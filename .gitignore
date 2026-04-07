@@ -1,0 +1,22 @@
+# Internal docs
+IMPROVEMENTS.md
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Chrome extension packaging
+*.crx
+*.pem
+*.zip
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Cursor
+.cursor/

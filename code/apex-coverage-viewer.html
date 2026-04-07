@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cobertura Apex</title>
+    <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
+    <link rel="stylesheet" href="./apex-coverage-viewer.css" />
+  </head>
+  <body>
+    <header class="apex-cov-viewer-toolbar">
+      <button type="button" id="apexCovViewerBack" class="apex-cov-viewer-back" data-i18n="apexLogViewer.back">
+        Volver
+      </button>
+      <span id="apexCovViewerTitle" class="apex-cov-viewer-title"></span>
+      <span class="apex-cov-viewer-legend" aria-hidden="true">
+        <span class="apex-cov-legend-covered"></span>
+        <span data-i18n="apexCoverageViewer.legendCovered">Cubierta</span>
+        <span class="apex-cov-legend-uncovered"></span>
+        <span data-i18n="apexCoverageViewer.legendUncovered">No cubierta</span>
+      </span>
+    </header>
+    <div id="apexCovViewerMount" class="apex-cov-viewer-editor"></div>
+    <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
+    <script src="./editor/monaco-amd-config.js"></script>
+    <script type="module" src="./apex-coverage-viewer.js"></script>
+  </body>
+</html>

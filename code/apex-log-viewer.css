@@ -1,0 +1,53 @@
+:root {
+  --alb-bg: #0f172a;
+  --alb-border: #334155;
+  --alb-text: #e2e8f0;
+  --alb-accent: #38bdf8;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--alb-bg);
+  color: var(--alb-text);
+  font-family: system-ui, sans-serif;
+}
+
+.apex-log-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--alb-border);
+  flex-shrink: 0;
+}
+
+.apex-log-viewer-back {
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--alb-border);
+  background: #1e293b;
+  color: var(--alb-text);
+  font-size: 13px;
+}
+
+.apex-log-viewer-back:hover {
+  border-color: var(--alb-accent);
+  color: var(--alb-accent);
+}
+
+.apex-log-viewer-title {
+  font-size: 13px;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apex-log-viewer-editor {
+  height: calc(100% - 49px);
+  width: 100%;
+}

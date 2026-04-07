@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Apex log</title>
+    <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
+    <link rel="stylesheet" href="./apex-log-viewer.css" />
+  </head>
+  <body>
+    <header class="apex-log-viewer-toolbar">
+      <button type="button" id="apexLogViewerBack" class="apex-log-viewer-back" data-i18n="apexLogViewer.back">
+        Volver
+      </button>
+      <span id="apexLogViewerTitle" class="apex-log-viewer-title"></span>
+    </header>
+    <div id="apexLogViewerMount" class="apex-log-viewer-editor"></div>
+    <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
+    <script src="./editor/monaco-amd-config.js"></script>
+    <script type="module" src="./apex-log-viewer.js"></script>
+  </body>
+</html>

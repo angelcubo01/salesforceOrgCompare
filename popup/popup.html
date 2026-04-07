@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Salesforce Org Compare</title>
+    <link rel="stylesheet" href="./popup.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="title">
+        <div class="title-main">Salesforce Org Compare</div>
+        <div class="title-subtitle" data-i18n="popup.subtitle">Comparador de orgs Salesforce</div>
+      </div>
+      <div class="topbar-right">
+        <button
+          type="button"
+          id="openSettingsBtn"
+          class="setup-btn"
+          data-i18n-title="popup.openSettingsTitle"
+          data-i18n-aria-label="popup.openSettingsTitle"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+        <button id="openCodeBtn" data-i18n-title="popup.openCode">
+          <span data-i18n="popup.compare">Comparar</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M7 17L17 7"></path>
+            <path d="M7 7h10v10"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="updateBanner" class="update-banner hidden">
+      <span id="updateBannerText"></span>
+      <button id="updateBannerButton" class="small" data-i18n="popup.viewUpdate">Ver actualización</button>
+    </div>
+
+    <div id="updateBlocker" class="update-blocker hidden">
+      <div class="update-blocker-dialog">
+        <h2 data-i18n="popup.mandatoryUpdate">Nueva versión obligatoria</h2>
+        <p id="updateBlockerText" data-i18n="popup.mandatoryUpdateText">
+          Hay una nueva versión mayor disponible de Salesforce Org Compare. Debes actualizar para seguir usando la extensión.
+        </p>
+        <button id="updateBlockerButton" data-i18n="popup.goToDownload">Ir a la página de descarga</button>
+      </div>
+    </div>
+
+    <section>
+      <h3 data-i18n="popup.savedOrgs">Orgs guardadas</h3>
+      <p class="section-hint" data-i18n="popup.savedOrgsHint">Arrastra el asa ⋮⋮ para priorizar; ese orden se usa en los desplegables al abrir Comparar.</p>
+      <ul id="savedList" class="list"></ul>
+    </section>
+
+    <section>
+      <h3 data-i18n="popup.detectedOrg">Org detectada en esta pestaña</h3>
+      <div id="detectedRow" class="row muted" data-i18n="popup.noDetected">No se ha detectado ninguna org Salesforce</div>
+    </section>
+
+    <script type="module" src="./popup.js"></script>
+  </body>
+  </html>

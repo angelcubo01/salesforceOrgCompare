@@ -1,0 +1,549 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Salesforce Org Compare</title>
+    <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
+    <link rel="stylesheet" href="./code.css" />
+  </head>
+  <body>
+    <div class="content">
+        <div class="sidebar">
+        <div class="resize-handle"></div>
+        <div class="sidebar-header">
+          <div class="sidebar-header-top">
+            <div class="filter-container">
+              <select id="typeSelect" class="type-select" data-i18n-title="code.operationSelectTitle">
+                <option value="" selected data-i18n="code.operationPlaceholder">— Elige una operación —</option>
+                <optgroup data-i18n-label="code.optgroupSource" label="Código fuente">
+                  <option value="Apex" data-i18n="code.opApex">Apex · clases y triggers</option>
+                  <option value="LWC" data-i18n="code.opLwc">Lightning Web Components</option>
+                  <option value="Aura" data-i18n="code.opAura">Aura (bundle)</option>
+                  <option value="VF" data-i18n="code.opVf">Visualforce</option>
+                </optgroup>
+                <optgroup data-i18n-label="code.optMetadataZip" label="Metadata ZIP">
+                  <option value="PermissionSet" data-i18n="code.opPermSet">Permission Sets</option>
+                  <option value="Profile" data-i18n="code.opProfile">Profiles</option>
+                  <option value="FlexiPage" data-i18n="code.opFlexi">FlexiPages</option>
+                </optgroup>
+                <optgroup data-i18n-label="code.optgroupAnalysis" label="Análisis">
+                  <option value="FieldDependency" data-i18n="code.opFieldDep">Dependencias picklist</option>
+                  <option value="ApexTests" data-i18n="code.opApexTests">Pruebas Apex</option>
+                </optgroup>
+                <optgroup data-i18n-label="code.optgroupPackage" label="package.xml">
+                  <option value="PackageXml" data-i18n="code.opPkgCompare">Comparar dos package.xml</option>
+                  <option value="GeneratePackageXml" data-i18n="code.opPkgGenerate">Generar manifest</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+          <div class="sidebar-header-bottom">
+            <div id="searchPanel" class="search">
+              <input id="searchInput" type="text" data-i18n-placeholder="code.searchPlaceholder" placeholder="Buscar" maxlength="64" />
+              <div id="searchResults" class="results"></div>
+            </div>
+            <div id="packageXmlPanel" class="package-xml-panel hidden" aria-label="Importar package.xml">
+              <input type="file" id="packageXmlFileInput" accept=".xml,application/xml,text/xml" tabindex="-1" />
+              <button type="button" id="packageXmlLoadBtn" class="package-xml-load-btn" data-i18n="code.loadFile">Cargar fichero</button>
+            </div>
+            <button id="clearHistoryButton" class="clear-history-button" data-i18n-title="code.clearSavedFiles">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <ul id="leftList" class="list"></ul>
+        
+      </div>
+      <div id="editorContainer" class="editor">
+        <div id="orgDropdowns" class="org-dropdowns">
+          <div class="org-dropdown-left">
+            <select id="leftOrg"></select>
+            <button id="leftReauthBtn" class="reauth-btn" data-i18n="code.reauth" data-i18n-title="code.reauth">Reautenticar</button>
+          </div>
+          <div class="org-dropdown-right">
+            <select id="rightOrg"></select>
+            <button id="rightReauthBtn" class="reauth-btn" data-i18n="code.reauth" data-i18n-title="code.reauth">Reautenticar</button>
+          </div>
+        </div>
+        <div id="appLandingPanel" class="app-landing-panel hidden" role="region" data-i18n-title="code.landingRegionTitle">
+          <div class="app-landing-inner">
+            <header class="app-landing-header">
+              <h1 class="app-landing-title" data-i18n="code.landingTitle">Salesforce Org Compare</h1>
+              <p class="app-landing-lead" data-i18n="code.landingSubtitle"></p>
+            </header>
+            <div class="app-landing-grid-wrap">
+            <div class="app-landing-grid">
+              <article class="app-landing-card app-landing-card-accent-1">
+                <h2 class="app-landing-card-title" data-i18n="code.landingCard1Title"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingCard1Text"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-2">
+                <h2 class="app-landing-card-title" data-i18n="code.landingCard2Title"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingCard2Text"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-3">
+                <h2 class="app-landing-card-title" data-i18n="code.landingCard3Title"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingCard3Text"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-4">
+                <h2 class="app-landing-card-title" data-i18n="code.landingCard4Title"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingCard4Text"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-5">
+                <h2 class="app-landing-card-title" data-i18n="code.landingCard5Title"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingCard5Text"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-6">
+                <h2 class="app-landing-card-title" data-i18n="code.landingCard6Title"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingCard6Text"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-7">
+                <h2 class="app-landing-card-title" data-i18n="code.landingCard7Title"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingCard7Text"></p>
+              </article>
+            </div>
+            </div>
+            <footer class="app-landing-footer">
+              <span class="app-landing-footer-label" data-i18n="code.landingFooterWebsiteLabel"></span>
+              <a
+                id="landingToolLink"
+                class="app-landing-footer-url"
+                href="https://salesforceorgcompare.web.app/"
+                target="_blank"
+                rel="noopener noreferrer"
+              ></a>
+              <span class="app-landing-footer-sep" aria-hidden="true">·</span>
+              <a
+                class="app-landing-footer-url"
+                href="https://es.linkedin.com/in/angelcubo01"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-i18n="code.landingFooterLinkedIn"
+                >LinkedIn</a
+              >
+            </footer>
+          </div>
+        </div>
+        <div id="standardComparePanel" class="standard-compare-panel">
+        <div class="diff-toolbar">
+          <div class="diff-toolbar-left">
+            <button id="retrieveAllBtn" class="retrieve-button hidden" data-i18n-title="code.downloadRetrieve" data-i18n="code.executeRetrieve">
+              EJECUTAR RETRIEVE
+            </button>
+          </div>
+          <span id="diffStatus" class="diff-status" data-i18n="code.noDifferences">Sin diferencias</span>
+          <div class="diff-toolbar-right">
+            <button id="toggleWhitespaceBtn" class="diff-nav-button" data-i18n-title="code.toggleWhitespace" title="Ignorar espacios en blanco">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 7h16M4 12h10M4 17h13"></path>
+              </svg>
+            </button>
+            <button id="exportDiffHtmlBtn" type="button" class="diff-nav-button" disabled data-i18n-title="code.exportDiffHtmlTitle" title="Exportar diff como HTML">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+            </button>
+            <button id="toggleSidebarBtn" class="diff-nav-button" data-i18n-title="code.showHideList">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 4h18M3 12h18M3 20h18"></path>
+              </svg>
+            </button>
+            <button id="prevDiffBtn" class="diff-nav-button" data-i18n-title="code.prevDiff">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <button id="nextDiffBtn" class="diff-nav-button" data-i18n-title="code.nextDiff">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div id="fileMetaRow" class="file-meta-row">
+          <div class="file-meta-col file-meta-left">
+            <span id="leftFileMeta" class="file-meta-value">—</span>
+          </div>
+          <div class="file-meta-col file-meta-right">
+            <span id="rightFileMeta" class="file-meta-value">—</span>
+          </div>
+        </div>
+        <div id="viewerChunkBar" class="viewer-chunk-bar hidden" role="region" aria-label="Navegación por fragmentos del visor">
+          <button type="button" id="viewerChunkPrev" class="viewer-chunk-btn" disabled data-i18n-title="code.prevChunkTitle" data-i18n="code.prevChunk">
+            ← Anterior
+          </button>
+          <span id="viewerChunkLabel" class="viewer-chunk-label"></span>
+          <button type="button" id="viewerChunkNext" class="viewer-chunk-btn" disabled data-i18n-title="code.nextChunkTitle" data-i18n="code.nextChunk">
+            Siguiente →
+          </button>
+        </div>
+        <div id="monacoContainer" class="monaco-container">
+          <div id="noOrgMessage" class="no-org-message hidden">
+          <div class="no-org-content">
+            <h3 data-i18n="code.selectOrg">Selecciona una organización</h3>
+            <p data-i18n="code.selectOrgHint">Elige una organización de Salesforce en los desplegables superiores para ver y comparar código.</p>
+            <p class="no-org-instructions" data-i18n="code.selectOrgInstructions">Si aún no has conectado ninguna org, ve a una pestaña de Salesforce y pulsa el botón de la extensión para añadirla.</p>
+          </div>
+          </div>
+          <div id="fileViewerLoadingBar" class="file-viewer-loading-bar hidden" aria-live="polite" aria-busy="true">
+            <span class="file-viewer-loading-spinner" aria-hidden="true"></span>
+            <span class="file-viewer-loading-text" data-i18n="code.loadingFile">Cargando fichero…</span>
+          </div>
+        </div>
+        </div>
+        <div id="generatePackageXmlPanel" class="generate-package-xml-panel hidden" aria-label="Generar package.xml">
+          <div class="generate-package-xml-panel-inner">
+            <h2 class="generate-package-xml-title" data-i18n="genPkg.title">Generar package.xml</h2>
+            <p class="generate-package-xml-hint" data-i18n="genPkg.hint">
+              Genera un package.xml para la organización seleccionada seleccionando los tipos y miembros que quieras.
+            </p>
+
+            <div class="generate-pkg-layout">
+              <div class="generate-pkg-col generate-pkg-col-left">
+                <label class="generate-pkg-label" for="generatePkgTypeSearch" data-i18n="genPkg.searchType">Buscar tipo de metadata</label>
+                <input
+                  id="generatePkgTypeSearch"
+                  type="search"
+                  class="generate-pkg-search-input"
+                  data-i18n-placeholder="genPkg.filterPlaceholder"
+                  placeholder="Filtrar por nombre, etiqueta…"
+                  autocomplete="off"
+                  spellcheck="false"
+                  disabled
+                />
+                <label class="generate-pkg-label" for="generatePkgMetadataType" data-i18n="genPkg.metadataType">Tipo de metadata</label>
+                <select id="generatePkgMetadataType" class="generate-pkg-select" disabled>
+                  <option value="" data-i18n="genPkg.selectOrgAbove">— Selecciona org arriba —</option>
+                </select>
+
+                <p id="generatePkgMembersLoading" class="generate-pkg-members-loading" aria-live="polite"></p>
+
+                <label class="generate-pkg-label" for="generatePkgMemberSearch" data-i18n="genPkg.searchMembers">Buscar en resultados (miembros)</label>
+                <input
+                  id="generatePkgMemberSearch"
+                  type="search"
+                  class="generate-pkg-search-input"
+                  data-i18n-placeholder="genPkg.filterMembers"
+                  placeholder="Filtrar por nombre de miembro…"
+                  autocomplete="off"
+                  spellcheck="false"
+                  disabled
+                />
+
+                <div class="generate-pkg-members-toolbar">
+                  <button type="button" id="generatePkgSelectAllMembers" class="generate-pkg-toolbar-btn" data-i18n-title="genPkg.selectAllTitle" data-i18n="genPkg.selectAll">
+                    Seleccionar todos
+                  </button>
+                  <button type="button" id="generatePkgClearTypeMembers" class="generate-pkg-toolbar-btn" data-i18n="genPkg.clearAll">
+                    Quitar todos
+                  </button>
+                </div>
+                <div id="generatePkgMembersList" class="generate-pkg-members-list" role="group" aria-label="Miembros del tipo seleccionado"></div>
+              </div>
+
+              <div class="generate-pkg-col generate-pkg-col-right">
+                <label class="generate-pkg-label" for="generatePkgXmlOutput">package.xml</label>
+                <textarea
+                  id="generatePkgXmlOutput"
+                  class="generate-pkg-xml-output"
+                  readonly
+                  spellcheck="false"
+                  rows="12"
+                  aria-readonly="true"
+                ></textarea>
+                <button type="button" id="generatePkgDownloadXml" class="generate-pkg-download-btn" data-i18n="genPkg.download">
+                  Descargar package.xml
+                </button>
+                <p class="generate-pkg-xml-footnote" data-i18n="genPkg.footnote">
+                  Usa los buscadores para filtrar tipos y miembros. Y descarga el package.xml.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="apexTestsPanel" class="apex-tests-panel hidden" aria-label="Pruebas Apex">
+          <div id="apexTestsHubView" class="apex-tests-hub-view">
+            <div class="apex-tests-hub-header">
+              <div class="apex-tests-hub-header-text">
+                <h2 class="apex-tests-hub-title" data-i18n="apexTests.title">Pruebas Apex</h2>
+                <p id="apexTestsHubStatus" class="apex-tests-hub-status" role="status"></p>
+              </div>
+              <button
+                type="button"
+                id="apexTestsOpenRunnerBtn"
+                class="apex-tests-open-runner-btn"
+                data-i18n="apexTests.openRunner"
+              >
+                Selección y ejecución
+              </button>
+            </div>
+
+            <section class="apex-tests-hub-runs" aria-labelledby="apexTestsRunsHeading">
+              <div class="apex-tests-hub-runs-head">
+                <h3 id="apexTestsRunsHeading" class="apex-tests-hub-runs-title" data-i18n="apexTests.runsTitle">
+                  Ejecuciones
+                </h3>
+              </div>
+              <p id="apexTestsRunsPollError" class="apex-tests-runs-poll-error hidden" role="status"></p>
+              <div id="apexTestsRunsTableWrap" class="apex-tests-runs-table-wrap hidden">
+                <table class="apex-tests-runs-table">
+                  <caption class="visually-hidden" data-i18n="apexTests.runsCaption"></caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" data-i18n="apexTests.runsColEnv"></th>
+                      <th scope="col" data-i18n="apexTests.runsColStartedAt"></th>
+                      <th scope="col" data-i18n="apexTests.runsColStatus"></th>
+                      <th scope="col" data-i18n="apexTests.runsColProgress"></th>
+                      <th scope="col" data-i18n="apexTests.runsColTests"></th>
+                      <th scope="col" data-i18n="apexTests.runsColActions"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="apexTestsRunsTbody"></tbody>
+                </table>
+              </div>
+              <details id="apexTestsOtherRunsDetails" class="apex-tests-other-runs-details hidden">
+                <summary class="apex-tests-other-runs-summary" data-i18n="apexTests.otherRunsSummary">
+                  Otras ejecuciones en la org
+                </summary>
+                <div
+                  id="apexTestsOtherRunsBody"
+                  class="apex-tests-other-runs-body"
+                  aria-live="polite"
+                >
+                  <div id="apexTestsOtherRunsScroll" class="apex-tests-other-runs-scroll"></div>
+                </div>
+              </details>
+              <p id="apexTestsRunsEmpty" class="apex-tests-runs-empty" data-i18n="apexTests.runsEmpty"></p>
+            </section>
+
+            <div
+              id="apexTestsCoverageModal"
+              class="apex-tests-coverage-modal hidden"
+              aria-hidden="true"
+            >
+              <div class="apex-tests-coverage-modal-backdrop" data-apex-coverage-close="1" tabindex="-1"></div>
+              <div
+                class="apex-tests-coverage-modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="apexTestsCoverageModalTitle"
+              >
+                <header class="apex-tests-coverage-modal-head">
+                  <h3 id="apexTestsCoverageModalTitle" data-i18n="apexTests.coverageModalTitle">
+                    Cobertura de código (&gt;50&nbsp;%)
+                  </h3>
+                  <button
+                    type="button"
+                    id="apexTestsCoverageModalClose"
+                    class="apex-tests-coverage-modal-close"
+                    data-i18n="apexTests.coverageModalClose"
+                  >
+                    Cerrar
+                  </button>
+                </header>
+                <div id="apexTestsCoverageModalBody" class="apex-tests-coverage-modal-body"></div>
+              </div>
+            </div>
+
+            <div
+              id="apexTestsViewTestModal"
+              class="apex-tests-coverage-modal hidden"
+              aria-hidden="true"
+            >
+              <div class="apex-tests-coverage-modal-backdrop" data-apex-view-test-close="1" tabindex="-1"></div>
+              <div
+                class="apex-tests-coverage-modal-panel apex-tests-view-test-modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="apexTestsViewTestModalTitle"
+              >
+                <header class="apex-tests-coverage-modal-head">
+                  <h3 id="apexTestsViewTestModalTitle" data-i18n="apexTests.viewTestModalTitle">
+                    Ver clase de test
+                  </h3>
+                  <button
+                    type="button"
+                    id="apexTestsViewTestModalClose"
+                    class="apex-tests-coverage-modal-close"
+                    data-i18n="apexTests.coverageModalClose"
+                  >
+                    Cerrar
+                  </button>
+                </header>
+                <div id="apexTestsViewTestModalBody" class="apex-tests-view-test-modal-body"></div>
+                <footer class="apex-tests-view-test-modal-foot">
+                  <button
+                    type="button"
+                    id="apexTestsViewTestModalOpen"
+                    class="apex-tests-runs-action-btn apex-tests-view-test-modal-open"
+                    data-i18n="apexTests.viewTestOpen"
+                  >
+                    Abrir en Monaco
+                  </button>
+                </footer>
+              </div>
+            </div>
+          </div>
+
+          <div id="apexTestsRunnerView" class="apex-tests-runner-view hidden" aria-hidden="true">
+            <div class="apex-tests-runner-toolbar">
+              <button
+                type="button"
+                id="apexTestsBackToHubBtn"
+                class="apex-tests-back-btn"
+                data-i18n="apexTests.backToHub"
+              >
+                Volver
+              </button>
+            </div>
+            <div id="apexTestsScaleViewport" class="apex-tests-scale-viewport">
+              <div id="apexTestsScaleSizer" class="apex-tests-scale-sizer">
+                <div id="apexTestsScaleContent" class="apex-tests-scale-content">
+                  <p id="apexTestsOrgStatus" class="apex-tests-org-status" role="status"></p>
+
+                  <div id="apexTestsControls" class="apex-tests-controls">
+                    <label class="apex-tests-label" for="apexTestsClassFilter" data-i18n="apexTests.filterClasses"></label>
+                    <input
+                      id="apexTestsClassFilter"
+                      type="search"
+                      class="apex-tests-search-input"
+                      data-i18n-placeholder="apexTests.filterClassesPh"
+                      placeholder="Filtrar clases por nombre…"
+                      autocomplete="off"
+                      spellcheck="false"
+                      disabled
+                    />
+
+                    <div id="apexTestsTablesWrap" class="apex-tests-tables-wrap">
+                      <div class="apex-tests-table-col">
+                        <div class="apex-tests-table-panel">
+                          <div id="apexTestsClassLoading" class="apex-tests-loading-overlay hidden" aria-hidden="true">
+                            <span class="apex-tests-spinner" aria-hidden="true"></span>
+                          </div>
+                          <div class="apex-tests-table-scroll">
+                            <table class="apex-tests-table apex-tests-class-table">
+                              <caption class="visually-hidden" data-i18n="apexTests.selectClasses">Clases Apex</caption>
+                              <thead>
+                                <tr>
+                                  <th scope="col" class="apex-tests-th-check"></th>
+                                  <th scope="col" data-i18n="apexTests.tableClassesCol">Clase</th>
+                                </tr>
+                              </thead>
+                              <tbody id="apexTestsClassTbody"></tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="apex-tests-table-col">
+                        <div class="apex-tests-table-panel">
+                          <div id="apexTestsMethodLoading" class="apex-tests-loading-overlay hidden" aria-hidden="true">
+                            <span class="apex-tests-spinner" aria-hidden="true"></span>
+                          </div>
+                          <div class="apex-tests-table-scroll">
+                            <table class="apex-tests-table">
+                              <caption class="visually-hidden" data-i18n="apexTests.selectMethods">Métodos de prueba</caption>
+                              <thead>
+                                <tr>
+                                  <th scope="col" class="apex-tests-th-check"></th>
+                                  <th scope="col" data-i18n="apexTests.tableMethodsCol">Método</th>
+                                </tr>
+                              </thead>
+                              <tbody id="apexTestsMethodTbody"></tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="apex-tests-tree-block">
+                      <span class="apex-tests-label" data-i18n="apexTests.selectionTreeTitle">Selección</span>
+                      <div id="apexTestsSelectionTree" class="apex-tests-selection-tree" role="tree"></div>
+                    </div>
+
+                    <button type="button" id="apexTestsRunBtn" class="apex-tests-run-btn" disabled data-i18n="apexTests.runButton">
+                      Ejecutar pruebas
+                    </button>
+                    <p id="apexTestsRunStatus" class="apex-tests-org-status" role="status"></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="fieldDependencyPanel" class="field-dependency-panel hidden" aria-label="Field Dependency">
+          <div class="field-dependency-panel-inner">
+            <h2 class="field-dependency-title" data-i18n="fieldDep.title">Field Dependency</h2>
+            <p class="field-dependency-hint" data-i18n="fieldDep.hint">
+              Elige un objeto (lista de la org izquierda) y obtén el metadata <code>CustomObject</code> en ambos entornos para comparar dependencias.
+            </p>
+            <p id="fieldDepOrgHint" class="field-dependency-org-hint" role="status"></p>
+
+            <div id="fieldDepControls" class="field-dep-controls">
+              <label class="field-dep-label" for="fieldDepObjectSearch" data-i18n="fieldDep.searchObject">Buscar objeto</label>
+              <input
+                id="fieldDepObjectSearch"
+                type="search"
+                class="field-dep-search-input"
+                data-i18n-placeholder="fieldDep.filterByApi"
+                placeholder="Filtra por nombre de API…"
+                autocomplete="off"
+                spellcheck="false"
+                disabled
+              />
+              <label class="field-dep-label" for="fieldDepObjectSelect" data-i18n="fieldDep.customObject">Custom Object</label>
+              <select id="fieldDepObjectSelect" class="field-dep-select" disabled>
+                <option value="" data-i18n="fieldDep.loadingObjects">— Cargando objetos… —</option>
+              </select>
+              <button type="button" id="fieldDepRetrieveBtn" class="field-dep-retrieve-btn" disabled data-i18n="fieldDep.getDependencies">
+                Obtener dependencias
+              </button>
+            </div>
+
+            <div id="fieldDepTableScreen" class="field-dep-table-screen">
+              <div id="fieldDepResults" class="field-dep-results hidden" aria-live="polite">
+                <div class="field-dep-table-wrap">
+                  <table class="field-dep-table" id="fieldDepTable">
+                    <thead>
+                      <tr>
+                        <th scope="col" data-i18n="fieldDep.controllerCol">Campo controlador (etiqueta)</th>
+                        <th scope="col" data-i18n="fieldDep.dependentCol">Campo dependiente (etiqueta)</th>
+                        <th scope="col" class="field-dep-col-action" data-i18n="fieldDep.actionCol">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody id="fieldDepTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div id="fieldDepCompareScreen" class="field-dep-compare-screen hidden" aria-label="Comparar relación">
+              <div class="field-dep-compare-toolbar">
+                <button type="button" id="fieldDepBackBtn" class="field-dep-back-btn" data-i18n-title="fieldDep.backToTable" title="Volver a la tabla">
+                  ←
+                </button>
+                <span id="fieldDepCompareTitle" class="field-dep-compare-title"></span>
+              </div>
+              <div id="fieldDepCompareBody" class="field-dep-compare-body"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="../vendor/jsdiff/diff.min.js"></script>
+    <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
+    <script src="./editor/monaco-amd-config.js"></script>
+    <script type="module" src="./code.js"></script>
+  </body>
+  </html>

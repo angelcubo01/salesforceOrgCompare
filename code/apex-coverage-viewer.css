@@ -1,0 +1,90 @@
+:root {
+  --acv-bg: #0f172a;
+  --acv-border: #334155;
+  --acv-text: #e2e8f0;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--acv-bg);
+  color: var(--acv-text);
+  font-family: system-ui, sans-serif;
+}
+
+.apex-cov-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--acv-border);
+  flex-shrink: 0;
+}
+
+.apex-cov-viewer-back {
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--acv-border);
+  background: #1e293b;
+  color: var(--acv-text);
+  font-size: 13px;
+}
+
+.apex-cov-viewer-back:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.apex-cov-viewer-title {
+  font-size: 13px;
+  opacity: 0.95;
+  flex: 1;
+  min-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apex-cov-viewer-legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.apex-cov-legend-covered {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(34, 197, 94, 0.45);
+  border: 1px solid rgba(34, 197, 94, 0.7);
+}
+
+.apex-cov-legend-uncovered {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(239, 68, 68, 0.4);
+  border: 1px solid rgba(239, 68, 68, 0.65);
+}
+
+.apex-cov-viewer-editor {
+  height: calc(100% - 49px);
+  width: 100%;
+}
+
+/* Decoraciones de línea (Monaco aplica className en la capa de overlays) */
+.monaco-editor .sfoc-cov-line-covered {
+  background-color: rgba(34, 197, 94, 0.28) !important;
+}
+
+.monaco-editor .sfoc-cov-line-uncovered {
+  background-color: rgba(239, 68, 68, 0.26) !important;
+}

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ajustes</title>
+    <link rel="stylesheet" href="./settings.css" />
+  </head>
+  <body>
+    <div class="settings-shell">
+      <header class="settings-header">
+        <h1 class="settings-title" data-i18n="settings.title">Ajustes</h1>
+        <p class="settings-lead" data-i18n="settings.subtitle"></p>
+      </header>
+
+      <main class="settings-main">
+        <section class="settings-card" aria-labelledby="settings-general-heading">
+          <h2 id="settings-general-heading" class="settings-card-title" data-i18n="settings.sectionGeneral">
+            General
+          </h2>
+          <label class="settings-label" for="settingsLang" data-i18n="settings.language">Idioma</label>
+          <select id="settingsLang" class="settings-select"></select>
+          <p class="settings-hint" data-i18n="settings.languageHint"></p>
+          <label class="settings-label" for="settingsApexTraceDebugLevel" id="settingsApexTraceDebugLevel_label"></label>
+          <input
+            type="text"
+            id="settingsApexTraceDebugLevel"
+            class="settings-text settings-text--wide"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <p class="settings-hint" id="settingsApexTraceDebugLevel_hint"></p>
+          <div class="settings-btn-row">
+            <button
+              type="button"
+              id="settingsGeneralTraceSave"
+              class="settings-secondary"
+              data-i18n="settings.advancedSaveAll"
+            >
+              Guardar
+            </button>
+          </div>
+          <p id="settingsGeneralTraceStatus" class="settings-status" role="status"></p>
+        </section>
+
+
+
+        <section class="settings-card" aria-labelledby="settings-orgs-heading">
+          <h2 id="settings-orgs-heading" class="settings-card-title" data-i18n="settings.sectionOrgs">
+            Organizaciones
+          </h2>
+          <p class="settings-hint settings-hint--nomargin" data-i18n="settings.orgsHint"></p>
+          <div class="settings-btn-row">
+            <button type="button" id="settingsExportOrgs" class="settings-secondary" data-i18n="settings.orgsExport">
+              Exportar
+            </button>
+            <button type="button" id="settingsImportMerge" class="settings-secondary" data-i18n="settings.orgsImportMerge">
+              Fusionar
+            </button>
+            <button type="button" id="settingsImportReplace" class="settings-secondary" data-i18n="settings.orgsImportReplace">
+              Sustituir
+            </button>
+          </div>
+          <input type="file" id="settingsOrgsFile" class="visually-hidden" accept=".json,application/json" />
+          <p id="settingsOrgsStatus" class="settings-status" role="status"></p>
+        </section>
+
+        <details class="settings-advanced" id="settingsAdvanced">
+          <summary class="settings-advanced-summary">
+            <span data-i18n="settings.advancedSummary">Avanzado</span>
+          </summary>
+          <div class="settings-advanced-inner">
+            <p class="settings-hint settings-hint--nomargin" data-i18n="settings.advancedLead"></p>
+            <div id="settingsAdvancedFields" class="settings-advanced-fields"></div>
+            <div class="settings-btn-row">
+              <button type="button" id="settingsAdvancedSave" class="settings-secondary" data-i18n="settings.advancedSaveAll">
+                Guardar
+              </button>
+              <button type="button" id="settingsAdvancedReset" class="settings-secondary" data-i18n="settings.advancedResetAll">
+                Predeterminado
+              </button>
+            </div>
+            <p id="settingsAdvancedStatus" class="settings-status" role="status"></p>
+          </div>
+        </details>
+
+        <section class="settings-card" aria-labelledby="settings-about-heading">
+          <h2 id="settings-about-heading" class="settings-card-title" data-i18n="settings.sectionAbout">
+            Acerca de
+          </h2>
+          <p class="settings-version-row">
+            <span data-i18n="settings.versionLabel">Versión</span>
+            <strong id="settingsVersion" class="settings-version-value">—</strong>
+          </p>
+          <div class="settings-links">
+            <a
+              id="settingsHomeLink"
+              class="settings-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-i18n="settings.projectPage"
+              >Web</a
+            >
+            <span class="settings-links-sep" aria-hidden="true">·</span>
+            <a
+              id="settingsPrivacyLink"
+              class="settings-link"
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-i18n="settings.privacy"
+              >Privacidad</a
+            >
+            <span class="settings-links-sep" aria-hidden="true">·</span>
+            <a
+              class="settings-link"
+              href="https://es.linkedin.com/in/angelcubo01"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-i18n="settings.linkedIn"
+              >LinkedIn</a
+            >
+          </div>
+        </section>
+
+      </main>
+    </div>
+    <script type="module" src="./settings.js"></script>
+  </body>
+</html>
