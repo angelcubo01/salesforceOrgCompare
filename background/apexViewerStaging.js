@@ -9,12 +9,26 @@ function prune() {
   }
 }
 
-export function stageApexViewerPayload(title, content) {
+/**
+ * @param {string} title
+ * @param {string} content
+ * @param {{ initialLine?: number, downloadFileName?: string }} [options]
+ */
+export function stageApexViewerPayload(title, content, options = {}) {
   prune();
   const id = `v_${Date.now()}_${Math.random().toString(36).slice(2, 16)}`;
+  const il = options.initialLine;
+  const initialLine =
+    il != null && Number.isFinite(Number(il)) ? Math.max(1, Math.floor(Number(il))) : undefined;
+  const df =
+    options.downloadFileName != null && String(options.downloadFileName).trim()
+      ? String(options.downloadFileName).trim()
+      : undefined;
   STAGING.set(id, {
     title: title != null ? String(title) : '',
     content: content != null ? String(content) : '',
+    ...(initialLine != null ? { initialLine } : {}),
+    ...(df ? { downloadFileName: df } : {}),
     at: Date.now()
   });
   return id;
@@ -25,5 +39,12 @@ export function takeApexViewerPayload(id) {
   const key = String(id || '');
   const v = STAGING.get(key);
   if (v) STAGING.delete(key);
-  return v ? { title: v.title, content: v.content } : null;
+  return v
+    ? {
+        title: v.title,
+        content: v.content,
+        ...(v.initialLine != null ? { initialLine: v.initialLine } : {}),
+        ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {})
+      }
+    : null;
 }

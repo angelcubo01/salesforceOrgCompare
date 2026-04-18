@@ -12,7 +12,9 @@ export const EXTENSION_FIELD_BOUNDS = {
   maxDiffAlgorithmChars: { min: 50_000, max: 2_000_000 },
   maxAlignedBufferChars: { min: 2_000_000, max: 64_000_000 },
   apexTestsPollIntervalMs: { min: 1000, max: 120_000 },
-  apexTestsMaxTrackedJobs: { min: 3, max: 100 }
+  apexTestsMaxTrackedJobs: { min: 3, max: 100 },
+  /** Porcentaje mínimo (0–100) para listar clases en el modal Cobertura del hub Apex tests. */
+  apexTestsCoverageMinPercent: { min: 0, max: 100 }
 };
 
 /** Claves ordenadas para el formulario de Ajustes → Avanzado. */
@@ -35,6 +37,8 @@ const DEFAULTS = {
   maxAlignedBufferChars: 24_000_000,
   apexTestsPollIntervalMs: 4000,
   apexTestsMaxTrackedJobs: 25,
+  /** Mínimo de cobertura (0–100) para incluir una clase/trigger en el modal Cobertura. */
+  apexTestsCoverageMinPercent: 50,
   /** Patrones LIKE para SOQL (coma): qué ApexClass se consideran “de prueba” al listar. */
   apexTestsClassNameLikePatterns: '%test%',
   /** DeveloperName del registro DebugLevel al activar trazas USER_DEBUG antes de ejecutar tests Apex. */
@@ -173,6 +177,15 @@ export function getApexTestsPollIntervalMs() {
 
 export function getApexTestsMaxTrackedJobs() {
   return cache.apexTestsMaxTrackedJobs;
+}
+
+/**
+ * Porcentaje mínimo de cobertura (0–100) para listar clases en el modal Cobertura del hub.
+ * @returns {number}
+ */
+export function getApexTestsCoverageMinPercent() {
+  const v = cache.apexTestsCoverageMinPercent;
+  return typeof v === 'number' && Number.isFinite(v) ? v : DEFAULTS.apexTestsCoverageMinPercent;
 }
 
 /**

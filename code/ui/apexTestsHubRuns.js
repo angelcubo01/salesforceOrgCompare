@@ -2,12 +2,17 @@ import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
-import { showToast } from './toast.js';
+import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
 import { logApexTestRunUsage } from './apexTestUsageLog.js';
 import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
-import { getApexTestsPollIntervalMs, getApexTestsMaxTrackedJobs } from '../../shared/extensionSettings.js';
+import {
+  getApexTestsPollIntervalMs,
+  getApexTestsMaxTrackedJobs,
+  loadExtensionSettings,
+  getApexTestsCoverageMinPercent
+} from '../../shared/extensionSettings.js';
 
 const STORAGE_KEY = 'apexTestRunJobs';
 const MAX_POLLS_ALL_MISSING = 10;
@@ -26,6 +31,7 @@ const failuresCache = new Map();
 let lastPollResult = null;
 let coverageModalInitialized = false;
 let viewTestModalInitialized = false;
+let viewLogModalInitialized = false;
 /** @type {{ orgId: string, options: { classId: string | null, className: string | null, label: string }[] } | null} */
 let viewTestPickContext = null;
 
@@ -79,6 +85,83 @@ export function initApexTestsViewTestModal() {
   });
 }
 
+export function initApexTestsViewLogModal() {
+  if (viewLogModalInitialized) return;
+  viewLogModalInitialized = true;
+  const modal = document.getElementById('apexTestsViewLogModal');
+  const closeBtn = document.getElementById('apexTestsViewLogModalClose');
+  const body = document.getElementById('apexTestsViewLogModalBody');
+  const backdrop = modal?.querySelector('[data-apex-view-log-close]');
+  const close = () => {
+    if (!modal) return;
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    if (body) body.innerHTML = '';
+  };
+  closeBtn?.addEventListener('click', close);
+  backdrop?.addEventListener('click', close);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) close();
+  });
+}
+
+/**
+ * P. ej. `Class.CC_MiClase_Test.miMetodo: line 237, column 1`
+ * @returns {{ className: string, line: number } | null}
+ */
+function parseApexStackFrameLine(line) {
+  const m = String(line).trim().match(/^Class\.(.+):\s*line\s+(\d+)/i);
+  if (!m) return null;
+  const beforeLine = m[1].trim();
+  const lineNum = parseInt(m[2], 10);
+  if (!Number.isFinite(lineNum) || lineNum < 1) return null;
+  const lastDot = beforeLine.lastIndexOf('.');
+  if (lastDot < 1) return null;
+  const className = beforeLine.slice(0, lastDot).trim();
+  if (!className) return null;
+  return { className, line: lineNum };
+}
+
+/**
+ * @param {string} stackText
+ * @param {string} orgId
+ */
+function buildStackTracePreWithCtrlLinks(stackText, orgId) {
+  const pre = document.createElement('pre');
+  pre.className = 'apex-tests-runs-stacktrace-pre';
+  const lines = String(stackText).split(/\r?\n/);
+  lines.forEach((line, i) => {
+    if (i > 0) pre.appendChild(document.createTextNode('\n'));
+    const parsed = parseApexStackFrameLine(line);
+    if (parsed) {
+      const span = document.createElement('span');
+      span.className = 'apex-tests-stacktrace-frame';
+      span.textContent = line;
+      span.dataset.apexStackClass = parsed.className;
+      span.dataset.apexStackLine = String(parsed.line);
+      pre.appendChild(span);
+    } else {
+      pre.appendChild(document.createTextNode(line));
+    }
+  });
+  pre.addEventListener('click', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    const span = e.target.closest('.apex-tests-stacktrace-frame');
+    if (!span) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const cn = span.dataset.apexStackClass;
+    const ln = parseInt(span.dataset.apexStackLine, 10);
+    if (!cn || !Number.isFinite(ln)) return;
+    void openApexTestClassInMonaco(
+      orgId,
+      { className: cn, classId: null, label: cn },
+      { initialLine: ln }
+    );
+  });
+  return pre;
+}
+
 function testClassOptionsFromRunBody(runBody) {
   if (!runBody || typeof runBody !== 'object') return [];
   const tests = runBody.tests;
@@ -93,17 +176,7 @@ function testClassOptionsFromRunBody(runBody) {
     const key = classId || `name:${className}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const methods = Array.isArray(entry.testMethods)
-      ? entry.testMethods.filter(Boolean).map(String)
-      : [];
-    let label = className || shortId(classId);
-    if (methods.length) {
-      const m =
-        methods.length <= 2
-          ? methods.join(', ')
-          : `${methods.slice(0, 2).join(', ')} +${methods.length - 2}`;
-      label = `${label} · ${m}`;
-    }
+    const label = className || shortId(classId);
     out.push({
       classId: classId || null,
       className: className || null,
@@ -113,21 +186,58 @@ function testClassOptionsFromRunBody(runBody) {
   return out;
 }
 
+/** Nombre seguro para fichero (descarga visor); sin ruta. */
+function sanitizeApexViewerDownloadFileName(name) {
+  const s = String(name || '')
+    .replace(/[/\\?%*:|"<>]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+  return s || 'file';
+}
+
 /** Abre apex-log-viewer: staging en SW → chrome.storage → IndexedDB (sin descarga). */
-async function openApexLogViewerWithPayload(title, content) {
-  const staged = await bg({ type: 'apexViewer:stage', title, content });
+async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
+  const initialLine =
+    viewerOpts.initialLine != null && Number.isFinite(Number(viewerOpts.initialLine))
+      ? Math.max(1, Math.floor(Number(viewerOpts.initialLine)))
+      : undefined;
+  const downloadFileName =
+    viewerOpts.downloadFileName != null && String(viewerOpts.downloadFileName).trim()
+      ? sanitizeApexViewerDownloadFileName(viewerOpts.downloadFileName)
+      : undefined;
+  const lineQs =
+    initialLine != null ? `&line=${encodeURIComponent(String(initialLine))}` : '';
+  const staged = await bg({
+    type: 'apexViewer:stage',
+    title,
+    content,
+    ...(initialLine != null ? { initialLine } : {}),
+    ...(downloadFileName ? { downloadFileName } : {})
+  });
   if (staged.ok && staged.id) {
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?sid=${encodeURIComponent(staged.id)}`),
+      chrome.runtime.getURL(
+        `code/apex-log-viewer.html?sid=${encodeURIComponent(staged.id)}${lineQs}`
+      ),
       '_blank'
     );
     return true;
   }
   const storageKey = `sfoc_al_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
   try {
-    await chrome.storage.local.set({ [storageKey]: { title, content } });
+    await chrome.storage.local.set({
+      [storageKey]: {
+        title,
+        content,
+        ...(initialLine != null ? { initialLine } : {}),
+        ...(downloadFileName ? { downloadFileName } : {})
+      }
+    });
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?k=${encodeURIComponent(storageKey)}`),
+      chrome.runtime.getURL(
+        `code/apex-log-viewer.html?k=${encodeURIComponent(storageKey)}${lineQs}`
+      ),
       '_blank'
     );
     return true;
@@ -136,9 +246,16 @@ async function openApexLogViewerWithPayload(title, content) {
   }
   try {
     const idbId = `idb_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
-    await apexViewerIdbPut(idbId, { title, content });
+    await apexViewerIdbPut(idbId, {
+      title,
+      content,
+      ...(initialLine != null ? { initialLine } : {}),
+      ...(downloadFileName ? { downloadFileName } : {})
+    });
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}`),
+      chrome.runtime.getURL(
+        `code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}${lineQs}`
+      ),
       '_blank'
     );
     return true;
@@ -147,7 +264,7 @@ async function openApexLogViewerWithPayload(title, content) {
   }
 }
 
-async function openApexTestClassInMonaco(orgId, pick) {
+async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
   const res = await bg({
     type: 'apexTests:getTestClassSource',
     orgId,
@@ -165,9 +282,18 @@ async function openApexTestClassInMonaco(orgId, pick) {
     return;
   }
   const name = res.name || pick.label || 'ApexClass';
+  const initialLine =
+    opts.initialLine != null && Number.isFinite(Number(opts.initialLine))
+      ? Math.max(1, Math.floor(Number(opts.initialLine)))
+      : undefined;
+  const downloadFileName = `${sanitizeApexViewerDownloadFileName(name.replace(/\.cls$/i, ''))}.cls`;
   const ok = await openApexLogViewerWithPayload(
     `${name}.cls · ${t('docTitle.apexTestClass')}`,
-    res.body != null ? String(res.body) : ''
+    res.body != null ? String(res.body) : '',
+    {
+      ...(initialLine != null ? { initialLine } : {}),
+      downloadFileName
+    }
   );
   if (!ok) showToast(t('apexTests.viewTestStorageError'), 'warn');
 }
@@ -220,15 +346,30 @@ async function openRunCoverageModal(orgId, jobIdForApi) {
   if (!modal || !body) return;
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
+  await loadExtensionSettings();
+  const minCoveragePercent = getApexTestsCoverageMinPercent();
+  const titleEl = document.getElementById('apexTestsCoverageModalTitle');
+  if (titleEl) {
+    titleEl.textContent = t('apexTests.coverageModalTitle', { minPercent: minCoveragePercent });
+  }
   body.innerHTML = `<p class="apex-tests-coverage-loading">${t('apexTests.coverageLoading')}</p>`;
-  const res = await bg({ type: 'apexTests:getRunCoverage', orgId, jobId: jobIdForApi });
+  const res = await bg({
+    type: 'apexTests:getRunCoverage',
+    orgId,
+    jobId: jobIdForApi,
+    minCoveragePercent
+  });
   if (!res.ok) {
     body.innerHTML = `<p class="apex-tests-coverage-error">${
       res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.coverageLoadError')
     }</p>`;
     return;
   }
-  const classes = res.classes || [];
+  const thresh = Math.min(1, Math.max(0, minCoveragePercent / 100));
+  const classes = (res.classes || []).filter((row) => {
+    const p = Number(row.percent);
+    return Number.isFinite(p) && p + 1e-9 >= thresh;
+  });
   if (!classes.length) {
     body.innerHTML = `<p class="apex-tests-coverage-empty">${t('apexTests.coverageEmpty')}</p>`;
     return;
@@ -397,30 +538,126 @@ async function rerunStoredApexJob(rowOrgId, storedJob) {
   }
 }
 
-async function openTestRunLogTab(orgId, job, displayJobId) {
-  const failJobId = job?.Id || displayJobId;
-  const res = await bg({
-    type: 'apexTests:getTestRunLog',
-    orgId,
-    jobId: failJobId,
-    createdDate: job?.CreatedDate,
-    completedDate: job?.CompletedDate,
-    createdById: job?.CreatedById
-  });
-  if (!res.ok) {
-    const msg =
-      res.reason === 'NO_SID'
-        ? t('toast.noSession')
-        : String(res.error) === 'NO_APEX_LOGS'
-          ? t('apexTests.logNoLogs')
-          : res.error || t('apexTests.logOpenError');
-    showToast(msg, 'warn');
-    return;
+/**
+ * Tabla de Ids de ApexLog (mismo estilo que el modal de cobertura); botón por fila.
+ * @param {string} orgId
+ * @param {unknown} job
+ * @param {string} displayJobId
+ * @param {{ Id?: string }[]} logs
+ */
+function openViewLogRecordsModal(orgId, job, displayJobId, logs) {
+  const modal = document.getElementById('apexTestsViewLogModal');
+  const body = document.getElementById('apexTestsViewLogModalBody');
+  const titleEl = document.getElementById('apexTestsViewLogModalTitle');
+  if (!modal || !body) return;
+  if (titleEl) titleEl.textContent = t('apexTests.viewLogModalTitle');
+  body.innerHTML = '';
+
+  const scroll = document.createElement('div');
+  scroll.className = 'apex-tests-coverage-table-scroll';
+
+  const tbl = document.createElement('table');
+  tbl.className = 'apex-tests-coverage-table';
+  const thead = document.createElement('thead');
+  thead.innerHTML = `<tr>
+    <th>${t('apexTests.viewLogTableColId')}</th>
+    <th scope="col" class="apex-tests-coverage-th-editor">${t('apexTests.viewLogTableColAction')}</th>
+  </tr>`;
+  tbl.appendChild(thead);
+  const tb = document.createElement('tbody');
+  const oid = String(orgId);
+  const dj = String(displayJobId);
+
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+    body.innerHTML = '';
+  };
+
+  for (const row of logs) {
+    const rid = row.Id != null && String(row.Id).trim() ? String(row.Id).trim() : '';
+    const rtr = document.createElement('tr');
+    const c1 = document.createElement('td');
+    c1.className = 'apex-tests-view-log-table-id-cell';
+    c1.textContent = rid || '—';
+    const c2 = document.createElement('td');
+    c2.className = 'apex-tests-coverage-td-editor';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'apex-tests-coverage-view-btn';
+    btn.textContent = t('apexTests.viewLogOpen');
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!rid) return;
+      closeModal();
+      void openTestRunLogTab(oid, job, dj, { logId: rid });
+    });
+    c2.appendChild(btn);
+    rtr.appendChild(c1);
+    rtr.appendChild(c2);
+    tb.appendChild(rtr);
   }
-  const title = `${t('docTitle.apexLog')} · ${shortId(displayJobId)}`;
-  const content = res.body != null ? String(res.body) : '';
-  const ok = await openApexLogViewerWithPayload(title, content);
-  if (!ok) showToast(t('apexTests.logOpenError'), 'warn');
+  tbl.appendChild(tb);
+  scroll.appendChild(tbl);
+  body.appendChild(scroll);
+
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+async function openTestRunLogTab(orgId, job, displayJobId, opts = {}) {
+  const logId = opts.logId != null ? String(opts.logId).trim() : '';
+  const failJobId = job?.Id || displayJobId;
+  showToastWithSpinner(t('apexTests.logOpening'));
+  try {
+    const res = await bg({
+      type: 'apexTests:getTestRunLog',
+      /** Sin esto, un `logId` residual en el mensaje abría el cuerpo sin pasar por la lista. */
+      intent: logId ? 'body' : 'list',
+      orgId,
+      jobId: failJobId,
+      ...(logId ? { logId } : {}),
+      createdDate: job?.CreatedDate,
+      completedDate: job?.CompletedDate,
+      createdById: job?.CreatedById
+    });
+    if (!res.ok) {
+      const msg =
+        res.reason === 'NO_SID'
+          ? t('toast.noSession')
+          : String(res.error) === 'NO_APEX_LOGS_TRACES'
+            ? t('apexTests.logNoLogsTraces')
+            : String(res.error) === 'NO_LOG_USER'
+              ? t('apexTests.logNoJobUser')
+              : String(res.error) === 'NO_JOB_START'
+                ? t('apexTests.logNoJobStart')
+                : res.error || t('apexTests.logOpenError');
+      showToast(msg, 'warn');
+      return;
+    }
+    if (res.pick && Array.isArray(res.logs) && res.logs.length) {
+      openViewLogRecordsModal(orgId, job, displayJobId, res.logs);
+      return;
+    }
+    const lid =
+      res.logId != null && String(res.logId).trim() ? String(res.logId).trim() : '';
+    const parts = [t('docTitle.apexLog')];
+    if (lid) parts.push(lid);
+    parts.push(shortId(displayJobId));
+    const title = parts.join(' · ');
+    const content = res.body != null ? String(res.body) : '';
+    const downloadFileName = lid ? `${sanitizeApexViewerDownloadFileName(lid)}.log` : undefined;
+    const ok = await openApexLogViewerWithPayload(title, content, {
+      ...(downloadFileName ? { downloadFileName } : {})
+    });
+    if (!ok) showToast(t('apexTests.logOpenError'), 'warn');
+  } finally {
+    dismissSpinnerToast();
+  }
+}
+
+function openTestRunLogFromHubRow(orgId, job, displayJobId) {
+  void openTestRunLogTab(orgId, job, displayJobId, {});
 }
 
 function isRunnerVisible() {
@@ -611,6 +848,33 @@ function friendlyQueueTestClassLabel(raw, runBody) {
   return s;
 }
 
+/**
+ * Texto para notificación al completar: nombres de clase (cola o runBody), o id corto del job si no hay datos.
+ */
+function formatApexTestNotificationClassSummary(j, run, jobId) {
+  const jid = String(jobId || '');
+  const rb = j.runBody;
+  const labels = [];
+  const qrows = Array.isArray(run.queueRows) ? run.queueRows : [];
+  for (const row of qrows) {
+    const lab = friendlyQueueTestClassLabel(row.classname, rb);
+    if (lab) labels.push(lab);
+  }
+  if (!labels.length && rb && typeof rb === 'object' && Array.isArray(rb.tests)) {
+    for (const te of rb.tests) {
+      if (!te || typeof te !== 'object') continue;
+      let n = te.className != null && String(te.className).trim() ? String(te.className).trim() : '';
+      if (!n && te.classId) n = classNameFromRunBodyForClassId(rb, te.classId);
+      if (n) labels.push(n);
+    }
+  }
+  const uniq = [...new Set(labels)].sort((a, b) => a.localeCompare(b));
+  if (!uniq.length) return shortId(jid);
+  let s = uniq.join(', ');
+  if (s.length > 200) s = `${s.slice(0, 197)}…`;
+  return s;
+}
+
 function runExpandKey(orgId, jobId) {
   return `${String(orgId)}:${String(jobId)}`;
 }
@@ -642,14 +906,6 @@ function formatOutcomeSummary(counts) {
     if (v) parts.push(`${k}: ${v}`);
   }
   return parts.length ? parts.join(' · ') : '—';
-}
-
-function progressText(job) {
-  if (!job) return '—';
-  const cur = job.JobItemsProcessed != null ? Number(job.JobItemsProcessed) : null;
-  const tot = job.TotalJobItems != null ? Number(job.TotalJobItems) : null;
-  if (cur != null && tot != null && !Number.isNaN(cur) && !Number.isNaN(tot)) return `${cur} / ${tot}`;
-  return '—';
 }
 
 function apexClassNameFromResult(row) {
@@ -703,6 +959,64 @@ function buildRunJobIdMap(poll) {
   return m;
 }
 
+/** orgId:jobId → último Status del poll (notificación al completar con la pestaña sin foco). */
+const apexTestJobStatusSnapshot = new Map();
+
+function pruneApexTestJobStatusSnapshot(activeKeys) {
+  for (const k of apexTestJobStatusSnapshot.keys()) {
+    if (!activeKeys.has(k)) apexTestJobStatusSnapshot.delete(k);
+  }
+}
+
+/**
+ * @param {Array<{ orgId: unknown, jobId: unknown, displayEnv?: string }>} enriched
+ * @param {Record<string, unknown>} pollsByOrgId
+ */
+function maybeNotifyTestRunCompletions(enriched, pollsByOrgId) {
+  try {
+    if (typeof document === 'undefined' || document.hasFocus()) return;
+  } catch {
+    return;
+  }
+  const activeKeys = new Set();
+  for (const j of enriched) {
+    const oid = String(j.orgId);
+    const jid = String(j.jobId);
+    const key = `${oid}:${jid}`;
+    activeKeys.add(key);
+    const poll = pollsByOrgId[oid];
+    const run = pickRunForStoredJob(poll, jid);
+    const status =
+      run.missing || run.pollFailure ? null : run.job?.Status != null ? String(run.job.Status) : null;
+    const prev = apexTestJobStatusSnapshot.get(key);
+    apexTestJobStatusSnapshot.set(key, status);
+
+    if (prev === undefined) continue;
+    if (status == null || run.missing || run.pollFailure) continue;
+    if (!isApexAsyncJobInFlightStatus(prev)) continue;
+    if (isApexAsyncJobInFlightStatus(status)) continue;
+    if (!['Completed', 'Failed', 'Aborted', 'Error'].includes(status)) continue;
+
+    const envLabel =
+      j.displayEnv != null && String(j.displayEnv).trim()
+        ? String(j.displayEnv).trim()
+        : shortId(oid);
+    const classesSummary = formatApexTestNotificationClassSummary(j, run, jid);
+    let notifyMsg = t('apexTests.notifyRunDoneBody', {
+      env: envLabel,
+      status,
+      classes: classesSummary
+    });
+    if (notifyMsg.length > 256) notifyMsg = `${notifyMsg.slice(0, 253)}…`;
+    void bg({
+      type: 'notifications:showApexTestComplete',
+      title: t('apexTests.notifyRunDoneTitle'),
+      message: notifyMsg
+    });
+  }
+  pruneApexTestJobStatusSnapshot(activeKeys);
+}
+
 function canonicalRunBodyJson(body) {
   if (!body || typeof body !== 'object') return '';
   try {
@@ -710,6 +1024,7 @@ function canonicalRunBodyJson(body) {
     if (Array.isArray(o.tests)) {
       o.tests = o.tests.map((entry) => {
         const e = { ...entry };
+        delete e.className;
         if (Array.isArray(e.testMethods)) {
           e.testMethods = [...e.testMethods].sort((a, b) => String(a).localeCompare(String(b)));
         }
@@ -1103,13 +1418,17 @@ async function renderHubRunsTable(opts = {}) {
     errEl.classList.remove('hidden');
   }
 
-  /** orgId → Map jobId → run (resultado de poll) */
+  /** orgId → Map jobId → run (poll); solo necesario si se muestra el botón Re-ejecutar (ver bucle de filas). */
+  /*
   const runMapsByOrg = new Map();
   if (pollsByOrgId) {
     for (const oid of Object.keys(pollsByOrgId)) {
       runMapsByOrg.set(oid, buildRunJobIdMap(pollsByOrgId[oid]));
     }
   }
+  */
+
+  maybeNotifyTestRunCompletions(enriched, pollsByOrgId);
 
   const runsForStop = [];
   tbody.innerHTML = '';
@@ -1179,13 +1498,12 @@ async function renderHubRunsTable(opts = {}) {
       }
     }
 
-    const tdProg = document.createElement('td');
-    tdProg.textContent = run.missing || run.pollFailure ? '—' : progressText(run.job);
-
     const tdTests = document.createElement('td');
     tdTests.className = 'apex-tests-runs-td-summary';
     tdTests.textContent =
-      run.missing || run.pollFailure ? '—' : formatOutcomeSummary(run.outcomeCounts);
+      run.missing || run.pollFailure
+        ? '—'
+        : formatOutcomeSummary(run.outcomeCounts);
 
     const tdActions = document.createElement('td');
     tdActions.className = 'apex-tests-runs-td-actions';
@@ -1225,6 +1543,10 @@ async function renderHubRunsTable(opts = {}) {
     btnViewTest.title =
       viewTestOpts.length === 0 ? t('apexTests.viewTestNoClassesHint') : '';
 
+    /** Poll fiable para abort / futuro rerun (mismo criterio que antes del comentario del botón). */
+    const pollHealthy = !!(pollOk && !run.pollFailure && !run.missing && run.job);
+
+    /* FUTURE: botón «Re-ejecutar» — descomentar junto con runMapsByOrg arriba y rerunStoredApexJob sigue disponible.
     const btnRerun = document.createElement('button');
     btnRerun.type = 'button';
     btnRerun.className = 'apex-tests-runs-action-btn';
@@ -1232,8 +1554,6 @@ async function renderHubRunsTable(opts = {}) {
     btnRerun.textContent = t('apexTests.runsRerun');
     const hasRunSnapshot = !!(j.runBody && typeof j.runBody === 'object');
     const runMap = runMapsByOrg.get(rowOrgId) || new Map();
-    /** Solo bloquear por colisión si el poll devolvió estado fiable del AsyncApexJob. */
-    const pollHealthy = !!(pollOk && !run.pollFailure && !run.missing && run.job);
     let selfInFlight = false;
     let duplicateInFlight = false;
     if (pollHealthy) {
@@ -1254,6 +1574,21 @@ async function renderHubRunsTable(opts = {}) {
         ? t('apexTests.rerunBlockedSelf')
         : t('apexTests.rerunBlockedDuplicate');
     } else btnRerun.title = '';
+    */
+
+    const stLc = String(run.job?.Status || '')
+      .trim()
+      .toLowerCase();
+    const canAbortJob =
+      pollHealthy && !!run.job && ['queued', 'processing', 'preparing', 'holding'].includes(stLc);
+
+    const btnAbort = document.createElement('button');
+    btnAbort.type = 'button';
+    btnAbort.className = 'apex-tests-runs-action-btn';
+    btnAbort.dataset.i18n = 'apexTests.runsAbort';
+    btnAbort.textContent = t('apexTests.runsAbort');
+    btnAbort.disabled = !canAbortJob;
+    btnAbort.title = canAbortJob ? t('apexTests.runsAbortHint') : '';
 
     const actionsInner = document.createElement('div');
     actionsInner.className = 'apex-tests-runs-actions-inner';
@@ -1261,12 +1596,12 @@ async function renderHubRunsTable(opts = {}) {
     actionsInner.appendChild(btnCoverage);
     actionsInner.appendChild(btnLog);
     actionsInner.appendChild(btnViewTest);
-    actionsInner.appendChild(btnRerun);
+    actionsInner.appendChild(btnAbort);
+    // FUTURE: actionsInner.appendChild(btnRerun);
     tdActions.appendChild(actionsInner);
     tr.appendChild(tdEnv);
     tr.appendChild(tdStarted);
     tr.appendChild(tdStatus);
-    tr.appendChild(tdProg);
     tr.appendChild(tdTests);
     tr.appendChild(tdActions);
     tbody.appendChild(tr);
@@ -1287,18 +1622,46 @@ async function renderHubRunsTable(opts = {}) {
     btnLog.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btnLog.disabled) return;
-      void openTestRunLogTab(rowOrgId, run.job, jobId);
+      openTestRunLogFromHubRow(rowOrgId, run.job, jobId);
     });
     btnViewTest.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btnViewTest.disabled) return;
       openViewTestPicker(rowOrgId, j.runBody);
     });
+    btnAbort.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (btnAbort.disabled) return;
+      if (!window.confirm(t('apexTests.runsAbortConfirm'))) return;
+      btnAbort.disabled = true;
+      const abortRes = await bg({
+        type: 'apexTests:abortRun',
+        orgId: rowOrgId,
+        jobId: run.job?.Id || run.canonicalJobId || jobId
+      });
+      if (abortRes?.ok) {
+        showToast(t('apexTests.runsAbortOk'), 'info');
+        void renderHubRunsTable({ reusePoll: false });
+      } else {
+        const msg =
+          abortRes?.reason === 'NO_SID'
+            ? t('toast.noSession')
+            : abortRes?.reason === 'NO_QUEUE_ITEMS'
+              ? t('apexTests.runsAbortNoQueueItems')
+              : abortRes?.reason === 'NO_ABORTABLE_QUEUE_ITEMS'
+                ? t('apexTests.runsAbortNoAbortableItems')
+                : abortRes?.error || t('apexTests.runsAbortError');
+        showToast(msg, 'error');
+        btnAbort.disabled = !canAbortJob;
+      }
+    });
+    /* FUTURE: Re-ejecutar
     btnRerun.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btnRerun.disabled) return;
       void rerunStoredApexJob(rowOrgId, j);
     });
+    */
 
     if (expandedRunKey === exKey && terminal && !run.missing && !run.pollFailure) {
       const trSub = document.createElement('tr');
@@ -1352,10 +1715,7 @@ async function renderHubRunsTable(opts = {}) {
           c5.className = 'apex-tests-runs-stack-cell';
           const stackText = row.StackTrace != null ? String(row.StackTrace).trim() : '';
           if (stackText) {
-            const pre = document.createElement('pre');
-            pre.className = 'apex-tests-runs-stacktrace-pre';
-            pre.textContent = stackText;
-            c5.appendChild(pre);
+            c5.appendChild(buildStackTracePreWithCtrlLinks(stackText, rowOrgId));
           } else {
             c5.textContent = '—';
           }

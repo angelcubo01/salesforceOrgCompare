@@ -24,6 +24,11 @@ body {
   flex-shrink: 0;
 }
 
+.apex-log-viewer-toolbar .apex-log-viewer-title {
+  flex: 1;
+  min-width: 0;
+}
+
 .apex-log-viewer-back {
   cursor: pointer;
   padding: 6px 12px;
@@ -45,6 +50,27 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.apex-log-viewer-download {
+  flex-shrink: 0;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--alb-accent);
+  background: rgba(56, 189, 248, 0.12);
+  color: var(--alb-accent);
+  font-size: 13px;
+}
+
+.apex-log-viewer-download:hover {
+  background: rgba(56, 189, 248, 0.22);
+  color: #7dd3fc;
+}
+
+.apex-log-viewer-download:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .apex-log-viewer-editor {

@@ -48,21 +48,31 @@ function refreshGeneralTraceFieldI18n() {
   const hi = document.getElementById('settingsApexTraceDebugLevel_hint');
   if (lb) lb.textContent = t('settings.general.apexTestsTraceDebugLevel.label');
   if (hi) hi.textContent = t('settings.general.apexTestsTraceDebugLevel.hint');
+  const lbCov = document.getElementById('settingsApexCoverageMinPercent_label');
+  const hiCov = document.getElementById('settingsApexCoverageMinPercent_hint');
+  if (lbCov) lbCov.textContent = t('settings.general.apexTestsCoverageMinPercent.label');
+  if (hiCov) hiCov.textContent = t('settings.general.apexTestsCoverageMinPercent.hint');
 }
 
 function wireGeneralTraceSettings() {
   const inp = document.getElementById('settingsApexTraceDebugLevel');
+  const inpCov = document.getElementById('settingsApexCoverageMinPercent');
   const btn = document.getElementById('settingsGeneralTraceSave');
   const statusEl = document.getElementById('settingsGeneralTraceStatus');
   void loadExtensionSettings().then((cfg) => {
     if (inp) inp.value = String(cfg.apexTestsTraceDebugLevel ?? '');
+    if (inpCov) inpCov.value = String(cfg.apexTestsCoverageMinPercent ?? '');
   });
   refreshGeneralTraceFieldI18n();
   btn?.addEventListener('click', async () => {
     if (statusEl) statusEl.textContent = '';
-    const partial = { apexTestsTraceDebugLevel: inp?.value ?? '' };
+    const partial = {
+      apexTestsTraceDebugLevel: inp?.value ?? '',
+      apexTestsCoverageMinPercent: inpCov?.value ?? ''
+    };
     const cfg = await saveExtensionSettings(partial);
     if (inp) inp.value = String(cfg.apexTestsTraceDebugLevel ?? '');
+    if (inpCov) inpCov.value = String(cfg.apexTestsCoverageMinPercent ?? '');
     if (statusEl) {
       statusEl.textContent = t('settings.advancedSaved');
       statusEl.style.color = '#94a3b8';

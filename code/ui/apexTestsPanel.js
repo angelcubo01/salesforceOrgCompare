@@ -11,7 +11,8 @@ import {
   updateApexTestsHubPollingState,
   stopApexTestsHubPolling,
   initApexTestsCoverageModal,
-  initApexTestsViewTestModal
+  initApexTestsViewTestModal,
+  initApexTestsViewLogModal
 } from './apexTestsHubRuns.js';
 
 /** Prefijo para valor de checkbox de clase cuando no hay Id (debe coincidir con background). */
@@ -19,6 +20,12 @@ const CLASS_OPT_NAME_PREFIX = 'n:';
 
 /** @type {{ id: string | null, name: string }[]} */
 let apexClassesCache = [];
+
+/**
+ * Valores de checkbox de clase (`classOptionValue`) marcados por el usuario.
+ * Persiste aunque el filtro de búsqueda oculte la fila (antes solo existían en el DOM).
+ */
+const selectedClassOptionValues = new Set();
 
 /** Métodos marcados por nombre de clase (persiste al añadir clases / recargar tabla). */
 const methodSelectionsByClass = new Map();
@@ -204,16 +211,16 @@ function pruneMethodSelections() {
 }
 
 function getSelectedClassNamesOrdered() {
-  const { classTbody } = getEls();
-  if (!classTbody) return [];
-  return [...classTbody.querySelectorAll('input.apex-tests-class-cb:checked')]
-    .map((cb) => {
-      const v = cb.value;
-      if (v.startsWith(CLASS_OPT_NAME_PREFIX)) return v.slice(CLASS_OPT_NAME_PREFIX.length);
-      return apexClassesCache.find((x) => x.id === v)?.name;
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+  const names = [];
+  for (const v of selectedClassOptionValues) {
+    if (v.startsWith(CLASS_OPT_NAME_PREFIX)) {
+      names.push(v.slice(CLASS_OPT_NAME_PREFIX.length));
+    } else {
+      const x = apexClassesCache.find((c) => c.id === v);
+      if (x?.name) names.push(x.name);
+    }
+  }
+  return names.sort((a, b) => a.localeCompare(b));
 }
 
 function syncMethodCheckboxToMap(cb) {
@@ -283,15 +290,7 @@ function refreshSelectionTree() {
 }
 
 function getCheckedClassValues() {
-  const { classTbody } = getEls();
-  if (!classTbody) return [];
-  return [...classTbody.querySelectorAll('input.apex-tests-class-cb:checked')].map((cb) => cb.value);
-}
-
-function setEq(a, b) {
-  if (a.size !== b.size) return false;
-  for (const x of a) if (!b.has(x)) return false;
-  return true;
+  return [...selectedClassOptionValues];
 }
 
 function updateClassRowActiveHighlight() {
@@ -324,6 +323,7 @@ function clearMethodTable() {
 
 function resetApexTestsUi() {
   apexClassesCache = [];
+  selectedClassOptionValues.clear();
   methodSelectionsByClass.clear();
   activeClassForMethods = null;
   const { filter, classTbody, runStatus } = getEls();
@@ -341,7 +341,6 @@ function applyClassFilter() {
   const { classTbody, filter } = getEls();
   if (!classTbody) return;
   const q = (filter?.value || '').trim().toLowerCase();
-  const prevChecked = new Set(getCheckedClassValues());
   classTbody.innerHTML = '';
   for (const c of apexClassesCache) {
     if (q && !String(c.name).toLowerCase().includes(q)) continue;
@@ -352,7 +351,7 @@ function applyClassFilter() {
     cb.type = 'checkbox';
     cb.className = 'apex-tests-class-cb';
     cb.value = val;
-    cb.checked = prevChecked.has(val);
+    cb.checked = selectedClassOptionValues.has(val);
     tdCb.appendChild(cb);
     const tdName = document.createElement('td');
     tdName.className = 'apex-tests-td-name';
@@ -361,15 +360,8 @@ function applyClassFilter() {
     tr.appendChild(tdName);
     classTbody.appendChild(tr);
   }
-  const afterChecked = new Set(
-    [...classTbody.querySelectorAll('input.apex-tests-class-cb:checked')].map((cb) => cb.value)
-  );
-  if (activeClassForMethods && !afterChecked.has(activeClassForMethods)) {
-    activeClassForMethods = [...afterChecked][0] ?? null;
-  }
-  if (!setEq(prevChecked, afterChecked)) {
-    pruneMethodSelections();
-    scheduleReloadMethods();
+  if (activeClassForMethods && !selectedClassOptionValues.has(activeClassForMethods)) {
+    activeClassForMethods = getCheckedClassValues()[0] ?? null;
   }
   updateClassRowActiveHighlight();
   refreshSelectionTree();
@@ -466,6 +458,7 @@ async function loadApexClasses() {
   const { status, runBtn, classTbody } = getEls();
   if (!state.leftOrgId) return;
   if (apexTestsPanelOrgId !== state.leftOrgId) {
+    selectedClassOptionValues.clear();
     methodSelectionsByClass.clear();
     activeClassForMethods = null;
     apexTestsPanelOrgId = state.leftOrgId;
@@ -484,6 +477,7 @@ async function loadApexClasses() {
   if (runBtn) runBtn.disabled = false;
   if (!res.ok) {
     apexClassesCache = [];
+    selectedClassOptionValues.clear();
     methodSelectionsByClass.clear();
     activeClassForMethods = null;
     if (classTbody) classTbody.innerHTML = '';
@@ -503,6 +497,22 @@ async function loadApexClasses() {
     return;
   }
   apexClassesCache = res.classes || [];
+  const validVals = new Set(apexClassesCache.map((c) => classOptionValue(c)));
+  let prunedSelection = false;
+  for (const v of [...selectedClassOptionValues]) {
+    if (!validVals.has(v)) {
+      selectedClassOptionValues.delete(v);
+      prunedSelection = true;
+    }
+  }
+  const prevActive = activeClassForMethods;
+  if (activeClassForMethods && !selectedClassOptionValues.has(activeClassForMethods)) {
+    activeClassForMethods = getCheckedClassValues()[0] ?? null;
+  }
+  pruneMethodSelections();
+  if (prunedSelection || prevActive !== activeClassForMethods) {
+    scheduleReloadMethods();
+  }
   applyClassFilter();
   if (status) status.textContent = t('apexTests.orgReady');
   scheduleApexTestsFitScale();
@@ -523,8 +533,9 @@ function buildRunBody() {
     const methods =
       set && set.size > 0 ? [...set].sort((a, b) => a.localeCompare(b)) : null;
     if (c?.id) {
-      if (methods?.length) tests.push({ classId: c.id, testMethods: methods });
-      else tests.push({ classId: c.id });
+      /** `className` es solo para UI / hub; la API usa `classId` (se elimina en background). */
+      if (methods?.length) tests.push({ classId: c.id, className: cn, testMethods: methods });
+      else tests.push({ classId: c.id, className: cn });
     } else if (methods?.length) {
       tests.push({ className: cn, testMethods: methods });
     } else {
@@ -644,13 +655,16 @@ export function setupApexTestsPanel() {
   tablesWrap?.addEventListener('change', (ev) => {
     const el = ev.target;
     if (el?.classList.contains('apex-tests-class-cb')) {
-      pruneMethodSelections();
       if (el.checked) {
+        selectedClassOptionValues.add(el.value);
         activeClassForMethods = el.value;
-      } else if (activeClassForMethods === el.value) {
-        const rest = getCheckedClassValues();
-        activeClassForMethods = rest[0] ?? null;
+      } else {
+        selectedClassOptionValues.delete(el.value);
+        if (activeClassForMethods === el.value) {
+          activeClassForMethods = getCheckedClassValues()[0] ?? null;
+        }
       }
+      pruneMethodSelections();
       updateClassRowActiveHighlight();
       scheduleReloadMethods();
     } else if (el?.classList.contains('apex-tests-method-cb')) {
@@ -661,5 +675,6 @@ export function setupApexTestsPanel() {
   if (runBtn) runBtn.addEventListener('click', () => void runApexTests());
   initApexTestsCoverageModal();
   initApexTestsViewTestModal();
+  initApexTestsViewLogModal();
   void refreshApexTestsPanel();
 }

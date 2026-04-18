@@ -68,6 +68,57 @@ export async function restQuery(instanceUrl, sid, apiVersion, soql) {
   return body.records || [];
 }
 
+/**
+ * PATCH sobre un registro REST estándar (objetos actualizables vía `/sobjects/`).
+ * @param {string} sobjectApiName p. ej. `AsyncApexJob`
+ * @param {string} recordId Id de 15 o 18 caracteres
+ * @param {Record<string, unknown>} fields cuerpo JSON (p. ej. `{ Status: 'Aborted' }`)
+ */
+export async function restPatchSobject(instanceUrl, sid, apiVersion, sobjectApiName, recordId, fields) {
+  const path = `/services/data/v${apiVersion}/sobjects/${encodeURIComponent(String(sobjectApiName))}/${encodeURIComponent(String(recordId))}`;
+  const res = await restFetchWithSid(instanceUrl, sid, path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields && typeof fields === 'object' ? fields : {})
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(`PATCH ${sobjectApiName}: ${res.status} ${detail}`);
+    err.status = res.status;
+    throw err;
+  }
+  return true;
+}
+
+/**
+ * PATCH Tooling API (p. ej. `ApexTestQueueItem` con `Status: Aborted` para cancelar tests en cola).
+ */
+export async function toolingPatchSobject(instanceUrl, sid, apiVersion, sobjectApiName, recordId, fields) {
+  const path = `/services/data/v${apiVersion}/tooling/sobjects/${encodeURIComponent(String(sobjectApiName))}/${encodeURIComponent(String(recordId))}`;
+  const res = await restFetchWithSid(instanceUrl, sid, path, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields && typeof fields === 'object' ? fields : {})
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(`Tooling PATCH ${sobjectApiName}: ${res.status} ${detail}`);
+    err.status = res.status;
+    throw err;
+  }
+  return true;
+}
+
 /** Igual que {@link restQuery} pero sigue todas las páginas (`nextRecordsUrl`). */
 export async function restQueryAll(instanceUrl, sid, apiVersion, soql) {
   const encoded = encodeURIComponent(soql);
@@ -668,7 +719,9 @@ function toSoqlUtcDateTimeLiteral(isoOrDate) {
 /**
  * Logs de depuración en una ventana temporal (p. ej. ejecución de tests).
  * Incluye campos para elegir el log asociado al job (usuario, duración, operación).
- * @param {{ logUserId?: string, limit?: number }} [opts]
+ * @param {{ logUserId?: string, limit?: number, operationEquals?: string, locationLikeContains?: string }} [opts]
+ *   `operationEquals` p. ej. `ApexTestHandler` para acotar a logs de ejecución de tests.
+ *   `locationLikeContains` texto literal a buscar en `Location` (se escapan `%`, `_` y `\\` para LIKE).
  */
 export async function queryApexLogsInWindow(instanceUrl, sid, apiVersion, sinceIso, untilIso, opts = {}) {
   const a = toSoqlUtcDateTimeLiteral(sinceIso);
@@ -677,14 +730,38 @@ export async function queryApexLogsInWindow(instanceUrl, sid, apiVersion, sinceI
   const limit = Math.min(200, Math.max(10, Number(opts.limit) || 80));
   const uid = String(opts.logUserId || '').replace(/[^a-zA-Z0-9]/g, '');
   const userClause = uid ? ` AND LogUserId = '${escapeSoqlLiteral(uid)}'` : '';
-  const soql = `SELECT Id, StartTime, Operation, LogLength, LogUserId, DurationMilliseconds FROM ApexLog WHERE StartTime >= ${a} AND StartTime <= ${b}${userClause} ORDER BY StartTime ASC LIMIT ${limit}`;
+  const opEq = String(opts.operationEquals || '').trim();
+  const opClause = opEq ? ` AND Operation = '${escapeSoqlLiteral(opEq)}'` : '';
+  const locNeedle = String(opts.locationLikeContains || '').trim();
+  /** Solo nombres API seguros para LIKE (evita comillas y comodines mal escapados). */
+  const safeLoc =
+    locNeedle && /^[a-zA-Z][a-zA-Z0-9_]*$/.test(locNeedle) ? locNeedle : '';
+  let likeClause = '';
+  if (safeLoc) {
+    const pat = soqlLikeEscapeMetacharacters(safeLoc);
+    likeClause = ` AND Location LIKE '%${pat}%' ESCAPE '\\'`;
+  }
+  const baseFields = 'Id, StartTime, Operation, LogLength, LogUserId, DurationMilliseconds, Location';
+  const whereCore = `StartTime >= ${a} AND StartTime <= ${b}${userClause}${opClause}`;
+  const orderLimit = ` ORDER BY StartTime ASC LIMIT ${limit}`;
+  const soqlLocNoLike = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${orderLimit}`;
+  const soqlWithLoc = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${likeClause}${orderLimit}`;
+  const soqlNoLoc = `SELECT Id, StartTime, Operation, LogLength, LogUserId, DurationMilliseconds FROM ApexLog WHERE ${whereCore}${orderLimit}`;
   try {
-    return (await toolingQuery(instanceUrl, sid, apiVersion, soql)) || [];
+    if (likeClause) {
+      const withLike = (await toolingQueryAll(instanceUrl, sid, apiVersion, soqlWithLoc)) || [];
+      if (withLike.length) return withLike;
+    }
+    return (await toolingQueryAll(instanceUrl, sid, apiVersion, soqlLocNoLike)) || [];
   } catch {
     try {
-      return (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
+      return (await toolingQueryAll(instanceUrl, sid, apiVersion, soqlLocNoLike)) || [];
     } catch {
-      return [];
+      try {
+        return (await restQueryAll(instanceUrl, sid, apiVersion, soqlNoLoc)) || [];
+      } catch {
+        return [];
+      }
     }
   }
 }
@@ -695,14 +772,64 @@ function parseLogTimeMs(d) {
   return Number.isNaN(t) ? null : t;
 }
 
+/** Patrón LIKE (sin comillas): escapa `\\`, `%` y `_` para usar con `ESCAPE '\\'`. */
+function soqlLikeEscapeMetacharacters(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+/**
+ * `Location` en ApexLog suele ser el contexto (p. ej. clase de test) en ejecuciones de test.
+ * Puede ser `Clase`, `ns.Clase`, `Clase.metodo`, etc. (misma fila que el Id del log en Setup).
+ */
+export function apexLogLocationMatchesTestClass(location, className) {
+  const cn = String(className || '').trim();
+  if (!cn) return true;
+  const loc = location == null ? '' : String(location).trim();
+  if (!loc) return false;
+  const a = loc.toLowerCase();
+  const b = cn.toLowerCase();
+  if (a === b) return true;
+  if (b.length >= 4 && a.includes(b)) return true;
+  const seg = a.split(/[.\s]+/).filter(Boolean);
+  if (seg.includes(b)) return true;
+  return a.endsWith('.' + b) || a.includes('.' + b + '.');
+}
+
+/**
+ * ¿El texto del cuerpo del log parece corresponder a la clase de test indicada?
+ * Busca el nombre de clase y líneas típicas de ejecución de tests (barato: solo prefijo).
+ */
+export function apexLogBodyLooksLikeTestClass(body, className) {
+  const cn = String(className || '').trim();
+  if (!cn || body == null) return false;
+  const text = String(body);
+  const head = text.length > 180_000 ? text.slice(0, 180_000) : text;
+  const lo = head.toLowerCase();
+  const b = cn.toLowerCase();
+  if (lo.includes(b)) return true;
+  const compact = cn.replace(/[^a-zA-Z0-9_]/g, '');
+  if (compact.length >= 4 && head.includes(compact)) return true;
+  return /\bEXECUTION_STARTED\b/i.test(head) && lo.includes(b);
+}
+
 /**
  * Elige el ApexLog más probable para una ejecución AsyncApexJob (tests).
  * Evita tomar el log más grande de la ventana (puede ser otra actividad del mismo usuario).
+ * Con `apexTestClassName`, se priorizan filas cuyo `Location` encaja; si ninguna encaja, se usa el resto con puntuación (no devuelve null si hay logs).
  */
-export function pickBestApexLogForTestRun(logs, { createdById, createdMs, completedMs }) {
+export function pickBestApexLogForTestRun(
+  logs,
+  { createdById, createdMs, completedMs, apexTestClassName }
+) {
   if (!Array.isArray(logs) || !logs.length) return null;
   const id15 = (x) => (x == null ? '' : String(x).slice(0, 15));
   const cb = createdById ? id15(createdById) : '';
+
+  const wantClass = String(apexTestClassName || '').trim();
+  const locationMatched = wantClass
+    ? logs.filter((l) => apexLogLocationMatchesTestClass(l.Location, wantClass))
+    : [];
+  const pool = locationMatched.length ? locationMatched : logs;
 
   const scoreOne = (l) => {
     let score = 0;
@@ -710,9 +837,12 @@ export function pickBestApexLogForTestRun(logs, { createdById, createdMs, comple
     const op = String(l.Operation || '');
     const len = Number(l.LogLength) || 0;
 
+    if (wantClass && apexLogLocationMatchesTestClass(l.Location, wantClass)) score += 450;
+
     if (cb && id15(l.LogUserId) === cb) score += 200;
 
-    if (op === 'Batch Apex' || op === 'Api') score += 90;
+    if (op === 'ApexTestHandler') score += 110;
+    else if (op === 'Batch Apex' || op === 'Api') score += 90;
     else if (op === 'Developer Console') score -= 60;
 
     if (createdMs != null && completedMs != null && st != null) {
@@ -729,16 +859,60 @@ export function pickBestApexLogForTestRun(logs, { createdById, createdMs, comple
     return score;
   };
 
-  let best = logs[0];
+  let best = pool[0];
   let bestS = scoreOne(best);
-  for (let i = 1; i < logs.length; i++) {
-    const s = scoreOne(logs[i]);
+  for (let i = 1; i < pool.length; i++) {
+    const s = scoreOne(pool[i]);
     if (s > bestS) {
       bestS = s;
-      best = logs[i];
+      best = pool[i];
     }
   }
   return best;
+}
+
+const SNIFF_MAX_LOG_BYTES = 900_000;
+const SNIFF_MAX_CANDIDATES = 6;
+
+/**
+ * Si `Location` no basta, descarga solo logs pequeños y busca el nombre de clase en el prefijo del cuerpo.
+ * @returns {Promise<{ row: object, body: string } | null>}
+ */
+export async function pickApexTestLogByBodySnippet(
+  instanceUrl,
+  sid,
+  apiVersion,
+  logs,
+  className,
+  fetchBodyFn
+) {
+  const want = String(className || '').trim();
+  if (!want || !Array.isArray(logs) || !logs.length) return null;
+  const fetchBody = fetchBodyFn || fetchApexLogBody;
+  const candidates = [...logs]
+    .filter((l) => String(l.Operation || '') === 'ApexTestHandler')
+    .filter((l) => {
+      const n = Number(l.LogLength);
+      return Number.isFinite(n) && n > 0 && n <= SNIFF_MAX_LOG_BYTES;
+    })
+    .sort((x, y) => {
+      const ax = Number(x.LogLength) || 0;
+      const ay = Number(y.LogLength) || 0;
+      if (ax !== ay) return ax - ay;
+      return String(x.StartTime || '').localeCompare(String(y.StartTime || ''));
+    })
+    .slice(0, SNIFF_MAX_CANDIDATES);
+
+  for (const l of candidates) {
+    if (!l?.Id) continue;
+    try {
+      const body = await fetchBody(instanceUrl, sid, apiVersion, l.Id);
+      if (apexLogBodyLooksLikeTestClass(body, want)) return { row: l, body };
+    } catch {
+      /* siguiente candidato */
+    }
+  }
+  return null;
 }
 
 function toSfJsonUtcDateTime(exp) {

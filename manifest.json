@@ -3,7 +3,7 @@
 
   "manifest_version": 3,
   "name": "Salesforce Org Compare",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Compare Salesforce orgs using your browser session.",
   "homepage_url": "https://salesforceorgcompare.web.app/",
   "icons": {
@@ -25,6 +25,7 @@
   "permissions": [
     "alarms",
     "cookies",
+    "notifications",
     "storage",
     "tabs"
   ],

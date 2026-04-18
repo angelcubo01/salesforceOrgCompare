@@ -7,6 +7,8 @@ import {
   sourceSignatureFromFiles,
   restQuery,
   restQueryAll,
+  restPatchSobject,
+  toolingPatchSobject,
   getOrganizationInfo,
   toolingQuery,
   toolingQueryAll,
@@ -15,7 +17,6 @@ import {
   fetchApexTestQueueServletStatus,
   fetchApexLogBody,
   queryApexLogsInWindow,
-  pickBestApexLogForTestRun,
   enableUserDebugTraceForSessionUser,
   deleteTraceFlagById
 } from '../shared/salesforceApi.js';
@@ -35,14 +36,102 @@ import { appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
 import {
   loadExtensionSettings,
   getApexTestsClassNameLikePatterns,
-  getApexTestsTraceDebugLevel
+  getApexTestsTraceDebugLevel,
+  getApexTestsCoverageMinPercent,
 } from '../shared/extensionSettings.js';
 import { stageApexViewerPayload, takeApexViewerPayload } from './apexViewerStaging.js';
+import { isTestSetupApexTestResult } from '../shared/apexTestMakeDataMethod.js';
 
 function buildApexClassNameLikeWhere(patterns) {
   const list = patterns && patterns.length ? patterns : ['%test%'];
   const parts = list.map((p) => `Name LIKE '${escapeSoqlLiteral(p)}'`);
   return `( ${parts.join(' OR ')} )`;
+}
+
+/**
+ * Resta del total Pass los resultados de métodos `@TestSetup` (`IsTestSetup = true`).
+ * Si la org no expone `IsTestSetup`, la consulta falla y se devuelve `outcomeCounts` sin cambiar.
+ * @param {string} instanceUrl
+ * @param {string} sid
+ * @param {string} apiVersion
+ * @param {string} jobIdForResults
+ * @param {Record<string, number>} outcomeCounts
+ */
+async function adjustOutcomeCountsExcludingTestSetup(
+  instanceUrl,
+  sid,
+  apiVersion,
+  jobIdForResults,
+  outcomeCounts
+) {
+  if (!outcomeCounts || outcomeCounts.Pass == null || Number(outcomeCounts.Pass) < 1) {
+    return outcomeCounts;
+  }
+  let setupPassCount = 0;
+  try {
+    const soql = `SELECT COUNT(Id) FROM ApexTestResult WHERE AsyncApexJobId = '${escapeSoqlLiteral(
+      jobIdForResults
+    )}' AND Outcome = 'Pass' AND IsTestSetup = true`;
+    const rows = await toolingQuery(instanceUrl, sid, apiVersion, soql);
+    const row = rows && rows[0];
+    if (row) {
+      for (const [key, val] of Object.entries(row)) {
+        if (key === 'attributes') continue;
+        if (typeof val === 'number') {
+          setupPassCount = val;
+          break;
+        }
+      }
+    }
+  } catch {
+    return outcomeCounts;
+  }
+  if (!setupPassCount) return outcomeCounts;
+  const next = { ...outcomeCounts };
+  next.Pass = Math.max(0, Number(next.Pass || 0) - setupPassCount);
+  return next;
+}
+
+/**
+ * Varias filas del servlet pueden compartir el mismo `parentid` (una por clase de test).
+ * Elige la que mejor representa el estado global: si hay alguna en Processing, prevalece sobre Queued.
+ */
+function pickPrimaryApexTestServletRow(rows) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const priority = (st) => {
+    const s = String(st || '')
+      .trim()
+      .toLowerCase();
+    const order = ['processing', 'preparing', 'holding', 'abortingjob', 'queued'];
+    const i = order.indexOf(s);
+    return i >= 0 ? i : 100;
+  };
+  let best = rows[0];
+  let bestP = priority(best.status);
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const p = priority(row.status);
+    if (p < bestP) {
+      best = row;
+      bestP = p;
+    }
+  }
+  return best;
+}
+
+/** Campos extra del panel (p. ej. `className` junto a `classId`) no forman parte del contrato de `runTestsAsynchronous`. */
+function sanitizeRunTestsBodyForApi(body) {
+  if (!body || typeof body !== 'object') return body;
+  const tests = body.tests;
+  if (!Array.isArray(tests)) return body;
+  return {
+    ...body,
+    tests: tests.map((te) => {
+      if (!te || typeof te !== 'object') return te;
+      const { className: _omit, ...rest } = te;
+      return rest;
+    })
+  };
 }
 
 function mergeApexCoverageJsonField(raw, coveredSet, uncoveredSet) {
@@ -457,7 +546,11 @@ export function installMessageHandlers() {
           }
           case 'apexViewer:stage': {
             try {
-              const id = stageApexViewerPayload(message.title, message.content);
+              const il = message.initialLine;
+              const id = stageApexViewerPayload(message.title, message.content, {
+                initialLine: il != null ? Number(il) : undefined,
+                downloadFileName: message.downloadFileName
+              });
               sendResponse({ ok: true, id });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
@@ -470,7 +563,13 @@ export function installMessageHandlers() {
               sendResponse({ ok: false, error: 'NOT_FOUND' });
               break;
             }
-            sendResponse({ ok: true, title: v.title, content: v.content });
+            sendResponse({
+              ok: true,
+              title: v.title,
+              content: v.content,
+              ...(v.initialLine != null ? { initialLine: v.initialLine } : {}),
+              ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {})
+            });
             break;
           }
           case 'metadata:retrievePermissionSet': {
@@ -786,7 +885,9 @@ export function installMessageHandlers() {
             let sid = await getSidForCookieDomain(org.cookieDomain);
             if (!sid) sid = await getSidForOrgId(org.id);
             if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
-            const body = runBody && typeof runBody === 'object' ? runBody : {};
+            const body = sanitizeRunTestsBodyForApi(
+              runBody && typeof runBody === 'object' ? runBody : {}
+            );
             await loadExtensionSettings();
             const traceDebugLevel = getApexTestsTraceDebugLevel();
             let traceFlagId = null;
@@ -904,7 +1005,7 @@ export function installMessageHandlers() {
                 let job = null;
 
                 if (queueRows.length) {
-                  const primary = queueRows[0];
+                  const primary = pickPrimaryApexTestServletRow(queueRows);
                   job = {
                     Id: primary.parentid,
                     Status: primary.status,
@@ -964,23 +1065,49 @@ export function installMessageHandlers() {
                       }
                       outcomeCounts[k] = n;
                     }
+                    outcomeCounts = await adjustOutcomeCountsExcludingTestSetup(
+                      org.instanceUrl,
+                      sid,
+                      org.apiVersion,
+                      jobIdForResults,
+                      outcomeCounts
+                    );
                   } catch {
                     try {
-                      const light = `SELECT Outcome FROM ApexTestResult WHERE AsyncApexJobId = '${escapeSoqlLiteral(
+                      const light = `SELECT Outcome, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${escapeSoqlLiteral(
                         jobIdForResults
                       )}'`;
                       const rows = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, light);
                       outcomeCounts = {};
                       for (const r of rows) {
                         const k = r.Outcome != null ? String(r.Outcome) : '?';
+                        if (k === 'Pass' && isTestSetupApexTestResult(r)) continue;
                         outcomeCounts[k] = (outcomeCounts[k] || 0) + 1;
                       }
                     } catch {
-                      outcomeCounts = null;
+                      try {
+                        const legacy = `SELECT Outcome FROM ApexTestResult WHERE AsyncApexJobId = '${escapeSoqlLiteral(
+                          jobIdForResults
+                        )}'`;
+                        const rows = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, legacy);
+                        outcomeCounts = {};
+                        for (const r of rows) {
+                          const k = r.Outcome != null ? String(r.Outcome) : '?';
+                          outcomeCounts[k] = (outcomeCounts[k] || 0) + 1;
+                        }
+                      } catch {
+                        outcomeCounts = null;
+                      }
                     }
                   }
                 }
-                runs.push({ jobId, canonicalJobId: job.Id, job, outcomeCounts, queueRows });
+                runs.push({
+                  jobId,
+                  canonicalJobId: job.Id,
+                  job,
+                  outcomeCounts,
+                  queueRows
+                });
               }
               await scheduleTerminalJobsTraceCleanup(orgId, runs);
               sendResponse({ ok: true, runs });
@@ -1014,23 +1141,28 @@ export function installMessageHandlers() {
               const st = await fetchApexTestQueueServletStatus(org.instanceUrl, sid);
               const raw =
                 st && st.success && Array.isArray(st.apexTestJobs) ? st.apexTestJobs : [];
-              const byParent = new Map();
+              const byParentLists = new Map();
               for (const row of raw) {
                 const p = row?.parentid;
                 if (!p) continue;
                 const k15 = sfId15(p);
                 if (trackedSet.has(k15)) continue;
-                if (!byParent.has(k15)) {
-                  byParent.set(k15, {
-                    parentid: String(p),
-                    status: row.status != null ? String(row.status) : '',
-                    extstatus: row.extstatus != null ? String(row.extstatus) : '',
-                    date: row.date != null ? String(row.date) : '',
-                    classname: row.classname != null ? String(row.classname) : ''
-                  });
-                }
+                if (!byParentLists.has(k15)) byParentLists.set(k15, []);
+                byParentLists.get(k15).push(row);
               }
-              sendResponse({ ok: true, jobs: [...byParent.values()] });
+              const jobs = [];
+              for (const list of byParentLists.values()) {
+                const primary = pickPrimaryApexTestServletRow(list);
+                if (!primary) continue;
+                jobs.push({
+                  parentid: String(primary.parentid),
+                  status: primary.status != null ? String(primary.status) : '',
+                  extstatus: primary.extstatus != null ? String(primary.extstatus) : '',
+                  date: primary.date != null ? String(primary.date) : '',
+                  classname: primary.classname != null ? String(primary.classname) : ''
+                });
+              }
+              sendResponse({ ok: true, jobs });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }
@@ -1058,20 +1190,27 @@ export function installMessageHandlers() {
               const esc = escapeSoqlLiteral(jobId);
               let rows;
               try {
-                const soql = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') ORDER BY ApexClass.Name, MethodName LIMIT 200`;
+                const soql = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') ORDER BY ApexClass.Name, MethodName LIMIT 200`;
                 rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
               } catch {
-                const soql2 = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') LIMIT 200`;
-                rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql2);
+                try {
+                  const soql2 = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') ORDER BY ApexClass.Name, MethodName LIMIT 200`;
+                  rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql2);
+                } catch {
+                  const soql3 = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') LIMIT 200`;
+                  rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql3);
+                }
               }
-              sendResponse({ ok: true, failures: rows || [] });
+              const raw = rows || [];
+              const failures = raw.filter((r) => !isTestSetupApexTestResult(r));
+              sendResponse({ ok: true, failures });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexTests:getRunCoverage': {
-            const { orgId, jobId } = message;
+            const { orgId, jobId, minCoveragePercent: minCoveragePercentMsg } = message;
             if (!jobId) {
               sendResponse({ ok: false, error: 'Missing jobId' });
               break;
@@ -1089,6 +1228,13 @@ export function installMessageHandlers() {
               break;
             }
             try {
+              await loadExtensionSettings();
+              let minPct = getApexTestsCoverageMinPercent();
+              if (minCoveragePercentMsg != null && minCoveragePercentMsg !== '') {
+                const n = Number(minCoveragePercentMsg);
+                if (Number.isFinite(n)) minPct = Math.min(100, Math.max(0, n));
+              }
+              const coverageMinFraction = Math.min(1, Math.max(0, minPct / 100));
               const esc = escapeSoqlLiteral(jobId);
               const trSoql = `SELECT ApexClassId FROM ApexTestResult WHERE AsyncApexJobId = '${esc}'`;
               let testClassRows = [];
@@ -1126,7 +1272,7 @@ export function installMessageHandlers() {
                 const ag = byTarget.get(tid);
                 mergeApexCoverageJsonField(row.Coverage, ag.covered, ag.uncovered);
               }
-              const overHalf = [];
+              const overThreshold = [];
               for (const [classOrTriggerId, ag] of byTarget) {
                 for (const ln of ag.covered) ag.uncovered.delete(ln);
                 const nCovered = ag.covered.size;
@@ -1134,12 +1280,12 @@ export function installMessageHandlers() {
                 const total = nCovered + nUncovered;
                 if (total <= 0) continue;
                 const pct = nCovered / total;
-                if (pct > 0.5) {
-                  overHalf.push({ id: classOrTriggerId, percent: pct, covered: nCovered, total });
+                if (pct >= coverageMinFraction) {
+                  overThreshold.push({ id: classOrTriggerId, percent: pct, covered: nCovered, total });
                 }
               }
-              overHalf.sort((a, b) => b.percent - a.percent);
-              const ids = overHalf.map((x) => x.id);
+              overThreshold.sort((a, b) => b.percent - a.percent);
+              const ids = overThreshold.map((x) => x.id);
               const nameById = new Map();
               const chunkSize = 40;
               for (let i = 0; i < ids.length; i += chunkSize) {
@@ -1180,7 +1326,7 @@ export function installMessageHandlers() {
                 const s = String(id || '');
                 return nameById.get(s) || (s.length >= 15 ? nameById.get(s.slice(0, 15)) : null) || s;
               };
-              const classes = overHalf.map((row) => ({
+              const classes = overThreshold.map((row) => ({
                 id: row.id,
                 name: resolveName(row.id),
                 percent: row.percent,
@@ -1194,7 +1340,9 @@ export function installMessageHandlers() {
             break;
           }
           case 'apexTests:getTestRunLog': {
-            let { orgId, jobId, createdDate, completedDate, createdById } = message;
+            let { orgId, jobId, createdDate, completedDate, createdById, logId: logIdParam, intent } =
+              message;
+            const wantLogBody = intent === 'body';
             if (!jobId) {
               sendResponse({ ok: false, error: 'Missing jobId' });
               break;
@@ -1218,6 +1366,17 @@ export function installMessageHandlers() {
                 return Number.isNaN(t) ? null : t;
               };
 
+              const rawLogId = logIdParam != null ? String(logIdParam).replace(/[^a-zA-Z0-9]/g, '') : '';
+              if (wantLogBody && rawLogId) {
+                const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, rawLogId);
+                sendResponse({
+                  ok: true,
+                  logId: rawLogId,
+                  body
+                });
+                break;
+              }
+
               const escJob = escapeSoqlLiteral(jobId);
               const jq = `SELECT Id, CreatedDate, CompletedDate, CreatedById FROM AsyncApexJob WHERE Id = '${escJob}'`;
               try {
@@ -1230,93 +1389,52 @@ export function installMessageHandlers() {
                   if (createdById == null) createdById = row.CreatedById;
                 }
               } catch {
-                /* seguir con fechas del mensaje */
+                /* fechas del mensaje */
               }
 
-              let jobCreatedMs = parseMs(createdDate);
-              let jobCompletedMs = parseMs(completedDate);
-              if (jobCompletedMs == null && jobCreatedMs != null) {
-                jobCompletedMs = jobCreatedMs + 45 * 60 * 1000;
-              }
-              if (jobCreatedMs == null && jobCompletedMs != null) {
-                jobCreatedMs = jobCompletedMs - 45 * 60 * 1000;
-              }
-              let winStartMs = jobCreatedMs;
-              let winEndMs = jobCompletedMs;
-              if (winEndMs == null && winStartMs == null) {
-                sendResponse({ ok: false, error: 'NO_APEX_LOGS' });
+              if (!createdById) {
+                sendResponse({ ok: false, error: 'NO_LOG_USER' });
                 break;
               }
-              if (winStartMs == null) winStartMs = (winEndMs ?? Date.now()) - 30 * 60 * 1000;
-              if (winEndMs == null) winEndMs = (winStartMs ?? Date.now()) + 30 * 60 * 1000;
 
-              const bufMs = 90_000;
-              const sinceIso = new Date(winStartMs - bufMs).toISOString();
-              const untilIso = new Date(winEndMs + bufMs).toISOString();
+              const jobCreatedMs = parseMs(createdDate);
+              if (jobCreatedMs == null) {
+                sendResponse({ ok: false, error: 'NO_JOB_START' });
+                break;
+              }
 
-              const userOpts = createdById
-                ? { logUserId: String(createdById), limit: 80 }
-                : { limit: 80 };
-              let logs = await queryApexLogsInWindow(
+              const completedParsed = parseMs(completedDate);
+              const jobCompletedMs =
+                completedParsed ?? jobCreatedMs + 6 * 60 * 60 * 1000;
+
+              /** Ventana amplia: los ApexLog pueden cerrarse después del CompletedDate del job. */
+              const untilMs = Math.max(
+                jobCompletedMs + 45 * 60 * 1000,
+                jobCreatedMs + 6 * 60 * 60 * 1000
+              );
+              const sinceIso = new Date(jobCreatedMs - 60_000).toISOString();
+              const untilIso = new Date(untilMs).toISOString();
+
+              const logs = await queryApexLogsInWindow(
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
                 sinceIso,
                 untilIso,
-                userOpts
-              );
-              if (!logs.length && createdById) {
-                logs = await queryApexLogsInWindow(
-                  org.instanceUrl,
-                  sid,
-                  org.apiVersion,
-                  sinceIso,
-                  untilIso,
-                  { limit: 80 }
-                );
-              }
-              if (!logs.length) {
-                const wideSince = new Date(winEndMs - 45 * 60 * 1000).toISOString();
-                const wideUntil = new Date(winEndMs + 5 * 60 * 1000).toISOString();
-                logs = await queryApexLogsInWindow(
-                  org.instanceUrl,
-                  sid,
-                  org.apiVersion,
-                  wideSince,
-                  wideUntil,
-                  createdById ? { logUserId: String(createdById), limit: 100 } : { limit: 100 }
-                );
-                if (!logs.length && createdById) {
-                  logs = await queryApexLogsInWindow(
-                    org.instanceUrl,
-                    sid,
-                    org.apiVersion,
-                    wideSince,
-                    wideUntil,
-                    { limit: 100 }
-                  );
+                {
+                  logUserId: String(createdById),
+                  operationEquals: 'ApexTestHandler',
+                  limit: 200
                 }
-              }
+              );
+
               if (!logs.length) {
-                sendResponse({ ok: false, error: 'NO_APEX_LOGS' });
+                sendResponse({ ok: false, error: 'NO_APEX_LOGS_TRACES' });
                 break;
               }
 
-              const pick = pickBestApexLogForTestRun(logs, {
-                createdById,
-                createdMs: jobCreatedMs ?? winStartMs,
-                completedMs: jobCompletedMs ?? winEndMs
-              });
-              const chosen = pick || logs[0];
-              const logId = chosen.Id;
-              const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
-              sendResponse({
-                ok: true,
-                logId,
-                body,
-                operation: chosen.Operation || '',
-                startTime: chosen.StartTime || ''
-              });
+              const slimLogs = logs.map((l) => ({ Id: l.Id }));
+              sendResponse({ ok: true, pick: true, logs: slimLogs });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }
@@ -1464,6 +1582,108 @@ export function installMessageHandlers() {
                 name: row.Name != null ? String(row.Name) : '',
                 body: bodyText
               });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'notifications:showApexTestComplete': {
+            const { title, message: msg } = message;
+            const nid = `sfoc_at_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+            try {
+              await new Promise((resolve, reject) => {
+                chrome.notifications.create(
+                  nid,
+                  {
+                    type: 'basic',
+                    iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+                    title: String(title || 'Salesforce Org Compare').slice(0, 128),
+                    message: String(msg || '').slice(0, 256),
+                    priority: 0
+                  },
+                  () => {
+                    const err = chrome.runtime.lastError;
+                    if (err) reject(new Error(err.message));
+                    else resolve(undefined);
+                  }
+                );
+              });
+              sendResponse({ ok: true });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'apexTests:abortRun': {
+            const { orgId, jobId } = message;
+            if (!jobId) {
+              sendResponse({ ok: false, error: 'Missing jobId' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            /**
+             * `AsyncApexJob` no admite PATCH por REST (CANNOT_INSERT_UPDATE_ACTIVATE_ENTITY).
+             * La forma soportada es actualizar `ApexTestQueueItem` (Tooling) a Status Aborted.
+             */
+            try {
+              const jid = escapeSoqlLiteral(String(jobId).replace(/[^a-zA-Z0-9]/g, ''));
+              const soql = `SELECT Id, Status FROM ApexTestQueueItem WHERE ParentJobId = '${jid}'`;
+              const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+              if (!rows || !rows.length) {
+                sendResponse({
+                  ok: false,
+                  reason: 'NO_QUEUE_ITEMS',
+                  error:
+                    'No ApexTestQueueItem rows for this job (job may be too old or not cancelable via queue).'
+                });
+                break;
+              }
+              const isTerminalQueue = (st) => {
+                const s = String(st || '')
+                  .trim()
+                  .toLowerCase();
+                return ['completed', 'failed', 'aborted'].includes(s);
+              };
+              let patched = 0;
+              let lastErr = '';
+              for (const row of rows) {
+                if (!row?.Id || isTerminalQueue(row.Status)) continue;
+                try {
+                  await toolingPatchSobject(
+                    org.instanceUrl,
+                    sid,
+                    org.apiVersion,
+                    'ApexTestQueueItem',
+                    row.Id,
+                    { Status: 'Aborted' }
+                  );
+                  patched++;
+                } catch (e) {
+                  lastErr = String(e?.message || e);
+                }
+              }
+              if (patched > 0) {
+                sendResponse({ ok: true });
+              } else {
+                sendResponse({
+                  ok: false,
+                  reason: 'NO_ABORTABLE_QUEUE_ITEMS',
+                  error:
+                    lastErr ||
+                    'No queue items in a state that can be aborted (already finished or not updatable).'
+                });
+              }
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }

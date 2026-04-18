@@ -69,6 +69,9 @@ const translations = {
     'settings.adv.apexTestsClassNameLikePatterns.label': 'Filtro SOQL LIKE para clases de prueba (coma)',
     'settings.adv.apexTestsClassNameLikePatterns.hint':
       'Patrones Name LIKE de Apex (coma). Usa % como comodín (p. ej. %test%,%_Test). Varios patrones se unen con OR.',
+    'settings.general.apexTestsCoverageMinPercent.label': 'Umbral mínimo cobertura Apex (%)',
+    'settings.general.apexTestsCoverageMinPercent.hint':
+      'En el modal Cobertura del hub solo se listan clases/triggers con cobertura ≥ este valor (0–100).',
     'settings.general.apexTestsTraceDebugLevel.label': 'Nivel de trazas Apex (DebugLevel)',
     'settings.general.apexTestsTraceDebugLevel.hint':
       'DeveloperName del registro DebugLevel al activar trazas antes de ejecutar tests (p. ej. SFDC_DevConsole). Debe existir en la org.',
@@ -266,11 +269,11 @@ const translations = {
     'apexTests.runsHint': '',
     'apexTests.runsCaption': 'Ejecuciones de pruebas',
     'apexTests.runsEmpty': 'Sin ejecuciones. Abre «Ejecutar tests» para lanzar pruebas.',
+    'apexTests.logOpening': 'Abriendo log…',
     'apexTests.runsColEnv': 'Entorno',
     'apexTests.runsColStartedAt': 'Inicio',
     'apexTests.runsColJobId': 'Id trabajo',
     'apexTests.runsColStatus': 'Estado',
-    'apexTests.runsColProgress': 'Progreso',
     'apexTests.runsColJobErrors': 'Errores (job)',
     'apexTests.runsColTests': 'Resultado',
     'apexTests.runsColActions': 'Acciones',
@@ -300,11 +303,11 @@ const translations = {
     'apexTests.outcome.Skip': 'Omitido',
     'apexTests.runsCoverage': 'Cobertura',
     'apexTests.runsLog': 'Ver log',
-    'apexTests.coverageModalTitle': 'Clases con cobertura > 50 % (este run)',
+    'apexTests.coverageModalTitle': 'Clases/triggers con cobertura ≥ {minPercent}% ',
     'apexTests.coverageModalClose': 'Cerrar',
     'apexTests.coverageLoading': 'Cargando cobertura…',
     'apexTests.coverageEmpty':
-      'No hay clases o triggers por encima del 50 % para este trabajo (o la org no devolvió datos de ApexCodeCoverage). Asegúrate de ejecutar con cobertura activada.',
+      'No hay clases o triggers por encima del umbral configurado para este trabajo (o la org no devolvió datos de ApexCodeCoverage). Asegúrate de ejecutar con cobertura activada.',
     'apexTests.coverageLoadError': 'No se ha podido cargar la cobertura.',
     'apexTests.coverageColClass': 'Clase / trigger',
     'apexTests.coverageColPercent': 'Cobertura',
@@ -317,9 +320,24 @@ const translations = {
     'apexTests.coverageLinesError': 'No se ha podido cargar la cobertura por líneas.',
     'apexTests.coverageLinesStorageError': 'No cabe el código en almacenamiento; abre el run con menos clases o recarga la extensión.',
     'apexTests.runsRerun': 'Re-ejecutar',
+    'apexTests.runsAbort': 'Cancelar',
+    'apexTests.runsAbortHint': 'Solicitar cancelación del trabajo en la org',
+    'apexTests.runsAbortConfirm': '¿Cancelar esta ejecución de pruebas en Salesforce?',
+    'apexTests.runsAbortOk': 'Cancelación solicitada. El estado pasará a Aborted en unos segundos.',
+    'apexTests.runsAbortError': 'No se ha podido cancelar el trabajo.',
+    'apexTests.runsAbortNoQueueItems':
+      'No hay elementos en cola asociados a este trabajo (no se puede cancelar por API o el trabajo es antiguo).',
+    'apexTests.runsAbortNoAbortableItems':
+      'No quedan clases en cola cancelables (ya han terminado o no se pueden actualizar).',
+    'apexTests.notifyRunDoneTitle': 'Prueba Apex finalizada',
+    'apexTests.notifyRunDoneBody': '{env} · {status} · {classes}',
     'apexTests.runsViewTest': 'Ver test',
-    'apexTests.viewTestModalTitle': 'Clases de este run',
-    'apexTests.viewTestOpen': 'Abrir en Monaco',
+    'apexTests.viewTestModalTitle': 'Clases test',
+    'apexTests.viewTestOpen': 'Abrir',
+    'apexTests.viewLogModalTitle': 'ApexLog',
+    'apexTests.viewLogTableColId': 'Id',
+    'apexTests.viewLogTableColAction': 'Acción',
+    'apexTests.viewLogOpen': 'Abrir log',
     'apexTests.viewTestNoClasses':
       'Esta ejecución no guarda clases concretas (p. ej. todas las locales). Lanza con selección explícita.',
     'apexTests.viewTestNoClassesHint':
@@ -336,6 +354,12 @@ const translations = {
       'Ya hay otra ejecución con la misma selección de pruebas en marcha en este entorno.',
     'apexTests.logOpenError': 'No se ha podido abrir el log.',
     'apexTests.logNoLogs': 'No se encontraron ApexLog en la ventana de tiempo del trabajo.',
+    'apexTests.logNoLogForClass':
+      'No hay un log para esta ejecución.',
+    'apexTests.logNoLogsTraces':
+      'No se han generado logs ApexTestHandler para esta ejecución (usuario y fecha de inicio). Comprueba que las trazas estén activas y el nivel de depuración permita generar log.',
+    'apexTests.logNoJobUser': 'No se ha podido determinar el usuario del trabajo; no se pueden filtrar logs.',
+    'apexTests.logNoJobStart': 'No hay fecha de inicio del trabajo; no se puede acotar la búsqueda de logs.',
 
     // ── Puente code ↔ background ──
     'bridge.noExtensionApi':
@@ -468,6 +492,7 @@ const translations = {
     'apexCoverageViewer.legendUncovered': 'No cubierta',
 
     'apexLogViewer.back': 'Volver',
+    'apexLogViewer.download': 'Descargar',
     'apexLogViewer.missingPayload': 'No hay contenido de log. Vuelve a abrirlo desde la tabla de ejecuciones.',
     'apexLogViewer.monacoError': 'No se ha podido cargar el editor de texto.',
 
@@ -549,6 +574,9 @@ const translations = {
     'settings.adv.apexTestsClassNameLikePatterns.label': 'SOQL LIKE filter for test classes (comma-separated)',
     'settings.adv.apexTestsClassNameLikePatterns.hint':
       'Apex Name LIKE patterns (comma). Use % as wildcard (e.g. %test%,%_Test). Multiple patterns are OR-ed.',
+    'settings.general.apexTestsCoverageMinPercent.label': 'Minimum Apex coverage threshold (%)',
+    'settings.general.apexTestsCoverageMinPercent.hint':
+      'Coverage modal lists only classes/triggers at or above this value (0–100).',
     'settings.general.apexTestsTraceDebugLevel.label': 'Apex trace level (DebugLevel)',
     'settings.general.apexTestsTraceDebugLevel.hint':
       'DebugLevel DeveloperName used when enabling traces before test runs (e.g. SFDC_DevConsole). Must exist in the org.',
@@ -746,11 +774,11 @@ const translations = {
     'apexTests.runsHint': '',
     'apexTests.runsCaption': 'Test runs',
     'apexTests.runsEmpty': 'No runs yet. Open «Select & run» to start tests.',
+    'apexTests.logOpening': 'Opening log…',
     'apexTests.runsColEnv': 'Environment',
     'apexTests.runsColStartedAt': 'Started',
     'apexTests.runsColJobId': 'Job Id',
     'apexTests.runsColStatus': 'Status',
-    'apexTests.runsColProgress': 'Progress',
     'apexTests.runsColJobErrors': 'Job errors',
     'apexTests.runsColTests': 'Results',
     'apexTests.runsColActions': 'Actions',
@@ -780,11 +808,11 @@ const translations = {
     'apexTests.outcome.Skip': 'Skip',
     'apexTests.runsCoverage': 'Coverage',
     'apexTests.runsLog': 'View log',
-    'apexTests.coverageModalTitle': 'Classes/triggers with > 50 % coverage (this run)',
+    'apexTests.coverageModalTitle': 'Classes/triggers with coverage ≥ {minPercent}%',
     'apexTests.coverageModalClose': 'Close',
     'apexTests.coverageLoading': 'Loading coverage…',
     'apexTests.coverageEmpty':
-      'No classes or triggers above 50 % for this job (or the org returned no ApexCodeCoverage data). Ensure the run was executed with code coverage enabled.',
+      'No classes or triggers above the configured threshold for this job (or the org returned no ApexCodeCoverage data). Ensure the run was executed with code coverage enabled.',
     'apexTests.coverageLoadError': 'Could not load coverage.',
     'apexTests.coverageColClass': 'Class / trigger',
     'apexTests.coverageColPercent': 'Coverage',
@@ -797,9 +825,24 @@ const translations = {
     'apexTests.coverageLinesError': 'Could not load line-level coverage.',
     'apexTests.coverageLinesStorageError': 'Source could not be stored; try a smaller run or reload the extension.',
     'apexTests.runsRerun': 'Re-run',
+    'apexTests.runsAbort': 'Cancel',
+    'apexTests.runsAbortHint': 'Request abort for this job in the org',
+    'apexTests.runsAbortConfirm': 'Cancel this test run in Salesforce?',
+    'apexTests.runsAbortOk': 'Abort requested. Status should show Aborted shortly.',
+    'apexTests.runsAbortError': 'Could not cancel the job.',
+    'apexTests.runsAbortNoQueueItems':
+      'No queue items found for this job (not cancelable via API or job is too old).',
+    'apexTests.runsAbortNoAbortableItems':
+      'No queued test classes left to abort (already finished or not updatable).',
+    'apexTests.notifyRunDoneTitle': 'Apex test run finished',
+    'apexTests.notifyRunDoneBody': '{env} · {status} · {classes}',
     'apexTests.runsViewTest': 'View test',
-    'apexTests.viewTestModalTitle': 'Classes in this run',
-    'apexTests.viewTestOpen': 'Open in Monaco',
+    'apexTests.viewTestModalTitle': 'Classes test',
+    'apexTests.viewTestOpen': 'Open',
+    'apexTests.viewLogModalTitle': 'ApexLog',
+    'apexTests.viewLogTableColId': 'Id',
+    'apexTests.viewLogTableColAction': 'Action',
+    'apexTests.viewLogOpen': 'Open log',
     'apexTests.viewTestNoClasses':
       'This run has no specific classes saved (e.g. all local tests). Run with an explicit selection.',
     'apexTests.viewTestNoClassesHint':
@@ -816,6 +859,12 @@ const translations = {
       'Another run with the same test selection is already in progress in this org.',
     'apexTests.logOpenError': 'Could not open the log.',
     'apexTests.logNoLogs': 'No ApexLog records found in the job time window.',
+    'apexTests.logNoLogForClass':
+      'No ApexLog found for this run.',
+    'apexTests.logNoLogsTraces':
+      'No ApexTestHandler logs for this run (same user, after job start). Check that traces are enabled and the debug level can produce logs.',
+    'apexTests.logNoJobUser': 'Could not resolve the job user; logs cannot be filtered.',
+    'apexTests.logNoJobStart': 'Job has no start time; cannot narrow log search.',
 
     // ── Puente code ↔ background ──
     'bridge.noExtensionApi':
@@ -948,6 +997,7 @@ const translations = {
     'apexCoverageViewer.legendUncovered': 'Uncovered',
 
     'apexLogViewer.back': 'Back',
+    'apexLogViewer.download': 'Download',
     'apexLogViewer.missingPayload': 'No log content. Open it again from the runs table.',
     'apexLogViewer.monacoError': 'Could not load the text editor.',
 
