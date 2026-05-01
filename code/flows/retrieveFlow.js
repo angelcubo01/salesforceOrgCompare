@@ -216,7 +216,7 @@ export async function retrieveAndLoadFromZip(item) {
       const lc = leftByPath[firstPath] ?? '';
       const rc = rightByPath[firstPath] ?? '';
       const fn = firstPath.split('/').pop() || 'file';
-      const prepared = prepareDiffForViewer(lc, rc, { buildAlignedDiff });
+      const prepared = await prepareDiffForViewer(lc, rc, { buildAlignedDiff });
       if (prepared.userMessage) {
         showToast(prepared.userMessage, prepared.skippedHeavyDiff ? 'warn' : 'info');
       }
@@ -279,7 +279,7 @@ export async function retrieveAndLoadFromZip(item) {
     const rightFileName = targetFileName || (item.fileName || `${item.key}.permissionset`);
 
     // Construir diff alineado entre ambos retrieves (izquierda vs derecha), con límites anti-OOM
-    const prepared = prepareDiffForViewer(leftRetrievedContent, rightRetrievedContent, { buildAlignedDiff });
+    const prepared = await prepareDiffForViewer(leftRetrievedContent, rightRetrievedContent, { buildAlignedDiff });
     if (prepared.userMessage) {
       showToast(prepared.userMessage, prepared.skippedHeavyDiff ? 'warn' : 'info');
     }

@@ -58,8 +58,19 @@ export function updateOrgDropdownLayout() {
   if (!leftDropdown || !rightDropdown) return;
 
   if (
-    document.body.classList.contains('artifact-generate-package-xml') ||
-    document.body.classList.contains('artifact-apex-tests')
+    (document.body.classList.contains('artifact-generate-package-xml') &&
+      !document.body.classList.contains('artifact-generate-package-xml-compare')) ||
+    document.body.classList.contains('artifact-apex-tests') ||
+    document.body.classList.contains('artifact-debug-log-browser') ||
+    document.body.classList.contains('artifact-setup-audit-trail')
+  ) {
+    rightDropdown.classList.add('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
+  if (
+    document.body.classList.contains('artifact-org-limits') &&
+    !document.body.classList.contains('artifact-org-limits-compare')
   ) {
     rightDropdown.classList.add('hidden');
     leftDropdown.classList.remove('single-mode');

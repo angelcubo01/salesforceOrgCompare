@@ -13,12 +13,15 @@ import {
   toolingQuery,
   toolingQueryAll,
   parseApexTestMethodNames,
+  executeAnonymous,
   runTestsAsynchronous,
   fetchApexTestQueueServletStatus,
   fetchApexLogBody,
   queryApexLogsInWindow,
   enableUserDebugTraceForSessionUser,
-  deleteTraceFlagById
+  deleteTraceFlagById,
+  fetchSessionUserId,
+  fetchOrgLimits
 } from '../shared/salesforceApi.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
@@ -924,6 +927,297 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'anonymousApex:execute': {
+            const { orgId, anonymousBody } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const startedAtIso = new Date().toISOString();
+            let traceFlagId = null;
+            try {
+              try {
+                await loadExtensionSettings();
+                traceFlagId = await enableUserDebugTraceForSessionUser(
+                  org.instanceUrl,
+                  sid,
+                  org.apiVersion,
+                  getApexTestsTraceDebugLevel()
+                );
+              } catch {
+                traceFlagId = null;
+              }
+              const result = await executeAnonymous(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                String(anonymousBody || '')
+              );
+              let logId = '';
+              // Errores de compilación (compiled=false) no generan ejecución ni log útil.
+              if (result?.compiled === true) {
+                try {
+                  const userId = await fetchSessionUserId(org.instanceUrl, sid);
+                  const startedMs = new Date(startedAtIso).getTime();
+                  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+                  const scoreAnonLog = (row) => {
+                    const st = new Date(row?.StartTime || 0).getTime();
+                    const op = String(row?.Operation || '').toLowerCase();
+                    let score = 0;
+                    if (Number.isFinite(st)) {
+                      if (st >= startedMs - 15_000) score += 80;
+                      score += Math.min(40, Math.max(0, (st - (startedMs - 120_000)) / 10_000));
+                    }
+                    if (op === 'execute anonymous') score += 120;
+                    else if (op.includes('anonymous')) score += 60;
+                    else if (op === 'developer console') score -= 30;
+                    return score;
+                  };
+                  for (let attempt = 0; attempt < 5 && !logId; attempt++) {
+                    if (attempt > 0) await sleep(800);
+                    const since = new Date(startedMs - 120_000).toISOString();
+                    const until = new Date(Date.now() + 10_000).toISOString();
+                    let logs =
+                      (await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
+                        logUserId: userId,
+                        operationEquals: 'Execute Anonymous',
+                        limit: 40
+                      })) || [];
+                    if (!logs.length) {
+                      logs =
+                        (await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
+                          logUserId: userId,
+                          limit: 40
+                        })) || [];
+                    }
+                    const ranked = [...logs]
+                      .filter((r) => r?.Id)
+                      .sort((a, b) => scoreAnonLog(b) - scoreAnonLog(a));
+                    if (ranked[0]?.Id) logId = String(ranked[0].Id);
+                  }
+                } catch {
+                  logId = '';
+                }
+              }
+              sendResponse({
+                ok: true,
+                result,
+                startedAtIso,
+                finishedAtIso: new Date().toISOString(),
+                ...(logId ? { logId } : {})
+              });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            } finally {
+              if (traceFlagId) {
+                try {
+                  await deleteTraceFlagById(org.instanceUrl, sid, org.apiVersion, traceFlagId);
+                } catch {
+                  /* ignore cleanup error */
+                }
+              }
+            }
+            break;
+          }
+          case 'anonymousApex:getLogBody': {
+            const { orgId, logId } = message;
+            if (!logId) {
+              sendResponse({ ok: false, error: 'Missing logId' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
+              sendResponse({ ok: true, body });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'orgLimits:get': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const limits = await fetchOrgLimits(org.instanceUrl, sid, org.apiVersion);
+              sendResponse({ ok: true, limits });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'debugLogs:list': {
+            const { orgId, sinceIso, untilIso } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const since = String(sinceIso || '');
+              const until = String(untilIso || '');
+              if (!since || !until) {
+                sendResponse({ ok: false, error: 'Missing date range' });
+                break;
+              }
+              const logs = await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
+                limit: 15000
+              });
+              sendResponse({ ok: true, logs: Array.isArray(logs) ? logs : [] });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'debugLogs:resolveUsers': {
+            const { orgId, userIds } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map((x) => String(x || '').replace(/[^a-zA-Z0-9]/g, '')).filter(Boolean))];
+              const namesById = {};
+              if (!ids.length) {
+                sendResponse({ ok: true, namesById });
+                break;
+              }
+              for (let i = 0; i < ids.length; i += 100) {
+                const chunk = ids.slice(i, i + 100);
+                const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
+                const soql = `SELECT Id, Name FROM User WHERE Id IN (${inList})`;
+                let rows = [];
+                try {
+                  rows = (await restQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                } catch {
+                  try {
+                    rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                  } catch {
+                    rows = [];
+                  }
+                }
+                for (const row of rows) {
+                  const id = String(row?.Id || '').trim();
+                  const name = String(row?.Name || '').trim();
+                  if (!id || !name) continue;
+                  namesById[id] = name;
+                }
+              }
+              sendResponse({ ok: true, namesById });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'debugLogs:getBody': {
+            const { orgId, logId } = message;
+            if (!logId) {
+              sendResponse({ ok: false, error: 'Missing logId' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
+              sendResponse({ ok: true, body });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'setupAuditTrail:list': {
+            const { orgId, sinceIso, untilIso, limit } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const since = String(sinceIso || '');
+              const until = String(untilIso || '');
+              if (!since || !until) {
+                sendResponse({ ok: false, error: 'Missing date range' });
+                break;
+              }
+              const soqlDateTime = (v) => {
+                const d = new Date(v);
+                if (Number.isNaN(d.getTime())) {
+                  throw new Error('Invalid date range');
+                }
+                return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+              };
+              const parsedLimit = Math.max(1, Math.min(50000, Number(limit) || 15000));
+              const sinceDt = soqlDateTime(since);
+              const untilDt = soqlDateTime(until);
+              const soql = `SELECT Id, CreatedDate, CreatedById, CreatedBy.Name, CreatedBy.Username, Section, Action, Display FROM SetupAuditTrail WHERE CreatedDate >= ${sinceDt} AND CreatedDate <= ${untilDt} ORDER BY CreatedDate DESC LIMIT ${parsedLimit}`;
+              const rows = await restQueryAll(org.instanceUrl, sid, org.apiVersion, soql);
+              sendResponse({ ok: true, rows: Array.isArray(rows) ? rows : [] });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
           case 'apexTests:pollRuns': {
             const { orgId, jobIds } = message;
             const ids = Array.isArray(jobIds) ? jobIds.filter(Boolean).map(String).slice(0, 30) : [];
@@ -1151,11 +1445,84 @@ export function installMessageHandlers() {
                 byParentLists.get(k15).push(row);
               }
               const jobs = [];
+              const launcherFromParentInfo = (rawParentInfo) => {
+                const s = rawParentInfo != null ? String(rawParentInfo).trim() : '';
+                if (!s) return '';
+                const parts = s
+                  .split(',')
+                  .map((x) => x.trim())
+                  .filter(Boolean);
+                if (!parts.length) return '';
+                // Formato típico: "YYYY-MM-DD HH:mm:ss, username@domain, ..."
+                const looksLikeDate = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(parts[0]);
+                if (looksLikeDate && parts[1]) return parts[1];
+                return parts[0] || '';
+              };
+              const launcherFromServletRow = (row) => {
+                if (!row || typeof row !== 'object') return '';
+                // Campo esperado: parentinfo (pero puede variar en mayúsculas/minúsculas).
+                const direct = Object.entries(row).find(
+                  ([k]) => String(k).trim().toLowerCase() === 'parentinfo'
+                );
+                if (direct) return launcherFromParentInfo(direct[1]);
+                // Fallback defensivo: primer valor string con pinta de "fecha,usuario,..."
+                for (const val of Object.values(row)) {
+                  const s = val != null ? String(val).trim() : '';
+                  if (!s || !s.includes(',') || !s.includes('@')) continue;
+                  const parsed = launcherFromParentInfo(s);
+                  if (parsed) return parsed;
+                }
+                return '';
+              };
+              const launcherByParent15 = new Map();
+              try {
+                const parentIds = [...byParentLists.values()]
+                  .map((list) => list?.[0]?.parentid)
+                  .filter(Boolean)
+                  .map((id) => String(id));
+                if (parentIds.length) {
+                  const inList = parentIds
+                    .map((id) => `'${escapeSoqlLiteral(id)}'`)
+                    .join(',');
+                  const soql = `SELECT Id, CreatedBy.Username, CreatedBy.Name FROM AsyncApexJob WHERE Id IN (${inList})`;
+                  let rows = [];
+                  try {
+                    rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                  } catch {
+                    rows = (await restQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                  }
+                  for (const row of rows) {
+                    const id = row?.Id != null ? String(row.Id) : '';
+                    if (!id) continue;
+                    const k15 = sfId15(id);
+                    const name =
+                      row?.CreatedBy &&
+                      typeof row.CreatedBy === 'object' &&
+                      row.CreatedBy.Username != null
+                        ? String(row.CreatedBy.Username).trim()
+                        : row?.CreatedBy && typeof row.CreatedBy === 'object' && row.CreatedBy.Name != null
+                          ? String(row.CreatedBy.Name).trim()
+                        : '';
+                    launcherByParent15.set(k15, name || '');
+                  }
+                }
+              } catch {
+                /* sin nombre de lanzador: mantener cola con datos del servlet */
+              }
               for (const list of byParentLists.values()) {
                 const primary = pickPrimaryApexTestServletRow(list);
                 if (!primary) continue;
+                const parent = String(primary.parentid);
+                let fromParentInfo = launcherFromServletRow(primary);
+                if (!fromParentInfo && Array.isArray(list)) {
+                  for (const row of list) {
+                    fromParentInfo = launcherFromServletRow(row);
+                    if (fromParentInfo) break;
+                  }
+                }
                 jobs.push({
-                  parentid: String(primary.parentid),
+                  parentid: parent,
+                  launchedBy: launcherByParent15.get(sfId15(parent)) || fromParentInfo || '',
                   status: primary.status != null ? String(primary.status) : '',
                   extstatus: primary.extstatus != null ? String(primary.extstatus) : '',
                   date: primary.date != null ? String(primary.date) : '',
@@ -1204,6 +1571,42 @@ export function installMessageHandlers() {
               const raw = rows || [];
               const failures = raw.filter((r) => !isTestSetupApexTestResult(r));
               sendResponse({ ok: true, failures });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'apexTests:getRunMethods': {
+            const { orgId, jobId } = message;
+            if (!jobId) {
+              sendResponse({ ok: false, error: 'Missing jobId' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const esc = escapeSoqlLiteral(jobId);
+              let rows;
+              try {
+                const soql = `SELECT ApexClass.Name, MethodName, Outcome, Message, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
+                rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+              } catch {
+                const soql2 = `SELECT ApexClass.Name, MethodName, Outcome, Message FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
+                rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql2);
+              }
+              const raw = Array.isArray(rows) ? rows : [];
+              const methods = raw.filter((r) => !isTestSetupApexTestResult(r));
+              sendResponse({ ok: true, methods });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }
@@ -1407,12 +1810,72 @@ export function installMessageHandlers() {
               const jobCompletedMs =
                 completedParsed ?? jobCreatedMs + 6 * 60 * 60 * 1000;
 
+              // Acotar ventana usando ejecuciones vecinas del mismo usuario (evita mezclar logs entre jobs).
+              let prevJobMs = null;
+              let nextJobMs = null;
+              try {
+                const neighSoql = `SELECT Id, CreatedDate, CompletedDate FROM AsyncApexJob WHERE CreatedById = '${escapeSoqlLiteral(
+                  String(createdById)
+                )}' AND JobType = 'TestRequest' ORDER BY CreatedDate DESC LIMIT 200`;
+                let neighRows = [];
+                try {
+                  neighRows =
+                    (await toolingQuery(org.instanceUrl, sid, org.apiVersion, neighSoql)) || [];
+                } catch {
+                  neighRows = (await restQuery(org.instanceUrl, sid, org.apiVersion, neighSoql)) || [];
+                }
+                const current15 = String(jobId).slice(0, 15);
+                const withMs = (neighRows || [])
+                  .map((r) => {
+                    const cMs = parseMs(r?.CreatedDate);
+                    const eMs = parseMs(r?.CompletedDate);
+                    return {
+                      id15: String(r?.Id || '').slice(0, 15),
+                      createdMs: cMs,
+                      completedMs: eMs
+                    };
+                  })
+                  .filter((r) => Number.isFinite(r.createdMs))
+                  .sort((a, b) => a.createdMs - b.createdMs);
+                let idx = withMs.findIndex((r) => r.id15 === current15);
+                if (idx < 0) {
+                  // Fallback: si no aparece el Id (normalización 15/18), localizar por fecha más cercana.
+                  let best = -1;
+                  let bestDelta = Number.POSITIVE_INFINITY;
+                  for (let i = 0; i < withMs.length; i++) {
+                    const d = Math.abs(withMs[i].createdMs - jobCreatedMs);
+                    if (d < bestDelta) {
+                      bestDelta = d;
+                      best = i;
+                    }
+                  }
+                  idx = best;
+                }
+                if (idx > 0) {
+                  const prev = withMs[idx - 1];
+                  prevJobMs =
+                    Number.isFinite(prev.completedMs) && prev.completedMs > 0
+                      ? prev.completedMs
+                      : prev.createdMs;
+                }
+                if (idx >= 0 && idx < withMs.length - 1) {
+                  const next = withMs[idx + 1];
+                  nextJobMs = next.createdMs;
+                }
+              } catch {
+                /* sin vecinas: mantener ventana base */
+              }
+
               /** Ventana amplia: los ApexLog pueden cerrarse después del CompletedDate del job. */
-              const untilMs = Math.max(
+              let untilMs = Math.max(
                 jobCompletedMs + 45 * 60 * 1000,
                 jobCreatedMs + 6 * 60 * 60 * 1000
               );
-              const sinceIso = new Date(jobCreatedMs - 60_000).toISOString();
+              let sinceMs = jobCreatedMs - 60_000;
+              if (Number.isFinite(prevJobMs)) sinceMs = Math.max(sinceMs, prevJobMs + 1000);
+              if (Number.isFinite(nextJobMs)) untilMs = Math.min(untilMs, nextJobMs - 1000);
+              if (untilMs <= sinceMs) untilMs = sinceMs + 60_000;
+              const sinceIso = new Date(sinceMs).toISOString();
               const untilIso = new Date(untilMs).toISOString();
 
               const logs = await queryApexLogsInWindow(

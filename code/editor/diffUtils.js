@@ -15,7 +15,7 @@ export function getTotalDiffLines(changes) {
   return total;
 }
 
-export function buildAlignedDiff(leftText, rightText) {
+function buildAlignedDiffSync(leftText, rightText) {
   const leftRaw = String(leftText == null ? '' : leftText);
   const rightRaw = String(rightText == null ? '' : rightText);
 
@@ -86,6 +86,81 @@ export function buildAlignedDiff(leftText, rightText) {
     rightText: rightLines.join('\n'),
     changes
   };
+}
+
+let jsDiffWorker = null;
+let jsDiffReqSeq = 0;
+const jsDiffPending = new Map();
+const JS_DIFF_WORKER_TIMEOUT_MS = 15000;
+
+function ensureJsDiffWorker() {
+  if (jsDiffWorker) return jsDiffWorker;
+  if (typeof Worker === 'undefined') return null;
+  const url =
+    typeof chrome !== 'undefined' && chrome?.runtime?.getURL
+      ? chrome.runtime.getURL('code/workers/jsdiff.worker.js')
+      : '/code/workers/jsdiff.worker.js';
+  try {
+    jsDiffWorker = new Worker(url);
+  } catch {
+    jsDiffWorker = null;
+    return null;
+  }
+  jsDiffWorker.onmessage = (ev) => {
+    const data = ev?.data || {};
+    const id = Number(data.id);
+    if (!Number.isFinite(id) || !jsDiffPending.has(id)) return;
+    const h = jsDiffPending.get(id);
+    jsDiffPending.delete(id);
+    if (data.ok) h.resolve(data.result);
+    else h.reject(new Error(data.error || 'worker_error'));
+  };
+  jsDiffWorker.onerror = () => {
+    for (const h of jsDiffPending.values()) h.reject(new Error('worker_crash'));
+    jsDiffPending.clear();
+    try {
+      jsDiffWorker?.terminate();
+    } catch {}
+    jsDiffWorker = null;
+  };
+  return jsDiffWorker;
+}
+
+export async function buildAlignedDiff(leftText, rightText) {
+  const leftRaw = String(leftText == null ? '' : leftText);
+  const rightRaw = String(rightText == null ? '' : rightText);
+  const worker = ensureJsDiffWorker();
+  if (!worker) return buildAlignedDiffSync(leftRaw, rightRaw);
+
+  const id = ++jsDiffReqSeq;
+  const p = new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      if (!jsDiffPending.has(id)) return;
+      jsDiffPending.delete(id);
+      try {
+        jsDiffWorker?.terminate();
+      } catch {}
+      jsDiffWorker = null;
+      reject(new Error('worker_timeout'));
+    }, JS_DIFF_WORKER_TIMEOUT_MS);
+    jsDiffPending.set(id, {
+      resolve: (value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      reject: (error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    });
+  });
+  try {
+    worker.postMessage({ id, leftText: leftRaw, rightText: rightRaw });
+    return await p;
+  } catch {
+    jsDiffPending.delete(id);
+    return buildAlignedDiffSync(leftRaw, rightRaw);
+  }
 }
 
 export function applyDiffDecorations(changes) {

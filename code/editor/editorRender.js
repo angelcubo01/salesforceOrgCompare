@@ -466,7 +466,7 @@ export async function renderEditor(opts = {}) {
     const dpKey = diffPreparedCacheKey(itemKey, leftOrgId, rightOrgId, l, r);
     let prepared = diffPreparedLru.get(dpKey);
     if (!prepared) {
-      prepared = prepareDiffForViewer(leftRaw, rightRaw, { buildAlignedDiff });
+      prepared = await prepareDiffForViewer(leftRaw, rightRaw, { buildAlignedDiff });
       touchDiffPreparedCache(dpKey, prepared);
     }
     if (prepared.userMessage) {

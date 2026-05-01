@@ -28,12 +28,15 @@ export function isRetrieveZipTreeItem(item) {
 export function updateOrgSelectorsLockedState() {
   const left = document.getElementById('leftOrg');
   const right = document.getElementById('rightOrg');
+  const isGen = document.body.classList.contains('artifact-generate-package-xml');
+  const isGenCompare = document.body.classList.contains('artifact-generate-package-xml-compare');
+  const isApexTests = document.body.classList.contains('artifact-apex-tests');
   if (
-    document.body.classList.contains('artifact-generate-package-xml') ||
-    document.body.classList.contains('artifact-apex-tests')
+    (isGen && !isGenCompare) ||
+    isApexTests
   ) {
     const tipLeft = '';
-    const tipRight = document.body.classList.contains('artifact-apex-tests')
+    const tipRight = isApexTests
       ? t('orgs.apexTestsOnlyLeft')
       : t('orgs.genPkgOnlyLeft');
     if (left) {
@@ -43,6 +46,19 @@ export function updateOrgSelectorsLockedState() {
     if (right) {
       right.disabled = true;
       right.title = tipRight;
+    }
+    const editor = document.getElementById('editorContainer');
+    if (editor) editor.classList.remove('org-selectors-locked');
+    return;
+  }
+  if (isGenCompare) {
+    if (left) {
+      left.disabled = false;
+      left.title = '';
+    }
+    if (right) {
+      right.disabled = false;
+      right.title = '';
     }
     const editor = document.getElementById('editorContainer');
     if (editor) editor.classList.remove('org-selectors-locked');

@@ -2,6 +2,7 @@ import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { saveScrollPosition } from '../ui/scrollRestore.js';
 import { renderEditor, focusDiffAtIndex, navigateViewerChunk } from '../editor/editorRender.js';
+import { applyWordWrapToCurrentEditors } from '../editor/monaco.js';
 import { updateOrgDropdownLayout, updateAuthIndicators } from '../ui/orgs.js';
 import { renderSavedItems, removeAllItems } from '../ui/listUi.js';
 import { saveItemsToStorage } from '../core/persistence.js';
@@ -13,6 +14,10 @@ import { getSelectedArtifactType } from '../ui/artifactTypeUi.js';
 import { refreshGeneratePackageXmlTypes } from '../ui/generatePackageXmlPanel.js';
 import { resetFieldDependencyToInitial } from '../ui/fieldDependencyPanel.js';
 import { refreshApexTestsPanel } from '../ui/apexTestsPanel.js';
+import { refreshAnonymousApexPanel } from '../ui/anonymousApexPanel.js';
+import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
+import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
+import { refreshSetupAuditTrailPanel } from '../ui/setupAuditTrailPanel.js';
 import { t } from '../../shared/i18n.js';
 
 export function wireSelectors() {
@@ -40,6 +45,18 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'FieldDependency') {
       resetFieldDependencyToInitial();
     }
+    if (getSelectedArtifactType() === 'AnonymousApex') {
+      void refreshAnonymousApexPanel();
+    }
+    if (getSelectedArtifactType() === 'OrgLimits') {
+      void refreshOrgLimitsPanel();
+    }
+    if (getSelectedArtifactType() === 'DebugLogBrowser') {
+      void refreshDebugLogBrowserPanel();
+    }
+    if (getSelectedArtifactType() === 'SetupAuditTrail') {
+      void refreshSetupAuditTrailPanel();
+    }
   });
   right.addEventListener('change', () => {
     if (state.selectedItem) {
@@ -52,6 +69,18 @@ export function wireSelectors() {
     renderEditor({ leftChanged: false, rightChanged: true, prevRightOrgId: prevRight });
     if (getSelectedArtifactType() === 'FieldDependency') {
       resetFieldDependencyToInitial();
+    }
+    if (getSelectedArtifactType() === 'AnonymousApex') {
+      void refreshAnonymousApexPanel();
+    }
+    if (getSelectedArtifactType() === 'OrgLimits') {
+      void refreshOrgLimitsPanel();
+    }
+    if (getSelectedArtifactType() === 'DebugLogBrowser') {
+      void refreshDebugLogBrowserPanel();
+    }
+    if (getSelectedArtifactType() === 'SetupAuditTrail') {
+      void refreshSetupAuditTrailPanel();
     }
   });
 
@@ -368,6 +397,20 @@ export function setupDiffNavigation() {
       if (state.diffEditor) {
         state.diffEditor.updateOptions({ ignoreTrimWhitespace: state.ignoreTrimWhitespace });
       }
+    });
+  }
+
+  const wwBtn = document.getElementById('toggleWordWrapBtn');
+  if (wwBtn) {
+    const syncWordWrapUi = () => {
+      wwBtn.classList.toggle('active', !!state.wordWrapEnabled);
+      wwBtn.title = state.wordWrapEnabled ? t('code.wordWrapOn') : t('code.wordWrapOff');
+    };
+    syncWordWrapUi();
+    wwBtn.addEventListener('click', () => {
+      state.wordWrapEnabled = !state.wordWrapEnabled;
+      applyWordWrapToCurrentEditors();
+      syncWordWrapUi();
     });
   }
 

@@ -173,9 +173,9 @@ export function sliceAlignedPrevChunkStart(leftFull, rightFull, currentStartLine
  * Construye el contenido para el diff: o bien diff alineado (jsdiff), o paralelo por fragmentos si es demasiado grande.
  * @param {string} leftRaw
  * @param {string} rightRaw
- * @param {{ buildAlignedDiff: (a: string, b: string) => { leftText: string; rightText: string; changes: unknown[] } }} diffImpl
+ * @param {{ buildAlignedDiff: (a: string, b: string) => Promise<{ leftText: string; rightText: string; changes: unknown[] }> }} diffImpl
  */
-export function prepareDiffForViewer(leftRaw, rightRaw, diffImpl) {
+export async function prepareDiffForViewer(leftRaw, rightRaw, diffImpl) {
   const left = String(leftRaw ?? '');
   const right = String(rightRaw ?? '');
   const maxIn = Math.max(left.length, right.length);
@@ -195,7 +195,7 @@ export function prepareDiffForViewer(leftRaw, rightRaw, diffImpl) {
     };
   }
 
-  const aligned = diffImpl.buildAlignedDiff(left, right);
+  const aligned = await diffImpl.buildAlignedDiff(left, right);
   const chunk0 = sliceAlignedLinesChunk(aligned.leftText, aligned.rightText, 0);
 
   if (!chunk0.hasNext) {

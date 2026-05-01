@@ -11,11 +11,48 @@ import {
   saveExtensionSettings,
   resetExtensionSettings,
   EXTENSION_ADVANCED_FIELD_KEYS,
-  EXTENSION_FIELD_BOUNDS
+  EXTENSION_FIELD_BOUNDS,
+  EXTENSION_CONFIG_KEY
 } from '../shared/extensionSettings.js';
 
 async function bg(message) {
   return chrome.runtime.sendMessage(message);
+}
+
+const ANON_SAVED_SCRIPTS_KEY = 'sfoc_anon_apex_saved_scripts';
+
+function scriptItemKey(item) {
+  return `${String(item?.type || '')}:${String(item?.key || '')}`;
+}
+
+function mergeSavedCodeItems(current, incoming) {
+  const out = Array.isArray(current) ? [...current] : [];
+  const seen = new Set(out.map(scriptItemKey));
+  for (const x of Array.isArray(incoming) ? incoming : []) {
+    const k = scriptItemKey(x);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(x);
+  }
+  return out;
+}
+
+function readLocalAnonScripts() {
+  try {
+    const raw = localStorage.getItem(ANON_SAVED_SCRIPTS_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalAnonScripts(list) {
+  try {
+    localStorage.setItem(ANON_SAVED_SCRIPTS_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+  } catch {
+    /* ignore */
+  }
 }
 
 function applyStaticTranslations() {
@@ -29,6 +66,7 @@ function applyStaticTranslations() {
 
 function advFieldStep(key) {
   if (key === 'apexTestsPollIntervalMs') return 500;
+  if (key === 'apexTestsExpandedMethodsPollIntervalMs') return 500;
   if (key === 'apexTestsMaxTrackedJobs') return 1;
   if (key === 'maxAlignedBufferChars') return 500_000;
   return 10_000;
@@ -180,7 +218,7 @@ function wireLanguageSelect() {
 function wireOrgsBackup() {
   const statusEl = document.getElementById('settingsOrgsStatus');
   const fileInput = document.getElementById('settingsOrgsFile');
-  let importReplace = false;
+  const importReplace = true;
 
   const setStatus = (msg, isError) => {
     if (!statusEl) return;
@@ -190,18 +228,32 @@ function wireOrgsBackup() {
 
   document.getElementById('settingsExportOrgs')?.addEventListener('click', async () => {
     setStatus('');
-    const res = await bg({ type: 'orgs:exportConfig' });
+    const [res, local] = await Promise.all([
+      bg({ type: 'orgs:exportConfig' }),
+      chrome.storage.local.get([EXTENSION_CONFIG_KEY, 'savedCodeItems', 'pinnedKeys'])
+    ]);
     if (!res?.ok || !res.payload) {
-      setStatus(t('settings.orgsExportError'), true);
+      setStatus(t('settings.backupExportError'), true);
       return;
     }
-    const blob = new Blob([JSON.stringify(res.payload, null, 2)], {
+    const payload = {
+      formatVersion: 2,
+      exportedAt: new Date().toISOString(),
+      orgConfig: res.payload,
+      localConfig: {
+        extensionSettings: local?.[EXTENSION_CONFIG_KEY] || null,
+        savedCodeItems: Array.isArray(local?.savedCodeItems) ? local.savedCodeItems : [],
+        pinnedKeys: Array.isArray(local?.pinnedKeys) ? local.pinnedKeys : [],
+        anonymousApexScripts: readLocalAnonScripts()
+      }
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: 'application/json;charset=utf-8'
     });
     const a = document.createElement('a');
     const stamp = new Date().toISOString().slice(0, 10);
     a.href = URL.createObjectURL(blob);
-    a.download = `sfoc-orgs-${stamp}.json`;
+    a.download = `sfoc-backup-${stamp}.json`;
     a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
@@ -209,14 +261,8 @@ function wireOrgsBackup() {
     URL.revokeObjectURL(a.href);
   });
 
-  document.getElementById('settingsImportMerge')?.addEventListener('click', () => {
-    importReplace = false;
-    fileInput?.click();
-  });
-
   document.getElementById('settingsImportReplace')?.addEventListener('click', () => {
-    if (!confirm(t('settings.orgsImportReplaceConfirm'))) return;
-    importReplace = true;
+    if (!confirm(t('settings.backupImportReplaceConfirm'))) return;
     fileInput?.click();
   });
 
@@ -229,15 +275,78 @@ function wireOrgsBackup() {
     try {
       data = JSON.parse(await f.text());
     } catch {
-      setStatus(t('settings.orgsImportError'), true);
+      setStatus(t('settings.backupImportError'), true);
       return;
     }
-    const res = await bg({ type: 'orgs:importConfig', data, replace: importReplace });
+    // Compatibilidad: formato antiguo (solo orgs)
+    const isLegacyOrgs = data && typeof data === 'object' && data.orgs && typeof data.orgs === 'object';
+    if (isLegacyOrgs) {
+      const resLegacy = await bg({ type: 'orgs:importConfig', data, replace: importReplace });
+      if (!resLegacy?.ok) {
+        setStatus(t('settings.backupImportError'), true);
+        return;
+      }
+      setStatus(t('settings.backupImportOk', { count: resLegacy.count ?? 0 }), false);
+      return;
+    }
+    if (!data || typeof data !== 'object' || !data.orgConfig || !data.localConfig) {
+      setStatus(t('settings.backupImportError'), true);
+      return;
+    }
+    const res = await bg({ type: 'orgs:importConfig', data: data.orgConfig, replace: importReplace });
     if (!res?.ok) {
-      setStatus(t('settings.orgsImportError'), true);
+      setStatus(t('settings.backupImportError'), true);
       return;
     }
-    setStatus(t('settings.orgsImportOk', { count: res.count ?? 0 }), false);
+
+    const incomingSettings = data.localConfig.extensionSettings ?? null;
+    const incomingSavedItems = Array.isArray(data.localConfig.savedCodeItems)
+      ? data.localConfig.savedCodeItems
+      : [];
+    const incomingPinnedKeys = Array.isArray(data.localConfig.pinnedKeys) ? data.localConfig.pinnedKeys : [];
+    const incomingAnonScripts = Array.isArray(data.localConfig.anonymousApexScripts)
+      ? data.localConfig.anonymousApexScripts
+      : [];
+
+    if (importReplace) {
+      const replacePayload = {
+        savedCodeItems: incomingSavedItems,
+        pinnedKeys: incomingPinnedKeys
+      };
+      if (incomingSettings && typeof incomingSettings === 'object') {
+        replacePayload[EXTENSION_CONFIG_KEY] = incomingSettings;
+        await chrome.storage.local.set(replacePayload);
+      } else {
+        await chrome.storage.local.remove(EXTENSION_CONFIG_KEY);
+        await chrome.storage.local.set(replacePayload);
+      }
+      writeLocalAnonScripts(incomingAnonScripts);
+    } else {
+      const current = await chrome.storage.local.get([EXTENSION_CONFIG_KEY, 'savedCodeItems', 'pinnedKeys']);
+      const mergedSettings = {
+        ...(current?.[EXTENSION_CONFIG_KEY] || {}),
+        ...(incomingSettings || {})
+      };
+      const mergedSavedItems = mergeSavedCodeItems(current?.savedCodeItems, incomingSavedItems);
+      const mergedPinned = [...new Set([...(current?.pinnedKeys || []), ...incomingPinnedKeys])].slice(0, 5);
+      await chrome.storage.local.set({
+        [EXTENSION_CONFIG_KEY]: mergedSettings,
+        savedCodeItems: mergedSavedItems,
+        pinnedKeys: mergedPinned
+      });
+      const currentScripts = readLocalAnonScripts();
+      const seenNames = new Set(currentScripts.map((s) => String(s?.name || '').trim().toLocaleLowerCase()));
+      const mergedScripts = [...currentScripts];
+      for (const s of incomingAnonScripts) {
+        const nm = String(s?.name || '').trim().toLocaleLowerCase();
+        if (!nm || seenNames.has(nm)) continue;
+        seenNames.add(nm);
+        mergedScripts.push(s);
+      }
+      writeLocalAnonScripts(mergedScripts);
+    }
+
+    setStatus(t('settings.backupImportOk', { count: res.count ?? 0 }), false);
   });
 }
 

@@ -27,13 +27,18 @@
                   <option value="Profile" data-i18n="code.opProfile">Profiles</option>
                   <option value="FlexiPage" data-i18n="code.opFlexi">FlexiPages</option>
                 </optgroup>
-                <optgroup data-i18n-label="code.optgroupAnalysis" label="Análisis">
-                  <option value="FieldDependency" data-i18n="code.opFieldDep">Dependencias picklist</option>
+                <optgroup data-i18n-label="code.optgroupAnalysis" label="Análisis">                
                   <option value="ApexTests" data-i18n="code.opApexTests">Pruebas Apex</option>
+                  <option value="AnonymousApex" data-i18n="code.opAnonymousApex">Anonymous Apex</option>
+                  <option value="DebugLogBrowser" data-i18n="code.opDebugLogs">Debug Log Browser</option>
+                  <option value="FieldDependency" data-i18n="code.opFieldDep">Dependencias picklist</option>
+                  <option value="SetupAuditTrail" data-i18n="code.opSetupAuditTrail">Setup Audit Trail Viewer</option>
+                  <option value="OrgLimits" data-i18n="code.opOrgLimits">Org Limits Dashboard</option>
                 </optgroup>
                 <optgroup data-i18n-label="code.optgroupPackage" label="package.xml">
-                  <option value="PackageXml" data-i18n="code.opPkgCompare">Comparar dos package.xml</option>
                   <option value="GeneratePackageXml" data-i18n="code.opPkgGenerate">Generar manifest</option>
+                  <option value="PackageXml" data-i18n="code.opPkgCompare">Comparar dos package.xml</option>
+
                 </optgroup>
               </select>
             </div>
@@ -145,6 +150,13 @@
                 <path d="M4 7h16M4 12h10M4 17h13"></path>
               </svg>
             </button>
+            <button id="toggleWordWrapBtn" class="diff-nav-button" data-i18n-title="code.toggleWordWrap" title="Activar/desactivar ajuste de línea">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7h13a4 4 0 1 1 0 8h-4"></path>
+                <polyline points="12 12 9 15 12 18"></polyline>
+                <path d="M3 17h4"></path>
+              </svg>
+            </button>
             <button id="exportDiffHtmlBtn" type="button" class="diff-nav-button" disabled data-i18n-title="code.exportDiffHtmlTitle" title="Exportar diff como HTML">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -202,7 +214,14 @@
         </div>
         <div id="generatePackageXmlPanel" class="generate-package-xml-panel hidden" aria-label="Generar package.xml">
           <div class="generate-package-xml-panel-inner">
-            <h2 class="generate-package-xml-title" data-i18n="genPkg.title">Generar package.xml</h2>
+            <div class="generate-package-xml-head">
+              <h2 class="generate-package-xml-title" data-i18n="genPkg.title">Generar package.xml</h2>
+              <label class="generate-pkg-compare-toggle" for="generatePkgCompareToggle">
+                <input type="checkbox" id="generatePkgCompareToggle" />
+                <span class="generate-pkg-compare-switch" aria-hidden="true"></span>
+                <span class="generate-pkg-compare-label" data-i18n="genPkg.compareMode">Modo comparación</span>
+              </label>
+            </div>
             <p class="generate-package-xml-hint" data-i18n="genPkg.hint">
               Genera un package.xml para la organización seleccionada seleccionando los tipos y miembros que quieras.
             </p>
@@ -260,9 +279,20 @@
                   rows="12"
                   aria-readonly="true"
                 ></textarea>
-                <button type="button" id="generatePkgDownloadXml" class="generate-pkg-download-btn" data-i18n="genPkg.download">
-                  Descargar package.xml
-                </button>
+                <div class="generate-pkg-output-actions">
+                  <button type="button" id="generatePkgDownloadXml" class="generate-pkg-download-btn" data-i18n="genPkg.download">
+                    Descargar package.xml
+                  </button>
+                  <button
+                    type="button"
+                    id="generatePkgCompareOpenBtn"
+                    class="generate-pkg-compare-btn hidden"
+                    data-i18n="genPkg.comparePackageXmlBtn"
+                  >
+                    Comparar package.xml
+                  </button>
+
+                </div>
                 <p class="generate-pkg-xml-footnote" data-i18n="genPkg.footnote">
                   Usa los buscadores para filtrar tipos y miembros. Y descarga el package.xml.
                 </p>
@@ -299,6 +329,7 @@
                   <caption class="visually-hidden" data-i18n="apexTests.runsCaption"></caption>
                   <thead>
                     <tr>
+                      <th scope="col" class="apex-tests-runs-col-expand"></th>
                       <th scope="col" data-i18n="apexTests.runsColEnv"></th>
                       <th scope="col" data-i18n="apexTests.runsColStartedAt"></th>
                       <th scope="col" data-i18n="apexTests.runsColStatus"></th>
@@ -559,6 +590,208 @@
                 <span id="fieldDepCompareTitle" class="field-dep-compare-title"></span>
               </div>
               <div id="fieldDepCompareBody" class="field-dep-compare-body"></div>
+            </div>
+          </div>
+        </div>
+        <div id="anonymousApexPanel" class="anonymous-apex-panel hidden" aria-label="Anonymous Apex">
+          <div class="anonymous-apex-panel-inner">
+            <div class="anonymous-apex-head">
+              <h2 class="anonymous-apex-title" data-i18n="anonymousApex.title">Anonymous Apex</h2>
+              <label class="anonymous-apex-compare-toggle" for="anonymousApexCompareToggle">
+                <input type="checkbox" id="anonymousApexCompareToggle" />
+                <span class="anonymous-apex-compare-switch" aria-hidden="true"></span>
+                <span class="anonymous-apex-compare-label" data-i18n="anonymousApex.compareMode">Modo comparación</span>
+              </label>
+            </div>
+            <p id="anonymousApexOrgStatus" class="anonymous-apex-org-status" role="status"></p>
+            <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount"></div>
+            <div class="anonymous-apex-actions">
+              <button type="button" id="anonymousApexRunBtn" class="anonymous-apex-run-btn" data-i18n="anonymousApex.run">
+                Ejecutar
+              </button>
+              <button type="button" id="anonymousApexOpenLogBtn" class="anonymous-apex-log-btn hidden" data-i18n="anonymousApex.openLog" disabled>
+                Abrir log
+              </button>
+            </div>
+            <p id="anonymousApexExecStatus" class="anonymous-apex-exec-status" role="status"></p>
+            <div id="anonymousApexResultWrap" class="anonymous-apex-result-grid hidden">
+              <div class="anonymous-apex-result-card anonymous-apex-result-card-full">
+                <h3 data-i18n="anonymousApex.executionResult">Resultado de ejecución</h3>
+                <pre id="anonymousApexResultCombined">—</pre>
+              </div>
+            </div>
+            <div id="anonymousApexLogPickerModal" class="anonymous-apex-log-picker-modal hidden" aria-hidden="true">
+              <div class="anonymous-apex-log-picker-backdrop"></div>
+              <div class="anonymous-apex-log-picker-panel" role="dialog" aria-modal="true" aria-labelledby="anonymousApexLogPickerTitle">
+                <h3 id="anonymousApexLogPickerTitle" data-i18n="anonymousApex.logPickerTitle">Elegir entorno</h3>
+                <div id="anonymousApexLogPickerBody" class="anonymous-apex-log-picker-body"></div>
+                <div class="anonymous-apex-log-picker-actions">
+                  <button type="button" id="anonymousApexLogPickerCancelBtn" class="anonymous-apex-small-btn" data-i18n="anonymousApex.cancel">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="orgLimitsPanel" class="org-limits-panel hidden" aria-label="Org Limits Dashboard">
+          <div class="org-limits-panel-inner">
+            <div class="org-limits-head">
+              <h2 class="org-limits-title" data-i18n="orgLimits.title">Org Limits Dashboard</h2>
+              <div class="org-limits-head-controls">
+                <button type="button" id="orgLimitsRefreshBtn" class="org-limits-refresh-btn" data-i18n="orgLimits.refresh">
+                  Actualizar límites
+                </button>
+                <label class="org-limits-compare-toggle" for="orgLimitsCompareToggle" data-i18n-title="orgLimits.compareTooltip">
+                  <input type="checkbox" id="orgLimitsCompareToggle" />
+                  <span class="org-limits-compare-switch" aria-hidden="true"></span>
+                  <span class="org-limits-compare-label" data-i18n="orgLimits.compareMode">Comparar 2 orgs</span>
+                </label>
+              </div>
+            </div>
+            <p id="orgLimitsStatus" class="org-limits-status" role="status"></p>
+            <div id="orgLimitsCards" class="org-limits-cards"></div>
+          </div>
+        </div>
+        <div id="debugLogBrowserPanel" class="debug-log-browser-panel hidden" aria-label="Debug Log Browser">
+          <div class="debug-log-browser-panel-inner">
+            <div class="debug-log-browser-head">
+              <h2 class="debug-log-browser-title" data-i18n="debugLogs.title">Debug Log Browser</h2>
+            </div>
+            <p id="debugLogBrowserStatus" class="debug-log-browser-status" role="status"></p>
+            <div class="debug-log-browser-filters">
+              <div class="debug-log-browser-field">
+                <label for="debugLogBrowserUserFilter" class="debug-log-browser-field-label" data-i18n="debugLogs.filterUser">Usuario</label>
+                <select id="debugLogBrowserUserFilter" class="debug-log-browser-input debug-log-browser-select">
+                  <option value="" data-i18n="debugLogs.userAll">Todos los usuarios</option>
+                </select>
+              </div>
+              <div class="debug-log-browser-field">
+                <label for="debugLogBrowserOperationFilter" class="debug-log-browser-field-label" data-i18n="debugLogs.filterOperation">Operación</label>
+                <select id="debugLogBrowserOperationFilter" class="debug-log-browser-input debug-log-browser-select">
+                  <option value="" data-i18n="debugLogs.operationAll">Todas las operaciones</option>
+                </select>
+              </div>
+              <div class="debug-log-browser-field">
+                <label for="debugLogBrowserSince" class="debug-log-browser-field-label" data-i18n="debugLogs.filterSince">Desde</label>
+                <input id="debugLogBrowserSince" type="datetime-local" class="debug-log-browser-input" />
+              </div>
+              <div class="debug-log-browser-field">
+                <label for="debugLogBrowserUntil" class="debug-log-browser-field-label" data-i18n="debugLogs.filterUntil">Hasta</label>
+                <input id="debugLogBrowserUntil" type="datetime-local" class="debug-log-browser-input" />
+              </div>
+            </div>
+            <div class="debug-log-browser-pagination debug-log-browser-pagination-top">
+              <button type="button" id="debugLogBrowserPrevPage" class="debug-log-browser-open-btn">←</button>
+              <span id="debugLogBrowserPageLabel" class="debug-log-browser-page-label">1/1</span>
+              <button type="button" id="debugLogBrowserNextPage" class="debug-log-browser-open-btn">→</button>
+            </div>
+            <div class="debug-log-browser-table-wrap">
+              <table class="debug-log-browser-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Log Id</th>
+                    <th scope="col" data-i18n="debugLogs.colStart">Inicio</th>
+                    <th scope="col" data-i18n="debugLogs.colUser">Usuario</th>
+                    <th scope="col" data-i18n="debugLogs.colOperation">Operación</th>
+                    <th scope="col" data-i18n="debugLogs.colDuration">Duración (ms)</th>
+                    <th scope="col" data-i18n="debugLogs.colLength">Tamaño</th>
+                    <th scope="col" data-i18n="debugLogs.colActions">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="debugLogBrowserTbody"></tbody>
+              </table>
+              <p id="debugLogBrowserEmpty" class="debug-log-browser-empty" data-i18n="debugLogs.empty">No hay logs para los filtros actuales.</p>
+            </div>
+            <div class="debug-log-browser-pagination debug-log-browser-pagination-bottom">
+              <div class="debug-log-browser-field debug-log-browser-page-size-wrap">
+                <label for="debugLogBrowserPageSize" class="debug-log-browser-field-label" data-i18n="debugLogs.filterPageSize">Filas por página</label>
+                <select id="debugLogBrowserPageSize" class="debug-log-browser-input debug-log-browser-select debug-log-browser-page-size">
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="setupAuditTrailPanel" class="setup-audit-panel hidden" aria-label="Setup Audit Trail Viewer">
+          <div class="setup-audit-panel-inner">
+            <div class="setup-audit-head">
+              <h2 class="setup-audit-title" data-i18n="setupAudit.title">Setup Audit Trail Viewer</h2>
+            </div>
+            <p id="setupAuditStatus" class="setup-audit-status" role="status"></p>
+            <div class="setup-audit-filters setup-audit-filters-row-1">
+              <div class="setup-audit-field">
+                <label for="setupAuditUserFilter" class="setup-audit-field-label" data-i18n="setupAudit.filterUser">Usuario</label>
+                <select id="setupAuditUserFilter" class="setup-audit-input setup-audit-select">
+                  <option value="" data-i18n="setupAudit.userAll">Todos los usuarios</option>
+                </select>
+              </div>
+              <div class="setup-audit-field">
+                <label for="setupAuditSectionFilter" class="setup-audit-field-label" data-i18n="setupAudit.filterSection">Sección</label>
+                <select id="setupAuditSectionFilter" class="setup-audit-input setup-audit-select">
+                  <option value="" data-i18n="setupAudit.sectionAll">Todas las secciones</option>
+                </select>
+              </div>
+              <div class="setup-audit-field">
+                <label for="setupAuditActionFilter" class="setup-audit-field-label" data-i18n="setupAudit.filterAction">Acción</label>
+                <select id="setupAuditActionFilter" class="setup-audit-input setup-audit-select" disabled>
+                  <option value="" data-i18n="setupAudit.actionSelectSectionFirst">Selecciona sección primero</option>
+                </select>
+              </div>
+              <div class="setup-audit-field">
+                <label for="setupAuditTextFilter" class="setup-audit-field-label" data-i18n="setupAudit.filterText">Texto</label>
+                <input
+                  id="setupAuditTextFilter"
+                  type="text"
+                  class="setup-audit-input"
+                  data-i18n-placeholder="setupAudit.textFilterPh"
+                  placeholder="Filtrar por acción o detalle"
+                />
+              </div>
+            </div>
+            <div class="setup-audit-filters setup-audit-filters-row-2">
+              <div class="setup-audit-field">
+                <label for="setupAuditSince" class="setup-audit-field-label" data-i18n="setupAudit.filterSince">Desde</label>
+                <input id="setupAuditSince" type="datetime-local" class="setup-audit-input" />
+              </div>
+              <div class="setup-audit-field">
+                <label for="setupAuditUntil" class="setup-audit-field-label" data-i18n="setupAudit.filterUntil">Hasta</label>
+                <input id="setupAuditUntil" type="datetime-local" class="setup-audit-input" />
+              </div>
+            </div>
+            <div class="setup-audit-pagination setup-audit-pagination-top">
+              <button type="button" id="setupAuditPrevPage" class="setup-audit-open-btn">←</button>
+              <span id="setupAuditPageLabel" class="setup-audit-page-label">1/1</span>
+              <button type="button" id="setupAuditNextPage" class="setup-audit-open-btn">→</button>
+            </div>
+            <div class="setup-audit-table-wrap">
+              <table class="setup-audit-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-i18n="setupAudit.colCreated">Fecha</th>
+                    <th scope="col" data-i18n="setupAudit.colUser">Usuario</th>
+                    <th scope="col" data-i18n="setupAudit.colSection">Sección</th>
+                    <th scope="col" data-i18n="setupAudit.colAction">Acción</th>
+                    <th scope="col" data-i18n="setupAudit.colDisplay">Detalle</th>
+                  </tr>
+                </thead>
+                <tbody id="setupAuditTbody"></tbody>
+              </table>
+              <p id="setupAuditEmpty" class="setup-audit-empty" data-i18n="setupAudit.empty">
+                No hay cambios de Setup Audit Trail con los filtros actuales.
+              </p>
+            </div>
+            <div class="setup-audit-pagination setup-audit-pagination-bottom">
+              <div class="setup-audit-field setup-audit-page-size-wrap">
+                <label for="setupAuditPageSize" class="setup-audit-field-label" data-i18n="setupAudit.filterPageSize">Filas por página</label>
+                <select id="setupAuditPageSize" class="setup-audit-input setup-audit-select setup-audit-page-size">
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>

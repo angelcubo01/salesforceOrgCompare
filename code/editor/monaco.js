@@ -1,4 +1,5 @@
 // Monaco ESM loader (no eval/AMD) and helpers.
+import { state } from '../core/state.js';
 
 export async function loadMonaco() {
   // Load Monaco via AMD loader to avoid CSS-as-module issues in ESM build
@@ -68,13 +69,14 @@ export async function loadMonaco() {
 }
 
 export function createSingleEditor(monaco, container) {
+  const wrap = state.wordWrapEnabled ? 'on' : 'off';
   return monaco.editor.create(container, {
     value: '',
     readOnly: true,
     language: 'plaintext',
     automaticLayout: true,
     minimap: { enabled: false },
-    wordWrap: 'off',
+    wordWrap: wrap,
     theme: 'sfoc-editor-dark',
     fontSize: 13,
     lineHeight: 20,
@@ -88,6 +90,7 @@ export function createSingleEditor(monaco, container) {
 }
 
 export function createDiffEditor(monaco, container) {
+  const wrap = state.wordWrapEnabled ? 'on' : 'off';
   const diff = monaco.editor.createDiffEditor(container, {
     readOnly: true,
     automaticLayout: true,
@@ -101,7 +104,7 @@ export function createDiffEditor(monaco, container) {
     renderMarginRevertIcon: false,
     ignoreTrimWhitespace: false,
     minimap: { enabled: false },
-    wordWrap: 'off',
+    wordWrap: wrap,
     theme: 'sfoc-editor-dark',
     fontSize: 13,
     lineHeight: 20,
@@ -116,7 +119,7 @@ export function createDiffEditor(monaco, container) {
   });
   try {
     const common = {
-      wordWrap: 'off',
+      wordWrap: wrap,
       theme: 'sfoc-editor-dark',
       fontSize: 13,
       lineHeight: 20,
@@ -136,6 +139,20 @@ export function createDiffEditor(monaco, container) {
     // ignore if APIs differ on this monaco version
   }
   return diff;
+}
+
+export function applyWordWrapToCurrentEditors() {
+  const wrap = state.wordWrapEnabled ? 'on' : 'off';
+  try {
+    if (state.editor) state.editor.updateOptions({ wordWrap: wrap });
+  } catch {}
+  try {
+    if (state.diffEditor) {
+      state.diffEditor.updateOptions({ wordWrap: wrap });
+      state.diffEditor.getOriginalEditor().updateOptions({ wordWrap: wrap });
+      state.diffEditor.getModifiedEditor().updateOptions({ wordWrap: wrap });
+    }
+  } catch {}
 }
 
 export function languageForFileName(fileName) {

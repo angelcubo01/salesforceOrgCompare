@@ -84,6 +84,18 @@ export function updateDocumentTitle() {
     document.title = t('docTitle.apexTests');
     return;
   }
+  if (state.selectedArtifactType === 'AnonymousApex') {
+    document.title = t('docTitle.anonymousApex');
+    return;
+  }
+  if (state.selectedArtifactType === 'OrgLimits') {
+    document.title = t('docTitle.orgLimits');
+    return;
+  }
+  if (state.selectedArtifactType === 'SetupAuditTrail') {
+    document.title = t('docTitle.setupAuditTrail');
+    return;
+  }
   const sel = state.selectedItem;
   let fileName = getDisplayFileName(sel);
   if (sel?.type === 'PackageXml' && sel.descriptor?.source === 'retrieveZipFile' && sel.descriptor?.relativePath) {

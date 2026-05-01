@@ -187,6 +187,17 @@ export async function getOrganizationInfo(instanceUrl, sid, apiVersion) {
   return { id: org.Id, name: org.Name, isSandbox: !!org.IsSandbox };
 }
 
+/** Límites de la org (`/limits`). */
+export async function fetchOrgLimits(instanceUrl, sid, apiVersion) {
+  const res = await restFetchWithSid(instanceUrl, sid, `/services/data/v${apiVersion}/limits`);
+  if (!res.ok) {
+    const err = new Error(`Limits query failed: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return await res.json();
+}
+
 export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
   const like = sanitizeSearchPrefix(prefix || '');
   switch (type) {
@@ -741,12 +752,13 @@ export async function queryApexLogsInWindow(instanceUrl, sid, apiVersion, sinceI
     const pat = soqlLikeEscapeMetacharacters(safeLoc);
     likeClause = ` AND Location LIKE '%${pat}%' ESCAPE '\\'`;
   }
-  const baseFields = 'Id, StartTime, Operation, LogLength, LogUserId, DurationMilliseconds, Location';
+  const baseFields =
+    'Id, StartTime, Operation, LogLength, LogUserId, LogUser.Name, DurationMilliseconds, Location';
   const whereCore = `StartTime >= ${a} AND StartTime <= ${b}${userClause}${opClause}`;
   const orderLimit = ` ORDER BY StartTime ASC LIMIT ${limit}`;
   const soqlLocNoLike = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${orderLimit}`;
   const soqlWithLoc = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${likeClause}${orderLimit}`;
-  const soqlNoLoc = `SELECT Id, StartTime, Operation, LogLength, LogUserId, DurationMilliseconds FROM ApexLog WHERE ${whereCore}${orderLimit}`;
+  const soqlNoLoc = `SELECT Id, StartTime, Operation, LogLength, LogUserId, LogUser.Name, DurationMilliseconds FROM ApexLog WHERE ${whereCore}${orderLimit}`;
   try {
     if (likeClause) {
       const withLike = (await toolingQueryAll(instanceUrl, sid, apiVersion, soqlWithLoc)) || [];
@@ -1096,6 +1108,41 @@ export async function runTestsAsynchronous(instanceUrl, sid, apiVersion, body) {
   headers.set('Content-Type', 'application/json; charset=UTF-8');
   headers.set('sforce-call-options', 'client=devconsole');
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const text = await res.text();
+  let json;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    json = { message: text };
+  }
+  if (!res.ok) {
+    const msg =
+      (Array.isArray(json) && json[0] && json[0].message) ||
+      json.message ||
+      json.error ||
+      text ||
+      `HTTP ${res.status}`;
+    const err = new Error(msg);
+    err.status = res.status;
+    err.body = json;
+    throw err;
+  }
+  return json;
+}
+
+/**
+ * Ejecuta Apex anónimo vía Tooling API.
+ * Devuelve el JSON de Salesforce (`compiled`, `success`, `compileProblem`, `exceptionMessage`, `exceptionStackTrace`, `logs`, etc).
+ */
+export async function executeAnonymous(instanceUrl, sid, apiVersion, anonymousBody) {
+  await restGate.acquire();
+  const base = String(instanceUrl).replace(/\/$/, '');
+  const body = String(anonymousBody == null ? '' : anonymousBody);
+  const url = `${base}/services/data/v${apiVersion}/tooling/executeAnonymous/?anonymousBody=${encodeURIComponent(body)}`;
+  const headers = new Headers();
+  headers.set('Authorization', `Bearer ${sid}`);
+  headers.set('Accept', 'application/json');
+  const res = await fetch(url, { method: 'GET', headers });
   const text = await res.text();
   let json;
   try {

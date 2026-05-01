@@ -7,6 +7,10 @@ import { renderEditor } from '../editor/editorRender.js';
 import { refreshGeneratePackageXmlTypes } from './generatePackageXmlPanel.js';
 import { refreshFieldDependencyPanel } from './fieldDependencyPanel.js';
 import { refreshApexTestsPanel, resetApexTestsShellToHub } from './apexTestsPanel.js';
+import { refreshAnonymousApexPanel } from './anonymousApexPanel.js';
+import { refreshOrgLimitsPanel } from './orgLimitsPanel.js';
+import { refreshDebugLogBrowserPanel } from './debugLogBrowserPanel.js';
+import { refreshSetupAuditTrailPanel } from './setupAuditTrailPanel.js';
 import { t } from '../../shared/i18n.js';
 
 export function updateSearchUiForType() {
@@ -69,6 +73,10 @@ export function setupSearch() {
       selectedType === 'PackageXml' ||
       selectedType === 'GeneratePackageXml' ||
       selectedType === 'ApexTests' ||
+      selectedType === 'AnonymousApex' ||
+      selectedType === 'OrgLimits' ||
+      selectedType === 'DebugLogBrowser' ||
+      selectedType === 'SetupAuditTrail' ||
       selectedType === 'FieldDependency'
     ) {
       results.style.display = 'none';
@@ -151,6 +159,10 @@ export function setupSearch() {
         resetApexTestsShellToHub();
       }
       void refreshApexTestsPanel();
+      void refreshAnonymousApexPanel();
+      void refreshOrgLimitsPanel();
+      void refreshDebugLogBrowserPanel();
+      void refreshSetupAuditTrailPanel();
       refreshFieldDependencyPanel();
     });
   }

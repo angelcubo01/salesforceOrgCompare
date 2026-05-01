@@ -1,7 +1,10 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { showToast } from './toast.js';
+import { addSelected } from '../flows/addItems.js';
+import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
+import { applyArtifactTypeUi } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 /** @type {Array<{ xmlName: string, label: string, directoryName: string, inFolder: boolean }>} */
 let describeCache = [];
@@ -326,14 +329,25 @@ function wireSearchInputs() {
   }
 }
 
+function syncCompareButtonVisibility() {
+  const btn = document.getElementById('generatePkgCompareOpenBtn');
+  if (!btn) return;
+  btn.classList.toggle('hidden', !state.generatePackageXmlCompareMode);
+}
+
 /** Llamar tras cambiar a modo generar o al cambiar la org izquierda. */
 export function refreshGeneratePackageXmlTypes() {
+  const toggle = document.getElementById('generatePkgCompareToggle');
+  if (toggle) toggle.checked = !!state.generatePackageXmlCompareMode;
+  syncCompareButtonVisibility();
   selectedByType.clear();
   return loadMetadataTypesIntoPicklist();
 }
 
 export function setupGeneratePackageXmlPanel() {
   const typeSelect = document.getElementById('generatePkgMetadataType');
+  const compareToggle = document.getElementById('generatePkgCompareToggle');
+  const compareOpenBtn = document.getElementById('generatePkgCompareOpenBtn');
 
   wireSearchInputs();
 
@@ -351,6 +365,46 @@ export function setupGeneratePackageXmlPanel() {
   }
 
   wireMembersToolbar();
+
+  if (compareToggle) {
+    compareToggle.checked = !!state.generatePackageXmlCompareMode;
+    compareToggle.addEventListener('change', () => {
+      state.generatePackageXmlCompareMode = !!compareToggle.checked;
+      syncCompareButtonVisibility();
+      applyArtifactTypeUi();
+    });
+  }
+  if (compareOpenBtn) {
+    compareOpenBtn.addEventListener('click', () => {
+      const ta = document.getElementById('generatePkgXmlOutput');
+      const xml = ta ? String(ta.value || '') : '';
+      if (!xml.trim()) {
+        showToast(t('toast.noPackageXml'), 'warn');
+        return;
+      }
+      const key = `local-${Date.now()}-package`;
+      state.packageXmlLocalContent[key] = { fileName: 'package.xml', content: xml };
+      addSelected({
+        type: 'PackageXml',
+        key,
+        descriptor: {
+          name: 'package.xml',
+          originalFileName: 'package.xml',
+          source: 'localFile'
+        }
+      });
+      const op = document.getElementById('typeSelect');
+      if (!op) return;
+      op.value = 'PackageXml';
+      op.dispatchEvent(new Event('change', { bubbles: true }));
+      setTimeout(() => {
+        const current = state.selectedItem;
+        if (current?.type === 'PackageXml' && current?.descriptor?.source === 'localFile') {
+          void retrieveAndLoadFromZip(current);
+        }
+      }, 0);
+    });
+  }
 
   const downloadBtn = document.getElementById('generatePkgDownloadXml');
   if (downloadBtn) {
@@ -389,4 +443,5 @@ export function setupGeneratePackageXmlPanel() {
   }
 
   updateXmlOutput();
+  syncCompareButtonVisibility();
 }

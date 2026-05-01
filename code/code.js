@@ -36,6 +36,10 @@ import { applyArtifactTypeUi } from './ui/artifactTypeUi.js';
 import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
 import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
+import { setupAnonymousApexPanel, refreshAnonymousApexPanel } from './ui/anonymousApexPanel.js';
+import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
+import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
+import { setupSetupAuditTrailPanel, refreshSetupAuditTrailPanel } from './ui/setupAuditTrailPanel.js';
 import {
   setupClearApexTestJobsOnPageClose,
   updateApexTestsHubPollingState
@@ -180,10 +184,18 @@ async function init() {
   setupSearch();
   setupGeneratePackageXmlPanel();
   setupApexTestsPanel();
+  setupAnonymousApexPanel();
+  setupOrgLimitsPanel();
+  setupDebugLogBrowserPanel();
+  setupSetupAuditTrailPanel();
   setupFieldDependencyPanel();
   renderEditor();
   refreshGeneratePackageXmlTypes();
   void refreshApexTestsPanel();
+  void refreshAnonymousApexPanel();
+  void refreshOrgLimitsPanel();
+  void refreshDebugLogBrowserPanel();
+  void refreshSetupAuditTrailPanel();
   setupResizable();
   setupDragAndDrop();
   setupDownloadAll();

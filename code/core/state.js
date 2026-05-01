@@ -33,5 +33,9 @@ export const state = {
   /** Items fijados en la lista (máximo 5). Almacena claves `type:key`. */
   pinnedKeys: [],
   ignoreTrimWhitespace: false,
+  wordWrapEnabled: false,
+  anonymousApexCompareMode: false,
+  orgLimitsCompareMode: false,
+  generatePackageXmlCompareMode: false,
   orgsList: []
 };
