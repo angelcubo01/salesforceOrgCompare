@@ -31,24 +31,35 @@ import {
   setupDiffNavigation,
   setupSidebarToggle
 } from './setup/setupListeners.js';
-import { setupKeyboardShortcutsModal } from './ui/keyboardShortcutsModal.js';
-import { setupSearch } from './ui/searchSetup.js';
+import { setupSearch, setOnAfterArtifactTypeChange } from './ui/searchSetup.js';
+import {
+  initializeAppNavigation,
+  setupAppModeTabHandlers,
+  persistAfterOperationChange
+} from './ui/appModeNav.js';
 import { applyArtifactTypeUi } from './ui/artifactTypeUi.js';
 import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
 import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
 import { setupAnonymousApexPanel, refreshAnonymousApexPanel } from './ui/anonymousApexPanel.js';
 import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
+import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryExplorerPanel.js';
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
+import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
 import { setupSetupAuditTrailPanel, refreshSetupAuditTrailPanel } from './ui/setupAuditTrailPanel.js';
 import { setupQuickEditPanel, refreshQuickEditPanel } from './ui/quickEditPanel.js';
 import {
   setupClearApexTestJobsOnPageClose,
   updateApexTestsHubPollingState
 } from './ui/apexTestsHubRuns.js';
-import { loadLang, t } from '../shared/i18n.js';
-import { loadExtensionSettings, EXTENSION_CONFIG_KEY } from '../shared/extensionSettings.js';
+import { loadLang, t, getCurrentLang } from '../shared/i18n.js';
+import {
+  loadExtensionSettings,
+  EXTENSION_CONFIG_KEY,
+  applyUiThemeToDocument
+} from '../shared/extensionSettings.js';
 import { UPDATE_PAGE_URL } from './core/constants.js';
+import { applyMonacoThemeGlobally } from './editor/monaco.js';
 
 /** Alinea `#typeSelect` con un ítem abierto por URL (`type` = API del metadata). */
 function operationSelectValueForItemType(itemType) {
@@ -78,6 +89,9 @@ function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n-placeholder]').forEach((elem) => {
     elem.placeholder = t(elem.getAttribute('data-i18n-placeholder'));
   });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((elem) => {
+    elem.setAttribute('aria-label', t(elem.getAttribute('data-i18n-aria-label')));
+  });
   document.querySelectorAll('[data-i18n-label]').forEach((elem) => {
     elem.label = t(elem.getAttribute('data-i18n-label'));
   });
@@ -91,13 +105,44 @@ function applyLandingFooterLinks() {
   }
 }
 
+async function applyLandingHomeBanner() {
+  const wrap = document.getElementById('appLandingHomeBanner');
+  const textEl = document.getElementById('appLandingHomeBannerText');
+  if (!wrap || !textEl) return;
+  wrap.classList.add('hidden');
+  textEl.textContent = '';
+  try {
+    const res = await bg({ type: 'version:getUpdateInfo', forceRefreshRemote: true });
+    if (!res || !res.ok) return;
+    const lang = getCurrentLang();
+    const es = String(res.homeBanner_es || '').trim();
+    const en = String(res.homeBanner_en || '').trim();
+    const gen = String(res.homeBanner || '').trim();
+    const message = lang === 'es' ? es || gen || en : en || gen || es;
+    if (!message) return;
+    textEl.textContent = message;
+    wrap.classList.remove('hidden');
+  } catch {
+    /* ignore */
+  }
+}
+
 async function init() {
   await loadLang();
   await loadExtensionSettings();
+  applyUiThemeToDocument(document);
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[EXTENSION_CONFIG_KEY]) {
-      void loadExtensionSettings();
-      updateApexTestsHubPollingState();
+      void (async () => {
+        await loadExtensionSettings();
+        applyUiThemeToDocument(document);
+        updateApexTestsHubPollingState();
+        if (state.monaco) applyMonacoThemeGlobally(state.monaco);
+        const { refreshAnonymousApexEditorTheme } = await import('./ui/anonymousApexPanel.js');
+        const { refreshQuickEditEditorTheme } = await import('./ui/quickEditPanel.js');
+        refreshAnonymousApexEditorTheme();
+        refreshQuickEditEditorTheme();
+      })();
     }
   });
   applyStaticTranslations();
@@ -107,6 +152,8 @@ async function init() {
   if (blocked) {
     return;
   }
+
+  await applyLandingHomeBanner();
 
   await loadSavedOrgs();
   await loadPinnedKeys();
@@ -121,10 +168,13 @@ async function init() {
   const descriptorParam = urlParams.get('descriptor');
   const orgIdParam = urlParams.get('orgId');
 
-  if (itemType && itemKey && typeSelect) {
-    const op = operationSelectValueForItemType(itemType);
-    if (op) typeSelect.value = op;
-  }
+  const urlOp = itemType && itemKey ? operationSelectValueForItemType(itemType) : '';
+
+  setOnAfterArtifactTypeChange((isUserChange) => {
+    void persistAfterOperationChange(isUserChange);
+  });
+
+  await initializeAppNavigation({ urlOp });
 
   if (typeSelect) {
     state.selectedArtifactType = typeSelect.value || '';
@@ -184,11 +234,14 @@ async function init() {
   
   wireSelectors();
   setupSearch();
+  setupAppModeTabHandlers();
   setupGeneratePackageXmlPanel();
   setupApexTestsPanel();
   setupAnonymousApexPanel();
   setupOrgLimitsPanel();
+  setupQueryExplorerPanel();
   setupDebugLogBrowserPanel();
+  setupApexCoverageComparePanel();
   setupSetupAuditTrailPanel();
   setupQuickEditPanel();
   setupFieldDependencyPanel();
@@ -197,7 +250,9 @@ async function init() {
   void refreshApexTestsPanel();
   void refreshAnonymousApexPanel();
   void refreshOrgLimitsPanel();
+  void refreshQueryExplorerPanel();
   void refreshDebugLogBrowserPanel();
+  void refreshApexCoverageComparePanel();
   void refreshSetupAuditTrailPanel();
   void refreshQuickEditPanel();
   setupResizable();
@@ -209,7 +264,6 @@ async function init() {
   setupModifierKeyTracking();
   setupDiffNavigation();
   setupSidebarToggle();
-  setupKeyboardShortcutsModal();
   updateOrgDropdownLayout();
   updateDocumentTitle();
   updateOrgSelectorsLockedState();

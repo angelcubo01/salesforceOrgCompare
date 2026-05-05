@@ -394,5 +394,50 @@ export function setupDebugLogBrowserPanel() {
       currentPage += 1;
       renderRows();
     });
+  const deleteAllBtn = document.getElementById('debugLogBrowserDeleteAllBtn');
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', async () => {
+      if (!state.leftOrgId) {
+        showToast(t('debugLogs.selectOrg'), 'error');
+        return;
+      }
+      if (!window.confirm(t('debugLogs.deleteAllConfirm'))) return;
+      deleteAllBtn.disabled = true;
+      showToastWithSpinner(t('debugLogs.deletingAll'));
+      try {
+        const res = await bg({
+          type: 'debugLogs:deleteAll',
+          orgId: state.leftOrgId
+        });
+        if (!res?.ok) {
+          const msg =
+            res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('debugLogs.deleteAllError');
+          showToast(msg, 'error');
+          return;
+        }
+        const total = Number(res.total ?? 0);
+        const deleted = Number(res.deleted ?? 0);
+        const failed = Number(res.failed ?? 0);
+        if (!total) {
+          showToast(t('debugLogs.deleteAllNone'), 'info');
+        } else {
+          const toastType = failed > 0 ? 'warn' : 'info';
+          showToast(
+            t('debugLogs.deleteAllDone', {
+              deleted: String(deleted),
+              failed: String(failed),
+              total: String(total)
+            }),
+            toastType
+          );
+        }
+        lastLoadSignature = '';
+        await refreshDebugLogBrowserPanel();
+      } finally {
+        dismissSpinnerToast();
+        deleteAllBtn.disabled = false;
+      }
+    });
+  }
   ensureDefaultDateRange();
 }

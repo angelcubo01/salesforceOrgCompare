@@ -1,5 +1,7 @@
 /** Estado global de la UI del comparador (code.html). */
 export const state = {
+  /** Pestaña de modo: `home` o clave de `MODE_TOOLS` en appModeNav. */
+  appNavMode: 'home',
   /** Valor actual de `#typeSelect` (vacío = placeholder «elige operación»). */
   selectedArtifactType: '',
   monaco: null,
@@ -37,5 +39,6 @@ export const state = {
   anonymousApexCompareMode: false,
   orgLimitsCompareMode: false,
   generatePackageXmlCompareMode: false,
+  queryExplorerCompareMode: false,
   orgsList: []
 };

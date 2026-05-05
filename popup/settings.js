@@ -12,8 +12,72 @@ import {
   resetExtensionSettings,
   EXTENSION_ADVANCED_FIELD_KEYS,
   EXTENSION_FIELD_BOUNDS,
-  EXTENSION_CONFIG_KEY
+  EXTENSION_CONFIG_KEY,
+  MONACO_THEME_IDS,
+  normalizeMonacoThemeId,
+  applyUiThemeToDocument
 } from '../shared/extensionSettings.js';
+
+const MONACO_THEME_I18N_KEYS = {
+  'sfoc-editor-dark': 'settings.monacoThemeSfocDark',
+  'sfoc-editor-light': 'settings.monacoThemeSfocLight',
+  'vs-dark': 'settings.monacoThemeVsDark',
+  vs: 'settings.monacoThemeVs',
+  'hc-black': 'settings.monacoThemeHcBlack',
+  'hc-light': 'settings.monacoThemeHcLight'
+};
+
+function refreshAppearanceSelectLabels() {
+  const uiSel = document.getElementById('settingsUiTheme');
+  if (uiSel) {
+    for (const o of Array.from(uiSel.options)) {
+      o.textContent = t(o.value === 'light' ? 'settings.uiThemeLight' : 'settings.uiThemeDark');
+    }
+  }
+  const monSel = document.getElementById('settingsMonacoTheme');
+  if (monSel) {
+    for (const o of Array.from(monSel.options)) {
+      const k = MONACO_THEME_I18N_KEYS[o.value];
+      o.textContent = k ? t(k) : o.value;
+    }
+  }
+}
+
+function wireAppearanceSettings() {
+  const uiSel = document.getElementById('settingsUiTheme');
+  const monSel = document.getElementById('settingsMonacoTheme');
+  if (uiSel) {
+    uiSel.innerHTML = '';
+    for (const val of ['dark', 'light']) {
+      const o = document.createElement('option');
+      o.value = val;
+      o.textContent = t(val === 'light' ? 'settings.uiThemeLight' : 'settings.uiThemeDark');
+      uiSel.appendChild(o);
+    }
+  }
+  if (monSel) {
+    monSel.innerHTML = '';
+    for (const id of MONACO_THEME_IDS) {
+      const o = document.createElement('option');
+      o.value = id;
+      const k = MONACO_THEME_I18N_KEYS[id];
+      o.textContent = k ? t(k) : id;
+      monSel.appendChild(o);
+    }
+  }
+  void loadExtensionSettings().then((cfg) => {
+    if (uiSel) uiSel.value = cfg.uiTheme === 'light' ? 'light' : 'dark';
+    if (monSel) monSel.value = normalizeMonacoThemeId(cfg.monacoTheme);
+  });
+  uiSel?.addEventListener('change', async () => {
+    const v = uiSel.value === 'light' ? 'light' : 'dark';
+    await saveExtensionSettings({ uiTheme: v });
+    applyUiThemeToDocument(document);
+  });
+  monSel?.addEventListener('change', async () => {
+    await saveExtensionSettings({ monacoTheme: normalizeMonacoThemeId(monSel.value) });
+  });
+}
 
 async function bg(message) {
   return chrome.runtime.sendMessage(message);
@@ -212,6 +276,7 @@ function wireLanguageSelect() {
     document.title = t('settings.pageTitle');
     refreshAdvancedFieldI18n();
     refreshGeneralTraceFieldI18n();
+    refreshAppearanceSelectLabels();
   });
 }
 
@@ -353,10 +418,12 @@ function wireOrgsBackup() {
 async function main() {
   await loadLang();
   await loadExtensionSettings();
+  applyUiThemeToDocument(document);
   document.documentElement.lang = getCurrentLang() === 'en' ? 'en' : 'es';
   document.title = t('settings.pageTitle');
   applyStaticTranslations();
   wireLanguageSelect();
+  wireAppearanceSettings();
   wireGeneralTraceSettings();
   wireAdvancedPanel();
   wireOrgsBackup();

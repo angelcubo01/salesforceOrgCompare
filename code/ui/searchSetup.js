@@ -8,14 +8,52 @@ import { refreshGeneratePackageXmlTypes } from './generatePackageXmlPanel.js';
 import { refreshFieldDependencyPanel } from './fieldDependencyPanel.js';
 import { refreshApexTestsPanel, resetApexTestsShellToHub } from './apexTestsPanel.js';
 import { refreshAnonymousApexPanel } from './anonymousApexPanel.js';
+import { refreshQueryExplorerPanel } from './queryExplorerPanel.js';
 import { refreshOrgLimitsPanel } from './orgLimitsPanel.js';
 import { refreshDebugLogBrowserPanel } from './debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from './setupAuditTrailPanel.js';
 import { refreshQuickEditPanel } from './quickEditPanel.js';
+import { refreshApexCoverageComparePanel } from './apexCoverageComparePanel.js';
 import { t } from '../../shared/i18n.js';
+
+/** @type {(isUserChange: boolean) => void} */
+let onAfterArtifactTypeChange = () => {};
+
+export function setOnAfterArtifactTypeChange(fn) {
+  onAfterArtifactTypeChange = typeof fn === 'function' ? fn : () => {};
+}
+
+/** @type {((() => void) | null)} */
+let runSearchFn = null;
 
 export function updateSearchUiForType() {
   applyArtifactTypeUi();
+}
+
+/**
+ * Ejecuta el mismo efecto que al cambiar `#typeSelect` (búsqueda, paneles, persistencia).
+ * @param {{ isUserChange?: boolean }} [options]
+ */
+export function handleArtifactTypeSelectChange(options = {}) {
+  const isUserChange = !!options.isUserChange;
+  const typeSelect = document.getElementById('typeSelect');
+  updateSearchUiForType();
+  if (runSearchFn) void runSearchFn();
+  renderEditor();
+  refreshGeneratePackageXmlTypes();
+  if (typeSelect?.value === 'ApexTests') {
+    resetApexTestsShellToHub();
+  }
+  void refreshApexTestsPanel();
+  void refreshAnonymousApexPanel();
+  void refreshQueryExplorerPanel();
+  void refreshOrgLimitsPanel();
+  void refreshDebugLogBrowserPanel();
+  void refreshSetupAuditTrailPanel();
+  void refreshQuickEditPanel();
+  void refreshApexCoverageComparePanel();
+  refreshFieldDependencyPanel();
+  onAfterArtifactTypeChange(isUserChange);
 }
 
 export function handlePackageXmlFileSelected(file) {
@@ -63,7 +101,7 @@ export function setupSearch() {
     });
   }
 
-  async function runSearch() {
+  async function runSearchImpl() {
     const selectedType = typeSelect ? typeSelect.value : '';
     if (!selectedType) {
       results.style.display = 'none';
@@ -75,6 +113,7 @@ export function setupSearch() {
       selectedType === 'GeneratePackageXml' ||
       selectedType === 'ApexTests' ||
       selectedType === 'AnonymousApex' ||
+      selectedType === 'QueryExplorer' ||
       selectedType === 'OrgLimits' ||
       selectedType === 'DebugLogBrowser' ||
       selectedType === 'SetupAuditTrail' ||
@@ -149,29 +188,18 @@ export function setupSearch() {
     results.style.display = count ? 'block' : 'none';
   }
 
+  runSearchFn = () => {
+    void runSearchImpl();
+  };
+
   // Cambiar tipo de metadata relanza la búsqueda actual
-  if (typeSelect) {
-    typeSelect.addEventListener('change', () => {
-      updateSearchUiForType();
-      runSearch();
-      renderEditor();
-      refreshGeneratePackageXmlTypes();
-      if (typeSelect.value === 'ApexTests') {
-        resetApexTestsShellToHub();
-      }
-      void refreshApexTestsPanel();
-      void refreshAnonymousApexPanel();
-      void refreshOrgLimitsPanel();
-      void refreshDebugLogBrowserPanel();
-      void refreshSetupAuditTrailPanel();
-      void refreshQuickEditPanel();
-      refreshFieldDependencyPanel();
-    });
-  }
+  typeSelect?.addEventListener('change', () => {
+    handleArtifactTypeSelectChange({ isUserChange: true });
+  });
   updateSearchUiForType();
 
-  input.addEventListener('input', debounce(runSearch, 300));
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { runSearch(); } });
+  input.addEventListener('input', debounce(runSearchImpl, 300));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { void runSearchImpl(); } });
   input.addEventListener('focus', () => { if (results.childElementCount) results.style.display = 'block'; });
 
   // Cerrar lista de resultados al hacer clic fuera del buscador o de la lista

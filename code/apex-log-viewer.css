@@ -77,3 +77,20 @@ body {
   height: calc(100% - 49px);
   width: 100%;
 }
+
+html[data-ui-theme='light'] {
+  --alb-bg: #f8fafc;
+  --alb-border: #cbd5e1;
+  --alb-text: #0f172a;
+  --alb-accent: #0284c7;
+}
+
+html[data-ui-theme='light'] .apex-log-viewer-back {
+  background: #ffffff;
+}
+
+html[data-ui-theme='light'] .apex-log-viewer-download {
+  background: rgba(2, 132, 199, 0.12);
+  color: #0369a1;
+  border-color: #0ea5e9;
+}

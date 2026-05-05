@@ -1,12 +1,21 @@
 import { loadMonaco, createSingleEditor } from './editor/monaco.js';
 import { loadLang, t } from '../shared/i18n.js';
+import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 
 function getStorageKey() {
   const q = new URLSearchParams(window.location.search || '');
   return q.get('k') || '';
 }
 
-function applyCoverageDecorations(monaco, editor, coveredLines, uncoveredLines) {
+/**
+ * @param {import('monaco-editor')} monaco
+ * @param {import('monaco-editor').editor.IStandaloneCodeEditor} editor
+ * @param {unknown} coveredLines
+ * @param {unknown} uncoveredLines
+ * @param {string} coveredClass
+ * @param {string} uncoveredClass
+ */
+function applyCoverageDecorations(monaco, editor, coveredLines, uncoveredLines, coveredClass, uncoveredClass) {
   const model = editor.getModel();
   if (!model) return;
   const covered = new Set((coveredLines || []).map((n) => Number(n)).filter((x) => Number.isFinite(x) && x >= 1));
@@ -21,25 +30,70 @@ function applyCoverageDecorations(monaco, editor, coveredLines, uncoveredLines) 
     if (covered.has(ln)) {
       decos.push({
         range: new monaco.Range(ln, 1, ln, lastCol),
-        options: { isWholeLine: true, className: 'sfoc-cov-line-covered' }
+        options: { isWholeLine: true, className: coveredClass }
       });
     } else if (uncovered.has(ln)) {
       decos.push({
         range: new monaco.Range(ln, 1, ln, lastCol),
-        options: { isWholeLine: true, className: 'sfoc-cov-line-uncovered' }
+        options: { isWholeLine: true, className: uncoveredClass }
       });
     }
   }
   editor.deltaDecorations([], decos);
 }
 
+/**
+ * @param {import('monaco-editor').editor.IStandaloneCodeEditor} editorA
+ * @param {import('monaco-editor').editor.IStandaloneCodeEditor} editorB
+ */
+function bindSyncedScroll(editorA, editorB) {
+  let mute = false;
+  const apply = (/** @type {import('monaco-editor').editor.IScrollEvent} */ e, target) => {
+    if (mute) return;
+    mute = true;
+    try {
+      target.setScrollTop(e.scrollTop);
+      target.setScrollLeft(e.scrollLeft);
+    } finally {
+      mute = false;
+    }
+  };
+  editorA.onDidScrollChange((e) => apply(e, editorB));
+  editorB.onDidScrollChange((e) => apply(e, editorA));
+}
+
+/**
+ * @param {unknown} payload
+ * @returns {payload is { mode: 'split', title?: string, left: Record<string, unknown>, right: Record<string, unknown> }}
+ */
+function isSplitPayload(payload) {
+  return Boolean(
+    payload &&
+      typeof payload === 'object' &&
+      payload.mode === 'split' &&
+      payload.left &&
+      typeof payload.left === 'object' &&
+      payload.right &&
+      typeof payload.right === 'object'
+  );
+}
+
 async function main() {
   await loadLang();
+  await loadExtensionSettings();
+  applyUiThemeToDocument(document);
   document.title = t('docTitle.apexCoverage');
 
   const backBtn = document.getElementById('apexCovViewerBack');
   const titleEl = document.getElementById('apexCovViewerTitle');
-  const mount = document.getElementById('apexCovViewerMount');
+  const singleWrap = document.getElementById('apexCovSingleWrap');
+  const singleMount = document.getElementById('apexCovViewerMount');
+  const splitRoot = document.getElementById('apexCovSplitRoot');
+  const splitLeftMount = document.getElementById('apexCovSplitLeftMount');
+  const splitRightMount = document.getElementById('apexCovSplitRightMount');
+  const splitLeftBadge = document.getElementById('apexCovSplitLeftBadge');
+  const splitRightBadge = document.getElementById('apexCovSplitRightBadge');
+
   if (backBtn) backBtn.textContent = t('apexLogViewer.back');
 
   document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -63,20 +117,90 @@ async function main() {
     return;
   }
 
+  if (isSplitPayload(payload)) {
+    document.body.classList.add('apex-cov-split-active');
+    const title =
+      (payload.title && String(payload.title)) ||
+      `${t('coverageCompare.viewSplit')} · ${t('docTitle.apexCoverage')}`;
+    if (titleEl) titleEl.textContent = title;
+    if (singleWrap) singleWrap.hidden = true;
+    if (splitRoot) splitRoot.hidden = false;
+
+    const left = payload.left;
+    const right = payload.right;
+    if (splitLeftBadge)
+      splitLeftBadge.textContent = left.orgLabel != null ? String(left.orgLabel) : t('coverageCompare.viewLeft');
+    if (splitRightBadge)
+      splitRightBadge.textContent =
+        right.orgLabel != null ? String(right.orgLabel) : t('coverageCompare.viewRight');
+
+    if (!splitLeftMount || !splitRightMount) return;
+    try {
+      const monaco = await loadMonaco();
+      const editorL = createSingleEditor(monaco, splitLeftMount);
+      const editorR = createSingleEditor(monaco, splitRightMount);
+      const bodyL = left.body != null ? String(left.body) : '';
+      const bodyR = right.body != null ? String(right.body) : '';
+      editorL.setValue(bodyL || '—');
+      editorR.setValue(bodyR || '—');
+      monaco.editor.setModelLanguage(editorL.getModel(), 'apex');
+      monaco.editor.setModelLanguage(editorR.getModel(), 'apex');
+      applyCoverageDecorations(
+        monaco,
+        editorL,
+        left.coveredLines,
+        left.uncoveredLines,
+        'sfoc-cov-line-covered',
+        'sfoc-cov-line-uncovered'
+      );
+      applyCoverageDecorations(
+        monaco,
+        editorR,
+        right.coveredLines,
+        right.uncoveredLines,
+        'sfoc-cov-line-covered',
+        'sfoc-cov-line-uncovered'
+      );
+      bindSyncedScroll(editorL, editorR);
+    } catch {
+      if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
+    }
+
+    backBtn?.addEventListener('click', () => {
+      if (window.opener && !window.opener.closed) {
+        window.close();
+        return;
+      }
+      if (window.history.length > 1) {
+        window.history.back();
+        return;
+      }
+      window.close();
+    });
+    return;
+  }
+
   const title = (payload && payload.title) || t('docTitle.apexCoverage');
   const content = (payload && payload.body) != null ? String(payload.body) : '';
   const coveredLines = payload?.coveredLines;
   const uncoveredLines = payload?.uncoveredLines;
   if (titleEl) titleEl.textContent = title;
 
-  if (!mount) return;
+  if (!singleMount) return;
 
   try {
     const monaco = await loadMonaco();
-    const editor = createSingleEditor(monaco, mount);
+    const editor = createSingleEditor(monaco, singleMount);
     editor.setValue(content || '—');
     monaco.editor.setModelLanguage(editor.getModel(), 'apex');
-    applyCoverageDecorations(monaco, editor, coveredLines, uncoveredLines);
+    applyCoverageDecorations(
+      monaco,
+      editor,
+      coveredLines,
+      uncoveredLines,
+      'sfoc-cov-line-covered',
+      'sfoc-cov-line-uncovered'
+    );
   } catch {
     if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
   }

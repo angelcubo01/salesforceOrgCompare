@@ -68,8 +68,8 @@ function setupApexTestsScaleObserver() {
 }
 
 /**
- * Escala el bloque completo para que quepa en ancho y alto del viewport sin scroll.
- * `minWidth = vw` al medir mantiene las dos tablas usando todo el ancho antes de calcular la escala.
+ * Si todo cabe en ancho (s ≥ 1), sin transform: altura limitada al viewport y scroll en `.apex-tests-table-scroll`.
+ * Si el panel es muy estrecho, escala horizontal (rama transform).
  */
 function apexTestsFitScale() {
   const runner = document.getElementById('apexTestsRunnerView');
@@ -81,7 +81,6 @@ function apexTestsFitScale() {
   if (viewport.clientWidth < 8 || viewport.clientHeight < 8) return;
 
   const vw = viewport.clientWidth;
-  const vh = viewport.clientHeight;
 
   content.style.position = 'static';
   content.style.transform = 'none';
@@ -100,7 +99,20 @@ function apexTestsFitScale() {
   content.style.minWidth = '';
   if (cw < 1 || ch < 1) return;
 
-  const s = Math.min(1, vw / cw, vh / ch);
+  const s = Math.min(1, vw / cw);
+
+  if (s >= 1) {
+    content.style.position = 'static';
+    content.style.transform = 'none';
+    content.style.transformOrigin = '';
+    content.style.width = '';
+    content.style.height = '';
+    content.style.top = '';
+    content.style.left = '';
+    sizer.style.width = '';
+    sizer.style.height = '';
+    return;
+  }
 
   content.style.position = 'absolute';
   content.style.top = '0';

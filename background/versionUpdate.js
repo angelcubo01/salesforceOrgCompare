@@ -14,9 +14,15 @@ export function parseVersionString(v) {
   return { major, minor, raw: clean };
 }
 
-export async function fetchRemoteUpdateInfo() {
+/**
+ * @param {{ bypassMemoryCache?: boolean }} [options]
+ * Si bypassMemoryCache es true, vuelve a pedir version.json aunque no haya caducado el TTL
+ * (p. ej. para el banner de inicio tras publicar cambios en el hosting).
+ */
+export async function fetchRemoteUpdateInfo(options = {}) {
+  const bypass = options.bypassMemoryCache === true;
   const now = Date.now();
-  if (latestUpdateInfo && now - latestUpdateFetchedAt < UPDATE_INFO_TTL_MS) {
+  if (!bypass && latestUpdateInfo && now - latestUpdateFetchedAt < UPDATE_INFO_TTL_MS) {
     return latestUpdateInfo;
   }
   if (!UPDATE_INFO_URL) {
@@ -39,7 +45,10 @@ export async function fetchRemoteUpdateInfo() {
       url_en: data.url_en || '',
       notes: data.notes || '',
       notes_es: data.notes_es || '',
-      notes_en: data.notes_en || ''
+      notes_en: data.notes_en || '',
+      homeBanner: typeof data.homeBanner === 'string' ? data.homeBanner : '',
+      homeBanner_es: typeof data.homeBanner_es === 'string' ? data.homeBanner_es : '',
+      homeBanner_en: typeof data.homeBanner_en === 'string' ? data.homeBanner_en : ''
     };
     latestUpdateFetchedAt = now;
     return latestUpdateInfo;
@@ -48,11 +57,16 @@ export async function fetchRemoteUpdateInfo() {
   }
 }
 
-export async function getUpdateStatus() {
+/**
+ * @param {{ bypassMemoryCache?: boolean }} [options]
+ */
+export async function getUpdateStatus(options = {}) {
   const manifest = chrome.runtime.getManifest();
   const currentVersion = manifest.version || '0.0';
   const current = parseVersionString(currentVersion);
-  const remote = await fetchRemoteUpdateInfo();
+  const remote = await fetchRemoteUpdateInfo({
+    bypassMemoryCache: options.bypassMemoryCache === true
+  });
 
   if (!remote || !remote.version) {
     return {
@@ -70,7 +84,10 @@ export async function getUpdateStatus() {
     updateUrl_en: remote.url_en || '',
     notes: remote.notes || '',
     notes_es: remote.notes_es || '',
-    notes_en: remote.notes_en || ''
+    notes_en: remote.notes_en || '',
+    homeBanner: remote.homeBanner || '',
+    homeBanner_es: remote.homeBanner_es || '',
+    homeBanner_en: remote.homeBanner_en || ''
   };
 
   if (remoteParsed.major === current.major && remoteParsed.minor === current.minor) {

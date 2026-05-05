@@ -6,49 +6,24 @@
     <title>Salesforce Org Compare</title>
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
     <link rel="stylesheet" href="./code.css" />
+    <link rel="stylesheet" href="./code-theme-light.css" />
   </head>
   <body>
+    <!-- Herramienta actual: mismo id para el código; solo se cambia desde la barra superior (menú modos). -->
+    <div class="sfoc-type-select-host" aria-hidden="true">
+      <select id="typeSelect" class="type-select sfoc-type-select-hidden" tabindex="-1" aria-hidden="true">
+        <option value="" selected data-i18n="code.operationPlaceholder">— Elige una operación —</option>
+      </select>
+    </div>
     <div class="content">
         <div class="sidebar">
         <div class="resize-handle"></div>
         <div class="sidebar-header">
-          <div class="sidebar-header-top">
-            <div class="filter-container">
-              <select id="typeSelect" class="type-select" data-i18n-title="code.operationSelectTitle">
-                <option value="" selected data-i18n="code.operationPlaceholder">— Elige una operación —</option>
-                <optgroup data-i18n-label="code.optgroupCode" label="Comparar código">
-                  <option value="Apex" data-i18n="code.opApex">Clases y Triggers Apex</option>
-                  <option value="LWC" data-i18n="code.opLwc">Lightning Web Components</option>
-                  <option value="Aura" data-i18n="code.opAura">Aura Components</option>
-                  <option value="VF" data-i18n="code.opVf">Visualforce</option>
-                </optgroup>
-                <optgroup data-i18n-label="code.optgroupSecurity" label="Seguridad y permisos">
-                  <option value="PermissionSet" data-i18n="code.opPermSet">Conjuntos de permisos</option>
-                  <option value="Profile" data-i18n="code.opProfile">Perfiles</option>
-                  <option value="FlexiPage" data-i18n="code.opFlexi">Páginas Lightning</option>
-                </optgroup>
-                <optgroup data-i18n-label="code.optgroupDev" label="Desarrollo">
-                  <option value="ApexTests" data-i18n="code.opApexTests">Ejecutar Tests Apex</option>
-                  <option value="QuickEdit" data-i18n="code.opQuickEdit">Editor rápido Apex</option>
-                  <option value="AnonymousApex" data-i18n="code.opAnonymousApex">Ejecutar Apex anónimo</option>
-                  <option value="DebugLogBrowser" data-i18n="code.opDebugLogs">Explorar Debug Logs</option>
-                </optgroup>
-                <optgroup data-i18n-label="code.optgroupMonitor" label="Monitorización">
-                  <option value="OrgLimits" data-i18n="code.opOrgLimits">Límites de la org</option>
-                  <option value="SetupAuditTrail" data-i18n="code.opSetupAuditTrail">Historial de cambios</option>
-                  <option value="FieldDependency" data-i18n="code.opFieldDep">Dependencias de picklist</option>
-                </optgroup>
-                <optgroup data-i18n-label="code.optgroupManifest" label="Manifiestos">
-                  <option value="GeneratePackageXml" data-i18n="code.opPkgGenerate">Generar package.xml</option>
-                  <option value="PackageXml" data-i18n="code.opPkgCompare">Comparar package.xml</option>
-                </optgroup>
-              </select>
-            </div>
-          </div>
+          <p id="sidebarHomeHint" class="sidebar-home-hint hidden" data-i18n="code.sidebarHomeHint"></p>
           <div class="sidebar-header-bottom">
             <div id="searchPanel" class="search">
-              <input id="searchInput" type="text" data-i18n-placeholder="code.searchPlaceholder" placeholder="Buscar por nombre (mín. 3 caracteres)" maxlength="64" />
-              <div id="searchResults" class="results"></div>
+              <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholder" placeholder="Buscar por nombre (mín. 3 caracteres)" maxlength="64" />
+              <div id="searchResults" class="results sfoc-autocomplete-panel"></div>
             </div>
             <div id="packageXmlPanel" class="package-xml-panel hidden" aria-label="Importar package.xml">
               <input type="file" id="packageXmlFileInput" accept=".xml,application/xml,text/xml" tabindex="-1" />
@@ -66,25 +41,116 @@
           </div>
         </div>
         <ul id="leftList" class="list"></ul>
-        <div id="anonymousApexScriptsSidebar" class="anonymous-apex-scripts-sidebar hidden">
-          <h4 class="anonymous-apex-pane-title" data-i18n="anonymousApex.savedScripts">Scripts guardados</h4>
-          <input
-            type="text"
-            id="anonymousApexScriptNameInput"
-            class="anonymous-apex-script-name-input"
-            data-i18n-placeholder="anonymousApex.scriptNamePlaceholder"
-            placeholder="Nombre del script..."
-            maxlength="80"
-          />
-          <div class="anonymous-apex-scripts-actions">
-            <button type="button" id="anonymousApexSaveScriptBtn" class="anonymous-apex-small-btn" data-i18n="anonymousApex.saveScript">
-              Guardar
-            </button>
-          </div>
-          <div id="anonymousApexSavedScriptsList" class="anonymous-apex-saved-scripts-list"></div>
-        </div>
       </div>
       <div id="editorContainer" class="editor">
+        <div class="app-mode-tabs-wrap">
+          <nav
+            class="app-mode-tabs"
+            role="tablist"
+            data-i18n-aria-label="code.appModeBarLabel"
+          >
+            <div class="app-mode-tabs-inner">
+              <button
+                type="button"
+                role="tab"
+                class="app-mode-tab app-mode-tab-active"
+                id="appModeTabHome"
+                data-mode="home"
+                aria-selected="true"
+                data-i18n="code.appModeHome"
+                data-i18n-title="code.appModeHomeTitle"
+              >
+                Inicio
+              </button>
+
+              <div class="app-mode-dropdown" data-mode="compare">
+                <button
+                  type="button"
+                  role="tab"
+                  class="app-mode-tab app-mode-tab-trigger"
+                  id="appModeTabCompare"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-selected="false"
+                  data-i18n="code.appModeCompare"
+                  data-i18n-title="code.appModeCompareTitle"
+                ></button>
+                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuCompare">
+                  <div class="app-mode-submenu-inner"></div>
+                </div>
+              </div>
+
+              <div class="app-mode-dropdown" data-mode="security">
+                <button
+                  type="button"
+                  role="tab"
+                  class="app-mode-tab app-mode-tab-trigger"
+                  id="appModeTabSecurity"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-selected="false"
+                  data-i18n="code.appModeSecurity"
+                  data-i18n-title="code.appModeSecurityTitle"
+                ></button>
+                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuSecurity">
+                  <div class="app-mode-submenu-inner"></div>
+                </div>
+              </div>
+
+              <div class="app-mode-dropdown" data-mode="development">
+                <button
+                  type="button"
+                  role="tab"
+                  class="app-mode-tab app-mode-tab-trigger"
+                  id="appModeTabDevelopment"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-selected="false"
+                  data-i18n="code.appModeDevelopment"
+                  data-i18n-title="code.appModeDevelopmentTitle"
+                ></button>
+                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuDevelopment">
+                  <div class="app-mode-submenu-inner"></div>
+                </div>
+              </div>
+
+              <div class="app-mode-dropdown" data-mode="monitoring">
+                <button
+                  type="button"
+                  role="tab"
+                  class="app-mode-tab app-mode-tab-trigger"
+                  id="appModeTabMonitoring"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-selected="false"
+                  data-i18n="code.appModeMonitoring"
+                  data-i18n-title="code.appModeMonitoringTitle"
+                ></button>
+                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuMonitoring">
+                  <div class="app-mode-submenu-inner"></div>
+                </div>
+              </div>
+
+              <div class="app-mode-dropdown" data-mode="manifests">
+                <button
+                  type="button"
+                  role="tab"
+                  class="app-mode-tab app-mode-tab-trigger"
+                  id="appModeTabManifests"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-selected="false"
+                  data-i18n="code.appModeManifests"
+                  data-i18n-title="code.appModeManifestsTitle"
+                ></button>
+                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuManifests">
+                  <div class="app-mode-submenu-inner"></div>
+                </div>
+              </div>
+            </div>
+        </nav>
+        </div>
+        <p id="compareContextTitle" class="compare-context-title hidden" aria-live="polite"></p>
         <div id="orgDropdowns" class="org-dropdowns">
           <div class="org-dropdown-left">
             <select id="leftOrg"></select>
@@ -95,41 +161,41 @@
             <button id="rightReauthBtn" class="reauth-btn" data-i18n="code.reauth" data-i18n-title="code.reauth">Reautenticar</button>
           </div>
         </div>
-        <div id="appLandingPanel" class="app-landing-panel hidden" role="region" data-i18n-title="code.landingRegionTitle">
+        <div id="appLandingPanel" class="app-landing-panel hidden" role="region" aria-labelledby="appLandingHeading">
           <div class="app-landing-inner">
+            <div id="appLandingHomeBanner" class="app-landing-home-banner hidden" role="status" aria-live="polite">
+              <p id="appLandingHomeBannerText" class="app-landing-home-banner-text"></p>
+            </div>
             <header class="app-landing-header">
-              <h1 class="app-landing-title" data-i18n="code.landingTitle">Salesforce Org Compare</h1>
+              <h1 id="appLandingHeading" class="app-landing-title" data-i18n="code.landingTitle">Salesforce Org Compare</h1>
               <p class="app-landing-lead" data-i18n="code.landingSubtitle"></p>
             </header>
             <div class="app-landing-grid-wrap">
             <div class="app-landing-grid">
               <article class="app-landing-card app-landing-card-accent-1">
-                <h2 class="app-landing-card-title" data-i18n="code.landingCard1Title"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingCard1Text"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingModeCompareTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingModeCompareText"></p>
+                <p class="app-landing-card-tools" data-i18n="code.landingModeCompareTools"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-2">
-                <h2 class="app-landing-card-title" data-i18n="code.landingCard2Title"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingCard2Text"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingModeSecurityTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingModeSecurityText"></p>
+                <p class="app-landing-card-tools" data-i18n="code.landingModeSecurityTools"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-3">
-                <h2 class="app-landing-card-title" data-i18n="code.landingCard3Title"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingCard3Text"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingModeDevelopmentTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingModeDevelopmentText"></p>
+                <p class="app-landing-card-tools" data-i18n="code.landingModeDevelopmentTools"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-4">
-                <h2 class="app-landing-card-title" data-i18n="code.landingCard4Title"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingCard4Text"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingModeMonitoringTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingModeMonitoringText"></p>
+                <p class="app-landing-card-tools" data-i18n="code.landingModeMonitoringTools"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-5">
-                <h2 class="app-landing-card-title" data-i18n="code.landingCard5Title"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingCard5Text"></p>
-              </article>
-              <article class="app-landing-card app-landing-card-accent-6">
-                <h2 class="app-landing-card-title" data-i18n="code.landingCard6Title"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingCard6Text"></p>
-              </article>
-              <article class="app-landing-card app-landing-card-accent-7">
-                <h2 class="app-landing-card-title" data-i18n="code.landingCard7Title"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingCard7Text"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingModeManifestsTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingModeManifestsText"></p>
+                <p class="app-landing-card-tools" data-i18n="code.landingModeManifestsTools"></p>
               </article>
             </div>
             </div>
@@ -186,16 +252,6 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 4h18M3 12h18M3 20h18"></path>
               </svg>
-            </button>
-            <button
-              type="button"
-              id="keyboardShortcutsHelpBtn"
-              class="diff-nav-button keyboard-shortcuts-help-btn"
-              data-i18n-title="shortcuts.openTitle"
-              aria-controls="keyboardShortcutsModal"
-              aria-haspopup="dialog"
-            >
-              ?
             </button>
             <button id="prevDiffBtn" class="diff-nav-button" data-i18n-title="code.prevDiff">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -260,7 +316,7 @@
                 <input
                   id="generatePkgTypeSearch"
                   type="search"
-                  class="generate-pkg-search-input"
+                  class="generate-pkg-search-input sfoc-query-input"
                   data-i18n-placeholder="genPkg.filterPlaceholder"
                   placeholder="Filtrar por nombre, etiqueta…"
                   autocomplete="off"
@@ -278,7 +334,7 @@
                 <input
                   id="generatePkgMemberSearch"
                   type="search"
-                  class="generate-pkg-search-input"
+                  class="generate-pkg-search-input sfoc-query-input"
                   data-i18n-placeholder="genPkg.filterMembers"
                   placeholder="Filtrar por nombre de miembro…"
                   autocomplete="off"
@@ -341,9 +397,6 @@
                     Retrieve y descargar ZIP
                   </button>
                 </div>
-                <p class="generate-pkg-xml-footnote" data-i18n="genPkg.footnote">
-                  Usa los buscadores para filtrar tipos y miembros. Y descarga el package.xml.
-                </p>
               </div>
             </div>
           </div>
@@ -501,14 +554,23 @@
 
           <div id="apexTestsRunnerView" class="apex-tests-runner-view hidden" aria-hidden="true">
             <div class="apex-tests-runner-toolbar">
-<button
-              type="button"
-              id="apexTestsBackToHubBtn"
-              class="apex-tests-back-btn"
-              data-i18n="apexTests.backToHub"
-            >
-              Volver
-            </button>
+              <button
+                type="button"
+                id="apexTestsBackToHubBtn"
+                class="apex-tests-back-btn"
+                data-i18n="apexTests.backToHub"
+              >
+                Volver
+              </button>
+              <button
+                type="button"
+                id="apexTestsRunBtn"
+                class="apex-tests-run-btn apex-tests-run-btn-toolbar"
+                disabled
+                data-i18n="apexTests.runButton"
+              >
+                Ejecutar tests
+              </button>
             </div>
             <div id="apexTestsScaleViewport" class="apex-tests-scale-viewport">
               <div id="apexTestsScaleSizer" class="apex-tests-scale-sizer">
@@ -520,7 +582,7 @@
                     <input
                       id="apexTestsClassFilter"
                       type="search"
-                      class="apex-tests-search-input"
+                      class="apex-tests-search-input sfoc-query-input"
                       data-i18n-placeholder="apexTests.filterClassesPh"
                       placeholder="Filtrar clases por nombre…"
                       autocomplete="off"
@@ -574,9 +636,6 @@
                       <div id="apexTestsSelectionTree" class="apex-tests-selection-tree" role="tree"></div>
                     </div>
 
-                    <button type="button" id="apexTestsRunBtn" class="apex-tests-run-btn" disabled data-i18n="apexTests.runButton">
-                      Ejecutar tests
-                    </button>
                     <p id="apexTestsRunStatus" class="apex-tests-org-status" role="status"></p>
                   </div>
                 </div>
@@ -597,7 +656,7 @@
               <input
                 id="fieldDepObjectSearch"
                 type="search"
-                class="field-dep-search-input"
+                class="field-dep-search-input sfoc-query-input"
                 data-i18n-placeholder="fieldDep.filterByApi"
                 placeholder="Filtra por nombre de API…"
                 autocomplete="off"
@@ -645,11 +704,31 @@
           <div class="anonymous-apex-panel-inner">
             <div class="anonymous-apex-head">
               <h2 class="anonymous-apex-title" data-i18n="anonymousApex.title">Anonymous Apex Executor</h2>
-              <label class="anonymous-apex-compare-toggle" for="anonymousApexCompareToggle">
-                <input type="checkbox" id="anonymousApexCompareToggle" />
-                <span class="anonymous-apex-compare-switch" aria-hidden="true"></span>
-                <span class="anonymous-apex-compare-label" data-i18n="anonymousApex.compareMode">Modo comparación</span>
-              </label>
+              <div class="anonymous-apex-head-trailing">
+                <button
+                  type="button"
+                  id="anonymousApexOpenScriptsModalBtn"
+                  class="anonymous-apex-small-btn"
+                  data-i18n="anonymousApex.openSavedScripts"
+                  data-i18n-title="anonymousApex.openSavedScriptsTitle"
+                >
+                  Scripts guardados
+                </button>
+                <button
+                  type="button"
+                  id="anonymousApexQuickSaveBtn"
+                  class="anonymous-apex-small-btn"
+                  data-i18n="anonymousApex.saveCurrentScript"
+                  data-i18n-title="anonymousApex.saveCurrentScriptTitle"
+                >
+                  Guardar
+                </button>
+                <label class="anonymous-apex-compare-toggle" for="anonymousApexCompareToggle">
+                  <input type="checkbox" id="anonymousApexCompareToggle" />
+                  <span class="anonymous-apex-compare-switch" aria-hidden="true"></span>
+                  <span class="anonymous-apex-compare-label" data-i18n="anonymousApex.compareMode">Modo comparación</span>
+                </label>
+              </div>
             </div>
             <p id="anonymousApexOrgStatus" class="anonymous-apex-org-status" role="status"></p>
             <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount"></div>
@@ -680,6 +759,234 @@
                 </div>
               </div>
             </div>
+            <div id="anonymousApexScriptsModal" class="anonymous-apex-scripts-modal hidden" aria-hidden="true">
+              <div class="anonymous-apex-log-picker-backdrop" data-anonymous-scripts-backdrop="1"></div>
+              <div
+                class="anonymous-apex-scripts-modal-panel anonymous-apex-log-picker-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="anonymousApexScriptsModalTitle"
+              >
+                <h3 id="anonymousApexScriptsModalTitle" data-i18n="anonymousApex.savedScripts">Scripts guardados</h3>
+                <div class="anonymous-apex-scripts-modal-save-row">
+                  <input
+                    type="text"
+                    id="anonymousApexScriptNameInput"
+                    class="anonymous-apex-script-name-input sfoc-query-input"
+                    data-i18n-placeholder="anonymousApex.scriptNamePlaceholder"
+                    placeholder="Nombre del script..."
+                    maxlength="80"
+                  />
+                  <button type="button" id="anonymousApexSaveScriptBtn" class="anonymous-apex-small-btn" data-i18n="anonymousApex.saveScript">
+                    Guardar
+                  </button>
+                </div>
+                <div id="anonymousApexSavedScriptsList" class="anonymous-apex-saved-scripts-list anonymous-apex-saved-scripts-list--modal"></div>
+                <div class="anonymous-apex-log-picker-actions">
+                  <button type="button" id="anonymousApexScriptsModalCloseBtn" class="anonymous-apex-small-btn" data-i18n="anonymousApex.closeModal">
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="queryExplorerPanel" class="query-explorer-panel org-limits-panel hidden" aria-label="Query Explorer">
+          <div class="org-limits-panel-inner query-explorer-panel-inner">
+            <div class="org-limits-head">
+              <h2 class="org-limits-title" data-i18n="queryExplorer.title">SOQL / SOSL Explorer</h2>
+              <div class="org-limits-head-controls">
+                <button
+                  type="button"
+                  id="queryExplorerOpenSavedModalBtn"
+                  class="anonymous-apex-small-btn"
+                  data-i18n="queryExplorer.openSavedQueries"
+                  data-i18n-title="queryExplorer.openSavedQueriesTitle"
+                >
+                  Consultas guardadas
+                </button>
+                <button
+                  type="button"
+                  id="queryExplorerQuickSaveBtn"
+                  class="anonymous-apex-small-btn"
+                  data-i18n="queryExplorer.saveCurrentQuery"
+                  data-i18n-title="queryExplorer.saveCurrentQueryTitle"
+                >
+                  Guardar
+                </button>
+                <label
+                  class="org-limits-compare-toggle"
+                  for="queryExplorerCompareToggle"
+                  data-i18n-title="queryExplorer.compareTooltip"
+                >
+                  <input type="checkbox" id="queryExplorerCompareToggle" />
+                  <span class="org-limits-compare-switch" aria-hidden="true"></span>
+                  <span class="org-limits-compare-label" data-i18n="queryExplorer.compareMode">Modo comparación</span>
+                </label>
+              </div>
+            </div>
+            <p id="queryExplorerStatus" class="org-limits-status" role="status"></p>
+            <div class="query-explorer-controls">
+              <div class="query-explorer-controls-row">
+                <label class="query-explorer-field">
+                  <span class="query-explorer-field-label" data-i18n="queryExplorer.apiLabel">API</span>
+                  <select id="queryExplorerApiSelect" class="query-explorer-select" aria-describedby="queryExplorerStatus">
+                    <option value="rest" data-i18n="queryExplorer.apiRest">REST (estándar)</option>
+                    <option value="tooling" data-i18n="queryExplorer.apiTooling">Tooling</option>
+                  </select>
+                </label>
+                <label class="query-explorer-field">
+                  <span class="query-explorer-field-label" data-i18n="queryExplorer.languageLabel">Lenguaje</span>
+                  <select id="queryExplorerLangSelect" class="query-explorer-select">
+                    <option value="soql" data-i18n="queryExplorer.langSoql">SOQL</option>
+                    <option value="sosl" data-i18n="queryExplorer.langSosl">SOSL</option>
+                  </select>
+                </label>
+              </div>
+              <label class="query-explorer-query-label" for="queryExplorerEditorMount">
+                <span class="query-explorer-field-label" data-i18n="queryExplorer.queryLabel">Consulta</span>
+              </label>
+              <div class="query-explorer-editor-wrap">
+                <div
+                  id="queryExplorerEditorMount"
+                  class="query-explorer-editor-mount sfoc-query-input"
+                  role="textbox"
+                  aria-multiline="true"
+                  data-i18n-aria-label="queryExplorer.queryLabel"
+                ></div>
+                <div
+                  id="queryExplorerEditorResize"
+                  class="query-explorer-editor-resize"
+                  role="separator"
+                  aria-orientation="horizontal"
+                  data-i18n-aria-label="queryExplorer.resizeEditor"
+                ></div>
+              </div>
+              <div class="query-explorer-run-row">
+                <button type="button" id="queryExplorerRunBtn" class="org-limits-refresh-btn" data-i18n="queryExplorer.run">
+                  Ejecutar
+                </button>
+              </div>
+            </div>
+            <div id="queryExplorerSingleWrap" class="query-explorer-single-wrap">
+              <div class="query-explorer-result-toolbar">
+                <button type="button" id="queryExplorerSinglePrev" class="query-explorer-icon-btn" disabled aria-label="Prev">←</button>
+                <span id="queryExplorerSingleMeta" class="query-explorer-page-meta"></span>
+                <button type="button" id="queryExplorerSingleNext" class="query-explorer-icon-btn" disabled aria-label="Next">→</button>
+                <span class="query-explorer-toolbar-spacer"></span>
+                <button type="button" id="queryExplorerSingleCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">
+                  CSV
+                </button>
+                <button type="button" id="queryExplorerSingleJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">
+                  JSON
+                </button>
+              </div>
+              <div id="queryExplorerSingleTableMount" class="query-explorer-table-scroll"></div>
+            </div>
+            <div id="queryExplorerCompareWrap" class="query-explorer-compare-wrap hidden">
+              <div class="query-explorer-split">
+                <div class="query-explorer-split-pane" data-side="left">
+                  <h3 id="queryExplorerCompareLeftTitle" class="query-explorer-pane-title"></h3>
+                  <div class="query-explorer-result-toolbar">
+                    <button type="button" id="queryExplorerLeftPrev" class="query-explorer-icon-btn" disabled>←</button>
+                    <span id="queryExplorerLeftMeta" class="query-explorer-page-meta"></span>
+                    <button type="button" id="queryExplorerLeftNext" class="query-explorer-icon-btn" disabled>→</button>
+                    <span class="query-explorer-toolbar-spacer"></span>
+                    <button type="button" id="queryExplorerLeftCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">
+                      CSV
+                    </button>
+                    <button type="button" id="queryExplorerLeftJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">
+                      JSON
+                    </button>
+                  </div>
+                  <div id="queryExplorerLeftTableMount" class="query-explorer-table-scroll"></div>
+                </div>
+                <div class="query-explorer-split-pane" data-side="right">
+                  <h3 id="queryExplorerCompareRightTitle" class="query-explorer-pane-title"></h3>
+                  <div class="query-explorer-result-toolbar">
+                    <button type="button" id="queryExplorerRightPrev" class="query-explorer-icon-btn" disabled>←</button>
+                    <span id="queryExplorerRightMeta" class="query-explorer-page-meta"></span>
+                    <button type="button" id="queryExplorerRightNext" class="query-explorer-icon-btn" disabled>→</button>
+                    <span class="query-explorer-toolbar-spacer"></span>
+                    <button type="button" id="queryExplorerRightCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">
+                      CSV
+                    </button>
+                    <button type="button" id="queryExplorerRightJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">
+                      JSON
+                    </button>
+                  </div>
+                  <div id="queryExplorerRightTableMount" class="query-explorer-table-scroll"></div>
+                </div>
+              </div>
+            </div>
+            <div
+              id="queryExplorerSavedQueriesModal"
+              class="anonymous-apex-scripts-modal hidden"
+              aria-hidden="true"
+            >
+              <div class="anonymous-apex-log-picker-backdrop" data-query-explorer-saved-backdrop="1"></div>
+              <div
+                class="anonymous-apex-scripts-modal-panel anonymous-apex-log-picker-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="queryExplorerSavedQueriesModalTitle"
+              >
+                <h3 id="queryExplorerSavedQueriesModalTitle" data-i18n="queryExplorer.savedQueriesModalTitle">
+                  Consultas guardadas
+                </h3>
+                <div class="anonymous-apex-scripts-modal-save-row">
+                  <input
+                    type="text"
+                    id="queryExplorerQueryNameInput"
+                    class="anonymous-apex-script-name-input sfoc-query-input"
+                    data-i18n-placeholder="queryExplorer.queryNamePlaceholder"
+                    placeholder="Nombre…"
+                    maxlength="80"
+                  />
+                  <button
+                    type="button"
+                    id="queryExplorerSaveNamedQueryBtn"
+                    class="anonymous-apex-small-btn"
+                    data-i18n="queryExplorer.saveNamedQuery"
+                  >
+                    Guardar
+                  </button>
+                </div>
+                <div
+                  id="queryExplorerSavedQueriesList"
+                  class="anonymous-apex-saved-scripts-list anonymous-apex-saved-scripts-list--modal"
+                ></div>
+                <div class="anonymous-apex-log-picker-actions">
+                  <button
+                    type="button"
+                    id="queryExplorerSavedQueriesModalCloseBtn"
+                    class="anonymous-apex-small-btn"
+                    data-i18n="queryExplorer.closeSavedQueriesModal"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="apexCoverageComparePanel" class="apex-coverage-compare-panel org-limits-panel hidden" aria-label="Apex coverage compare">
+          <div class="apex-coverage-compare-panel-inner org-limits-panel-inner">
+            <div class="org-limits-head">
+              <h2 class="org-limits-title" data-i18n="coverageCompare.title">Comparar cobertura Apex</h2>
+              <div class="org-limits-head-controls">
+                <button
+                  type="button"
+                  id="apexCoverageCompareRefreshBtn"
+                  class="org-limits-refresh-btn"
+                  data-i18n="coverageCompare.refresh"
+                >
+                  Cargar datos
+                </button>
+              </div>
+            </div>
+            <p id="apexCoverageCompareStatus" class="org-limits-status" role="status"></p>
+            <div id="apexCoverageCompareTableMount" class="coverage-compare-table-mount"></div>
           </div>
         </div>
         <div id="orgLimitsPanel" class="org-limits-panel hidden" aria-label="Org Limits Dashboard">
@@ -705,6 +1012,14 @@
           <div class="debug-log-browser-panel-inner">
             <div class="debug-log-browser-head">
               <h2 class="debug-log-browser-title" data-i18n="debugLogs.title">Navegador de Debug Logs</h2>
+              <button
+                type="button"
+                id="debugLogBrowserDeleteAllBtn"
+                class="debug-log-browser-delete-all-btn"
+                data-i18n="debugLogs.deleteAll"
+              >
+                Borrar todos los logs
+              </button>
             </div>
             <p id="debugLogBrowserStatus" class="debug-log-browser-status" role="status"></p>
             <div class="debug-log-browser-filters">
@@ -765,30 +1080,34 @@
         </div>
         <div id="quickEditPanel" class="quick-edit-panel hidden" aria-label="Apex Quick Editor">
           <div class="quick-edit-panel-inner">
-            <div class="quick-edit-search-bar">
-              <input
-                id="quickEditSearchInput"
-                type="search"
-                class="quick-edit-search-input"
-                data-i18n-placeholder="quickEdit.searchPlaceholder"
-                placeholder="Buscar Apex Class..."
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <div id="quickEditResultsList" class="quick-edit-results-dropdown"></div>
-            </div>
-            <div class="quick-edit-editor-toolbar">
-              <span id="quickEditCurrentFile" class="quick-edit-current-file" data-i18n="quickEdit.noFileLoaded">Ningún archivo cargado</span>
-              <div class="quick-edit-editor-actions">
-                <span id="quickEditModifiedIndicator" class="quick-edit-modified-indicator hidden" data-i18n="quickEdit.modified">Modificado</span>
-                <button type="button" id="quickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="quickEdit.clear">Limpiar</button>
-                <button type="button" id="quickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n="quickEdit.validate">Validar</button>
-                <button type="button" id="quickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
+            <div class="quick-edit-search-zone">
+              <div class="quick-edit-search-bar">
+                <input
+                  id="quickEditSearchInput"
+                  type="search"
+                  class="quick-edit-search-input sfoc-query-input"
+                  data-i18n-placeholder="quickEdit.searchPlaceholder"
+                  placeholder="Buscar Apex Class..."
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <div id="quickEditResultsList" class="quick-edit-results-dropdown sfoc-autocomplete-panel"></div>
               </div>
             </div>
-            <div id="quickEditEditorMount" class="quick-edit-editor-mount"></div>
-            <p id="quickEditStatus" class="quick-edit-status" role="status"></p>
-            <p id="quickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
+            <div class="quick-edit-panel-body">
+              <div class="quick-edit-editor-toolbar">
+                <span id="quickEditCurrentFile" class="quick-edit-current-file" data-i18n="quickEdit.noFileLoaded">Ningún archivo cargado</span>
+                <div class="quick-edit-editor-actions">
+                  <span id="quickEditModifiedIndicator" class="quick-edit-modified-indicator hidden" data-i18n="quickEdit.modified">Modificado</span>
+                  <button type="button" id="quickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="quickEdit.clear">Limpiar</button>
+                  <button type="button" id="quickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n="quickEdit.validate">Validar</button>
+                  <button type="button" id="quickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
+                </div>
+              </div>
+              <div id="quickEditEditorMount" class="quick-edit-editor-mount"></div>
+              <p id="quickEditStatus" class="quick-edit-status" role="status"></p>
+              <p id="quickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
+            </div>
           </div>
         </div>
         <div id="setupAuditTrailPanel" class="setup-audit-panel hidden" aria-label="Setup Audit Trail Viewer">
@@ -874,25 +1193,6 @@
       </div>
     </div>
 
-    <div id="keyboardShortcutsModal" class="keyboard-shortcuts-modal hidden" aria-hidden="true">
-      <div class="keyboard-shortcuts-modal-backdrop" data-keyboard-shortcuts-close="1" tabindex="-1"></div>
-      <div
-        class="keyboard-shortcuts-modal-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="keyboardShortcutsModalTitle"
-      >
-        <header class="keyboard-shortcuts-modal-head">
-          <h3 id="keyboardShortcutsModalTitle" data-i18n="shortcuts.title">Atajos de teclado</h3>
-          <button type="button" id="keyboardShortcutsModalClose" class="keyboard-shortcuts-modal-close" data-i18n="shortcuts.close">
-            Cerrar
-          </button>
-        </header>
-        <p class="keyboard-shortcuts-intro" data-i18n="shortcuts.intro"></p>
-        <div id="keyboardShortcutsModalBody" class="keyboard-shortcuts-modal-body"></div>
-      </div>
-    </div>
-    
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="../vendor/jsdiff/diff.min.js"></script>

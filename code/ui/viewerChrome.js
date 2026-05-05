@@ -64,6 +64,19 @@ export function updateOrgSelectorsLockedState() {
     if (editor) editor.classList.remove('org-selectors-locked');
     return;
   }
+  if (document.body.classList.contains('artifact-apex-coverage-compare')) {
+    if (left) {
+      left.disabled = false;
+      left.title = '';
+    }
+    if (right) {
+      right.disabled = false;
+      right.title = '';
+    }
+    const editor = document.getElementById('editorContainer');
+    if (editor) editor.classList.remove('org-selectors-locked');
+    return;
+  }
   if (document.body.classList.contains('artifact-field-dependency')) {
     if (left) {
       left.disabled = false;

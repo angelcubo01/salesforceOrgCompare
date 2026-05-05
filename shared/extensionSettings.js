@@ -32,7 +32,32 @@ export const EXTENSION_ADVANCED_FIELD_KEYS = [
 
 const LEGACY_NATIVE_DIFF_KEY = 'soc_native_diff_max_chars';
 
+/** Temas Monaco permitidos (built-in + personalizados SFOC). */
+export const MONACO_THEME_IDS = [
+  'sfoc-editor-dark',
+  'sfoc-editor-light',
+  'vs-dark',
+  'vs',
+  'hc-black',
+  'hc-light'
+];
+
+/** @param {unknown} raw */
+export function normalizeUiTheme(raw) {
+  return raw === 'light' ? 'light' : 'dark';
+}
+
+/** @param {unknown} raw */
+export function normalizeMonacoThemeId(raw) {
+  const s = typeof raw === 'string' ? raw.trim() : '';
+  return MONACO_THEME_IDS.includes(s) ? s : 'sfoc-editor-dark';
+}
+
 const DEFAULTS = {
+  /** Interfaz principal: oscuro (predeterminado) o claro. */
+  uiTheme: /** @type {'dark' | 'light'} */ ('dark'),
+  /** Tema del editor Monaco (diff y paneles que usan Monaco). */
+  monacoTheme: 'sfoc-editor-dark',
   nativeDiffMaxChars: 1_800_000,
   maxMonacoModelChars: 2_000_000,
   maxDiffAlgorithmChars: 400_000,
@@ -89,6 +114,14 @@ function normalizeConfig(partial) {
   const next = { ...DEFAULTS };
   const src = partial && typeof partial === 'object' ? partial : {};
   for (const k of Object.keys(DEFAULTS)) {
+    if (k === 'uiTheme') {
+      next[k] = normalizeUiTheme(src[k] != null ? src[k] : next[k]);
+      continue;
+    }
+    if (k === 'monacoTheme') {
+      next[k] = normalizeMonacoThemeId(src[k] != null ? src[k] : next[k]);
+      continue;
+    }
     if (k === 'apexTestsTraceDebugLevel') {
       next[k] = normalizeApexTraceDebugLevel(src[k] != null ? src[k] : undefined);
       continue;
@@ -213,4 +246,25 @@ export function getApexTestsClassNameLikePatterns() {
  */
 export function getApexTestsTraceDebugLevel() {
   return cache.apexTestsTraceDebugLevel || DEFAULTS.apexTestsTraceDebugLevel;
+}
+
+/** @returns {'dark' | 'light'} */
+export function getUiTheme() {
+  return normalizeUiTheme(cache.uiTheme);
+}
+
+/** @returns {string} */
+export function getMonacoThemeId() {
+  return normalizeMonacoThemeId(cache.monacoTheme);
+}
+
+/**
+ * Atributo `data-ui-theme` en la raíz del documento (pág. principal, ajustes).
+ * @param {Document} [doc]
+ */
+export function applyUiThemeToDocument(doc = typeof document !== 'undefined' ? document : null) {
+  if (!doc?.documentElement) return;
+  const t = getUiTheme();
+  doc.documentElement.dataset.uiTheme = t;
+  doc.documentElement.style.colorScheme = t === 'light' ? 'light' : 'dark';
 }

@@ -391,33 +391,37 @@ export function setupGeneratePackageXmlPanel() {
   }
   if (compareOpenBtn) {
     compareOpenBtn.addEventListener('click', () => {
-      const ta = document.getElementById('generatePkgXmlOutput');
-      const xml = ta ? String(ta.value || '') : '';
-      if (!xml.trim()) {
-        showToast(t('toast.noPackageXml'), 'warn');
-        return;
-      }
-      const key = `local-${Date.now()}-package`;
-      state.packageXmlLocalContent[key] = { fileName: 'package.xml', content: xml };
-      addSelected({
-        type: 'PackageXml',
-        key,
-        descriptor: {
-          name: 'package.xml',
-          originalFileName: 'package.xml',
-          source: 'localFile'
+      void (async () => {
+        const ta = document.getElementById('generatePkgXmlOutput');
+        const xml = ta ? String(ta.value || '') : '';
+        if (!xml.trim()) {
+          showToast(t('toast.noPackageXml'), 'warn');
+          return;
         }
-      });
-      const op = document.getElementById('typeSelect');
-      if (!op) return;
-      op.value = 'PackageXml';
-      op.dispatchEvent(new Event('change', { bubbles: true }));
-      setTimeout(() => {
-        const current = state.selectedItem;
-        if (current?.type === 'PackageXml' && current?.descriptor?.source === 'localFile') {
-          void retrieveAndLoadFromZip(current);
-        }
-      }, 0);
+        const key = `local-${Date.now()}-package`;
+        state.packageXmlLocalContent[key] = { fileName: 'package.xml', content: xml };
+        addSelected({
+          type: 'PackageXml',
+          key,
+          descriptor: {
+            name: 'package.xml',
+            originalFileName: 'package.xml',
+            source: 'localFile'
+          }
+        });
+        const op = document.getElementById('typeSelect');
+        if (!op) return;
+        const { ensureModeForTool } = await import('./appModeNav.js');
+        await ensureModeForTool('PackageXml');
+        op.value = 'PackageXml';
+        op.dispatchEvent(new Event('change', { bubbles: true }));
+        setTimeout(() => {
+          const current = state.selectedItem;
+          if (current?.type === 'PackageXml' && current?.descriptor?.source === 'localFile') {
+            void retrieveAndLoadFromZip(current);
+          }
+        }, 0);
+      })();
     });
   }
 

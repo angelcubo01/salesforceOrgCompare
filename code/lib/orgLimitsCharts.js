@@ -64,9 +64,35 @@ function ensureTooltip(container) {
 function setTooltip(container, text, x, y) {
   const tip = ensureTooltip(container);
   tip.textContent = text;
-  tip.style.left = `${x}px`;
-  tip.style.top = `${y}px`;
   tip.classList.remove('hidden');
+  void tip.offsetWidth;
+  const pad = 8;
+  const cw = container.clientWidth;
+  const ch = container.clientHeight;
+  let tw = tip.offsetWidth;
+  let th = tip.offsetHeight;
+  if (tw < 4 || th < 4) {
+    tw = 44;
+    th = 18;
+  }
+  const tx = Math.max(pad + tw / 2, Math.min(cw - pad - tw / 2, x));
+  const nearTop = y < th + pad;
+  const nearBottom = y > ch - th - pad;
+  let top;
+  let transform;
+  if (nearTop && !nearBottom) {
+    transform = 'translate(-50%, 0)';
+    top = Math.min(ch - th - pad, y + pad);
+  } else if (nearBottom) {
+    transform = 'translate(-50%, -100%)';
+    top = Math.max(th + pad, y - pad);
+  } else {
+    transform = 'translate(-50%, -100%)';
+    top = Math.max(pad, y - pad);
+  }
+  tip.style.left = `${tx}px`;
+  tip.style.top = `${top}px`;
+  tip.style.transform = transform;
 }
 
 function hideTooltip(container) {
@@ -102,13 +128,14 @@ export function renderDonutChart(container, percent, color) {
     drawRingInteractive(ctx, cx, cy, 30, 12, p, color, hovered);
   };
   draw(false);
-  canvas.addEventListener('mouseenter', () => {
+  canvas.addEventListener('mouseenter', (ev) => {
     draw(true);
-    setTooltip(container, pctTxt, 46, 4);
+    const rect = canvas.getBoundingClientRect();
+    setTooltip(container, pctTxt, ev.clientX - rect.left, ev.clientY - rect.top);
   });
   canvas.addEventListener('mousemove', (ev) => {
     const rect = canvas.getBoundingClientRect();
-    setTooltip(container, pctTxt, ev.clientX - rect.left + 8, ev.clientY - rect.top - 10);
+    setTooltip(container, pctTxt, ev.clientX - rect.left, ev.clientY - rect.top);
   });
   canvas.addEventListener('mouseleave', () => {
     draw(false);
@@ -159,7 +186,7 @@ export function renderMultiSeriesPieChart(
     if (dist >= 28 && dist <= 38) active = 'outer';
     else if (dist >= 15 && dist <= 25) active = 'inner';
     draw(active);
-    if (active) setTooltip(container, seriesText[active], x + 8, y - 10);
+    if (active) setTooltip(container, seriesText[active], x, y);
     else hideTooltip(container);
   });
   canvas.addEventListener('mouseleave', () => {

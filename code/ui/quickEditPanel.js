@@ -1,8 +1,71 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
-import { loadMonaco } from '../editor/monaco.js';
+import { loadMonaco, resolveMonacoThemeId } from '../editor/monaco.js';
 import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
+
+const QUICK_EDIT_SEARCH_MIN_PX = 288;
+
+/** Si no hay `field-sizing: content`, ajusta el ancho del input al texto (Chrome antiguo / fallback). */
+function syncQuickEditSearchInputWidth() {
+  const input = document.getElementById('quickEditSearchInput');
+  if (!input) return;
+  if (typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content')) {
+    input.style.removeProperty('width');
+    scheduleSyncQuickEditResultsListWidth();
+    return;
+  }
+  const zone = input.closest('.quick-edit-search-zone');
+  const maxW =
+    zone?.getBoundingClientRect().width || input.closest('.quick-edit-panel-inner')?.clientWidth || 1200;
+
+  window.requestAnimationFrame(() => {
+    if (!input.value.trim()) {
+      input.style.width = `${Math.min(maxW, QUICK_EDIT_SEARCH_MIN_PX)}px`;
+      syncQuickEditResultsListWidth();
+      return;
+    }
+    input.style.width = '0';
+    const needed = Math.max(QUICK_EDIT_SEARCH_MIN_PX, input.scrollWidth + 20);
+    input.style.width = `${Math.min(maxW, needed)}px`;
+    syncQuickEditResultsListWidth();
+  });
+}
+
+const QUICK_EDIT_RESULTS_WIDTH_CAP_PX = 1400;
+
+/** Ancho lista = max(ancho input, contenido más ancho); tope viewport (complementa CSS #quickEditResultsList). */
+function syncQuickEditResultsListWidth() {
+  const list = document.getElementById('quickEditResultsList');
+  const input = document.getElementById('quickEditSearchInput');
+  if (!list || !input || list.childElementCount === 0) {
+    list?.style.removeProperty('width');
+    return;
+  }
+
+  const cap = Math.min(window.innerWidth - 40, QUICK_EDIT_RESULTS_WIDTH_CAP_PX);
+
+  window.requestAnimationFrame(() => {
+    list.style.width = `${cap}px`;
+    let maxChild = 0;
+    for (const el of list.children) {
+      maxChild = Math.max(maxChild, el.scrollWidth);
+    }
+    const cs = getComputedStyle(list);
+    const chromeW =
+      (parseFloat(cs.borderLeftWidth) || 0) +
+      (parseFloat(cs.borderRightWidth) || 0) +
+      (parseFloat(cs.paddingLeft) || 0) +
+      (parseFloat(cs.paddingRight) || 0);
+    const inputW = Math.ceil(input.getBoundingClientRect().width);
+    const w = Math.min(cap, Math.max(inputW, Math.ceil(maxChild + chromeW)));
+    list.style.width = `${w}px`;
+  });
+}
+
+function scheduleSyncQuickEditResultsListWidth() {
+  window.requestAnimationFrame(() => syncQuickEditResultsListWidth());
+}
 
 let quickEditEditor = null;
 let currentEditItem = null;
@@ -96,7 +159,7 @@ async function ensureEditor() {
     automaticLayout: true,
     minimap: { enabled: true },
     wordWrap: state.wordWrapEnabled ? 'on' : 'off',
-    theme: 'sfoc-editor-dark',
+    theme: resolveMonacoThemeId(),
     fontSize: 13,
     lineHeight: 20,
     fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
@@ -125,22 +188,26 @@ function updateModifiedIndicator() {
 async function searchComponents() {
   const searchInput = document.getElementById('quickEditSearchInput');
   const resultsList = document.getElementById('quickEditResultsList');
-  
+  const bumpListWidth = () => scheduleSyncQuickEditResultsListWidth();
+
   if (!searchInput || !resultsList) return;
 
   const searchTerm = searchInput.value.trim();
 
   if (!state.leftOrgId) {
     resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.selectOrgFirst')}</div>`;
+    bumpListWidth();
     return;
   }
 
   if (searchTerm.length < 2) {
     resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.minChars')}</div>`;
+    bumpListWidth();
     return;
   }
 
   resultsList.innerHTML = `<div class="quick-edit-results-loading">${t('quickEdit.searching')}</div>`;
+  bumpListWidth();
 
   try {
     const res = await bg({
@@ -156,12 +223,14 @@ async function searchComponents() {
       } else {
         resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
       }
+      bumpListWidth();
       return;
     }
 
     const items = res.items || [];
     if (items.length === 0) {
       resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.noResults')}</div>`;
+      bumpListWidth();
       return;
     }
 
@@ -174,8 +243,10 @@ async function searchComponents() {
       btn.addEventListener('click', () => loadComponent('ApexClass', item));
       resultsList.appendChild(btn);
     }
+    bumpListWidth();
   } catch (e) {
     resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
+    bumpListWidth();
   }
 }
 
@@ -368,6 +439,7 @@ export function setupQuickEditPanel() {
   if (searchInput) {
     let searchTimeout = null;
     searchInput.addEventListener('input', () => {
+      syncQuickEditSearchInputWidth();
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => searchComponents(), 400);
     });
@@ -378,20 +450,30 @@ export function setupQuickEditPanel() {
         searchComponents();
       }
       if (e.key === 'Escape') {
-        if (resultsList) resultsList.innerHTML = '';
+        if (resultsList) {
+          resultsList.innerHTML = '';
+          scheduleSyncQuickEditResultsListWidth();
+        }
       }
     });
     searchInput.addEventListener('focus', () => {
+      syncQuickEditSearchInputWidth();
       if (searchInput.value.trim().length >= 2) {
         searchComponents();
       }
     });
+    syncQuickEditSearchInputWidth();
+    window.addEventListener('resize', () => {
+      syncQuickEditSearchInputWidth();
+      scheduleSyncQuickEditResultsListWidth();
+    });
   }
 
   document.addEventListener('click', (e) => {
-    const searchContainer = searchInput?.closest('.quick-edit-search-bar');
+    const searchContainer = searchInput?.closest('.quick-edit-search-zone');
     if (resultsList && searchContainer && !searchContainer.contains(e.target)) {
       resultsList.innerHTML = '';
+      scheduleSyncQuickEditResultsListWidth();
     }
   });
 
@@ -428,4 +510,13 @@ export function setupQuickEditPanel() {
       e.returnValue = '';
     }
   });
+}
+
+export function refreshQuickEditEditorTheme() {
+  if (!quickEditEditor) return;
+  try {
+    quickEditEditor.updateOptions({ theme: resolveMonacoThemeId() });
+  } catch {
+    /* ignore */
+  }
 }

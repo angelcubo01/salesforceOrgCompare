@@ -8,6 +8,10 @@ import {
   restQuery,
   restQueryAll,
   restPatchSobject,
+  restSoqlQueryPage,
+  toolingSoqlQueryPage,
+  restSoslSearchPage,
+  restSoslSearchAll,
   toolingPatchSobject,
   getOrganizationInfo,
   toolingQuery,
@@ -18,13 +22,29 @@ import {
   fetchApexTestQueueServletStatus,
   fetchApexLogBody,
   queryApexLogsInWindow,
+  deleteAllApexLogs,
   enableUserDebugTraceForSessionUser,
   deleteTraceFlagById,
   fetchSessionUserId,
-  fetchOrgLimits
+  fetchOrgLimits,
+  queryApexCodeCoverageAggregate,
+  restDescribeGlobal,
+  restDescribeSobject
 } from '../shared/salesforceApi.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
+
+/** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
+function queryExplorerCatchErrorPayload(e) {
+  const error = String(e?.message || e);
+  /** @type {{ ok: false, error: string, errorCode?: string }} */
+  const out = { ok: false, error };
+  if (e && typeof e === 'object' && e.salesforceErrorCode) {
+    const c = String(e.salesforceErrorCode).trim();
+    if (c) out.errorCode = c;
+  }
+  return out;
+}
 import {
   retrievePermissionSetZip,
   retrieveProfileZip,
@@ -220,7 +240,9 @@ export function installMessageHandlers() {
       try {
         switch (message?.type) {
           case 'version:getUpdateInfo': {
-            const status = await getUpdateStatus();
+            const status = await getUpdateStatus({
+              bypassMemoryCache: message.forceRefreshRemote === true
+            });
             sendResponse(status);
             break;
           }
@@ -1120,6 +1142,242 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'queryExplorer:run': {
+            const { orgId, variant, queryText, pagePath } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const q = queryText != null ? String(queryText).trim() : '';
+            const cont = pagePath != null && String(pagePath).trim() ? String(pagePath).trim() : '';
+            if (!q && !cont) {
+              sendResponse({ ok: false, error: 'Empty query' });
+              break;
+            }
+            try {
+              const pathOrQ = cont || q;
+              if (variant === 'rest-soql') {
+                const r = await restSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
+                sendResponse({
+                  ok: true,
+                  records: r.records,
+                  totalSize: r.totalSize,
+                  done: r.done,
+                  nextPath: r.nextPath
+                });
+              } else if (variant === 'tooling-soql') {
+                const r = await toolingSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
+                sendResponse({
+                  ok: true,
+                  records: r.records,
+                  totalSize: r.totalSize,
+                  done: r.done,
+                  nextPath: r.nextPath
+                });
+              } else if (variant === 'rest-sosl') {
+                const r = await restSoslSearchPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
+                sendResponse({
+                  ok: true,
+                  records: r.records,
+                  totalSize: r.totalSize,
+                  done: r.done,
+                  nextPath: r.nextPath
+                });
+              } else {
+                sendResponse({ ok: false, error: 'Invalid variant' });
+              }
+            } catch (e) {
+              sendResponse(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'queryExplorer:describeGlobal': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const sobjects = await restDescribeGlobal(org.instanceUrl, sid, org.apiVersion);
+              sendResponse({ ok: true, sobjects });
+            } catch (e) {
+              sendResponse(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'queryExplorer:describeSobject': {
+            const { orgId, objectApiName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const describe = await restDescribeSobject(org.instanceUrl, sid, org.apiVersion, objectApiName);
+              sendResponse({ ok: true, describe });
+            } catch (e) {
+              sendResponse(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'queryExplorer:runAll': {
+            const { orgId, variant, queryText } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const q = queryText != null ? String(queryText).trim() : '';
+            if (!q) {
+              sendResponse({ ok: false, error: 'Empty query' });
+              break;
+            }
+            try {
+              if (variant === 'rest-soql') {
+                const records = await restQueryAll(org.instanceUrl, sid, org.apiVersion, q);
+                sendResponse({ ok: true, records, totalSize: records.length });
+              } else if (variant === 'tooling-soql') {
+                const records = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, q);
+                sendResponse({ ok: true, records, totalSize: records.length });
+              } else if (variant === 'rest-sosl') {
+                const records = await restSoslSearchAll(org.instanceUrl, sid, org.apiVersion, q);
+                sendResponse({ ok: true, records, totalSize: records.length });
+              } else {
+                sendResponse({ ok: false, error: 'Invalid variant' });
+              }
+            } catch (e) {
+              sendResponse(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'apexCoverageCompare:fetch': {
+            const { leftOrgId, rightOrgId } = message;
+            const saved = await loadSavedOrgs();
+            const orgL = saved[leftOrgId];
+            const orgR = saved[rightOrgId];
+            if (!orgL || !orgR) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sidL = await getSidForCookieDomain(orgL.cookieDomain);
+            if (!sidL) sidL = await getSidForOrgId(orgL.id);
+            let sidR = await getSidForCookieDomain(orgR.cookieDomain);
+            if (!sidR) sidR = await getSidForOrgId(orgR.id);
+            if (!sidL || !sidR) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const [leftRows, rightRows] = await Promise.all([
+                queryApexCodeCoverageAggregate(orgL.instanceUrl, sidL, orgL.apiVersion),
+                queryApexCodeCoverageAggregate(orgR.instanceUrl, sidR, orgR.apiVersion)
+              ]);
+              sendResponse({
+                ok: true,
+                leftRows: Array.isArray(leftRows) ? leftRows : [],
+                rightRows: Array.isArray(rightRows) ? rightRows : []
+              });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'apexCoverageCompare:getLineView': {
+            const { orgId, apexClassOrTriggerId, className } = message;
+            const rawId = String(apexClassOrTriggerId || '').replace(/[^a-zA-Z0-9]/g, '');
+            if (!rawId) {
+              sendResponse({ ok: false, error: 'Missing apexClassOrTriggerId' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const tid = escapeSoqlLiteral(rawId);
+              const covSoql = `SELECT Coverage FROM ApexCodeCoverage WHERE ApexClassOrTriggerId = '${tid}'`;
+              const covRows = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, covSoql);
+              const covered = new Set();
+              const uncovered = new Set();
+              for (const row of covRows || []) {
+                mergeApexCoverageJsonField(row.Coverage, covered, uncovered);
+              }
+              for (const ln of covered) uncovered.delete(ln);
+              let body = '';
+              try {
+                const clsRows = await restQuery(
+                  org.instanceUrl,
+                  sid,
+                  org.apiVersion,
+                  `SELECT Body FROM ApexClass WHERE Id = '${tid}' LIMIT 1`
+                );
+                body = (clsRows && clsRows[0] && clsRows[0].Body) || '';
+              } catch {
+                body = '';
+              }
+              if (!body) {
+                try {
+                  const trRows = await restQuery(
+                    org.instanceUrl,
+                    sid,
+                    org.apiVersion,
+                    `SELECT Body FROM ApexTrigger WHERE Id = '${tid}' LIMIT 1`
+                  );
+                  body = (trRows && trRows[0] && trRows[0].Body) || '';
+                } catch {
+                  body = '';
+                }
+              }
+              sendResponse({
+                ok: true,
+                body,
+                name: className != null ? String(className) : '',
+                coveredLines: [...covered].sort((a, b) => a - b),
+                uncoveredLines: [...uncovered].sort((a, b) => a - b)
+              });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
           case 'debugLogs:list': {
             const { orgId, sinceIso, untilIso } = message;
             const saved = await loadSavedOrgs();
@@ -1145,6 +1403,28 @@ export function installMessageHandlers() {
                 limit: 15000
               });
               sendResponse({ ok: true, logs: Array.isArray(logs) ? logs : [] });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'debugLogs:deleteAll': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const result = await deleteAllApexLogs(org.instanceUrl, sid, org.apiVersion);
+              sendResponse({ ok: true, ...result });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }

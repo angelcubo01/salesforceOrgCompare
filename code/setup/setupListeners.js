@@ -15,10 +15,12 @@ import { refreshGeneratePackageXmlTypes } from '../ui/generatePackageXmlPanel.js
 import { resetFieldDependencyToInitial } from '../ui/fieldDependencyPanel.js';
 import { refreshApexTestsPanel } from '../ui/apexTestsPanel.js';
 import { refreshAnonymousApexPanel } from '../ui/anonymousApexPanel.js';
+import { refreshQueryExplorerPanel } from '../ui/queryExplorerPanel.js';
 import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
 import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from '../ui/setupAuditTrailPanel.js';
 import { refreshQuickEditPanel } from '../ui/quickEditPanel.js';
+import { refreshApexCoverageComparePanel } from '../ui/apexCoverageComparePanel.js';
 import { t } from '../../shared/i18n.js';
 
 export function wireSelectors() {
@@ -49,6 +51,9 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'AnonymousApex') {
       void refreshAnonymousApexPanel();
     }
+    if (getSelectedArtifactType() === 'QueryExplorer') {
+      void refreshQueryExplorerPanel();
+    }
     if (getSelectedArtifactType() === 'OrgLimits') {
       void refreshOrgLimitsPanel();
     }
@@ -60,6 +65,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'QuickEdit') {
       void refreshQuickEditPanel();
+    }
+    if (getSelectedArtifactType() === 'ApexCoverageCompare') {
+      void refreshApexCoverageComparePanel();
     }
   });
   right.addEventListener('change', () => {
@@ -77,6 +85,9 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'AnonymousApex') {
       void refreshAnonymousApexPanel();
     }
+    if (getSelectedArtifactType() === 'QueryExplorer') {
+      void refreshQueryExplorerPanel();
+    }
     if (getSelectedArtifactType() === 'OrgLimits') {
       void refreshOrgLimitsPanel();
     }
@@ -85,6 +96,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'SetupAuditTrail') {
       void refreshSetupAuditTrailPanel();
+    }
+    if (getSelectedArtifactType() === 'ApexCoverageCompare') {
+      void refreshApexCoverageComparePanel();
     }
   });
 

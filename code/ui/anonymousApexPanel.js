@@ -1,6 +1,6 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
-import { loadMonaco } from '../editor/monaco.js';
+import { loadMonaco, resolveMonacoThemeId } from '../editor/monaco.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
 import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
@@ -132,11 +132,105 @@ function findScriptByName(name) {
 
 function syncSaveButtonLabel() {
   const saveBtn = document.getElementById('anonymousApexSaveScriptBtn');
+  const quickBtn = document.getElementById('anonymousApexQuickSaveBtn');
   const inp = document.getElementById('anonymousApexScriptNameInput');
-  if (!saveBtn || !inp) return;
+  if (!inp) return;
   const hasExisting = !!findScriptByName(inp.value);
-  const key = hasExisting ? 'anonymousApex.updateScript' : 'anonymousApex.saveScript';
-  saveBtn.textContent = t(key);
+  const quickHasTarget =
+    !!selectedSavedScriptId && readSavedScripts().some((x) => x.id === selectedSavedScriptId);
+  const keyModal = hasExisting ? 'anonymousApex.updateScript' : 'anonymousApex.saveScript';
+  const keyQuick = quickHasTarget ? 'anonymousApex.updateScript' : 'anonymousApex.saveScript';
+  if (saveBtn) saveBtn.textContent = t(keyModal);
+  if (quickBtn) quickBtn.textContent = t(keyQuick);
+}
+
+async function persistScriptWithName(name) {
+  await ensureEditor();
+  const n = String(name || '').trim();
+  const body = String(anonEditor?.getValue() || '');
+  if (!n) {
+    showToast(t('anonymousApex.scriptNameRequired'), 'warn');
+    return false;
+  }
+  if (!body.trim()) {
+    showToast(t('anonymousApex.emptyBody'), 'warn');
+    return false;
+  }
+  const list = readSavedScripts();
+  const existing = findScriptByName(n);
+  if (existing) {
+    const ix = list.findIndex((x) => x.id === existing.id);
+    if (ix >= 0) {
+      list[ix] = { ...list[ix], name: n, body, updatedAt: Date.now() };
+      selectedSavedScriptId = list[ix].id;
+      writeSavedScripts(list);
+      refreshSavedScriptsUi();
+      showToast(t('anonymousApex.scriptUpdated'), 'info');
+      syncSaveButtonLabel();
+      return true;
+    }
+  }
+  selectedSavedScriptId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  list.unshift({ id: selectedSavedScriptId, name: n, body, updatedAt: Date.now() });
+  writeSavedScripts(list.slice(0, 100));
+  refreshSavedScriptsUi();
+  showToast(t('anonymousApex.scriptSaved'), 'info');
+  syncSaveButtonLabel();
+  return true;
+}
+
+async function quickSaveCurrentScript() {
+  await ensureEditor();
+  const body = String(anonEditor?.getValue() || '');
+  if (!body.trim()) {
+    showToast(t('anonymousApex.emptyBody'), 'warn');
+    return;
+  }
+  const list = readSavedScripts();
+  const byId =
+    selectedSavedScriptId && list.find((x) => x.id === selectedSavedScriptId);
+  if (byId) {
+    const ix = list.findIndex((x) => x.id === byId.id);
+    if (ix >= 0) {
+      list[ix] = { ...list[ix], body, updatedAt: Date.now() };
+      writeSavedScripts(list);
+      refreshSavedScriptsUi();
+      showToast(t('anonymousApex.scriptUpdated'), 'info');
+      syncSaveButtonLabel();
+      return;
+    }
+  }
+  const nameRaw = window.prompt(t('anonymousApex.quickSaveNamePrompt'), '');
+  if (nameRaw == null) return;
+  const name = String(nameRaw).trim();
+  if (!name) {
+    showToast(t('anonymousApex.scriptNameRequired'), 'warn');
+    return;
+  }
+  const ok = await persistScriptWithName(name);
+  if (ok) {
+    const inp = document.getElementById('anonymousApexScriptNameInput');
+    if (inp) inp.value = name;
+  }
+}
+
+function closeScriptsModal() {
+  const modal = document.getElementById('anonymousApexScriptsModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+}
+
+function openScriptsModal() {
+  const modal = document.getElementById('anonymousApexScriptsModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+  }
+  refreshSavedScriptsUi();
+  syncSaveButtonLabel();
+  document.getElementById('anonymousApexScriptNameInput')?.focus();
 }
 
 async function logAnonymousApexUsage(payload = {}) {
@@ -292,7 +386,7 @@ async function ensureEditor() {
     automaticLayout: true,
     minimap: { enabled: false },
     wordWrap: state.wordWrapEnabled ? 'on' : 'off',
-    theme: 'sfoc-editor-dark',
+    theme: resolveMonacoThemeId(),
     fontSize: 13,
     lineHeight: 20,
     fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
@@ -504,43 +598,33 @@ export function setupAnonymousApexPanel() {
   const logBtn = document.getElementById('anonymousApexOpenLogBtn');
   const toggle = document.getElementById('anonymousApexCompareToggle');
   const saveScriptBtn = document.getElementById('anonymousApexSaveScriptBtn');
+  const openScriptsBtn = document.getElementById('anonymousApexOpenScriptsModalBtn');
+  const quickSaveBtn = document.getElementById('anonymousApexQuickSaveBtn');
   const scriptNameInput = document.getElementById('anonymousApexScriptNameInput');
   const resultWrap = document.getElementById('anonymousApexResultWrap');
   const pickerBackdrop = document.querySelector('#anonymousApexLogPickerModal .anonymous-apex-log-picker-backdrop');
+  const scriptsBackdrop = document.querySelector('#anonymousApexScriptsModal [data-anonymous-scripts-backdrop="1"]');
+  const scriptsCloseBtn = document.getElementById('anonymousApexScriptsModalCloseBtn');
   if (runBtn) runBtn.addEventListener('click', () => void runAnonymousApex());
   if (logBtn) logBtn.addEventListener('click', () => void openAnonymousApexLog());
   if (saveScriptBtn) {
-    saveScriptBtn.addEventListener('click', async () => {
-      await ensureEditor();
+    saveScriptBtn.addEventListener('click', () => {
       const inp = document.getElementById('anonymousApexScriptNameInput');
-      const name = String(inp?.value || '').trim();
-      const body = String(anonEditor?.getValue() || '');
-      if (!name) {
-        showToast(t('anonymousApex.scriptNameRequired'), 'warn');
-        return;
-      }
-      const list = readSavedScripts();
-      const existing = findScriptByName(name);
-      if (existing) {
-        const ix = list.findIndex((x) => x.id === existing.id);
-        if (ix >= 0) {
-          list[ix] = { ...list[ix], name, body, updatedAt: Date.now() };
-          selectedSavedScriptId = list[ix].id;
-          writeSavedScripts(list);
-          refreshSavedScriptsUi();
-          showToast(t('anonymousApex.scriptUpdated'), 'info');
-          syncSaveButtonLabel();
-          return;
-        }
-      }
-      selectedSavedScriptId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      list.unshift({ id: selectedSavedScriptId, name, body, updatedAt: Date.now() });
-      writeSavedScripts(list.slice(0, 100));
-      refreshSavedScriptsUi();
-      showToast(t('anonymousApex.scriptSaved'), 'info');
-      syncSaveButtonLabel();
+      void persistScriptWithName(inp?.value || '');
     });
   }
+  if (openScriptsBtn) openScriptsBtn.addEventListener('click', () => openScriptsModal());
+  if (quickSaveBtn) quickSaveBtn.addEventListener('click', () => void quickSaveCurrentScript());
+  if (scriptsBackdrop) scriptsBackdrop.addEventListener('click', () => closeScriptsModal());
+  if (scriptsCloseBtn) scriptsCloseBtn.addEventListener('click', () => closeScriptsModal());
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    const scriptsModal = document.getElementById('anonymousApexScriptsModal');
+    if (scriptsModal && !scriptsModal.classList.contains('hidden')) {
+      e.preventDefault();
+      closeScriptsModal();
+    }
+  });
   if (scriptNameInput) {
     scriptNameInput.addEventListener('input', () => {
       syncSaveButtonLabel();
@@ -569,5 +653,15 @@ export function setupAnonymousApexPanel() {
   }
   refreshSavedScriptsUi();
   syncSaveButtonLabel();
+}
+
+/** Aplica el tema Monaco guardado en ajustes (p. ej. tras cambiar desde Ajustes con esta pantalla abierta). */
+export function refreshAnonymousApexEditorTheme() {
+  if (!anonEditor) return;
+  try {
+    anonEditor.updateOptions({ theme: resolveMonacoThemeId() });
+  } catch {
+    /* ignore */
+  }
 }
 

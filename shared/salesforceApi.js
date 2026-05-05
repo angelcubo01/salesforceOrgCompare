@@ -43,6 +43,289 @@ async function restFetchWithSid(instanceUrl, sid, path, init = {}) {
   return fetch(url, { ...init, headers });
 }
 
+/** Convierte `nextRecordsUrl` de la API en path relativo para `restFetchWithSid`. */
+function nextPathFromRecordsUrl(nextRecordsUrl) {
+  if (nextRecordsUrl == null || nextRecordsUrl === '') return null;
+  const next = String(nextRecordsUrl);
+  return next.startsWith('http') ? new URL(next).pathname + new URL(next).search : next;
+}
+
+/**
+ * Quita BOM y prefijos anti–JSON hijacking que a veces devuelve la API REST/Tooling.
+ * @param {string} raw
+ * @returns {string}
+ */
+function normalizeSalesforceRestErrorBodyText(raw) {
+  let t = String(raw || '').trim();
+  if (!t) return '';
+  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1).trim();
+  // Prefijo típico en respuestas GET de Salesforce (array/objeto en JSON).
+  if (t.startsWith(")]}'")) {
+    const nl = t.indexOf('\n');
+    t = (nl >= 0 ? t.slice(nl + 1) : t.slice(4)).trim();
+  }
+  if (t.startsWith('while(1);')) t = t.slice('while(1);'.length).trim();
+  return t;
+}
+
+/** @param {unknown} parsed @param {string[]} msgs */
+function collectSalesforceRestErrorMessages(parsed, msgs) {
+  const pushMsg = (m) => {
+    if (m == null) return;
+    const s = String(m).trim();
+    if (s) msgs.push(s);
+  };
+
+  /** @param {unknown} node */
+  function walk(node) {
+    if (node == null) return;
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    if (typeof node !== 'object') return;
+    const o = /** @type {Record<string, unknown>} */ (node);
+    const top =
+      o.message != null
+        ? o.message
+        : o.Message != null
+          ? o.Message
+          : o.error && typeof o.error === 'object' && /** @type {Record<string, unknown>} */ (o.error).message != null
+            ? /** @type {Record<string, unknown>} */ (o.error).message
+            : null;
+    if (top != null) pushMsg(top);
+    if (Array.isArray(o.errors)) {
+      for (const item of o.errors) walk(item);
+    }
+  }
+
+  walk(parsed);
+}
+
+/**
+ * Último recurso si `JSON.parse` falla: extrae valores de propiedades "message" en texto.
+ * @param {string} t
+ * @param {string[]} msgs
+ */
+function salesforceRestErrorMessagesRegexFallback(t, msgs) {
+  const re = /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/gi;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    try {
+      msgs.push(JSON.parse(`"${m[1]}"`));
+    } catch {
+      msgs.push(m[1]);
+    }
+  }
+}
+
+/**
+ * Solo textos `message` del cuerpo de error típico de Salesforce (array u objeto).
+ * Si no hay JSON reconocible, devuelve el texto en bruto recortado.
+ * @param {string} text
+ * @returns {string}
+ */
+function salesforceRestErrorMessagesOnly(text) {
+  const original = String(text || '').trim();
+  if (!original) return '';
+  const t = normalizeSalesforceRestErrorBodyText(original);
+
+  /** @type {string[]} */
+  const msgs = [];
+
+  /** @param {string} s */
+  function parsePayload(s) {
+    try {
+      return JSON.parse(s);
+    } catch {
+      return null;
+    }
+  }
+
+  let parsed = parsePayload(t);
+  if (typeof parsed === 'string') {
+    const inner = parsed.trim();
+    if (inner.startsWith('[') || inner.startsWith('{')) {
+      const again = parsePayload(inner);
+      if (again != null) parsed = again;
+    }
+  }
+
+  if (parsed != null) {
+    collectSalesforceRestErrorMessages(parsed, msgs);
+    if (msgs.length) return msgs.join('\n');
+  }
+
+  salesforceRestErrorMessagesRegexFallback(t, msgs);
+  if (msgs.length) return msgs.join('\n');
+
+  return t || original;
+}
+
+/**
+ * Primer(es) error(es) Salesforce REST: mensaje(s) y código del primer ítem con errorCode.
+ * @param {string} raw
+ * @returns {{ message: string, errorCode: string }}
+ */
+function salesforceRestErrorStructuredFromText(raw) {
+  const normalized = normalizeSalesforceRestErrorBodyText(String(raw || ''));
+  /** @type {{ message: string, errorCode: string }} */
+  const out = { message: '', errorCode: '' };
+  if (!normalized) return out;
+  /** @param {unknown} parsed */
+  function fromParsed(parsed) {
+    /** @type {{ message: string, code: string }[]} */
+    const items = [];
+    const pushItem = (msg, code) => {
+      const m = String(msg || '').trim();
+      if (!m) return;
+      items.push({ message: m, code: code != null ? String(code) : '' });
+    };
+    if (Array.isArray(parsed)) {
+      for (const it of parsed) {
+        if (it && typeof it === 'object') {
+          const o = /** @type {Record<string, unknown>} */ (it);
+          if (o.message != null) pushItem(o.message, o.errorCode ?? o.ErrorCode);
+        }
+      }
+    } else if (parsed && typeof parsed === 'object') {
+      const o = /** @type {Record<string, unknown>} */ (parsed);
+      if (o.message != null) pushItem(o.message, o.errorCode ?? o.ErrorCode);
+      const errors = o.errors;
+      if (Array.isArray(errors)) {
+        for (const it of errors) {
+          if (it && typeof it === 'object') {
+            const eo = /** @type {Record<string, unknown>} */ (it);
+            if (eo.message != null) pushItem(eo.message, eo.errorCode ?? eo.ErrorCode);
+          }
+        }
+      }
+    }
+    if (!items.length) return;
+    out.message = items.map((i) => i.message).join('\n\n');
+    out.errorCode = items[0].code || '';
+  }
+  let parsed = null;
+  try {
+    parsed = JSON.parse(normalized);
+  } catch {
+    out.message = normalized;
+    return out;
+  }
+  fromParsed(parsed);
+  if (!out.message) out.message = normalized;
+  return out;
+}
+
+/**
+ * @param {string} label p. ej. "REST query"
+ * @param {Response} res
+ */
+async function throwWithSalesforceRestError(label, res) {
+  let text = '';
+  try {
+    text = await res.text();
+  } catch {
+    text = '';
+  }
+  const structured = salesforceRestErrorStructuredFromText(text);
+  const detail = (structured.message || salesforceRestErrorMessagesOnly(text)).trim();
+  const msg = detail || `${label} failed: ${res.status}`;
+  const err = new Error(msg);
+  err.status = res.status;
+  if (structured.errorCode) err.salesforceErrorCode = structured.errorCode;
+  throw err;
+}
+
+/**
+ * Una página de SOQL vía REST (`/query` o continuación `nextRecordsUrl`).
+ * @param {string} soqlOrRelativePath consulta SOQL o path que empiece por `/services/data/...`
+ * @returns {{ records: any[], totalSize?: number, done: boolean, nextPath: string | null }}
+ */
+export async function restSoqlQueryPage(instanceUrl, sid, apiVersion, soqlOrRelativePath) {
+  const path =
+    soqlOrRelativePath && String(soqlOrRelativePath).startsWith('/')
+      ? String(soqlOrRelativePath)
+      : `/services/data/v${apiVersion}/query?q=${encodeURIComponent(String(soqlOrRelativePath))}`;
+  const res = await restFetchWithSid(instanceUrl, sid, path);
+  if (!res.ok) {
+    await throwWithSalesforceRestError('REST query', res);
+  }
+  const body = await res.json();
+  const done = !!body.done;
+  const nextPath = done || !body.nextRecordsUrl ? null : nextPathFromRecordsUrl(body.nextRecordsUrl);
+  return {
+    records: body.records || [],
+    totalSize: typeof body.totalSize === 'number' ? body.totalSize : undefined,
+    done,
+    nextPath
+  };
+}
+
+/**
+ * Una página de SOQL vía Tooling (`/tooling/query` o continuación).
+ */
+export async function toolingSoqlQueryPage(instanceUrl, sid, apiVersion, soqlOrRelativePath) {
+  const path =
+    soqlOrRelativePath && String(soqlOrRelativePath).startsWith('/')
+      ? String(soqlOrRelativePath)
+      : `/services/data/v${apiVersion}/tooling/query?q=${encodeURIComponent(String(soqlOrRelativePath))}`;
+  const res = await restFetchWithSid(instanceUrl, sid, path);
+  if (!res.ok) {
+    await throwWithSalesforceRestError('Tooling query', res);
+  }
+  const body = await res.json();
+  const done = !!body.done;
+  const nextPath = done || !body.nextRecordsUrl ? null : nextPathFromRecordsUrl(body.nextRecordsUrl);
+  return {
+    records: body.records || [],
+    totalSize: typeof body.totalSize === 'number' ? body.totalSize : undefined,
+    done,
+    nextPath
+  };
+}
+
+function normalizeSoslSearchRow(rec) {
+  if (!rec || typeof rec !== 'object') return {};
+  /** @type {Record<string, unknown>} */
+  const row = {};
+  const attr = rec.attributes;
+  if (attr && typeof attr === 'object') {
+    row.SObjectType = attr.type != null ? String(attr.type) : '';
+    row.RecordUrl = attr.url != null ? String(attr.url) : '';
+  }
+  for (const [k, v] of Object.entries(rec)) {
+    if (k === 'attributes') continue;
+    row[k] = v;
+  }
+  return row;
+}
+
+/**
+ * Una petición SOSL vía REST (`/search` o continuación).
+ */
+export async function restSoslSearchPage(instanceUrl, sid, apiVersion, soslOrRelativePath) {
+  const path =
+    soslOrRelativePath && String(soslOrRelativePath).startsWith('/')
+      ? String(soslOrRelativePath)
+      : `/services/data/v${apiVersion}/search?q=${encodeURIComponent(String(soslOrRelativePath))}`;
+  const res = await restFetchWithSid(instanceUrl, sid, path);
+  if (!res.ok) {
+    await throwWithSalesforceRestError('REST search (SOSL)', res);
+  }
+  const body = await res.json();
+  const raw = Array.isArray(body.searchRecords) ? body.searchRecords : [];
+  const records = raw.map(normalizeSoslSearchRow);
+  const nextPath = body.nextRecordsUrl ? nextPathFromRecordsUrl(body.nextRecordsUrl) : null;
+  const done = !nextPath;
+  return {
+    records,
+    totalSize: typeof body.totalSize === 'number' ? body.totalSize : records.length,
+    done,
+    nextPath
+  };
+}
+
 export async function probeApiVersion(instanceUrl, sid) {
   const res = await restFetchWithSid(instanceUrl, sid, `/services/data`);
   if (!res.ok) {
@@ -55,17 +338,46 @@ export async function probeApiVersion(instanceUrl, sid) {
   return versions[versions.length - 1].version;
 }
 
-// Simple REST query helper (used for PermissionSet search)
-export async function restQuery(instanceUrl, sid, apiVersion, soql) {
-  const encoded = encodeURIComponent(soql);
-  const res = await restFetchWithSid(instanceUrl, sid, `/services/data/v${apiVersion}/query?q=${encoded}`);
+/**
+ * Lista global de sObjects (`/sobjects`) para autocompletado y herramientas.
+ * @returns {Promise<Array<Record<string, unknown>>>}
+ */
+export async function restDescribeGlobal(instanceUrl, sid, apiVersion) {
+  const res = await restFetchWithSid(instanceUrl, sid, `/services/data/v${apiVersion}/sobjects`);
   if (!res.ok) {
-    const err = new Error(`REST query failed: ${res.status}`);
+    const err = new Error(`Describe global failed: ${res.status}`);
     err.status = res.status;
     throw err;
   }
   const body = await res.json();
-  return body.records || [];
+  return Array.isArray(body.sobjects) ? body.sobjects : [];
+}
+
+/**
+ * Describe de un sObject (campos, tipos, relaciones).
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function restDescribeSobject(instanceUrl, sid, apiVersion, objectApiName) {
+  const name = String(objectApiName || '').trim();
+  if (!name) {
+    const err = new Error('Missing object API name');
+    err.status = 400;
+    throw err;
+  }
+  const path = `/services/data/v${apiVersion}/sobjects/${encodeURIComponent(name)}/describe`;
+  const res = await restFetchWithSid(instanceUrl, sid, path);
+  if (!res.ok) {
+    const err = new Error(`Describe ${name} failed: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+// Simple REST query helper (used for PermissionSet search)
+export async function restQuery(instanceUrl, sid, apiVersion, soql) {
+  const { records } = await restSoqlQueryPage(instanceUrl, sid, apiVersion, soql);
+  return records;
 }
 
 /**
@@ -96,6 +408,57 @@ export async function restPatchSobject(instanceUrl, sid, apiVersion, sobjectApiN
 }
 
 /**
+ * DELETE REST estándar (`/sobjects/{type}/{id}`).
+ */
+export async function restDeleteSobject(instanceUrl, sid, apiVersion, sobjectApiName, recordId) {
+  const path = `/services/data/v${apiVersion}/sobjects/${encodeURIComponent(String(sobjectApiName))}/${encodeURIComponent(String(recordId))}`;
+  const res = await restFetchWithSid(instanceUrl, sid, path, { method: 'DELETE' });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(`DELETE ${sobjectApiName}: ${res.status} ${detail}`);
+    err.status = res.status;
+    throw err;
+  }
+  return true;
+}
+
+/** Máximo de subrequests por llamada a `/composite` (límite de la plataforma). */
+const COMPOSITE_SUBREQUEST_LIMIT = 25;
+
+/**
+ * Ejecuta una petición Composite (varias operaciones REST en un solo HTTP round-trip).
+ * @param {Array<{ method: string, url: string, referenceId: string, body?: unknown }>} compositeRequest
+ */
+async function restCompositeExecute(instanceUrl, sid, apiVersion, compositeRequest) {
+  const path = `/services/data/v${apiVersion}/composite`;
+  const res = await restFetchWithSid(instanceUrl, sid, path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      allOrNone: false,
+      compositeRequest
+    })
+  });
+  if (!res.ok) {
+    let detail = '';
+    try {
+      detail = await res.text();
+    } catch {
+      /* ignore */
+    }
+    const err = new Error(`REST composite: ${res.status} ${detail}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+/**
  * PATCH Tooling API (p. ej. `ApexTestQueueItem` con `Status: Aborted` para cancelar tests en cola).
  */
 export async function toolingPatchSobject(instanceUrl, sid, apiVersion, sobjectApiName, recordId, fields) {
@@ -121,56 +484,125 @@ export async function toolingPatchSobject(instanceUrl, sid, apiVersion, sobjectA
 
 /** Igual que {@link restQuery} pero sigue todas las páginas (`nextRecordsUrl`). */
 export async function restQueryAll(instanceUrl, sid, apiVersion, soql) {
-  const encoded = encodeURIComponent(soql);
-  let path = `/services/data/v${apiVersion}/query?q=${encoded}`;
+  let pathOrSoql = soql;
   const all = [];
   for (let page = 0; page < 500; page++) {
-    const res = await restFetchWithSid(instanceUrl, sid, path);
-    if (!res.ok) {
-      const err = new Error(`REST query failed: ${res.status}`);
-      err.status = res.status;
-      throw err;
-    }
-    const body = await res.json();
-    all.push(...(body.records || []));
-    if (body.done || !body.nextRecordsUrl) break;
-    const next = String(body.nextRecordsUrl);
-    path = next.startsWith('http') ? new URL(next).pathname + new URL(next).search : next;
+    const { records, done, nextPath } = await restSoqlQueryPage(instanceUrl, sid, apiVersion, pathOrSoql);
+    all.push(...records);
+    if (done || !nextPath) break;
+    pathOrSoql = nextPath;
   }
   return all;
 }
 
 export async function toolingQuery(instanceUrl, sid, apiVersion, soql) {
-  const encoded = encodeURIComponent(soql);
-  const res = await restFetchWithSid(instanceUrl, sid, `/services/data/v${apiVersion}/tooling/query?q=${encoded}`);
-  if (!res.ok) {
-    const err = new Error(`Tooling query failed: ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-  const body = await res.json();
-  return body.records || [];
+  const { records } = await toolingSoqlQueryPage(instanceUrl, sid, apiVersion, soql);
+  return records;
 }
 
 /** Igual que {@link toolingQuery} pero pagina con `nextRecordsUrl`. */
 export async function toolingQueryAll(instanceUrl, sid, apiVersion, soql) {
-  const encoded = encodeURIComponent(soql);
-  let path = `/services/data/v${apiVersion}/tooling/query?q=${encoded}`;
+  let pathOrSoql = soql;
   const all = [];
   for (let page = 0; page < 500; page++) {
-    const res = await restFetchWithSid(instanceUrl, sid, path);
-    if (!res.ok) {
-      const err = new Error(`Tooling query failed: ${res.status}`);
-      err.status = res.status;
-      throw err;
-    }
-    const body = await res.json();
-    all.push(...(body.records || []));
-    if (body.done || !body.nextRecordsUrl) break;
-    const next = String(body.nextRecordsUrl);
-    path = next.startsWith('http') ? new URL(next).pathname + new URL(next).search : next;
+    const { records, done, nextPath } = await toolingSoqlQueryPage(instanceUrl, sid, apiVersion, pathOrSoql);
+    all.push(...records);
+    if (done || !nextPath) break;
+    pathOrSoql = nextPath;
   }
   return all;
+}
+
+/** Todas las filas devueltas por SOSL (pagina si la API envía `nextRecordsUrl`). */
+export async function restSoslSearchAll(instanceUrl, sid, apiVersion, sosl) {
+  let pathOrSosl = sosl;
+  const all = [];
+  for (let page = 0; page < 500; page++) {
+    const { records, done, nextPath } = await restSoslSearchPage(instanceUrl, sid, apiVersion, pathOrSosl);
+    all.push(...records);
+    if (done || !nextPath) break;
+    pathOrSosl = nextPath;
+  }
+  return all;
+}
+
+function chunkArray(arr, size) {
+  const list = Array.isArray(arr) ? arr : [];
+  const out = [];
+  for (let i = 0; i < list.length; i += size) out.push(list.slice(i, i + size));
+  return out;
+}
+
+function mapNameByApexId(nameById, apexId) {
+  const id = String(apexId == null ? '' : apexId).trim();
+  if (!id) return '';
+  const direct = nameById.get(id);
+  if (direct) return direct;
+  if (id.length >= 15) {
+    const short = id.slice(0, 15);
+    const fromShort = nameById.get(short);
+    if (fromShort) return fromShort;
+  }
+  return '';
+}
+
+/**
+ * Resuelve nombres de clase/trigger para ids devueltos por ApexCodeCoverageAggregate.
+ * La relación SOQL `ApexClassOrTrigger.Name` falla o viene vacía en algunas orgs/versions;
+ * Tooling `ApexClass` / `ApexTrigger` por Id es fiable.
+ */
+async function enrichAggregateRowsWithNames(instanceUrl, sid, apiVersion, rows) {
+  const ids = [
+    ...new Set(
+      (rows || [])
+        .map((r) => String(r?.ApexClassOrTriggerId || '').trim())
+        .filter(Boolean)
+    )
+  ];
+  if (!ids.length) return;
+  const nameById = new Map();
+  for (const part of chunkArray(ids, 100)) {
+    const inList = part.map((x) => `'${escapeSoqlLiteral(x)}'`).join(',');
+    const [clsRows, trgRows] = await Promise.all([
+      toolingQueryAll(instanceUrl, sid, apiVersion, `SELECT Id, Name FROM ApexClass WHERE Id IN (${inList})`),
+      toolingQueryAll(instanceUrl, sid, apiVersion, `SELECT Id, Name FROM ApexTrigger WHERE Id IN (${inList})`)
+    ]);
+    for (const r of clsRows || []) {
+      const rid = String(r?.Id || '').trim();
+      if (!rid || r.Name == null) continue;
+      const nm = String(r.Name);
+      nameById.set(rid, nm);
+      if (rid.length >= 15) nameById.set(rid.slice(0, 15), nm);
+    }
+    for (const r of trgRows || []) {
+      const rid = String(r?.Id || '').trim();
+      if (!rid || r.Name == null) continue;
+      const nm = String(r.Name);
+      nameById.set(rid, nm);
+      if (rid.length >= 15) nameById.set(rid.slice(0, 15), nm);
+    }
+  }
+  for (const row of rows || []) {
+    const id = String(row?.ApexClassOrTriggerId || '').trim();
+    const fromMap = mapNameByApexId(nameById, id);
+    const fromRel = String(row?.ApexClassOrTrigger?.Name || '').trim();
+    const name = fromMap || fromRel || id;
+    if (!row.ApexClassOrTrigger || typeof row.ApexClassOrTrigger !== 'object') row.ApexClassOrTrigger = {};
+    row.ApexClassOrTrigger.Name = name;
+  }
+}
+
+/**
+ * Cobertura acumulada por clase/trigger (`ApexCodeCoverageAggregate` en Tooling).
+ * No ejecuta tests; refleja el último cálculo almacenado en la org.
+ */
+export async function queryApexCodeCoverageAggregate(instanceUrl, sid, apiVersion) {
+  const soql =
+    'SELECT ApexClassOrTriggerId, NumLinesCovered, NumLinesUncovered FROM ApexCodeCoverageAggregate';
+  const rows = (await toolingQueryAll(instanceUrl, sid, apiVersion, soql)) || [];
+  if (!rows.length) return [];
+  await enrichAggregateRowsWithNames(instanceUrl, sid, apiVersion, rows);
+  return rows;
 }
 
 export async function getOrganizationInfo(instanceUrl, sid, apiVersion) {
@@ -708,6 +1140,57 @@ export async function fetchApexLogBody(instanceUrl, sid, apiVersion, logId) {
     throw err;
   }
   return await res.text();
+}
+
+/**
+ * Consulta `SELECT Id FROM ApexLog` (REST o Tooling) y borra los registros en lotes
+ * vía Composite API (hasta 25 DELETE por petición HTTP). Si Composite falla en un lote,
+ * ese lote se reintenta con DELETE individuales.
+ * @returns {{ total: number, deleted: number, failed: number }}
+ */
+export async function deleteAllApexLogs(instanceUrl, sid, apiVersion) {
+  let rows = [];
+  try {
+    rows = (await restQueryAll(instanceUrl, sid, apiVersion, 'SELECT Id FROM ApexLog')) || [];
+  } catch {
+    rows = (await toolingQueryAll(instanceUrl, sid, apiVersion, 'SELECT Id FROM ApexLog')) || [];
+  }
+  const ids = rows.map((r) => String(r?.Id || '').trim()).filter(Boolean);
+  let deleted = 0;
+  let failed = 0;
+  async function deleteChunkWithFallback(chunk) {
+    const compositeRequest = chunk.map((id, j) => ({
+      method: 'DELETE',
+      referenceId: `apexlogDel_${j}`,
+      url: `/services/data/v${apiVersion}/sobjects/ApexLog/${encodeURIComponent(id)}`
+    }));
+    try {
+      const body = await restCompositeExecute(instanceUrl, sid, apiVersion, compositeRequest);
+      const parts = Array.isArray(body?.compositeResponse) ? body.compositeResponse : [];
+      for (const sub of parts) {
+        const code = Number(sub?.httpStatusCode);
+        if (code >= 200 && code < 300) deleted += 1;
+        else failed += 1;
+      }
+      if (parts.length < chunk.length) {
+        failed += chunk.length - parts.length;
+      }
+    } catch {
+      for (const id of chunk) {
+        try {
+          await restDeleteSobject(instanceUrl, sid, apiVersion, 'ApexLog', id);
+          deleted += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+    }
+  }
+  for (let i = 0; i < ids.length; i += COMPOSITE_SUBREQUEST_LIMIT) {
+    const chunk = ids.slice(i, i + COMPOSITE_SUBREQUEST_LIMIT);
+    await deleteChunkWithFallback(chunk);
+  }
+  return { total: ids.length, deleted, failed };
 }
 
 /**

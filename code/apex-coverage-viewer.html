@@ -8,19 +8,47 @@
     <link rel="stylesheet" href="./apex-coverage-viewer.css" />
   </head>
   <body>
-    <header class="apex-cov-viewer-toolbar">
+    <header class="apex-cov-viewer-toolbar" id="apexCovViewerHeader">
       <button type="button" id="apexCovViewerBack" class="apex-cov-viewer-back" data-i18n="apexLogViewer.back">
         Volver
       </button>
       <span id="apexCovViewerTitle" class="apex-cov-viewer-title"></span>
-      <span class="apex-cov-viewer-legend" aria-hidden="true">
+      <span id="apexCovViewerLegend" class="apex-cov-viewer-legend" aria-hidden="true">
         <span class="apex-cov-legend-covered"></span>
         <span data-i18n="apexCoverageViewer.legendCovered">Cubierta</span>
         <span class="apex-cov-legend-uncovered"></span>
         <span data-i18n="apexCoverageViewer.legendUncovered">No cubierta</span>
       </span>
     </header>
-    <div id="apexCovViewerMount" class="apex-cov-viewer-editor"></div>
+    <div id="apexCovSingleWrap" class="apex-cov-single-wrap">
+      <div id="apexCovViewerMount" class="apex-cov-viewer-editor"></div>
+    </div>
+    <div id="apexCovSplitRoot" class="apex-cov-split-root" hidden>
+      <section class="apex-cov-split-pane apex-cov-split-pane--org-l" aria-label="Left org">
+        <div class="apex-cov-split-pane-head">
+          <span id="apexCovSplitLeftBadge" class="apex-cov-split-org-badge"></span>
+          <span class="apex-cov-split-mini-legend">
+            <span class="apex-cov-legend-covered"></span>
+            <span class="apex-cov-split-legend-covered" data-i18n="apexCoverageViewer.legendCovered">Cubierta</span>
+            <span class="apex-cov-legend-uncovered"></span>
+            <span class="apex-cov-split-legend-uncovered" data-i18n="apexCoverageViewer.legendUncovered">No cubierta</span>
+          </span>
+        </div>
+        <div id="apexCovSplitLeftMount" class="apex-cov-split-editor"></div>
+      </section>
+      <section class="apex-cov-split-pane apex-cov-split-pane--org-r" aria-label="Right org">
+        <div class="apex-cov-split-pane-head">
+          <span id="apexCovSplitRightBadge" class="apex-cov-split-org-badge"></span>
+          <span class="apex-cov-split-mini-legend">
+            <span class="apex-cov-legend-covered"></span>
+            <span class="apex-cov-split-legend-covered" data-i18n="apexCoverageViewer.legendCovered">Cubierta</span>
+            <span class="apex-cov-legend-uncovered"></span>
+            <span class="apex-cov-split-legend-uncovered" data-i18n="apexCoverageViewer.legendUncovered">No cubierta</span>
+          </span>
+        </div>
+        <div id="apexCovSplitRightMount" class="apex-cov-split-editor"></div>
+      </section>
+    </div>
     <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
     <script src="./editor/monaco-amd-config.js"></script>
     <script type="module" src="./apex-coverage-viewer.js"></script>

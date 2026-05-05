@@ -1,6 +1,7 @@
 import { EXTENSION_DISPLAY_NAME, UPDATE_PAGE_URL } from '../code/core/constants.js';
 import { t, loadLang, getCurrentLang } from '../shared/i18n.js';
 import { sameGroupKey } from '../shared/orgPrefs.js';
+import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 
 async function bg(message) {
   return await chrome.runtime.sendMessage(message);
@@ -437,6 +438,8 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
 
 // Initialize
 (async () => {
+  await loadExtensionSettings();
+  applyUiThemeToDocument(document);
   await loadLang();
   applyStaticTranslations();
 

@@ -1,5 +1,6 @@
 import { loadMonaco, createSingleEditor } from './editor/monaco.js';
 import { loadLang, t } from '../shared/i18n.js';
+import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 import { bg } from './core/bridge.js';
 import { apexViewerIdbTake } from './lib/apexViewerIdb.js';
 
@@ -39,6 +40,8 @@ function getQueryKeys() {
 
 async function main() {
   await loadLang();
+  await loadExtensionSettings();
+  applyUiThemeToDocument(document);
 
   const backBtn = document.getElementById('apexLogViewerBack');
   const downloadBtn = document.getElementById('apexLogViewerDownload');

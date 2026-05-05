@@ -57,6 +57,10 @@ body {
   color: #94a3b8;
 }
 
+body.apex-cov-split-active .apex-cov-viewer-legend {
+  display: none;
+}
+
 .apex-cov-legend-covered {
   display: inline-block;
   width: 14px;
@@ -75,8 +79,78 @@ body {
   border: 1px solid rgba(239, 68, 68, 0.65);
 }
 
-.apex-cov-viewer-editor {
+.apex-cov-single-wrap {
   height: calc(100% - 49px);
+  width: 100%;
+  min-height: 0;
+}
+
+.apex-cov-viewer-editor {
+  height: 100%;
+  width: 100%;
+}
+
+.apex-cov-split-root {
+  display: flex;
+  flex-direction: row;
+  height: calc(100% - 49px);
+  width: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.apex-cov-split-pane {
+  flex: 1 1 50%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--acv-border);
+}
+
+.apex-cov-split-pane:last-child {
+  border-right: none;
+}
+
+.apex-cov-split-pane-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.65);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--acv-border);
+}
+
+.apex-cov-split-org-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--acv-text);
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.apex-cov-split-mini-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.apex-cov-split-mini-legend .apex-cov-legend-covered,
+.apex-cov-split-mini-legend .apex-cov-legend-uncovered {
+  width: 12px;
+  height: 9px;
+}
+
+.apex-cov-split-editor {
+  flex: 1;
+  min-height: 0;
   width: 100%;
 }
 
@@ -87,4 +161,26 @@ body {
 
 .monaco-editor .sfoc-cov-line-uncovered {
   background-color: rgba(239, 68, 68, 0.26) !important;
+}
+
+html[data-ui-theme='light'] {
+  --acv-bg: #f8fafc;
+  --acv-border: #cbd5e1;
+  --acv-text: #0f172a;
+}
+
+html[data-ui-theme='light'] .apex-cov-viewer-back {
+  background: #ffffff;
+}
+
+html[data-ui-theme='light'] .apex-cov-viewer-legend {
+  color: #64748b;
+}
+
+html[data-ui-theme='light'] .apex-cov-split-pane-head {
+  background: rgba(248, 250, 252, 0.92);
+}
+
+html[data-ui-theme='light'] .apex-cov-split-mini-legend {
+  color: #64748b;
 }

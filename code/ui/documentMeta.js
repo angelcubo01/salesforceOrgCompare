@@ -92,8 +92,20 @@ export function updateDocumentTitle() {
     document.title = t('docTitle.orgLimits');
     return;
   }
+  if (state.selectedArtifactType === 'QueryExplorer') {
+    document.title = t('docTitle.queryExplorer');
+    return;
+  }
   if (state.selectedArtifactType === 'SetupAuditTrail') {
     document.title = t('docTitle.setupAuditTrail');
+    return;
+  }
+  if (state.selectedArtifactType === 'QuickEdit') {
+    document.title = t('docTitle.quickEdit');
+    return;
+  }
+  if (state.selectedArtifactType === 'ApexCoverageCompare') {
+    document.title = t('docTitle.coverageCompare');
     return;
   }
   const sel = state.selectedItem;

@@ -6,14 +6,18 @@ require.config({
   }
 });
 
+function sfocWorkerScript(fileName) {
+  return chrome.runtime.getURL('code/workers/' + fileName);
+}
+
 // Route workers to static stub files to avoid blob: URLs blocked by MV3 CSP
 window.MonacoEnvironment = {
-  getWorkerUrl: function (moduleId, label) {
-    if (label === 'json') return 'workers/json.worker.js';
-    if (label === 'css') return 'workers/css.worker.js';
-    if (label === 'html') return 'workers/html.worker.js';
-    if (label === 'typescript' || label === 'javascript') return 'workers/ts.worker.js';
-    return 'workers/editor.worker.js';
+  getWorkerUrl: function (_moduleId, label) {
+    if (label === 'json') return sfocWorkerScript('json.worker.js');
+    if (label === 'css') return sfocWorkerScript('css.worker.js');
+    if (label === 'html') return sfocWorkerScript('html.worker.js');
+    if (label === 'typescript' || label === 'javascript') return sfocWorkerScript('ts.worker.js');
+    return sfocWorkerScript('editor.worker.js');
   }
 };
 
