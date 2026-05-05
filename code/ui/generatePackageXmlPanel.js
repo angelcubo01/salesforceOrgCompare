@@ -1,6 +1,6 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
-import { showToast } from './toast.js';
+import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { addSelected } from '../flows/addItems.js';
 import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
@@ -335,11 +335,25 @@ function syncCompareButtonVisibility() {
   btn.classList.toggle('hidden', !state.generatePackageXmlCompareMode);
 }
 
+/**
+ * Muestra/oculta el botón de Retrieve.
+ * Solo visible cuando el modo comparación está INACTIVO.
+ */
+function syncRetrieveButtonsVisibility() {
+  const retrieveBtn = document.getElementById('generatePkgRetrieveBtn');
+  const isCompareMode = !!state.generatePackageXmlCompareMode;
+
+  if (retrieveBtn) {
+    retrieveBtn.classList.toggle('hidden', isCompareMode);
+  }
+}
+
 /** Llamar tras cambiar a modo generar o al cambiar la org izquierda. */
 export function refreshGeneratePackageXmlTypes() {
   const toggle = document.getElementById('generatePkgCompareToggle');
   if (toggle) toggle.checked = !!state.generatePackageXmlCompareMode;
   syncCompareButtonVisibility();
+  syncRetrieveButtonsVisibility();
   selectedByType.clear();
   return loadMetadataTypesIntoPicklist();
 }
@@ -371,6 +385,7 @@ export function setupGeneratePackageXmlPanel() {
     compareToggle.addEventListener('change', () => {
       state.generatePackageXmlCompareMode = !!compareToggle.checked;
       syncCompareButtonVisibility();
+      syncRetrieveButtonsVisibility();
       applyArtifactTypeUi();
     });
   }
@@ -442,6 +457,91 @@ export function setupGeneratePackageXmlPanel() {
     });
   }
 
+  const retrieveBtn = document.getElementById('generatePkgRetrieveBtn');
+
+  if (retrieveBtn) {
+    retrieveBtn.addEventListener('click', async () => {
+      const ta = document.getElementById('generatePkgXmlOutput');
+      const xml = ta ? String(ta.value || '') : '';
+      if (!xml.trim()) {
+        showToast(t('toast.noPackageXml'), 'warn');
+        return;
+      }
+
+      const orgId = state.leftOrgId;
+      if (!orgId) {
+        showToast(t('toast.selectOrgFirst'), 'warn');
+        return;
+      }
+
+      retrieveBtn.disabled = true;
+      showToastWithSpinner(t('genPkg.retrieving'));
+
+      try {
+        const res = await bg({
+          type: 'metadata:retrievePackageXml',
+          orgId,
+          packageXml: xml
+        });
+
+        dismissSpinnerToast();
+
+        if (!res || !res.ok || !res.zipBase64) {
+          const rawError = (res && (res.error || res.reason)) || '';
+          if (String(rawError).includes('agotó el tiempo de espera') || String(rawError).includes('timed out')) {
+            showToast(t('toast.retrieveTimeout', { side: '' }), 'error');
+          } else {
+            showToast(rawError || t('toast.retrieveFailed', { side: '' }), 'error');
+          }
+          return;
+        }
+
+        // Descargar el ZIP automáticamente
+        const binaryString = atob(res.zipBase64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'application/zip' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'package_retrieve.zip';
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        showToast(t('toast.downloaded', { name: 'package_retrieve.zip' }), 'info');
+
+        const typesWithMembers = [...selectedByType.entries()].filter(
+          ([, set]) => set && set.size > 0
+        );
+        await bg({
+          type: 'usage:log',
+          entry: {
+            kind: 'codeComparison',
+            artifactType: 'PackageXml',
+            descriptor: { name: 'Generate package.xml - Retrieve & Download' },
+            phase: 'retrieve',
+            leftOrgId: orgId,
+            comparisonUrl: typeof window !== 'undefined' ? window.location.href : '',
+            typesCount: typesWithMembers.length,
+            xmlChars: xml.length
+          }
+        });
+      } catch (e) {
+        dismissSpinnerToast();
+        showToast(t('toast.retrieveError'), 'error');
+      } finally {
+        retrieveBtn.disabled = false;
+      }
+    });
+  }
+
   updateXmlOutput();
   syncCompareButtonVisibility();
+  syncRetrieveButtonsVisibility();
 }

@@ -11,6 +11,7 @@ import { refreshAnonymousApexPanel } from './anonymousApexPanel.js';
 import { refreshOrgLimitsPanel } from './orgLimitsPanel.js';
 import { refreshDebugLogBrowserPanel } from './debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from './setupAuditTrailPanel.js';
+import { refreshQuickEditPanel } from './quickEditPanel.js';
 import { t } from '../../shared/i18n.js';
 
 export function updateSearchUiForType() {
@@ -163,6 +164,7 @@ export function setupSearch() {
       void refreshOrgLimitsPanel();
       void refreshDebugLogBrowserPanel();
       void refreshSetupAuditTrailPanel();
+      void refreshQuickEditPanel();
       refreshFieldDependencyPanel();
     });
   }

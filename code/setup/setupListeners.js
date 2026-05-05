@@ -18,6 +18,7 @@ import { refreshAnonymousApexPanel } from '../ui/anonymousApexPanel.js';
 import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
 import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from '../ui/setupAuditTrailPanel.js';
+import { refreshQuickEditPanel } from '../ui/quickEditPanel.js';
 import { t } from '../../shared/i18n.js';
 
 export function wireSelectors() {
@@ -56,6 +57,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'SetupAuditTrail') {
       void refreshSetupAuditTrailPanel();
+    }
+    if (getSelectedArtifactType() === 'QuickEdit') {
+      void refreshQuickEditPanel();
     }
   });
   right.addEventListener('change', () => {

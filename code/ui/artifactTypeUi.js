@@ -37,6 +37,10 @@ export function isSetupAuditTrailMode() {
   return getSelectedArtifactType() === 'SetupAuditTrail';
 }
 
+export function isQuickEditMode() {
+  return getSelectedArtifactType() === 'QuickEdit';
+}
+
 export function isOperationPlaceholder() {
   return !getSelectedArtifactType();
 }
@@ -50,7 +54,8 @@ export function isFullScreenToolMode() {
     isAnonymousApexMode() ||
     isOrgLimitsMode() ||
     isDebugLogBrowserMode() ||
-    isSetupAuditTrailMode()
+    isSetupAuditTrailMode() ||
+    isQuickEditMode()
   );
 }
 
@@ -93,6 +98,7 @@ export function applyArtifactTypeUi() {
   const isDebugLogs = op === 'DebugLogBrowser';
   const isSetupAudit = op === 'SetupAuditTrail';
   const isFieldDep = op === 'FieldDependency';
+  const isQuickEdit = op === 'QuickEdit';
   document.body.classList.toggle('artifact-generate-package-xml', isGen);
   document.body.classList.toggle(
     'artifact-generate-package-xml-compare',
@@ -108,6 +114,7 @@ export function applyArtifactTypeUi() {
   document.body.classList.toggle('artifact-org-limits', isOrgLimits);
   document.body.classList.toggle('artifact-debug-log-browser', isDebugLogs);
   document.body.classList.toggle('artifact-setup-audit-trail', isSetupAudit);
+  document.body.classList.toggle('artifact-quick-edit', isQuickEdit);
   document.body.classList.toggle(
     'artifact-org-limits-compare',
     isOrgLimits && !!state.orgLimitsCompareMode
@@ -127,6 +134,7 @@ export function applyArtifactTypeUi() {
   const orgLimitsPanel = document.getElementById('orgLimitsPanel');
   const debugLogsPanel = document.getElementById('debugLogBrowserPanel');
   const setupAuditPanel = document.getElementById('setupAuditTrailPanel');
+  const quickEditPanel = document.getElementById('quickEditPanel');
   const results = document.getElementById('searchResults');
   const orgDropdowns = document.getElementById('orgDropdowns');
   const landingPanel = document.getElementById('appLandingPanel');
@@ -147,6 +155,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
     if (results) {
       results.style.display = 'none';
       results.innerHTML = '';
@@ -176,6 +185,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
 
     state.rightOrgId = null;
     const right = document.getElementById('rightOrg');
@@ -204,6 +214,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.generatePackageXmlCompareMode) {
@@ -242,6 +253,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.anonymousApexCompareMode) {
@@ -275,6 +287,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.remove('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.orgLimitsCompareMode) {
@@ -301,6 +314,9 @@ export function applyArtifactTypeUi() {
   } else if (isSetupAudit) {
     applySingleLeftOrgToolUi();
     setupAuditPanel?.classList.remove('hidden');
+  } else if (isQuickEdit) {
+    applySingleLeftOrgToolUi();
+    quickEditPanel?.classList.remove('hidden');
   } else if (isFieldDep) {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
@@ -315,6 +331,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
 
     const right = document.getElementById('rightOrg');
     if (right) {
@@ -340,6 +357,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
 
     const right = document.getElementById('rightOrg');
     if (right) {
@@ -361,6 +379,7 @@ export function applyArtifactTypeUi() {
       isDebugLogs ||
       isSetupAudit ||
       isFieldDep ||
+      isQuickEdit ||
       op === 'PackageXml' ||
       isNone)
   ) {

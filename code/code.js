@@ -31,6 +31,7 @@ import {
   setupDiffNavigation,
   setupSidebarToggle
 } from './setup/setupListeners.js';
+import { setupKeyboardShortcutsModal } from './ui/keyboardShortcutsModal.js';
 import { setupSearch } from './ui/searchSetup.js';
 import { applyArtifactTypeUi } from './ui/artifactTypeUi.js';
 import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
@@ -40,6 +41,7 @@ import { setupAnonymousApexPanel, refreshAnonymousApexPanel } from './ui/anonymo
 import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
 import { setupSetupAuditTrailPanel, refreshSetupAuditTrailPanel } from './ui/setupAuditTrailPanel.js';
+import { setupQuickEditPanel, refreshQuickEditPanel } from './ui/quickEditPanel.js';
 import {
   setupClearApexTestJobsOnPageClose,
   updateApexTestsHubPollingState
@@ -188,6 +190,7 @@ async function init() {
   setupOrgLimitsPanel();
   setupDebugLogBrowserPanel();
   setupSetupAuditTrailPanel();
+  setupQuickEditPanel();
   setupFieldDependencyPanel();
   renderEditor();
   refreshGeneratePackageXmlTypes();
@@ -196,6 +199,7 @@ async function init() {
   void refreshOrgLimitsPanel();
   void refreshDebugLogBrowserPanel();
   void refreshSetupAuditTrailPanel();
+  void refreshQuickEditPanel();
   setupResizable();
   setupDragAndDrop();
   setupDownloadAll();
@@ -205,6 +209,7 @@ async function init() {
   setupModifierKeyTracking();
   setupDiffNavigation();
   setupSidebarToggle();
+  setupKeyboardShortcutsModal();
   updateOrgDropdownLayout();
   updateDocumentTitle();
   updateOrgSelectorsLockedState();

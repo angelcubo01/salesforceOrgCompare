@@ -31,7 +31,9 @@ import {
   retrieveFlexiPageZip,
   retrievePackageXmlZip,
   describeMetadata,
-  listMetadataWithFolderFallback
+  listMetadataWithFolderFallback,
+  createDeployZipBase64,
+  deployAndWait
 } from '../shared/metadataRetrieve.js';
 import { indexCache, sourceCache, versionCache, authStatusCache } from './caches.js';
 import { DEBUG_LOGS } from './config.js';
@@ -747,6 +749,49 @@ export function installMessageHandlers() {
                 folder != null && folder !== '' ? String(folder) : undefined
               );
               sendResponse({ ok: true, records, apiVersionUsed: String(ver) });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'metadata:deploy': {
+            const { orgId, metadataType, memberName, content, fileName, checkOnly } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) throw new Error('Org not saved');
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const ver = org.apiVersion;
+            try {
+              const zipBase64 = createDeployZipBase64(
+                metadataType,
+                memberName,
+                content,
+                ver,
+                { fileName }
+              );
+              const result = await deployAndWait(
+                org.instanceUrl,
+                sid,
+                ver,
+                zipBase64,
+                {
+                  deployOptions: {
+                    checkOnly: !!checkOnly,
+                    testLevel: 'NoTestRun'
+                  },
+                  maxAttempts: 90,
+                  pollIntervalMs: 1500
+                }
+              );
+              sendResponse({
+                ok: result.success,
+                asyncId: result.asyncId,
+                status: result.status,
+                errorMessage: result.errorMessage,
+                componentFailures: result.componentFailures
+              });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }
