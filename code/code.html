@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
@@ -21,26 +21,45 @@
         <div class="sidebar-header">
           <p id="sidebarHomeHint" class="sidebar-home-hint hidden" data-i18n="code.sidebarHomeHint"></p>
           <div class="sidebar-header-bottom">
-            <div id="searchPanel" class="search">
-              <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholder" placeholder="Buscar por nombre (mín. 3 caracteres)" maxlength="64" />
-              <div id="searchResults" class="results sfoc-autocomplete-panel"></div>
+            <div id="searchPanel" class="search sidebar-search-panel">
+              <label for="searchInput" class="sidebar-search-label" data-i18n="code.searchTitle">Búsqueda</label>
+              <div class="sidebar-search-input-row">
+                <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholder" placeholder="Buscar por nombre (mín. 3 caracteres)" maxlength="64" />
+                <button id="clearHistoryButton" type="button" class="clear-history-button" data-i18n-title="code.clearSavedFiles">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                    <path d="M10 11v6"></path>
+                    <path d="M14 11v6"></path>
+                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+              </div>
             </div>
+            <div id="searchResults" class="results sfoc-autocomplete-panel sidebar-search-results" role="listbox" hidden></div>
             <div id="packageXmlPanel" class="package-xml-panel hidden" aria-label="Importar package.xml">
               <input type="file" id="packageXmlFileInput" accept=".xml,application/xml,text/xml" tabindex="-1" />
               <button type="button" id="packageXmlLoadBtn" class="package-xml-load-btn" data-i18n="code.loadFile">Cargar fichero</button>
             </div>
-            <button id="clearHistoryButton" class="clear-history-button" data-i18n-title="code.clearSavedFiles">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-                <path d="M10 11v6"></path>
-                <path d="M14 11v6"></path>
-                <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
           </div>
         </div>
-        <ul id="leftList" class="list"></ul>
+        <div id="compareListToolbar" class="compare-list-toolbar hidden" aria-label="Lista de comparación">
+          <input
+            id="compareListFilter"
+            class="sfoc-query-input compare-list-filter"
+            type="search"
+            autocomplete="off"
+            spellcheck="false"
+            data-i18n-placeholder="list.filterPlaceholder"
+            placeholder="Filtrar lista…"
+          />
+        </div>
+        <div id="compareListBody" class="compare-list-body">
+          <ul id="leftListPinned" class="list compare-list-pinned hidden" aria-label="Fijados"></ul>
+          <div id="compareListScrollHost" class="compare-list-scroll-host">
+            <ul id="leftList" class="list compare-tree" aria-label="Lista de comparación"></ul>
+          </div>
+        </div>
       </div>
       <div id="editorContainer" class="editor">
         <div class="app-mode-tabs-wrap">
@@ -156,6 +175,21 @@
             <select id="leftOrg"></select>
             <button id="leftReauthBtn" class="reauth-btn" data-i18n="code.reauth" data-i18n-title="code.reauth">Reautenticar</button>
           </div>
+          <button
+            type="button"
+            id="swapOrgsBtn"
+            class="org-swap-btn diff-nav-button hidden"
+            data-i18n-title="code.swapOrgsTitle"
+            title="Intercambiar entornos"
+            aria-label="Intercambiar entornos"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M4 9h11"></path>
+              <path d="M12 5l4 4-4 4"></path>
+              <path d="M20 15H9"></path>
+              <path d="M12 19l-4-4 4-4"></path>
+            </svg>
+          </button>
           <div class="org-dropdown-right">
             <select id="rightOrg"></select>
             <button id="rightReauthBtn" class="reauth-btn" data-i18n="code.reauth" data-i18n-title="code.reauth">Reautenticar</button>
@@ -163,13 +197,16 @@
         </div>
         <div id="appLandingPanel" class="app-landing-panel hidden" role="region" aria-labelledby="appLandingHeading">
           <div class="app-landing-inner">
-            <div id="appLandingHomeBanner" class="app-landing-home-banner hidden" role="status" aria-live="polite">
-              <p id="appLandingHomeBannerText" class="app-landing-home-banner-text"></p>
-            </div>
             <header class="app-landing-header">
               <h1 id="appLandingHeading" class="app-landing-title" data-i18n="code.landingTitle">Salesforce Org Compare</h1>
               <p class="app-landing-lead" data-i18n="code.landingSubtitle"></p>
             </header>
+            <div id="appLandingDiscoverBanner" class="app-landing-discover-banner" role="note">
+              <p id="appLandingDiscoverBannerText" class="app-landing-discover-banner-text"></p>
+            </div>
+            <div id="appLandingHomeBanner" class="app-landing-home-banner hidden" role="status" aria-live="polite">
+              <p id="appLandingHomeBannerText" class="app-landing-home-banner-text"></p>
+            </div>
             <div class="app-landing-grid-wrap">
             <div class="app-landing-grid">
               <article class="app-landing-card app-landing-card-accent-1">
@@ -221,14 +258,20 @@
           </div>
         </div>
         <div id="standardComparePanel" class="standard-compare-panel">
+        <div class="compare-viewer-chrome">
         <div class="diff-toolbar">
-          <div class="diff-toolbar-left">
-            <button id="retrieveAllBtn" class="retrieve-button hidden" data-i18n-title="code.downloadRetrieve" data-i18n="code.executeRetrieve">
-              EJECUTAR RETRIEVE
-            </button>
+          <div class="diff-toolbar-primary">
+            <span id="diffStatus" class="diff-status" data-i18n="code.noDifferences">Sin diferencias</span>
           </div>
-          <span id="diffStatus" class="diff-status" data-i18n="code.noDifferences">Sin diferencias</span>
-          <div class="diff-toolbar-right">
+          <div class="diff-toolbar-actions">
+            <button id="retrieveAllBtn" type="button" class="diff-nav-button retrieve-button hidden" data-i18n-title="code.downloadRetrieve" title="Descargar metadata (retrieve)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span class="retrieve-button-label" data-i18n="code.retrieveToolbar">Retrieve</span>
+            </button>
             <button id="toggleWhitespaceBtn" class="diff-nav-button" data-i18n-title="code.toggleWhitespace" title="Ignorar espacios en blanco">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 7h16M4 12h10M4 17h13"></path>
@@ -239,6 +282,18 @@
                 <path d="M3 7h13a4 4 0 1 1 0 8h-4"></path>
                 <polyline points="12 12 9 15 12 18"></polyline>
                 <path d="M3 17h4"></path>
+              </svg>
+            </button>
+            <button id="copyCompareLinkBtn" type="button" class="diff-nav-button" data-i18n-title="code.copyCompareLinkTitle" title="Copiar enlace a esta comparación">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+              </svg>
+            </button>
+            <button id="copyUnifiedDiffBtn" type="button" class="diff-nav-button" disabled data-i18n-title="code.copyUnifiedDiffTitle" title="Copiar diff unificado (git diff)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
             </button>
             <button id="exportDiffHtmlBtn" type="button" class="diff-nav-button" disabled data-i18n-title="code.exportDiffHtmlTitle" title="Exportar diff como HTML">
@@ -267,11 +322,12 @@
         </div>
         <div id="fileMetaRow" class="file-meta-row">
           <div class="file-meta-col file-meta-left">
-            <span id="leftFileMeta" class="file-meta-value">—</span>
+            <span id="leftFileMeta" class="file-meta-value" title="">—</span>
           </div>
           <div class="file-meta-col file-meta-right">
-            <span id="rightFileMeta" class="file-meta-value">—</span>
+            <span id="rightFileMeta" class="file-meta-value" title="">—</span>
           </div>
+        </div>
         </div>
         <div id="viewerChunkBar" class="viewer-chunk-bar hidden" role="region" aria-label="Navegación por fragmentos del visor">
           <button type="button" id="viewerChunkPrev" class="viewer-chunk-btn" disabled data-i18n-title="code.prevChunkTitle" data-i18n="code.prevChunk">
@@ -989,6 +1045,107 @@
             <div id="apexCoverageCompareTableMount" class="coverage-compare-table-mount"></div>
           </div>
         </div>
+        <div id="permissionDiffPanel" class="permission-diff-panel hidden" aria-label="Analizador de permisos">
+          <div class="permission-diff-panel-inner">
+            <div class="permission-diff-head">
+              <div>
+                <h2 class="permission-diff-title" data-i18n="permDiff.title">Analizador de permisos</h2>
+                <p class="permission-diff-subtitle" data-i18n="permDiff.subtitle">
+                  Consulta y compara quién puede ver o editar objetos, campos y elementos de configuración.
+                </p>
+              </div>
+              <div class="permission-diff-head-controls">
+                <label class="org-limits-compare-toggle" for="permissionDiffCompareToggle" data-i18n-title="permDiff.compareTooltip">
+                  <input type="checkbox" id="permissionDiffCompareToggle" />
+                  <span class="org-limits-compare-switch" aria-hidden="true"></span>
+                  <span class="org-limits-compare-label" data-i18n="permDiff.compareMode">Modo comparación</span>
+                </label>
+              </div>
+            </div>
+            <p id="permissionDiffStatus" class="permission-diff-status" role="status"></p>
+            <div class="permission-diff-toolbar">
+              <div class="permission-diff-direction-bar" role="tablist" aria-label="Forma de consulta">
+                <button type="button" class="permission-diff-direction is-active" data-perm-diff-direction="container" data-i18n="permDiff.dirContainer">Por conjunto o perfil</button>
+                <button type="button" class="permission-diff-direction" data-perm-diff-direction="resource" data-i18n="permDiff.dirResource">Por objeto o campo</button>
+                <button type="button" class="permission-diff-direction" data-perm-diff-direction="customPermission" data-i18n="permDiff.dirCustomPermission">Por permiso personalizado</button>
+              </div>
+              <div id="permissionDiffSectionTabs" class="permission-diff-section-tabs" role="tablist" aria-label="Sección">
+                <button type="button" class="permission-diff-tab is-active" data-perm-diff-section="object" role="tab" data-i18n="permDiff.tabObject">Objetos</button>
+                <button type="button" class="permission-diff-tab" data-perm-diff-section="field" role="tab" data-i18n="permDiff.tabField">Campos</button>
+                <button type="button" class="permission-diff-tab" data-perm-diff-section="setup" role="tab" data-i18n="permDiff.tabSetup">Configuración</button>
+              </div>
+            </div>
+            <div id="permissionDiffContainerBlock" class="permission-diff-filters">
+              <div class="permission-diff-field">
+                <label for="permissionDiffContainerType" class="permission-diff-field-label" data-i18n="permDiff.containerType">Tipo</label>
+                <select id="permissionDiffContainerType" class="permission-diff-input permission-diff-select">
+                  <option value="PermissionSet" data-i18n="permDiff.typePermissionSet">Conjunto de permisos</option>
+                  <option value="Profile" data-i18n="permDiff.typeProfile">Perfil</option>
+                </select>
+              </div>
+              <div class="permission-diff-field permission-diff-name-field">
+                <label for="permissionDiffNameInput" class="permission-diff-field-label" data-i18n="permDiff.containerName">Nombre</label>
+                <input id="permissionDiffNameInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.containerNamePh" placeholder="Ej.: Mi_Conjunto_Permisos o Administrador" autocomplete="off" spellcheck="false" />
+                <div id="permissionDiffSuggestions" class="permission-diff-suggestions" hidden></div>
+              </div>
+            </div>
+            <div id="permissionDiffResourceBlock" class="permission-diff-filters hidden">
+              <div class="permission-diff-field">
+                <label for="permissionDiffResourceType" class="permission-diff-field-label" data-i18n="permDiff.resourceType">Recurso</label>
+                <select id="permissionDiffResourceType" class="permission-diff-input permission-diff-select">
+                  <option value="object" data-i18n="permDiff.resourceObject">Objeto</option>
+                  <option value="field" data-i18n="permDiff.resourceField">Campo</option>
+                </select>
+              </div>
+              <div class="permission-diff-field">
+                <label for="permissionDiffContainerFilter" class="permission-diff-field-label" data-i18n="permDiff.showContainers">Mostrar</label>
+                <select id="permissionDiffContainerFilter" class="permission-diff-input permission-diff-select">
+                  <option value="all" data-i18n="permDiff.containerFilterAll">Perfiles y conjuntos de permisos</option>
+                  <option value="Profile" data-i18n="permDiff.containerFilterProfile">Solo perfiles</option>
+                  <option value="PermissionSet" data-i18n="permDiff.containerFilterPermSet">Solo conjuntos de permisos</option>
+                </select>
+              </div>
+              <div class="permission-diff-field permission-diff-name-field">
+                <label for="permissionDiffResourceInput" class="permission-diff-field-label" data-i18n="permDiff.resourceName">Nombre</label>
+                <input id="permissionDiffResourceInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.resourceNamePh" placeholder="Ej.: Cuenta o Cuenta.Nombre" autocomplete="off" spellcheck="false" />
+                <div id="permissionDiffResourceSuggestions" class="permission-diff-suggestions" hidden></div>
+              </div>
+            </div>
+            <div id="permissionDiffCustomPermBlock" class="permission-diff-filters hidden">
+              <div class="permission-diff-field">
+                <label for="permissionDiffContainerFilterCp" class="permission-diff-field-label" data-i18n="permDiff.showContainers">Mostrar</label>
+                <select id="permissionDiffContainerFilterCp" class="permission-diff-input permission-diff-select">
+                  <option value="all" data-i18n="permDiff.containerFilterAll">Perfiles y conjuntos de permisos</option>
+                  <option value="Profile" data-i18n="permDiff.containerFilterProfile">Solo perfiles</option>
+                  <option value="PermissionSet" data-i18n="permDiff.containerFilterPermSet">Solo conjuntos de permisos</option>
+                </select>
+              </div>
+              <div class="permission-diff-field permission-diff-name-field">
+                <label for="permissionDiffCustomPermInput" class="permission-diff-field-label" data-i18n="permDiff.customPermName">Permiso personalizado</label>
+                <input id="permissionDiffCustomPermInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.customPermNamePh" placeholder="Ej.: CC_Mi_Permiso" autocomplete="off" spellcheck="false" />
+                <div id="permissionDiffCustomPermSuggestions" class="permission-diff-suggestions" hidden></div>
+              </div>
+            </div>
+            <div class="permission-diff-filters permission-diff-filters-shared hidden">
+              <div class="permission-diff-field">
+                <label for="permissionDiffFilter" class="permission-diff-field-label" data-i18n="permDiff.filter">Buscar</label>
+                <input id="permissionDiffFilter" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.filterPh" placeholder="Buscar en resultados…" />
+              </div>
+              <label class="permission-diff-diff-only">
+                <input type="checkbox" id="permissionDiffDiffOnly" />
+                <span data-i18n="permDiff.diffOnly">Solo diferencias</span>
+              </label>
+            </div>
+            <p id="permissionDiffSummary" class="permission-diff-summary hidden"></p>
+            <div class="permission-diff-table-wrap hidden">
+              <table id="permissionDiffTable" class="permission-diff-table">
+                <thead id="permissionDiffThead"></thead>
+                <tbody id="permissionDiffTbody"></tbody>
+              </table>
+              <p id="permissionDiffEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
+            </div>
+          </div>
+        </div>
         <div id="orgLimitsPanel" class="org-limits-panel hidden" aria-label="Org Limits Dashboard">
           <div class="org-limits-panel-inner">
             <div class="org-limits-head">
@@ -1193,6 +1350,37 @@
       </div>
     </div>
 
+    <div
+      id="quickOpenOverlay"
+      class="quick-open-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Búsqueda rápida"
+      aria-hidden="true"
+    >
+      <div id="quickOpenBackdrop" class="quick-open-backdrop" tabindex="-1"></div>
+      <div class="quick-open-shell">
+        <input
+          id="quickOpenInput"
+          class="quick-open-input sfoc-query-input"
+          type="search"
+          autocomplete="off"
+          spellcheck="false"
+          data-i18n-placeholder="quickOpen.placeholder"
+          placeholder="Buscar metadatos, herramientas o ficheros…"
+          maxlength="120"
+          aria-controls="quickOpenResults"
+          aria-autocomplete="list"
+          aria-expanded="false"
+        />
+        <div
+          id="quickOpenResults"
+          class="quick-open-results hidden"
+          role="listbox"
+          aria-live="polite"
+        ></div>
+      </div>
+    </div>
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="../vendor/jsdiff/diff.min.js"></script>

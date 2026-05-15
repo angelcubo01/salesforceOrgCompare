@@ -107,8 +107,43 @@ body.apex-cov-split-active .apex-cov-viewer-legend {
   border-right: 1px solid var(--acv-border);
 }
 
-.apex-cov-split-pane:last-child {
+.apex-cov-split-pane:last-of-type {
   border-right: none;
+}
+
+.apex-cov-split-swap-col {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-right: 1px solid var(--acv-border);
+  background: #1e293b;
+}
+
+.apex-cov-split-swap-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid var(--acv-border);
+  border-radius: 4px;
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+  color: var(--acv-text);
+  transition: all 0.2s ease;
+}
+
+.apex-cov-split-swap-btn:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.apex-cov-split-swap-btn svg {
+  display: block;
 }
 
 .apex-cov-split-pane-head {

@@ -38,6 +38,7 @@ export const state = {
   wordWrapEnabled: false,
   anonymousApexCompareMode: false,
   orgLimitsCompareMode: false,
+  permissionDiffCompareMode: false,
   generatePackageXmlCompareMode: false,
   queryExplorerCompareMode: false,
   orgsList: []

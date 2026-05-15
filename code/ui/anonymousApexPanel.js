@@ -1,15 +1,19 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
-import { loadMonaco, resolveMonacoThemeId } from '../editor/monaco.js';
+import { loadMonaco, resolveMonacoThemeId, createStandaloneEditorSafe } from '../editor/monaco.js';
+import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
 import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
 import { applyArtifactTypeUi } from './artifactTypeUi.js';
+import { navigateToModeAndTool } from './appModeNav.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 
 const ANON_EDITOR_CACHE_KEY = 'sfoc_anon_apex_editor_text';
 const ANON_SAVED_SCRIPTS_KEY = 'sfoc_anon_apex_saved_scripts';
 let anonEditor = null;
+/** @type {Promise<import('monaco-editor').editor.IStandaloneCodeEditor | null> | null} */
+let anonEditorInit = null;
 let lastAnonLogs = [];
 let selectedSavedScriptId = '';
 let logPickerResolve = null;
@@ -374,32 +378,53 @@ function renderResult(resultByOrg) {
 async function ensureEditor() {
   const mount = document.getElementById('anonymousApexEditorMount');
   if (!mount) return null;
-  if (anonEditor) return anonEditor;
-  const monaco = state.monaco || (await loadMonaco());
-  state.monaco = monaco;
-  anonEditor = monaco.editor.create(mount, {
-    value:
-      localStorage.getItem(ANON_EDITOR_CACHE_KEY) ||
-      "System.debug('Hello from Salesforce Org Compare');",
-    language: 'apex',
-    readOnly: false,
-    automaticLayout: true,
-    minimap: { enabled: false },
-    wordWrap: state.wordWrapEnabled ? 'on' : 'off',
-    theme: resolveMonacoThemeId(),
-    fontSize: 13,
-    lineHeight: 20,
-    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-    scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
-  });
-  anonEditor.onDidChangeModelContent(() => {
+  if (anonEditor) {
     try {
-      localStorage.setItem(ANON_EDITOR_CACHE_KEY, anonEditor.getValue());
+      if (anonEditor.getContainerDomNode() === mount) return anonEditor;
     } catch {
-      /* ignore */
+      anonEditor = null;
     }
-  });
-  return anonEditor;
+  }
+  if (anonEditorInit) return anonEditorInit;
+
+  anonEditorInit = (async () => {
+    const monaco = state.monaco || (await loadMonaco());
+    state.monaco = monaco;
+    anonEditor = createStandaloneEditorSafe(
+      monaco,
+      mount,
+      {
+        value:
+          localStorage.getItem(ANON_EDITOR_CACHE_KEY) ||
+          "System.debug('Hello from Salesforce Org Compare');",
+        language: 'apex',
+        readOnly: false,
+        automaticLayout: true,
+        minimap: { enabled: false },
+        wordWrap: state.wordWrapEnabled ? 'on' : 'off',
+        theme: resolveMonacoThemeId(),
+        fontSize: 13,
+        lineHeight: 20,
+        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+        scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
+      },
+      anonEditor
+    );
+    anonEditor.onDidChangeModelContent(() => {
+      try {
+        localStorage.setItem(ANON_EDITOR_CACHE_KEY, anonEditor.getValue());
+      } catch {
+        /* ignore */
+      }
+    });
+    return anonEditor;
+  })();
+
+  try {
+    return await anonEditorInit;
+  } finally {
+    anonEditorInit = null;
+  }
 }
 
 async function runAnonymousApex() {
@@ -579,6 +604,55 @@ function openLogPickerModal(options) {
   });
 }
 
+/** Índice local para Quick Open (scripts Apex anónimo guardados). */
+export function getAnonymousApexSavedScriptsIndex() {
+  return readSavedScripts().map((s) => ({
+    id: String(s.id || ''),
+    name: String(s.name || 'script'),
+    searchHay: String(s.name || 'script')
+      .trim()
+      .toLowerCase()
+  }));
+}
+
+/** Abre Anonymous Apex y carga un script guardado por id en el editor. */
+export async function openAnonymousApexSavedScript(scriptId) {
+  const s = readSavedScripts().find((x) => x.id === scriptId);
+  if (!s) return false;
+
+  const body = String(s.body || '');
+  selectedSavedScriptId = s.id;
+
+  try {
+    localStorage.setItem(ANON_EDITOR_CACHE_KEY, body);
+  } catch {
+    /* ignore */
+  }
+
+  await navigateToModeAndTool('development', 'AnonymousApex', { userInitiated: true });
+
+  const ed = await ensureEditor();
+  if (!ed) return false;
+
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+
+  ed.setValue(body);
+  try {
+    ed.layout();
+  } catch {
+    /* ignore */
+  }
+  ed.focus();
+
+  const inp = document.getElementById('anonymousApexScriptNameInput');
+  if (inp) inp.value = String(s.name || '');
+  syncSaveButtonLabel();
+  refreshSavedScriptsUi();
+  return true;
+}
+
 export async function refreshAnonymousApexPanel() {
   const orgStatus = document.getElementById('anonymousApexOrgStatus');
   const toggle = document.getElementById('anonymousApexCompareToggle');
@@ -589,7 +663,9 @@ export async function refreshAnonymousApexPanel() {
     return;
   }
   orgStatus.textContent = '';
-  await ensureEditor();
+  if (getSelectedArtifactType() === 'AnonymousApex') {
+    await ensureEditor();
+  }
   refreshSavedScriptsUi();
 }
 

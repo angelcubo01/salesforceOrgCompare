@@ -1,5 +1,6 @@
 import { state } from '../core/state.js';
 import { t } from '../../shared/i18n.js';
+import { updateOrgSwapButtonState } from './orgs.js';
 
 export function beginFileViewerLoading() {
   state.fileViewerLoadingDepth = (state.fileViewerLoadingDepth || 0) + 1;
@@ -26,6 +27,7 @@ export function isRetrieveZipTreeItem(item) {
 }
 
 export function updateOrgSelectorsLockedState() {
+  try {
   const left = document.getElementById('leftOrg');
   const right = document.getElementById('rightOrg');
   const isGen = document.body.classList.contains('artifact-generate-package-xml');
@@ -104,6 +106,9 @@ export function updateOrgSelectorsLockedState() {
   }
   const editor = document.getElementById('editorContainer');
   if (editor) editor.classList.toggle('org-selectors-locked', locked);
+  } finally {
+    updateOrgSwapButtonState();
+  }
 }
 
 export function retrieveZipContentEqual(parentKey, relativePath) {

@@ -375,10 +375,13 @@ function parseListMetadataRecords(xml) {
 
   function addFromBlock(block) {
     const fullName = extractTagValue(block, 'fullName');
-    if (!fullName || seen.has(fullName)) return;
-    seen.add(fullName);
+    if (!fullName) return;
+    const type = extractTagValue(block, 'type') || '';
+    const dedupeKey = type ? `${type}\0${fullName}` : fullName;
+    if (seen.has(dedupeKey)) return;
+    seen.add(dedupeKey);
     const id = extractTagValue(block, 'id');
-    records.push({ fullName, ...(id ? { id } : {}) });
+    records.push({ fullName, type, ...(id ? { id } : {}) });
   }
 
   // Forma habitual: <listMetadataResponse><result>...</result><result>...</result>
@@ -454,6 +457,137 @@ export async function listMetadataWithFolderFallback(
     return listMetadata(instanceUrl, sid, apiVersion, typeName, folderCandidate);
   }
   return rows;
+}
+
+/**
+ * listMetadata con varios &lt;queries&gt; en una sola petición SOAP (más eficiente que N llamadas REST).
+ * @param {string[]} typeNames — tipos Metadata API (ApexClass, LightningComponentBundle, …)
+ */
+export async function listMetadataMulti(instanceUrl, sid, apiVersion, typeNames) {
+  const types = (typeNames || []).map((t) => String(t || '').trim()).filter(Boolean);
+  if (!types.length) return [];
+
+  const apiVerNum = Number(apiVersion) || 60.0;
+  const apiVer = apiVerNum.toFixed(1);
+  const queriesXml = types
+    .map((t) => `<queries><type>${escapeXmlText(t)}</type></queries>`)
+    .join('');
+  const body =
+    `<listMetadata xmlns="http://soap.sforce.com/2006/04/metadata">` +
+    queriesXml +
+    `<asOfVersion>${escapeXmlText(apiVer)}</asOfVersion>` +
+    `</listMetadata>`;
+
+  const responseXml = await metadataSoapCall(instanceUrl, sid, apiVer, body);
+
+  if (/<faultcode/i.test(responseXml) || /<soapenv:Fault/i.test(responseXml) || /<Fault[\s>]/i.test(responseXml)) {
+    const msg = extractTagValue(responseXml, 'faultstring') || 'listMetadata SOAP fault';
+    const err = new Error(msg);
+    err.responseXml = responseXml;
+    throw err;
+  }
+
+  return parseListMetadataRecords(responseXml);
+}
+
+/** Tipos Quick Open: artifactType interno ↔ Metadata API. */
+const QUICK_OPEN_INDEX_SPECS = [
+  { artifactType: 'ApexClass', metadataType: 'ApexClass', isBundle: false },
+  { artifactType: 'ApexTrigger', metadataType: 'ApexTrigger', isBundle: false },
+  { artifactType: 'ApexPage', metadataType: 'ApexPage', isBundle: false },
+  { artifactType: 'ApexComponent', metadataType: 'ApexComponent', isBundle: false },
+  { artifactType: 'LWC', metadataType: 'LightningComponentBundle', isBundle: true },
+  { artifactType: 'Aura', metadataType: 'AuraDefinitionBundle', isBundle: true },
+  { artifactType: 'PermissionSet', metadataType: 'PermissionSet', isBundle: false },
+  { artifactType: 'Profile', metadataType: 'Profile', isBundle: false },
+  { artifactType: 'FlexiPage', metadataType: 'FlexiPage', isBundle: false }
+];
+
+const QUICK_OPEN_SPEC_BY_METADATA_TYPE = Object.fromEntries(
+  QUICK_OPEN_INDEX_SPECS.map((s) => [s.metadataType, s])
+);
+
+/**
+ * Índice de nombres para Quick Open vía Metadata API listMetadata (como Generar package.xml).
+ * @returns {Promise<Record<string, unknown>[]>}
+ */
+/** Máximo de &lt;queries&gt; por llamada listMetadata (límite Metadata API). */
+const LIST_METADATA_QUERIES_PER_CALL = 3;
+
+export async function buildQuickOpenMetadataIndex(instanceUrl, sid, apiVersion) {
+  const metadataTypes = QUICK_OPEN_INDEX_SPECS.map((s) => s.metadataType);
+  /** @type {Map<string, { fullName: string, type?: string, id?: string }[]>} */
+  const byMetadataType = new Map(metadataTypes.map((t) => [t, []]));
+
+  /** @type {{ fullName: string, type?: string, id?: string }[]} */
+  const records = [];
+  for (let i = 0; i < metadataTypes.length; i += LIST_METADATA_QUERIES_PER_CALL) {
+    const chunk = metadataTypes.slice(i, i + LIST_METADATA_QUERIES_PER_CALL);
+    try {
+      const part = await listMetadataMulti(instanceUrl, sid, apiVersion, chunk);
+      records.push(...part);
+    } catch (e) {
+      if (e && (e.status === 401 || e.status === 403)) throw e;
+    }
+  }
+
+  for (const r of records) {
+    const mt = r.type || '';
+    if (!byMetadataType.has(mt)) continue;
+    byMetadataType.get(mt).push(r);
+  }
+
+  const needsFolderRetry = ['LightningComponentBundle', 'AuraDefinitionBundle'].filter(
+    (mt) => !(byMetadataType.get(mt) || []).length
+  );
+
+  if (needsFolderRetry.length) {
+    let describeObjects = null;
+    try {
+      describeObjects = await describeMetadata(instanceUrl, sid, apiVersion);
+    } catch {
+      describeObjects = [];
+    }
+    for (const mt of needsFolderRetry) {
+      try {
+        const metaObj = describeObjects.find((o) => o.xmlName === mt);
+        const folderHint = metaObj?.directoryName?.trim() || undefined;
+        const extra = await listMetadataWithFolderFallback(
+          instanceUrl,
+          sid,
+          apiVersion,
+          mt,
+          folderHint
+        );
+        for (const r of extra) {
+          byMetadataType.get(mt).push({ ...r, type: mt });
+        }
+      } catch (e) {
+        if (e && (e.status === 401 || e.status === 403)) throw e;
+      }
+    }
+  }
+
+  /** @type {Record<string, unknown>[]} */
+  const items = [];
+  for (const [mt, rows] of byMetadataType) {
+    const spec = QUICK_OPEN_SPEC_BY_METADATA_TYPE[mt];
+    if (!spec) continue;
+    for (const r of rows) {
+      const fullName = String(r.fullName || '').trim();
+      if (!fullName) continue;
+      if (spec.isBundle) {
+        items.push({
+          artifactType: spec.artifactType,
+          developerName: fullName,
+          ...(r.id ? { id: r.id } : {})
+        });
+      } else {
+        items.push({ artifactType: spec.artifactType, name: fullName });
+      }
+    }
+  }
+  return items;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

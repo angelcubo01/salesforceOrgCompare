@@ -46,6 +46,33 @@ function applyCoverageDecorations(monaco, editor, coveredLines, uncoveredLines, 
  * @param {import('monaco-editor').editor.IStandaloneCodeEditor} editorA
  * @param {import('monaco-editor').editor.IStandaloneCodeEditor} editorB
  */
+/**
+ * @param {import('monaco-editor')} monaco
+ * @param {import('monaco-editor').editor.IStandaloneCodeEditor} editor
+ * @param {Record<string, unknown>} side
+ */
+function applySplitPane(monaco, editor, side) {
+  const body = side.body != null ? String(side.body) : '';
+  editor.setValue(body || '—');
+  monaco.editor.setModelLanguage(editor.getModel(), 'apex');
+  applyCoverageDecorations(
+    monaco,
+    editor,
+    side.coveredLines,
+    side.uncoveredLines,
+    'sfoc-cov-line-covered',
+    'sfoc-cov-line-uncovered'
+  );
+}
+
+/**
+ * @param {Record<string, unknown>} side
+ * @param {string} fallback
+ */
+function orgBadgeLabel(side, fallback) {
+  return side.orgLabel != null ? String(side.orgLabel) : fallback;
+}
+
 function bindSyncedScroll(editorA, editorB) {
   let mute = false;
   const apply = (/** @type {import('monaco-editor').editor.IScrollEvent} */ e, target) => {
@@ -126,42 +153,37 @@ async function main() {
     if (singleWrap) singleWrap.hidden = true;
     if (splitRoot) splitRoot.hidden = false;
 
-    const left = payload.left;
-    const right = payload.right;
-    if (splitLeftBadge)
-      splitLeftBadge.textContent = left.orgLabel != null ? String(left.orgLabel) : t('coverageCompare.viewLeft');
-    if (splitRightBadge)
-      splitRightBadge.textContent =
-        right.orgLabel != null ? String(right.orgLabel) : t('coverageCompare.viewRight');
+    /** @type {{ left: Record<string, unknown>, right: Record<string, unknown> }} */
+    const splitSides = { left: payload.left, right: payload.right };
+
+    const refreshSplitBadges = () => {
+      if (splitLeftBadge) {
+        splitLeftBadge.textContent = orgBadgeLabel(splitSides.left, t('coverageCompare.viewLeft'));
+      }
+      if (splitRightBadge) {
+        splitRightBadge.textContent = orgBadgeLabel(splitSides.right, t('coverageCompare.viewRight'));
+      }
+    };
+    refreshSplitBadges();
 
     if (!splitLeftMount || !splitRightMount) return;
     try {
       const monaco = await loadMonaco();
       const editorL = createSingleEditor(monaco, splitLeftMount);
       const editorR = createSingleEditor(monaco, splitRightMount);
-      const bodyL = left.body != null ? String(left.body) : '';
-      const bodyR = right.body != null ? String(right.body) : '';
-      editorL.setValue(bodyL || '—');
-      editorR.setValue(bodyR || '—');
-      monaco.editor.setModelLanguage(editorL.getModel(), 'apex');
-      monaco.editor.setModelLanguage(editorR.getModel(), 'apex');
-      applyCoverageDecorations(
-        monaco,
-        editorL,
-        left.coveredLines,
-        left.uncoveredLines,
-        'sfoc-cov-line-covered',
-        'sfoc-cov-line-uncovered'
-      );
-      applyCoverageDecorations(
-        monaco,
-        editorR,
-        right.coveredLines,
-        right.uncoveredLines,
-        'sfoc-cov-line-covered',
-        'sfoc-cov-line-uncovered'
-      );
+      applySplitPane(monaco, editorL, splitSides.left);
+      applySplitPane(monaco, editorR, splitSides.right);
       bindSyncedScroll(editorL, editorR);
+
+      const swapBtn = document.getElementById('apexCovSplitSwapBtn');
+      swapBtn?.addEventListener('click', () => {
+        const tmp = splitSides.left;
+        splitSides.left = splitSides.right;
+        splitSides.right = tmp;
+        refreshSplitBadges();
+        applySplitPane(monaco, editorL, splitSides.left);
+        applySplitPane(monaco, editorR, splitSides.right);
+      });
     } catch {
       if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
     }

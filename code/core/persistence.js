@@ -26,30 +26,25 @@ export function loadItemsFromStorage() {
 }
 
 /**
- * Al cerrar/navegar fuera se borra el historial no fijado, pero los pineados deben
- * seguir en `savedCodeItems` para que coincidan con `pinnedKeys` en la siguiente sesión.
+ * Persiste la lista de comparación al ocultar o cerrar la pestaña (historial completo entre sesiones).
+ * Los fijados siguen ordenándose arriba vía `pinnedKeys`; el borrado manual usa el botón de papelera.
  */
-export function setupClearFileHistoryOnPageClose() {
-  const persistPinnedOnly = () => {
+export function setupPersistSavedItemsOnPageClose() {
+  const persist = () => {
     try {
-      const pinned = new Set(state.pinnedKeys);
-      const storablePinned = state.savedItems.filter(
-        (i) =>
-          pinned.has(pinKey(i)) &&
-          !(i.type === 'PackageXml' && i.descriptor?.source === 'localFile') &&
-          !(i.type === 'PackageXml' && i.descriptor?.source === 'retrieveZipFile')
-      );
-      if (storablePinned.length > 0) {
-        chrome.storage.local.set({ savedCodeItems: storablePinned });
-      } else {
-        chrome.storage.local.remove('savedCodeItems');
-      }
-    } catch (_) {
-      // ignore
+      saveItemsToStorage();
+    } catch {
+      /* ignore */
     }
   };
-  window.addEventListener('pagehide', persistPinnedOnly, { capture: true });
+  window.addEventListener('pagehide', persist, { capture: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') persist();
+  });
 }
+
+/** @deprecated Usar setupPersistSavedItemsOnPageClose */
+export const setupClearFileHistoryOnPageClose = setupPersistSavedItemsOnPageClose;
 
 /** Elimina entradas de `pinnedKeys` que no tienen ítem en la lista cargada (p. ej. no persistibles). */
 export function prunePinnedKeysToSavedItems() {

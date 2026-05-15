@@ -4,7 +4,7 @@ import { bg } from './core/bridge.js';
 import {
   saveItemsToStorage,
   loadItemsFromStorage,
-  setupClearFileHistoryOnPageClose,
+  setupPersistSavedItemsOnPageClose,
   loadPinnedKeys,
   prunePinnedKeysToSavedItems
 } from './core/persistence.js';
@@ -14,7 +14,7 @@ import {
   updateAuthIndicators,
   ensureRightOrgDistinctFromLeft
 } from './ui/orgs.js';
-import { renderSavedItems } from './ui/listUi.js';
+import { renderSavedItems, setupCompareListToolbar } from './ui/listUi.js';
 import { updateDocumentTitle } from './ui/documentMeta.js';
 import { renderEditor } from './editor/editorRender.js';
 import { updateOrgSelectorsLockedState } from './ui/viewerChrome.js';
@@ -25,6 +25,7 @@ import {
   setupDragAndDrop,
   setupDownloadAll,
   setupCopyAll,
+  setupCopyCompareLink,
   setupClearHistoryButton,
   setupRemoveAll,
   setupModifierKeyTracking,
@@ -32,10 +33,12 @@ import {
   setupSidebarToggle
 } from './setup/setupListeners.js';
 import { setupSearch, setOnAfterArtifactTypeChange } from './ui/searchSetup.js';
+import { setupQuickOpen } from './ui/quickOpen.js';
 import {
   initializeAppNavigation,
   setupAppModeTabHandlers,
-  persistAfterOperationChange
+  persistAfterOperationChange,
+  navigateToModeAndTool
 } from './ui/appModeNav.js';
 import { applyArtifactTypeUi } from './ui/artifactTypeUi.js';
 import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
@@ -47,6 +50,7 @@ import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryEx
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
 import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
 import { setupSetupAuditTrailPanel, refreshSetupAuditTrailPanel } from './ui/setupAuditTrailPanel.js';
+import { setupPermissionDiffPanel, refreshPermissionDiffPanel } from './ui/permissionDiffPanel.js';
 import { setupQuickEditPanel, refreshQuickEditPanel } from './ui/quickEditPanel.js';
 import {
   setupClearApexTestJobsOnPageClose,
@@ -60,24 +64,15 @@ import {
 } from '../shared/extensionSettings.js';
 import { UPDATE_PAGE_URL } from './core/constants.js';
 import { applyMonacoThemeGlobally } from './editor/monaco.js';
-
-/** Alinea `#typeSelect` con un ítem abierto por URL (`type` = API del metadata). */
-function operationSelectValueForItemType(itemType) {
-  const map = {
-    ApexClass: 'Apex',
-    ApexTrigger: 'Apex',
-    ApexPage: 'VF',
-    ApexComponent: 'VF',
-    LWC: 'LWC',
-    Aura: 'Aura',
-    PermissionSet: 'PermissionSet',
-    Profile: 'Profile',
-    FlexiPage: 'FlexiPage',
-    PackageXml: 'PackageXml',
-    CustomObject: 'FieldDependency'
-  };
-  return map[itemType] || '';
-}
+import {
+  parseCompareDeepLink,
+  operationSelectValueForItemType,
+  syncCompareUrlFromState
+} from './lib/compareDeepLink.js';
+import { applyDeepLinkOrgs, applyDeepLinkItemHint } from './lib/compareDeepLinkUi.js';
+import {
+  resolveLandingDiscoverBannerContent
+} from '../shared/landingDiscoverBanner.js';
 
 function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((elem) => {
@@ -103,6 +98,22 @@ function applyLandingFooterLinks() {
     tool.href = UPDATE_PAGE_URL;
     tool.textContent = UPDATE_PAGE_URL;
   }
+}
+
+/** Banner azul de descubrimiento (Quick Open); texto por i18n o version.json remoto. */
+async function applyLandingDiscoverBanner() {
+  const textEl = document.getElementById('appLandingDiscoverBannerText');
+  if (!textEl) return;
+  const lang = getCurrentLang() === 'es' ? 'es' : 'en';
+  let remote = null;
+  try {
+    const res = await bg({ type: 'version:getUpdateInfo', forceRefreshRemote: false });
+    if (res?.ok) remote = res;
+  } catch {
+    /* ignore */
+  }
+  const { html } = resolveLandingDiscoverBannerContent(remote, lang, t);
+  textEl.innerHTML = html;
 }
 
 async function applyLandingHomeBanner() {
@@ -153,6 +164,7 @@ async function init() {
     return;
   }
 
+  applyLandingDiscoverBanner();
   await applyLandingHomeBanner();
 
   await loadSavedOrgs();
@@ -161,84 +173,49 @@ async function init() {
   prunePinnedKeysToSavedItems();
 
   const typeSelect = document.getElementById('typeSelect');
-  const urlParams = new URLSearchParams(window.location.search);
-  const itemType = urlParams.get('type');
-  const itemKey = urlParams.get('key');
-  const itemFileName = urlParams.get('fileName');
-  const descriptorParam = urlParams.get('descriptor');
-  const orgIdParam = urlParams.get('orgId');
-
-  const urlOp = itemType && itemKey ? operationSelectValueForItemType(itemType) : '';
+  const urlDeepLink = parseCompareDeepLink(window.location.search);
+  const urlOp =
+    urlDeepLink.op ||
+    (urlDeepLink.itemType && urlDeepLink.itemKey
+      ? operationSelectValueForItemType(urlDeepLink.itemType)
+      : '');
 
   setOnAfterArtifactTypeChange((isUserChange) => {
+    syncCompareUrlFromState(state);
     void persistAfterOperationChange(isUserChange);
   });
 
-  await initializeAppNavigation({ urlOp });
+  if (urlDeepLink.navMode) {
+    await navigateToModeAndTool(urlDeepLink.navMode, urlOp, { userInitiated: false });
+  } else {
+    await initializeAppNavigation({ urlOp });
+  }
 
   if (typeSelect) {
     state.selectedArtifactType = typeSelect.value || '';
   }
   applyArtifactTypeUi();
 
-  if (orgIdParam) {
-    state.leftOrgId = orgIdParam;
-    const leftOrgSelect = document.getElementById('leftOrg');
-    if (leftOrgSelect) {
-      leftOrgSelect.value = orgIdParam;
-    }
+  applyDeepLinkOrgs(urlDeepLink);
+  if (urlDeepLink.leftOrgId && !urlDeepLink.rightOrgId) {
     ensureRightOrgDistinctFromLeft();
   }
-  
+
   renderSavedItems();
-  
-  if (itemType && itemKey) {
-    let targetItem = state.savedItems.find(
-      (saved) => saved.type === itemType && saved.key === itemKey
-    );
-    
-    if (!targetItem) {
-      targetItem = {
-        type: itemType,
-        key: itemKey,
-        fileName: itemFileName || undefined,
-        descriptor: descriptorParam ? JSON.parse(descriptorParam) : { name: itemKey }
-      };
-      
-      state.savedItems.push(targetItem);
-      saveItemsToStorage();
-      renderSavedItems();
-    }
-    
-    state.selectedItem = targetItem;
-    
-    setTimeout(() => {
-      try {
-        const list = document.getElementById('leftList');
-        const items = Array.from(list.querySelectorAll('li'));
-        for (const el of items) el.classList.remove('active');
-        const match = items.find(
-          (li) =>
-          li.getAttribute('data-type') === state.selectedItem.type && 
-          li.getAttribute('data-key') === state.selectedItem.key
-        );
-        if (match) {
-          match.classList.add('active');
-          match.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-        updateDocumentTitle();
-        renderEditor();
-      } catch {}
-    }, 100);
+
+  if (urlDeepLink.itemType && urlDeepLink.itemKey) {
+    setTimeout(() => applyDeepLinkItemHint(urlDeepLink), 80);
   }
   
   wireSelectors();
   setupSearch();
+  setupQuickOpen();
   setupAppModeTabHandlers();
   setupGeneratePackageXmlPanel();
   setupApexTestsPanel();
   setupAnonymousApexPanel();
   setupOrgLimitsPanel();
+  setupPermissionDiffPanel();
   setupQueryExplorerPanel();
   setupDebugLogBrowserPanel();
   setupApexCoverageComparePanel();
@@ -250,15 +227,18 @@ async function init() {
   void refreshApexTestsPanel();
   void refreshAnonymousApexPanel();
   void refreshOrgLimitsPanel();
+  void refreshPermissionDiffPanel();
   void refreshQueryExplorerPanel();
   void refreshDebugLogBrowserPanel();
   void refreshApexCoverageComparePanel();
   void refreshSetupAuditTrailPanel();
   void refreshQuickEditPanel();
   setupResizable();
+  setupCompareListToolbar();
   setupDragAndDrop();
   setupDownloadAll();
   setupCopyAll();
+  setupCopyCompareLink();
   setupRemoveAll();
   setupClearHistoryButton();
   setupModifierKeyTracking();
@@ -267,7 +247,8 @@ async function init() {
   updateOrgDropdownLayout();
   updateDocumentTitle();
   updateOrgSelectorsLockedState();
-  setupClearFileHistoryOnPageClose();
+  syncCompareUrlFromState(state);
+  setupPersistSavedItemsOnPageClose();
   setupClearApexTestJobsOnPageClose();
   setInterval(async () => {
     const auth = await bg({ type: 'auth:getStatuses', force: true });

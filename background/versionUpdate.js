@@ -48,7 +48,12 @@ export async function fetchRemoteUpdateInfo(options = {}) {
       notes_en: data.notes_en || '',
       homeBanner: typeof data.homeBanner === 'string' ? data.homeBanner : '',
       homeBanner_es: typeof data.homeBanner_es === 'string' ? data.homeBanner_es : '',
-      homeBanner_en: typeof data.homeBanner_en === 'string' ? data.homeBanner_en : ''
+      homeBanner_en: typeof data.homeBanner_en === 'string' ? data.homeBanner_en : '',
+      homeDiscoverBanner: typeof data.homeDiscoverBanner === 'string' ? data.homeDiscoverBanner : '',
+      homeDiscoverBanner_es:
+        typeof data.homeDiscoverBanner_es === 'string' ? data.homeDiscoverBanner_es : '',
+      homeDiscoverBanner_en:
+        typeof data.homeDiscoverBanner_en === 'string' ? data.homeDiscoverBanner_en : ''
     };
     latestUpdateFetchedAt = now;
     return latestUpdateInfo;
@@ -87,7 +92,10 @@ export async function getUpdateStatus(options = {}) {
     notes_en: remote.notes_en || '',
     homeBanner: remote.homeBanner || '',
     homeBanner_es: remote.homeBanner_es || '',
-    homeBanner_en: remote.homeBanner_en || ''
+    homeBanner_en: remote.homeBanner_en || '',
+    homeDiscoverBanner: remote.homeDiscoverBanner || '',
+    homeDiscoverBanner_es: remote.homeDiscoverBanner_es || '',
+    homeDiscoverBanner_en: remote.homeDiscoverBanner_en || ''
   };
 
   if (remoteParsed.major === current.major && remoteParsed.minor === current.minor) {

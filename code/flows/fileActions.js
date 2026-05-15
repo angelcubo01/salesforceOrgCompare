@@ -4,31 +4,40 @@ import { showToast } from '../ui/toast.js';
 import { getDisplayFileName } from '../lib/itemLabels.js';
 import { descriptorForFetchSource } from '../lib/sourceDescriptor.js';
 import { t } from '../../shared/i18n.js';
+import { buildComparePageUrl } from '../lib/compareDeepLink.js';
 
 export async function openFileInNewTab(item) {
   try {
-    const baseUrl = chrome.runtime.getURL('code/code.html');
-    
-    // Encode item information as URL parameters
-    const params = new URLSearchParams();
-    params.set('type', item.type);
-    params.set('key', item.key);
-    if (item.fileName) {
-      params.set('fileName', item.fileName);
-    }
-    // Include descriptor if it exists (needed for LWC bundles)
-    if (item.descriptor) {
-      params.set('descriptor', JSON.stringify(item.descriptor));
-    }
-    // Include org ID if one is selected
-    if (state.leftOrgId) {
-      params.set('orgId', state.leftOrgId);
-    }
-    
-    const url = `${baseUrl}?${params.toString()}`;
+    const prevItem = state.selectedItem;
+    state.selectedItem = item;
+    const url = buildComparePageUrl(state);
+    state.selectedItem = prevItem;
     await chrome.tabs.create({ url });
   } catch (err) {
     showToast(t('toast.fileNotInTab'), 'error');
+  }
+}
+
+/** Copia al portapapeles la URL que reproduce la comparación actual. */
+export async function copyCompareDeepLink() {
+  const url = buildComparePageUrl(state);
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(t('toast.compareLinkCopied'), 'info');
+  } catch {
+    const textArea = document.createElement('textarea');
+    textArea.value = url;
+    textArea.style.position = 'fixed';
+    textArea.style.opacity = '0';
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      showToast(t('toast.compareLinkCopied'), 'info');
+    } catch {
+      showToast(t('toast.compareLinkCopyFailed'), 'error');
+    }
+    document.body.removeChild(textArea);
   }
 }
 

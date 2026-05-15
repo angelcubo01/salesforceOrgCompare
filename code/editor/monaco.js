@@ -143,6 +143,52 @@ export async function loadMonaco() {
   });
 }
 
+/**
+ * Busca un editor standalone ya asociado al nodo contenedor.
+ * @param {import('monaco-editor')} monaco
+ * @param {HTMLElement} mount
+ */
+export function findStandaloneEditorOnMount(monaco, mount) {
+  if (!monaco?.editor?.getEditors || !mount) return null;
+  for (const ed of monaco.editor.getEditors()) {
+    try {
+      if (ed.getContainerDomNode() === mount) return ed;
+    } catch {
+      /* editor disposed */
+    }
+  }
+  return null;
+}
+
+/** Limpia restos DOM de un create anterior sin dispose (p. ej. recarga del panel). */
+export function prepareStandaloneEditorMount(mount) {
+  if (!mount) return;
+  if (mount.querySelector('.monaco-editor')) {
+    mount.replaceChildren();
+  }
+}
+
+/**
+ * Crea o reutiliza un editor en `mount` sin disparar "Element already has context attribute".
+ * @param {import('monaco-editor')} monaco
+ * @param {HTMLElement} mount
+ * @param {import('monaco-editor').editor.IStandaloneEditorConstructionOptions} options
+ * @param {import('monaco-editor').editor.IStandaloneCodeEditor | null} [cached]
+ */
+export function createStandaloneEditorSafe(monaco, mount, options, cached = null) {
+  if (cached) {
+    try {
+      if (cached.getContainerDomNode() === mount) return cached;
+    } catch {
+      /* stale reference */
+    }
+  }
+  const existing = findStandaloneEditorOnMount(monaco, mount);
+  if (existing) return existing;
+  prepareStandaloneEditorMount(mount);
+  return monaco.editor.create(mount, options);
+}
+
 export function createSingleEditor(monaco, container) {
   const wrap = state.wordWrapEnabled ? 'on' : 'off';
   const th = resolveMonacoThemeId();

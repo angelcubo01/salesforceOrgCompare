@@ -3,12 +3,13 @@ import { bg } from '../core/bridge.js';
 import { saveScrollPosition } from '../ui/scrollRestore.js';
 import { renderEditor, focusDiffAtIndex, navigateViewerChunk } from '../editor/editorRender.js';
 import { applyWordWrapToCurrentEditors } from '../editor/monaco.js';
-import { updateOrgDropdownLayout, updateAuthIndicators } from '../ui/orgs.js';
+import { updateOrgDropdownLayout, updateAuthIndicators, swapOrgs } from '../ui/orgs.js';
 import { renderSavedItems, removeAllItems } from '../ui/listUi.js';
 import { saveItemsToStorage } from '../core/persistence.js';
-import { downloadAllFiles, copyAllFileNames } from '../flows/fileActions.js';
+import { downloadAllFiles, copyAllFileNames, copyCompareDeepLink } from '../flows/fileActions.js';
 import { getTotalDiffLines } from '../editor/diffUtils.js';
 import { downloadDiffHtml } from '../editor/exportDiffHtml.js';
+import { copyUnifiedDiffToClipboard } from '../editor/exportUnifiedDiff.js';
 import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
 import { getSelectedArtifactType } from '../ui/artifactTypeUi.js';
 import { refreshGeneratePackageXmlTypes } from '../ui/generatePackageXmlPanel.js';
@@ -19,9 +20,12 @@ import { refreshQueryExplorerPanel } from '../ui/queryExplorerPanel.js';
 import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
 import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from '../ui/setupAuditTrailPanel.js';
+import { refreshPermissionDiffPanel } from '../ui/permissionDiffPanel.js';
 import { refreshQuickEditPanel } from '../ui/quickEditPanel.js';
 import { refreshApexCoverageComparePanel } from '../ui/apexCoverageComparePanel.js';
 import { t } from '../../shared/i18n.js';
+import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
+import { hideSidebarSearchResults } from '../ui/searchSetup.js';
 
 export function wireSelectors() {
   const left = document.getElementById('leftOrg');
@@ -36,8 +40,8 @@ export function wireSelectors() {
     state.leftOrgId = left.value || null;
     updateOrgDropdownLayout();
     updateAuthIndicators();
-    const results = document.getElementById('searchResults');
-    if (results) { results.style.display = 'none'; results.innerHTML = ''; }
+    hideSidebarSearchResults();
+    syncCompareUrlFromState(state);
     renderEditor({ leftChanged: true, rightChanged: false, prevLeftOrgId: prevLeft });
     if (getSelectedArtifactType() === 'GeneratePackageXml') {
       refreshGeneratePackageXmlTypes();
@@ -56,6 +60,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'OrgLimits') {
       void refreshOrgLimitsPanel();
+    }
+    if (getSelectedArtifactType() === 'PermissionDiff') {
+      void refreshPermissionDiffPanel();
     }
     if (getSelectedArtifactType() === 'DebugLogBrowser') {
       void refreshDebugLogBrowserPanel();
@@ -78,6 +85,7 @@ export function wireSelectors() {
     state.rightOrgId = right.value || null;
     updateOrgDropdownLayout();
     updateAuthIndicators();
+    syncCompareUrlFromState(state);
     renderEditor({ leftChanged: false, rightChanged: true, prevRightOrgId: prevRight });
     if (getSelectedArtifactType() === 'FieldDependency') {
       resetFieldDependencyToInitial();
@@ -90,6 +98,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'OrgLimits') {
       void refreshOrgLimitsPanel();
+    }
+    if (getSelectedArtifactType() === 'PermissionDiff') {
+      void refreshPermissionDiffPanel();
     }
     if (getSelectedArtifactType() === 'DebugLogBrowser') {
       void refreshDebugLogBrowserPanel();
@@ -110,6 +121,48 @@ export function wireSelectors() {
     if (!state.rightOrgId) return;
     await bg({ type: 'auth:reauth', orgId: state.rightOrgId });
   });
+
+  const swapBtn = document.getElementById('swapOrgsBtn');
+  if (swapBtn) {
+    swapBtn.addEventListener('click', () => {
+      void (async () => {
+        await swapOrgs();
+        if (getSelectedArtifactType() === 'GeneratePackageXml') {
+          refreshGeneratePackageXmlTypes();
+        }
+        if (getSelectedArtifactType() === 'ApexTests') {
+          void refreshApexTestsPanel();
+        }
+        if (getSelectedArtifactType() === 'FieldDependency') {
+          resetFieldDependencyToInitial();
+        }
+        if (getSelectedArtifactType() === 'AnonymousApex') {
+          void refreshAnonymousApexPanel();
+        }
+        if (getSelectedArtifactType() === 'QueryExplorer') {
+          void refreshQueryExplorerPanel();
+        }
+        if (getSelectedArtifactType() === 'OrgLimits') {
+          void refreshOrgLimitsPanel();
+        }
+        if (getSelectedArtifactType() === 'PermissionDiff') {
+          void refreshPermissionDiffPanel();
+        }
+        if (getSelectedArtifactType() === 'DebugLogBrowser') {
+          void refreshDebugLogBrowserPanel();
+        }
+        if (getSelectedArtifactType() === 'SetupAuditTrail') {
+          void refreshSetupAuditTrailPanel();
+        }
+        if (getSelectedArtifactType() === 'QuickEdit') {
+          void refreshQuickEditPanel();
+        }
+        if (getSelectedArtifactType() === 'ApexCoverageCompare') {
+          void refreshApexCoverageComparePanel();
+        }
+      })();
+    });
+  }
 }
 
 export function setupResizable() {
@@ -279,6 +332,15 @@ export function setupCopyAll() {
   }
 }
 
+export function setupCopyCompareLink() {
+  const btn = document.getElementById('copyCompareLinkBtn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      void copyCompareDeepLink();
+    });
+  }
+}
+
 export function setupClearHistoryButton() {
   const clearBtn = document.getElementById('clearHistoryButton');
   if (clearBtn) {
@@ -350,6 +412,7 @@ export function setupModifierKeyTracking() {
 export function setupDiffNavigation() {
   const prevBtn = document.getElementById('prevDiffBtn');
   const nextBtn = document.getElementById('nextDiffBtn');
+  const copyUnifiedDiffBtn = document.getElementById('copyUnifiedDiffBtn');
   const exportDiffHtmlBtn = document.getElementById('exportDiffHtmlBtn');
   const diffStatus = document.getElementById('diffStatus');
   const retrieveAllBtn = document.getElementById('retrieveAllBtn');
@@ -358,6 +421,9 @@ export function setupDiffNavigation() {
     const hasDiffs = state.diffChanges && state.diffChanges.length > 0 && state.currentDiffIndex >= 0;
     if (prevBtn) prevBtn.disabled = !hasDiffs || state.currentDiffIndex <= 0;
     if (nextBtn) nextBtn.disabled = !hasDiffs || state.currentDiffIndex >= state.diffChanges.length - 1;
+    if (copyUnifiedDiffBtn) {
+      copyUnifiedDiffBtn.disabled = !state.diffEditor || !hasDiffs;
+    }
     if (exportDiffHtmlBtn) {
       exportDiffHtmlBtn.disabled = !state.diffEditor || !hasDiffs;
     }
@@ -429,6 +495,12 @@ export function setupDiffNavigation() {
       state.wordWrapEnabled = !state.wordWrapEnabled;
       applyWordWrapToCurrentEditors();
       syncWordWrapUi();
+    });
+  }
+
+  if (copyUnifiedDiffBtn) {
+    copyUnifiedDiffBtn.addEventListener('click', () => {
+      void copyUnifiedDiffToClipboard(state);
     });
   }
 

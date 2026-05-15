@@ -3,6 +3,12 @@
  * Limitador de concurrencia para no saturar la API en búsquedas rápidas.
  */
 
+import {
+  normalizeSalesforceRestErrorBodyText,
+  salesforceRestErrorMessagesOnly,
+  salesforceRestErrorStructuredFromText
+} from './salesforceRestErrors.js';
+
 function createWindowLimiter(maxPerWindow, windowMs) {
   const stamps = [];
   async function acquire() {
@@ -48,173 +54,6 @@ function nextPathFromRecordsUrl(nextRecordsUrl) {
   if (nextRecordsUrl == null || nextRecordsUrl === '') return null;
   const next = String(nextRecordsUrl);
   return next.startsWith('http') ? new URL(next).pathname + new URL(next).search : next;
-}
-
-/**
- * Quita BOM y prefijos anti–JSON hijacking que a veces devuelve la API REST/Tooling.
- * @param {string} raw
- * @returns {string}
- */
-function normalizeSalesforceRestErrorBodyText(raw) {
-  let t = String(raw || '').trim();
-  if (!t) return '';
-  if (t.charCodeAt(0) === 0xfeff) t = t.slice(1).trim();
-  // Prefijo típico en respuestas GET de Salesforce (array/objeto en JSON).
-  if (t.startsWith(")]}'")) {
-    const nl = t.indexOf('\n');
-    t = (nl >= 0 ? t.slice(nl + 1) : t.slice(4)).trim();
-  }
-  if (t.startsWith('while(1);')) t = t.slice('while(1);'.length).trim();
-  return t;
-}
-
-/** @param {unknown} parsed @param {string[]} msgs */
-function collectSalesforceRestErrorMessages(parsed, msgs) {
-  const pushMsg = (m) => {
-    if (m == null) return;
-    const s = String(m).trim();
-    if (s) msgs.push(s);
-  };
-
-  /** @param {unknown} node */
-  function walk(node) {
-    if (node == null) return;
-    if (Array.isArray(node)) {
-      for (const item of node) walk(item);
-      return;
-    }
-    if (typeof node !== 'object') return;
-    const o = /** @type {Record<string, unknown>} */ (node);
-    const top =
-      o.message != null
-        ? o.message
-        : o.Message != null
-          ? o.Message
-          : o.error && typeof o.error === 'object' && /** @type {Record<string, unknown>} */ (o.error).message != null
-            ? /** @type {Record<string, unknown>} */ (o.error).message
-            : null;
-    if (top != null) pushMsg(top);
-    if (Array.isArray(o.errors)) {
-      for (const item of o.errors) walk(item);
-    }
-  }
-
-  walk(parsed);
-}
-
-/**
- * Último recurso si `JSON.parse` falla: extrae valores de propiedades "message" en texto.
- * @param {string} t
- * @param {string[]} msgs
- */
-function salesforceRestErrorMessagesRegexFallback(t, msgs) {
-  const re = /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/gi;
-  let m;
-  while ((m = re.exec(t)) !== null) {
-    try {
-      msgs.push(JSON.parse(`"${m[1]}"`));
-    } catch {
-      msgs.push(m[1]);
-    }
-  }
-}
-
-/**
- * Solo textos `message` del cuerpo de error típico de Salesforce (array u objeto).
- * Si no hay JSON reconocible, devuelve el texto en bruto recortado.
- * @param {string} text
- * @returns {string}
- */
-function salesforceRestErrorMessagesOnly(text) {
-  const original = String(text || '').trim();
-  if (!original) return '';
-  const t = normalizeSalesforceRestErrorBodyText(original);
-
-  /** @type {string[]} */
-  const msgs = [];
-
-  /** @param {string} s */
-  function parsePayload(s) {
-    try {
-      return JSON.parse(s);
-    } catch {
-      return null;
-    }
-  }
-
-  let parsed = parsePayload(t);
-  if (typeof parsed === 'string') {
-    const inner = parsed.trim();
-    if (inner.startsWith('[') || inner.startsWith('{')) {
-      const again = parsePayload(inner);
-      if (again != null) parsed = again;
-    }
-  }
-
-  if (parsed != null) {
-    collectSalesforceRestErrorMessages(parsed, msgs);
-    if (msgs.length) return msgs.join('\n');
-  }
-
-  salesforceRestErrorMessagesRegexFallback(t, msgs);
-  if (msgs.length) return msgs.join('\n');
-
-  return t || original;
-}
-
-/**
- * Primer(es) error(es) Salesforce REST: mensaje(s) y código del primer ítem con errorCode.
- * @param {string} raw
- * @returns {{ message: string, errorCode: string }}
- */
-function salesforceRestErrorStructuredFromText(raw) {
-  const normalized = normalizeSalesforceRestErrorBodyText(String(raw || ''));
-  /** @type {{ message: string, errorCode: string }} */
-  const out = { message: '', errorCode: '' };
-  if (!normalized) return out;
-  /** @param {unknown} parsed */
-  function fromParsed(parsed) {
-    /** @type {{ message: string, code: string }[]} */
-    const items = [];
-    const pushItem = (msg, code) => {
-      const m = String(msg || '').trim();
-      if (!m) return;
-      items.push({ message: m, code: code != null ? String(code) : '' });
-    };
-    if (Array.isArray(parsed)) {
-      for (const it of parsed) {
-        if (it && typeof it === 'object') {
-          const o = /** @type {Record<string, unknown>} */ (it);
-          if (o.message != null) pushItem(o.message, o.errorCode ?? o.ErrorCode);
-        }
-      }
-    } else if (parsed && typeof parsed === 'object') {
-      const o = /** @type {Record<string, unknown>} */ (parsed);
-      if (o.message != null) pushItem(o.message, o.errorCode ?? o.ErrorCode);
-      const errors = o.errors;
-      if (Array.isArray(errors)) {
-        for (const it of errors) {
-          if (it && typeof it === 'object') {
-            const eo = /** @type {Record<string, unknown>} */ (it);
-            if (eo.message != null) pushItem(eo.message, eo.errorCode ?? eo.ErrorCode);
-          }
-        }
-      }
-    }
-    if (!items.length) return;
-    out.message = items.map((i) => i.message).join('\n\n');
-    out.errorCode = items[0].code || '';
-  }
-  let parsed = null;
-  try {
-    parsed = JSON.parse(normalized);
-  } catch {
-    out.message = normalized;
-    return out;
-  }
-  fromParsed(parsed);
-  if (!out.message) out.message = normalized;
-  return out;
 }
 
 /**
@@ -716,6 +555,102 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
         `SELECT DeveloperName FROM FlexiPage ${q} ORDER BY DeveloperName LIMIT 50`
       );
       return rows.map(r => ({ type, name: r.DeveloperName }));
+    }
+    default:
+      return [];
+  }
+}
+
+/**
+ * Lista todos los nombres indexables de un tipo (pagina hasta agotar resultados).
+ * Para Quick Open y búsqueda local sin depender del límite de 50 con prefijo vacío.
+ */
+export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
+  switch (type) {
+    case 'ApexClass': {
+      const rows = await restQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Name FROM ApexClass ORDER BY Name'
+      );
+      return rows.map((r) => ({ type, name: r.Name }));
+    }
+    case 'ApexTrigger': {
+      const rows = await restQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Name FROM ApexTrigger ORDER BY Name'
+      );
+      return rows.map((r) => ({ type, name: r.Name }));
+    }
+    case 'ApexPage': {
+      const rows = await restQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Name FROM ApexPage ORDER BY Name'
+      );
+      return rows.map((r) => ({ type, name: r.Name }));
+    }
+    case 'ApexComponent': {
+      const rows = await restQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Name FROM ApexComponent ORDER BY Name'
+      );
+      return rows.map((r) => ({ type, name: r.Name }));
+    }
+    case 'LWC': {
+      const rows = await toolingQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Id, DeveloperName FROM LightningComponentBundle ORDER BY DeveloperName'
+      );
+      return rows.map((r) => ({ type, id: r.Id, developerName: r.DeveloperName }));
+    }
+    case 'Aura': {
+      const rows = await toolingQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Id, DeveloperName FROM AuraDefinitionBundle ORDER BY DeveloperName'
+      );
+      return rows.map((r) => ({ type, id: r.Id, developerName: r.DeveloperName }));
+    }
+    case 'PermissionSet': {
+      const rows = await restQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Name, NamespacePrefix FROM PermissionSet ORDER BY Name'
+      );
+      return rows.map((r) => {
+        const ns = (r.NamespacePrefix || '').trim();
+        const name = (r.Name || '').trim();
+        return { type, name: ns ? `${ns}__${name}` : name };
+      });
+    }
+    case 'Profile': {
+      const rows = await restQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT Name FROM Profile ORDER BY Name'
+      );
+      return rows.map((r) => ({ type, name: r.Name }));
+    }
+    case 'FlexiPage': {
+      const rows = await toolingQueryAll(
+        instanceUrl,
+        sid,
+        apiVersion,
+        'SELECT DeveloperName FROM FlexiPage ORDER BY DeveloperName'
+      );
+      return rows.map((r) => ({ type, name: r.DeveloperName }));
     }
     default:
       return [];

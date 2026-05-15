@@ -34,6 +34,24 @@ function touchDiffPreparedCache(key, value) {
   }
 }
 
+export function clearDiffPreparedCache() {
+  diffPreparedLru.clear();
+}
+
+/** Resuelve ficheros de un lado sin API (tras intercambio de orgs). */
+function filesForSideFromMemory(item, itemKey, side) {
+  const cached = side === 'left' ? state.cachedLeft : state.cachedRight;
+  if (cached?.itemKey === itemKey && Array.isArray(cached.files) && cached.files.length) {
+    return cached.files;
+  }
+  const content = side === 'left' ? state.lastLeftContent : state.lastRightContent;
+  const name = item?.fileName || (side === 'left' ? 'left.txt' : 'right.txt');
+  if (content != null && content !== '') {
+    return [{ fileName: name, content }];
+  }
+  return [];
+}
+
 function diffPreparedCacheKey(itemKey, leftOrgId, rightOrgId, l, r) {
   const lSig = `${l.fileName || ''}\t${l.lastModifiedDate || ''}\t${(l.content || '').length}`;
   const rSig = `${r.fileName || ''}\t${r.lastModifiedDate || ''}\t${(r.content || '').length}`;
@@ -51,6 +69,32 @@ export function disposeDiffEditorModels() {
   } catch {}
 }
 
+/** Cierra editores Monaco y oculta el visor (estado vacío tras cambio de menú o sin fichero). */
+export function resetMonacoComparisonView() {
+  disposeDiffEditorModels();
+  if (state.diffListenerDisposable) {
+    try {
+      state.diffListenerDisposable.dispose();
+    } catch {}
+    state.diffListenerDisposable = null;
+  }
+  try {
+    if (state.diffEditor) {
+      state.diffEditor.dispose();
+      state.diffEditor = null;
+    }
+    if (state.editor) {
+      state.editor.dispose();
+      state.editor = null;
+    }
+  } catch {}
+  state.diffChanges = [];
+  const container = document.getElementById('monacoContainer');
+  if (container) container.style.display = 'none';
+  const diffStatus = document.getElementById('diffStatus');
+  if (diffStatus) diffStatus.textContent = t('diff.noDifferences');
+}
+
 function disposeSingleEditorModel() {
   if (!state.editor) return;
   try {
@@ -61,6 +105,7 @@ function disposeSingleEditorModel() {
 
 export async function renderEditor(opts = {}) {
   if (isFullScreenToolMode()) {
+    if (!state.selectedItem) resetMonacoComparisonView();
     return;
   }
 
@@ -73,10 +118,13 @@ export async function renderEditor(opts = {}) {
   const retrieveAllBtn = document.getElementById('retrieveAllBtn');
   const leftChanged = opts.leftChanged === true;
   const rightChanged = opts.rightChanged === true;
+  const orgSwap = opts.orgSwap === true;
   const itemKey = getItemKey(item);
 
+  if (orgSwap) clearDiffPreparedCache();
+
   /** Spinner durante toda la carga (auth, fetch, Monaco, diff), solo si hay fichero y al menos una org. */
-  const trackLoading = !!(item && (leftOrgId || rightOrgId));
+  const trackLoading = !orgSwap && !!(item && (leftOrgId || rightOrgId));
 
   try {
     if (trackLoading) {
@@ -180,6 +228,7 @@ export async function renderEditor(opts = {}) {
   noOrgMessage.style.display = 'none';
 
   if (!item) {
+    resetMonacoComparisonView();
     updateFileMeta(null, null, !!rightOrgId);
     if (retrieveAllBtn) {
       retrieveAllBtn.classList.add('hidden');
@@ -193,8 +242,18 @@ export async function renderEditor(opts = {}) {
 
     if (!state.monaco) state.monaco = await loadMonaco();
 
-  const useCachedLeft = rightChanged && state.cachedLeft && state.cachedLeft.itemKey === itemKey && state.cachedLeft.orgId === leftOrgId;
-  const useCachedRight = leftChanged && state.cachedRight && state.cachedRight.itemKey === itemKey && state.cachedRight.orgId === rightOrgId;
+  const useCachedLeft = orgSwap
+    ? !!(state.cachedLeft && state.cachedLeft.itemKey === itemKey)
+    : rightChanged &&
+      state.cachedLeft &&
+      state.cachedLeft.itemKey === itemKey &&
+      state.cachedLeft.orgId === leftOrgId;
+  const useCachedRight = orgSwap
+    ? !!(state.cachedRight && state.cachedRight.itemKey === itemKey)
+    : leftChanged &&
+      state.cachedRight &&
+      state.cachedRight.itemKey === itemKey &&
+      state.cachedRight.orgId === rightOrgId;
 
   const isLocalPackageXml = item?.type === 'PackageXml' && item.descriptor?.source === 'localFile';
   const isRetrieveZipFile =
@@ -221,6 +280,8 @@ export async function renderEditor(opts = {}) {
       }
     } else if (useCachedLeft) {
       left = state.cachedLeft.files || [];
+    } else if (orgSwap) {
+      left = filesForSideFromMemory(item, itemKey, 'left');
     } else {
       const leftFiles = await bg({
         type: 'fetchSource',
@@ -255,6 +316,8 @@ export async function renderEditor(opts = {}) {
       }
     } else if (useCachedRight) {
       right = state.cachedRight.files || [];
+    } else if (orgSwap) {
+      right = filesForSideFromMemory(item, itemKey, 'right');
     } else {
       const rightFiles = await bg({
         type: 'fetchSource',
@@ -277,7 +340,7 @@ export async function renderEditor(opts = {}) {
     item.type !== 'Profile' &&
     item.type !== 'FlexiPage' &&
     item.type !== 'PackageXml';
-  if (logOnRender) {
+  if (logOnRender && !orgSwap) {
     try {
       await bg({
         type: 'usage:log',
@@ -413,6 +476,60 @@ export async function renderEditor(opts = {}) {
   const rightRaw = r.content || '';
   const maxIn = Math.max(leftRaw.length, rightRaw.length);
   const useNativeDiff = maxIn <= getNativeDiffMaxChars();
+
+  if (orgSwap && state.diffEditor && useNativeDiff) {
+    const existing = state.diffEditor.getModel();
+    if (existing?.original && existing?.modified) {
+      clearViewerChunkState();
+      state.lastLeftContent = leftRaw;
+      state.lastRightContent = rightRaw;
+      existing.original.setValue(leftRaw);
+      existing.modified.setValue(rightRaw);
+      const onDiffReady = () => {
+        try {
+          const lineChanges = state.diffEditor ? (state.diffEditor.getLineChanges() || []) : [];
+          state.diffChanges = lineChanges;
+          if (!lineChanges.length) {
+            state.currentDiffIndex = -1;
+            if (diffStatus) diffStatus.textContent = t('diff.noDifferences');
+          } else {
+            state.currentDiffIndex = 0;
+            const totalLines = getTotalDiffLines(lineChanges);
+            if (diffStatus) {
+              diffStatus.textContent = t('diff.status', {
+                current: 1,
+                total: lineChanges.length,
+                lines: totalLines
+              });
+            }
+          }
+          if (typeof state.updateDiffNavButtons === 'function') state.updateDiffNavButtons();
+        } catch {
+          state.diffChanges = [];
+          state.currentDiffIndex = -1;
+          if (diffStatus) diffStatus.textContent = t('diff.noDifferences');
+        }
+      };
+      restoreScrollPosition(item, leftOrgId, rightOrgId);
+      updateFileMeta(l, r, true);
+      if (retrieveAllBtn) {
+        const hasRetrieveType =
+          item.type === 'PermissionSet' ||
+          item.type === 'Profile' ||
+          item.type === 'FlexiPage' ||
+          (item.type === 'PackageXml' && item.descriptor?.source === 'localFile');
+        if (hasRetrieveType && leftOrgId && rightOrgId) {
+          retrieveAllBtn.classList.remove('hidden');
+          retrieveAllBtn.disabled = false;
+        } else {
+          retrieveAllBtn.classList.add('hidden');
+          retrieveAllBtn.disabled = true;
+        }
+      }
+      setTimeout(onDiffReady, 50);
+      return;
+    }
+  }
 
   if (useNativeDiff) {
     // --- Native Monaco diff: raw texts, Monaco computes diff internally ---

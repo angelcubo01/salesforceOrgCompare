@@ -1,7 +1,9 @@
 import { state } from '../core/state.js';
 import { APP_NAV_DEVELOPMENT_TOOLS } from '../core/constants.js';
 import { t } from '../../shared/i18n.js';
-import { handleArtifactTypeSelectChange } from './searchSetup.js';
+import { clearComparisonSelection, handleArtifactTypeSelectChange } from './searchSetup.js';
+import { resetMonacoComparisonView } from '../editor/editorRender.js';
+import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 
 export const NAV_PREFS_KEY = 'sfocAppNavPrefs';
 
@@ -11,11 +13,11 @@ export const MODE_TOOLS = {
   compare: ['Apex', 'LWC', 'Aura', 'VF'],
   security: ['PermissionSet', 'Profile', 'FlexiPage'],
   development: [...APP_NAV_DEVELOPMENT_TOOLS],
-  monitoring: ['OrgLimits', 'SetupAuditTrail', 'FieldDependency'],
+  monitoring: ['OrgLimits', 'SetupAuditTrail', 'FieldDependency', 'PermissionDiff'],
   manifests: ['GeneratePackageXml', 'PackageXml']
 };
 
-const TOOL_I18N = {
+export const TOOL_I18N = {
   Apex: 'code.opApex',
   LWC: 'code.opLwc',
   Aura: 'code.opAura',
@@ -32,6 +34,7 @@ const TOOL_I18N = {
   OrgLimits: 'code.opOrgLimits',
   SetupAuditTrail: 'code.opSetupAuditTrail',
   FieldDependency: 'code.opFieldDep',
+  PermissionDiff: 'code.opPermissionDiff',
   GeneratePackageXml: 'code.opPkgGenerate',
   PackageXml: 'code.opPkgCompare'
 };
@@ -91,6 +94,19 @@ export function populateModeSubmenus() {
     }
   });
   syncTabSelection();
+}
+
+/** Todas las herramientas navegables (modo + id + etiqueta traducida). */
+export function listAllNavTools() {
+  /** @type {{ mode: keyof typeof MODE_TOOLS, tool: string, label: string }[]} */
+  const out = [];
+  for (const [mode, tools] of Object.entries(MODE_TOOLS)) {
+    for (const tool of tools) {
+      const key = /** @type {keyof typeof TOOL_I18N} */ (tool);
+      out.push({ mode, tool, label: t(TOOL_I18N[key] || tool) });
+    }
+  }
+  return out;
 }
 
 /** @param {string} tool */
@@ -273,11 +289,11 @@ export async function navigateToModeAndTool(mode, tool, opts = {}) {
 
   if (mode === APP_NAV_MODE_HOME) {
     sel.value = '';
+    clearComparisonSelection();
     await persistModeAndTools('');
     const { applyArtifactTypeUi } = await import('./artifactTypeUi.js');
     applyArtifactTypeUi();
-    const { renderEditor } = await import('../editor/editorRender.js');
-    renderEditor();
+    resetMonacoComparisonView();
     return;
   }
 
@@ -285,6 +301,7 @@ export async function navigateToModeAndTool(mode, tool, opts = {}) {
   const pick = tool && tools.includes(tool) ? tool : prefsDefaultTool(mode);
   sel.value = pick;
   handleArtifactTypeSelectChange({ isUserChange: userInitiated });
+  syncCompareUrlFromState(state);
 }
 
 /**

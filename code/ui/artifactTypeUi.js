@@ -4,6 +4,8 @@ import { updateOrgDropdownLayout, updateAuthIndicators } from './orgs.js';
 import { updateOrgSelectorsLockedState } from './viewerChrome.js';
 import { updateDocumentTitle } from './documentMeta.js';
 import { t } from '../../shared/i18n.js';
+import { hideSidebarSearchResults } from './searchSetup.js';
+import { syncCompareListToolbarVisibility } from './listUi.js';
 
 export function getSelectedArtifactType() {
   const el = document.getElementById('typeSelect');
@@ -42,6 +44,10 @@ export function isSetupAuditTrailMode() {
   return getSelectedArtifactType() === 'SetupAuditTrail';
 }
 
+export function isPermissionDiffMode() {
+  return getSelectedArtifactType() === 'PermissionDiff';
+}
+
 export function isQuickEditMode() {
   return getSelectedArtifactType() === 'QuickEdit';
 }
@@ -65,6 +71,7 @@ export function isFullScreenToolMode() {
     isOrgLimitsMode() ||
     isDebugLogBrowserMode() ||
     isSetupAuditTrailMode() ||
+    isPermissionDiffMode() ||
     isQuickEditMode() ||
     isApexCoverageCompareMode()
   );
@@ -122,6 +129,7 @@ export function applyArtifactTypeUi() {
   const isOrgLimits = op === 'OrgLimits';
   const isDebugLogs = op === 'DebugLogBrowser';
   const isSetupAudit = op === 'SetupAuditTrail';
+  const isPermissionDiff = op === 'PermissionDiff';
   const isFieldDep = op === 'FieldDependency';
   const isQuickEdit = op === 'QuickEdit';
   const isApexCoverageCompare = op === 'ApexCoverageCompare';
@@ -145,6 +153,11 @@ export function applyArtifactTypeUi() {
   document.body.classList.toggle('artifact-org-limits', isOrgLimits);
   document.body.classList.toggle('artifact-debug-log-browser', isDebugLogs);
   document.body.classList.toggle('artifact-setup-audit-trail', isSetupAudit);
+  document.body.classList.toggle('artifact-permission-diff', isPermissionDiff);
+  document.body.classList.toggle(
+    'artifact-permission-diff-compare',
+    isPermissionDiff && !!state.permissionDiffCompareMode
+  );
   document.body.classList.toggle('artifact-quick-edit', isQuickEdit);
   document.body.classList.toggle('artifact-apex-coverage-compare', isApexCoverageCompare);
   document.body.classList.toggle(
@@ -156,7 +169,8 @@ export function applyArtifactTypeUi() {
   const searchPanel = document.getElementById('searchPanel');
   const packagePanel = document.getElementById('packageXmlPanel');
   const clearBtn = document.getElementById('clearHistoryButton');
-  const leftList = document.getElementById('leftList');
+  const compareListBody = document.getElementById('compareListBody');
+  const compareListToolbar = document.getElementById('compareListToolbar');
   const standardPanel = document.getElementById('standardComparePanel');
   const genPanel = document.getElementById('generatePackageXmlPanel');
   const apexTestsPanel = document.getElementById('apexTestsPanel');
@@ -166,9 +180,9 @@ export function applyArtifactTypeUi() {
   const orgLimitsPanel = document.getElementById('orgLimitsPanel');
   const debugLogsPanel = document.getElementById('debugLogBrowserPanel');
   const setupAuditPanel = document.getElementById('setupAuditTrailPanel');
+  const permissionDiffPanel = document.getElementById('permissionDiffPanel');
   const quickEditPanel = document.getElementById('quickEditPanel');
   const apexCoverageComparePanel = document.getElementById('apexCoverageComparePanel');
-  const results = document.getElementById('searchResults');
   const orgDropdowns = document.getElementById('orgDropdowns');
   const landingPanel = document.getElementById('appLandingPanel');
 
@@ -182,7 +196,8 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -192,12 +207,10 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
-    if (results) {
-      results.style.display = 'none';
-      results.innerHTML = '';
-    }
+    hideSidebarSearchResults();
     syncSearchInputState();
     updateOrgDropdownLayout();
     updateAuthIndicators();
@@ -214,7 +227,8 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -224,6 +238,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
 
@@ -244,7 +259,8 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.remove('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -254,6 +270,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
@@ -284,7 +301,8 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -294,6 +312,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
@@ -319,7 +338,8 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -329,6 +349,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     const rightQx = document.getElementById('rightOrg');
@@ -350,11 +371,49 @@ export function applyArtifactTypeUi() {
         rightReauthQx.disabled = true;
       }
     }
+  } else if (isPermissionDiff) {
+    searchPanel?.classList.add('hidden');
+    packagePanel?.classList.add('hidden');
+    clearBtn?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
+    standardPanel?.classList.add('hidden');
+    genPanel?.classList.add('hidden');
+    apexTestsPanel?.classList.add('hidden');
+    fieldDepPanel?.classList.add('hidden');
+    anonymousApexPanel?.classList.add('hidden');
+    queryExplorerPanel?.classList.add('hidden');
+    orgLimitsPanel?.classList.add('hidden');
+    debugLogsPanel?.classList.add('hidden');
+    setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.remove('hidden');
+    quickEditPanel?.classList.add('hidden');
+    apexCoverageComparePanel?.classList.add('hidden');
+    const rightPd = document.getElementById('rightOrg');
+    const rightReauthPd = document.getElementById('rightReauthBtn');
+    if (state.permissionDiffCompareMode) {
+      if (rightPd) rightPd.disabled = false;
+      if (rightReauthPd) {
+        rightReauthPd.disabled = false;
+        rightReauthPd.classList.remove('hidden');
+      }
+    } else {
+      state.rightOrgId = null;
+      if (rightPd) {
+        rightPd.value = '';
+        rightPd.disabled = true;
+      }
+      if (rightReauthPd) {
+        rightReauthPd.classList.add('hidden');
+        rightReauthPd.disabled = true;
+      }
+    }
   } else if (isOrgLimits) {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -364,6 +423,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.remove('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
@@ -399,7 +459,8 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -409,6 +470,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.remove('hidden');
     const right = document.getElementById('rightOrg');
@@ -422,7 +484,8 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.add('hidden');
     packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
-    leftList?.classList.add('hidden');
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -432,6 +495,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
 
@@ -449,7 +513,7 @@ export function applyArtifactTypeUi() {
     searchPanel?.classList.toggle('hidden', isPkg);
     packagePanel?.classList.toggle('hidden', !isPkg);
     clearBtn?.classList.remove('hidden');
-    leftList?.classList.remove('hidden');
+    compareListBody?.classList.remove('hidden');
     standardPanel?.classList.remove('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -459,6 +523,7 @@ export function applyArtifactTypeUi() {
     orgLimitsPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
 
@@ -474,22 +539,21 @@ export function applyArtifactTypeUi() {
   }
 
   if (
-    results &&
-    (isGen ||
-      isApexTests ||
-      isAnonymousApex ||
-      isQueryExplorer ||
-      isOrgLimits ||
-      isDebugLogs ||
-      isSetupAudit ||
-      isFieldDep ||
-      isQuickEdit ||
-      isApexCoverageCompare ||
-      op === 'PackageXml' ||
-      isNone)
+    isGen ||
+    isApexTests ||
+    isAnonymousApex ||
+    isQueryExplorer ||
+    isOrgLimits ||
+    isPermissionDiff ||
+    isDebugLogs ||
+    isSetupAudit ||
+    isFieldDep ||
+    isQuickEdit ||
+    isApexCoverageCompare ||
+    op === 'PackageXml' ||
+    isNone
   ) {
-    results.style.display = 'none';
-    results.innerHTML = '';
+    hideSidebarSearchResults();
   }
 
   syncSearchInputState();
@@ -499,4 +563,5 @@ export function applyArtifactTypeUi() {
   updateOrgSelectorsLockedState();
   updateDocumentTitle();
   syncHomeLayoutChrome();
+  syncCompareListToolbarVisibility();
 }

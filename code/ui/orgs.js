@@ -3,6 +3,9 @@ import { bg } from '../core/bridge.js';
 import { option } from '../core/persistence.js';
 import { t } from '../../shared/i18n.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
+import { getFileKey } from '../lib/itemLabels.js';
+import { saveScrollPosition } from './scrollRestore.js';
+import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 
 export async function loadSavedOrgs() {
   const [res, auth, extras] = await Promise.all([
@@ -37,6 +40,7 @@ export async function loadSavedOrgs() {
   }
   ensureRightOrgDistinctFromLeft();
   updateAuthIndicators();
+  updateOrgSwapButtonState();
 }
 
 /** Si izquierda y derecha son la misma org con ≥2 guardadas, asigna a la derecha otra distinta (p. ej. tras ?orgId=). */
@@ -76,6 +80,30 @@ export function updateOrgDropdownLayout() {
     leftDropdown.classList.remove('single-mode');
     return;
   }
+  if (
+    document.body.classList.contains('artifact-permission-diff') &&
+    !document.body.classList.contains('artifact-permission-diff-compare')
+  ) {
+    rightDropdown.classList.add('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
+  if (
+    document.body.classList.contains('artifact-anonymous-apex') &&
+    !document.body.classList.contains('artifact-anonymous-apex-compare')
+  ) {
+    rightDropdown.classList.add('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
+  if (
+    document.body.classList.contains('artifact-query-explorer') &&
+    !document.body.classList.contains('artifact-query-explorer-compare')
+  ) {
+    rightDropdown.classList.add('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
   if (document.body.classList.contains('artifact-field-dependency')) {
     rightDropdown.classList.remove('hidden');
     leftDropdown.classList.remove('single-mode');
@@ -97,6 +125,109 @@ export function updateOrgDropdownLayout() {
     leftDropdown.classList.remove('single-mode');
     rightDropdown.classList.remove('hidden');
   }
+  updateOrgSwapButtonState();
+}
+
+function migrateScrollPositionsOnSwap(item, prevLeftOrgId, prevRightOrgId) {
+  if (!item || !prevLeftOrgId || !prevRightOrgId) return;
+  const oldKey = getFileKey(item, prevLeftOrgId, prevRightOrgId);
+  const newKey = getFileKey(item, prevRightOrgId, prevLeftOrgId);
+  const pos = state.scrollPositions[oldKey];
+  if (!pos) return;
+  if (pos.original !== undefined && pos.modified !== undefined) {
+    state.scrollPositions[newKey] = { original: pos.modified, modified: pos.original };
+  } else if (pos.single !== undefined) {
+    state.scrollPositions[newKey] = { single: pos.single };
+  }
+  delete state.scrollPositions[oldKey];
+}
+
+/** Intercambia org izquierda/derecha y el contenido del diff Monaco. */
+export async function swapOrgs() {
+  if (!state.leftOrgId || !state.rightOrgId) return;
+
+  const leftSelect = document.getElementById('leftOrg');
+  const rightSelect = document.getElementById('rightOrg');
+  if (!leftSelect || !rightSelect) return;
+
+  const prevLeft = state.leftOrgId;
+  const prevRight = state.rightOrgId;
+
+  if (state.selectedItem) {
+    saveScrollPosition(state.selectedItem, prevLeft, prevRight);
+    migrateScrollPositionsOnSwap(state.selectedItem, prevLeft, prevRight);
+  }
+
+  state.leftOrgId = prevRight;
+  state.rightOrgId = prevLeft;
+  leftSelect.value = state.leftOrgId || '';
+  rightSelect.value = state.rightOrgId || '';
+
+  const tmpCache = state.cachedLeft;
+  state.cachedLeft = state.cachedRight;
+  state.cachedRight = tmpCache;
+
+  const tmpLeftContent = state.lastLeftContent;
+  state.lastLeftContent = state.lastRightContent;
+  state.lastRightContent = tmpLeftContent;
+
+  for (const pk of Object.keys(state.packageRetrieveZipCache)) {
+    const c = state.packageRetrieveZipCache[pk];
+    if (c && c.leftByPath && c.rightByPath) {
+      const tmpPaths = c.leftByPath;
+      c.leftByPath = c.rightByPath;
+      c.rightByPath = tmpPaths;
+    }
+  }
+
+  updateOrgDropdownLayout();
+  updateAuthIndicators();
+  syncCompareUrlFromState(state);
+
+  const { hideSidebarSearchResults } = await import('./searchSetup.js');
+  hideSidebarSearchResults();
+
+  swapViewerChunkState();
+
+  const { renderEditor } = await import('../editor/editorRender.js');
+  await renderEditor({
+    orgSwap: true,
+    prevLeftOrgId: prevLeft,
+    prevRightOrgId: prevRight
+  });
+}
+
+/** Intercambia textos completos en el estado de fragmentos del visor (sin nuevo retrieve). */
+function swapViewerChunkState() {
+  const vc = state.viewerChunk;
+  if (!vc) return;
+  if (vc.mode === 'diffAligned') {
+    const tmpFull = vc.leftFull;
+    vc.leftFull = vc.rightFull;
+    vc.rightFull = tmpFull;
+    const tmpName = vc.lFileName;
+    vc.lFileName = vc.rFileName;
+    vc.rFileName = tmpName;
+  } else if (vc.mode === 'diffParallel') {
+    const tmpFull = vc.fullLeft;
+    vc.fullLeft = vc.fullRight;
+    vc.fullRight = tmpFull;
+    const tmpName = vc.lFileName;
+    vc.lFileName = vc.rFileName;
+    vc.rFileName = tmpName;
+  }
+}
+
+export function updateOrgSwapButtonState() {
+  const btn = document.getElementById('swapOrgsBtn');
+  if (!btn) return;
+  const rightDropdown = document.querySelector('.org-dropdown-right');
+  const rightHidden = rightDropdown?.classList.contains('hidden');
+  const editor = document.getElementById('editorContainer');
+  const locked = editor?.classList.contains('org-selectors-locked');
+  const canSwap = !!state.leftOrgId && !!state.rightOrgId && !rightHidden && !locked;
+  btn.classList.toggle('hidden', !canSwap);
+  btn.disabled = !canSwap;
 }
 
 export function updateAuthIndicators() {
@@ -129,6 +260,7 @@ export function updateAuthIndicators() {
     rightSelect.classList.remove('auth-active', 'auth-expired');
     rightReauth.classList.add('hidden');
   }
+  updateOrgSwapButtonState();
 }
 
 export async function refreshAuthStatuses() {

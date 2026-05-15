@@ -48,10 +48,14 @@ export function updateFileMeta(leftFile, rightFile, hasRightOrg) {
       return;
     }
 
-    leftSpan.textContent = formatLastModified(leftFile || {});
+    const leftText = formatLastModified(leftFile || {});
+    leftSpan.textContent = leftText;
+    leftSpan.title = leftText;
 
     if (hasRightOrg) {
-      rightSpan.textContent = formatLastModified(rightFile || {});
+      const rightText = formatLastModified(rightFile || {});
+      rightSpan.textContent = rightText;
+      rightSpan.title = rightText;
       row.classList.remove('single-side');
     } else {
       rightSpan.textContent = '';
@@ -90,6 +94,10 @@ export function updateDocumentTitle() {
   }
   if (state.selectedArtifactType === 'OrgLimits') {
     document.title = t('docTitle.orgLimits');
+    return;
+  }
+  if (state.selectedArtifactType === 'PermissionDiff') {
+    document.title = t('docTitle.permissionDiff');
     return;
   }
   if (state.selectedArtifactType === 'QueryExplorer') {

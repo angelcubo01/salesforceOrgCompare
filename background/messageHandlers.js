@@ -52,9 +52,19 @@ import {
   retrievePackageXmlZip,
   describeMetadata,
   listMetadataWithFolderFallback,
+  buildQuickOpenMetadataIndex,
   createDeployZipBase64,
   deployAndWait
 } from '../shared/metadataRetrieve.js';
+import {
+  fetchPermissionContainerData,
+  searchPermissionContainers,
+  fetchAccessByResource,
+  searchPermissionResources,
+  searchPermissionDiffInteractive,
+  searchCustomPermissions,
+  fetchAssignmentsForCustomPermission
+} from '../shared/permissionsDiffApi.js';
 import { indexCache, sourceCache, versionCache, authStatusCache } from './caches.js';
 import { DEBUG_LOGS } from './config.js';
 import { appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
@@ -462,6 +472,31 @@ export function installMessageHandlers() {
                 sourceCache.clear();
               }
               sendResponse({ ok: false, error: 'Request failed. Please retry or re-authenticate.' });
+            }
+            break;
+          }
+          case 'quickOpen:buildIndex': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) throw new Error('Org not saved');
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+
+            try {
+              const items = await buildQuickOpenMetadataIndex(
+                org.instanceUrl,
+                sid,
+                org.apiVersion
+              );
+              sendResponse({ ok: true, items });
+            } catch (e) {
+              if (e && (e.status === 401 || e.status === 403)) {
+                indexCache.clear();
+                sourceCache.clear();
+              }
+              sendResponse({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1137,6 +1172,221 @@ export function installMessageHandlers() {
             try {
               const limits = await fetchOrgLimits(org.instanceUrl, sid, org.apiVersion);
               sendResponse({ ok: true, limits });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'permissionsDiff:search': {
+            const { orgId, containerType, queryText } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const ct = containerType === 'Profile' ? 'Profile' : 'PermissionSet';
+              const items = await searchPermissionContainers(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                ct,
+                queryText
+              );
+              sendResponse({ ok: true, items });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'permissionsDiff:searchInteractive': {
+            const { orgId, queryText, scope } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const items = await searchPermissionDiffInteractive(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                queryText,
+                scope || {}
+              );
+              sendResponse({ ok: true, items });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'permissionsDiff:searchResource': {
+            const { orgId, resourceType, queryText, objectApiName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const rt = resourceType === 'field' ? 'field' : 'object';
+              const items = await searchPermissionResources(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                rt,
+                queryText,
+                objectApiName
+              );
+              sendResponse({ ok: true, items });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'permissionsDiff:fetchByResource': {
+            const { orgId, resourceType, resourceInput, containerFilter } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const rt = resourceType === 'field' ? 'field' : 'object';
+              const filter =
+                containerFilter === 'Profile' || containerFilter === 'PermissionSet'
+                  ? containerFilter
+                  : 'all';
+              const data = await fetchAccessByResource(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                rt,
+                resourceInput,
+                { containerFilter: filter }
+              );
+              sendResponse({ ok: true, ...data });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'permissionsDiff:searchCustomPermission': {
+            const { orgId, queryText } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const items = await searchCustomPermissions(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                queryText
+              );
+              sendResponse({ ok: true, items });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'permissionsDiff:fetchByCustomPermission': {
+            const { orgId, customPermissionInput, containerFilter } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const filter =
+                containerFilter === 'Profile' || containerFilter === 'PermissionSet'
+                  ? containerFilter
+                  : 'all';
+              const data = await fetchAssignmentsForCustomPermission(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                customPermissionInput,
+                { containerFilter: filter }
+              );
+              sendResponse({ ok: true, ...data });
+            } catch (e) {
+              sendResponse({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'permissionsDiff:fetch': {
+            const { orgId, containerType, containerName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              sendResponse({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            let sid = await getSidForCookieDomain(org.cookieDomain);
+            if (!sid) sid = await getSidForOrgId(org.id);
+            if (!sid) {
+              sendResponse({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const ct = containerType === 'Profile' ? 'Profile' : 'PermissionSet';
+              const data = await fetchPermissionContainerData(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                ct,
+                containerName
+              );
+              sendResponse({
+                ok: true,
+                container: data.container,
+                objectPermissions: data.objectPermissions,
+                fieldPermissions: data.fieldPermissions,
+                setupEntityAccess: data.setupEntityAccess
+              });
             } catch (e) {
               sendResponse({ ok: false, error: String(e?.message || e) });
             }

@@ -6,6 +6,7 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
 import { logApexTestRunUsage } from './apexTestUsageLog.js';
+import { exportApexTestRun } from './apexTestsExport.js';
 import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
 import {
   getApexTestsPollIntervalMs,
@@ -38,6 +39,111 @@ let viewTestModalInitialized = false;
 let viewLogModalInitialized = false;
 /** @type {{ orgId: string, options: { classId: string | null, className: string | null, label: string }[] } | null} */
 let viewTestPickContext = null;
+
+let apexRunsMoreMenuDismissBound = false;
+
+function closeAllApexRunsMoreMenus() {
+  for (const menu of document.querySelectorAll('.apex-tests-runs-more-menu.is-open')) {
+    menu.classList.remove('is-open');
+    menu.style.top = '';
+    menu.style.left = '';
+    menu.style.right = '';
+    menu.style.bottom = '';
+  }
+  for (const btn of document.querySelectorAll('.apex-tests-runs-more-btn[aria-expanded="true"]')) {
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+function positionApexRunsMoreMenu(btn, menu) {
+  const r = btn.getBoundingClientRect();
+  const gap = 4;
+  menu.style.top = `${r.bottom + gap}px`;
+  menu.style.right = `${Math.max(8, window.innerWidth - r.right)}px`;
+  menu.style.left = 'auto';
+  menu.style.bottom = 'auto';
+  const menuRect = menu.getBoundingClientRect();
+  if (menuRect.bottom > window.innerHeight - 8) {
+    menu.style.top = 'auto';
+    menu.style.bottom = `${window.innerHeight - r.top + gap}px`;
+  }
+}
+
+function ensureApexRunsMoreMenuDismiss() {
+  if (apexRunsMoreMenuDismissBound) return;
+  apexRunsMoreMenuDismissBound = true;
+  document.addEventListener('click', () => closeAllApexRunsMoreMenus());
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAllApexRunsMoreMenus();
+  });
+}
+
+/**
+ * @param {{ disabled?: boolean, onExportCsv: () => void, onExportJson: () => void }} opts
+ */
+function createApexRunsMoreOptionsMenu(opts) {
+  const wrap = document.createElement('div');
+  wrap.className = 'apex-tests-runs-more-wrap';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'apex-tests-runs-action-btn apex-tests-runs-more-btn';
+  btn.textContent = t('apexTests.runsMoreOptions');
+  btn.disabled = !!opts.disabled;
+  btn.setAttribute('aria-haspopup', 'menu');
+  btn.setAttribute('aria-expanded', 'false');
+
+  const menu = document.createElement('div');
+  menu.className = 'apex-tests-runs-more-menu';
+  menu.setAttribute('role', 'menu');
+
+  const itemCsv = document.createElement('button');
+  itemCsv.type = 'button';
+  itemCsv.className = 'apex-tests-runs-more-item';
+  itemCsv.setAttribute('role', 'menuitem');
+  itemCsv.textContent = t('apexTests.exportCsvMenuItem');
+
+  const itemJson = document.createElement('button');
+  itemJson.type = 'button';
+  itemJson.className = 'apex-tests-runs-more-item';
+  itemJson.setAttribute('role', 'menuitem');
+  itemJson.textContent = t('apexTests.exportJsonMenuItem');
+
+  menu.appendChild(itemCsv);
+  menu.appendChild(itemJson);
+  wrap.appendChild(btn);
+  wrap.appendChild(menu);
+
+  menu.addEventListener('click', (e) => e.stopPropagation());
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (btn.disabled) return;
+    const willOpen = !menu.classList.contains('is-open');
+    closeAllApexRunsMoreMenus();
+    if (willOpen) {
+      menu.classList.add('is-open');
+      btn.setAttribute('aria-expanded', 'true');
+      positionApexRunsMoreMenu(btn, menu);
+    }
+  });
+
+  itemCsv.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllApexRunsMoreMenus();
+    if (btn.disabled) return;
+    opts.onExportCsv();
+  });
+
+  itemJson.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllApexRunsMoreMenus();
+    if (btn.disabled) return;
+    opts.onExportJson();
+  });
+
+  return wrap;
+}
 
 export function initApexTestsCoverageModal() {
   if (coverageModalInitialized) return;
@@ -1302,11 +1408,11 @@ async function refreshExpandedJobStatusInPlace() {
   const isTerminal = ['Completed', 'Failed', 'Aborted', 'Error'].includes(nextStatus);
   const stLc = nextStatus.trim().toLowerCase();
   const canAbort = ['queued', 'processing', 'preparing', 'holding'].includes(stLc);
-  const btnDetail = mainRow.querySelector('button[data-i18n="apexTests.runsDetail"]');
+  const btnMore = mainRow.querySelector('.apex-tests-runs-more-btn');
   const btnCoverage = mainRow.querySelector('button[data-i18n="apexTests.runsCoverage"]');
   const btnLog = mainRow.querySelector('button[data-i18n="apexTests.runsLog"]');
   const btnAbort = mainRow.querySelector('button[data-i18n="apexTests.runsAbort"]');
-  if (btnDetail) btnDetail.disabled = !isTerminal;
+  if (btnMore) btnMore.disabled = !isTerminal;
   if (btnCoverage) btnCoverage.disabled = !isTerminal;
   if (btnLog) btnLog.disabled = !isTerminal;
   if (btnAbort) btnAbort.disabled = !canAbort;
@@ -1780,6 +1886,9 @@ async function renderHubRunsTable(opts = {}) {
   const errEl = document.getElementById('apexTestsRunsPollError');
   if (!tbody || !wrap || !empty) return;
 
+  ensureApexRunsMoreMenuDismiss();
+  closeAllApexRunsMoreMenus();
+
   let list = await loadAllStoredJobs();
   const pollKey = list.map((j) => `${j.orgId}:${j.jobId}`).join('|');
 
@@ -1916,14 +2025,6 @@ async function renderHubRunsTable(opts = {}) {
     const tdActions = document.createElement('td');
     tdActions.className = 'apex-tests-runs-td-actions';
 
-    const btnDetail = document.createElement('button');
-    btnDetail.type = 'button';
-    btnDetail.className = 'apex-tests-runs-action-btn';
-    btnDetail.dataset.i18n = 'apexTests.runsDetail';
-    btnDetail.textContent = t('apexTests.runsDetail');
-    btnDetail.disabled = !!(run.missing || run.pollFailure || !run.job || !poll?.ok);
-    if (!terminal) btnDetail.disabled = true;
-
     const btnCoverage = document.createElement('button');
     btnCoverage.type = 'button';
     btnCoverage.className = 'apex-tests-runs-action-btn';
@@ -1997,11 +2098,26 @@ async function renderHubRunsTable(opts = {}) {
 
     const actionsInner = document.createElement('div');
     actionsInner.className = 'apex-tests-runs-actions-inner';
-    actionsInner.appendChild(btnDetail);
+    const exportDisabled = !terminal || !!(run.missing || run.pollFailure || !run.job);
+    const exportMeta = {
+      envLabel: j.displayEnv || rowOrgId,
+      status: String(run.job?.Status || ''),
+      startedAt: Number.isFinite(startedMs) ? new Date(startedMs).toISOString() : null,
+      summary: run.missing || run.pollFailure ? '' : formatOutcomeSummary(run.outcomeCounts)
+    };
+    const canonicalForExport = run.job?.Id || run.canonicalJobId || jobId;
+
+    const moreMenu = createApexRunsMoreOptionsMenu({
+      disabled: exportDisabled,
+      onExportCsv: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'csv', exportMeta),
+      onExportJson: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'json', exportMeta)
+    });
+
     actionsInner.appendChild(btnCoverage);
     actionsInner.appendChild(btnLog);
     actionsInner.appendChild(btnViewTest);
     actionsInner.appendChild(btnAbort);
+    actionsInner.appendChild(moreMenu);
     // FUTURE: actionsInner.appendChild(btnRerun);
     tdActions.appendChild(actionsInner);
     tr.appendChild(tdExpand);
@@ -2012,12 +2128,6 @@ async function renderHubRunsTable(opts = {}) {
     tr.appendChild(tdActions);
     tbody.appendChild(tr);
 
-    btnDetail.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      if (btnDetail.disabled) return;
-      expandedRunKey = expandedRunKey === exKey ? null : exKey;
-      await renderHubRunsTable({ reusePoll: false });
-    });
     btnExpand.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (btnExpand.disabled) return;
@@ -2041,6 +2151,7 @@ async function renderHubRunsTable(opts = {}) {
       if (btnViewTest.disabled) return;
       openViewTestPicker(rowOrgId, j.runBody);
     });
+
     btnAbort.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (btnAbort.disabled) return;

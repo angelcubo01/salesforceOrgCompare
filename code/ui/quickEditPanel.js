@@ -1,6 +1,7 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
-import { loadMonaco, resolveMonacoThemeId } from '../editor/monaco.js';
+import { loadMonaco, resolveMonacoThemeId, createStandaloneEditorSafe } from '../editor/monaco.js';
+import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 
@@ -68,6 +69,8 @@ function scheduleSyncQuickEditResultsListWidth() {
 }
 
 let quickEditEditor = null;
+/** @type {Promise<import('monaco-editor').editor.IStandaloneCodeEditor | null> | null} */
+let quickEditEditorInit = null;
 let currentEditItem = null;
 let originalContent = '';
 let isDeploying = false;
@@ -147,31 +150,51 @@ function hasUnsavedChanges() {
 async function ensureEditor() {
   const mount = document.getElementById('quickEditEditorMount');
   if (!mount) return null;
-  if (quickEditEditor) return quickEditEditor;
+  if (quickEditEditor) {
+    try {
+      if (quickEditEditor.getContainerDomNode() === mount) return quickEditEditor;
+    } catch {
+      quickEditEditor = null;
+    }
+  }
+  if (quickEditEditorInit) return quickEditEditorInit;
 
-  const monaco = state.monaco || (await loadMonaco());
-  state.monaco = monaco;
+  quickEditEditorInit = (async () => {
+    const monaco = state.monaco || (await loadMonaco());
+    state.monaco = monaco;
 
-  quickEditEditor = monaco.editor.create(mount, {
-    value: '',
-    language: 'apex',
-    readOnly: false,
-    automaticLayout: true,
-    minimap: { enabled: true },
-    wordWrap: state.wordWrapEnabled ? 'on' : 'off',
-    theme: resolveMonacoThemeId(),
-    fontSize: 13,
-    lineHeight: 20,
-    fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-    scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
-  });
+    quickEditEditor = createStandaloneEditorSafe(
+      monaco,
+      mount,
+      {
+        value: '',
+        language: 'apex',
+        readOnly: false,
+        automaticLayout: true,
+        minimap: { enabled: true },
+        wordWrap: state.wordWrapEnabled ? 'on' : 'off',
+        theme: resolveMonacoThemeId(),
+        fontSize: 13,
+        lineHeight: 20,
+        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+        scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
+      },
+      quickEditEditor
+    );
 
-  quickEditEditor.onDidChangeModelContent(() => {
-    updateDeployButtonState();
-    updateModifiedIndicator();
-  });
+    quickEditEditor.onDidChangeModelContent(() => {
+      updateDeployButtonState();
+      updateModifiedIndicator();
+    });
 
-  return quickEditEditor;
+    return quickEditEditor;
+  })();
+
+  try {
+    return await quickEditEditorInit;
+  } finally {
+    quickEditEditorInit = null;
+  }
 }
 
 function updateModifiedIndicator() {
@@ -424,7 +447,9 @@ export async function refreshQuickEditPanel() {
     return;
   }
 
-  await ensureEditor();
+  if (getSelectedArtifactType() === 'QuickEdit') {
+    await ensureEditor();
+  }
   updateCurrentFileDisplay();
   updateDeployButtonState();
 }

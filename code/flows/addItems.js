@@ -3,10 +3,11 @@ import { saveItemsToStorage } from '../core/persistence.js';
 import { saveScrollPosition } from '../ui/scrollRestore.js';
 import { updateDocumentTitle } from '../ui/documentMeta.js';
 import { renderEditor } from '../editor/editorRender.js';
-import { renderSavedItems } from '../ui/listUi.js';
+import { renderSavedItems, syncListActiveHighlight } from '../ui/listUi.js';
 import { bg } from '../core/bridge.js';
 import { showToast } from '../ui/toast.js';
 import { t } from '../../shared/i18n.js';
+import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 
 export function addSelected(item) {
   // Save scroll position of currently selected item before switching
@@ -29,21 +30,13 @@ export function addSelected(item) {
     selected = state.savedItems[existingIndex];
   }
   
-  // Re-render the list
   renderSavedItems();
-
-  // Select and highlight the item in the list
   state.selectedItem = selected;
-  try {
-    const list = document.getElementById('leftList');
-    const items = Array.from(list.querySelectorAll('li'));
-    for (const el of items) el.classList.remove('active');
-    const match = items.find(li => li.getAttribute('data-type') === selected.type && li.getAttribute('data-key') === selected.key);
-    if (match) match.classList.add('active');
-  } catch {}
+  syncListActiveHighlight();
 
   // Update document title and open in editor
   updateDocumentTitle();
+  syncCompareUrlFromState(state);
   renderEditor();
 }
 
@@ -140,13 +133,7 @@ export async function addBundleFiles(type, bundleItem) {
       const saved = state.savedItems.find(s => s.type === type && s.key === selectedKey);
       const selected = saved || { type, key: selectedKey, descriptor, fileName: preferred };
       state.selectedItem = selected;
-      const list = document.getElementById('leftList');
-      if (list) {
-        const lis = Array.from(list.querySelectorAll('li'));
-        for (const el of lis) el.classList.remove('active');
-        const match = lis.find(li => li.getAttribute('data-type') === selected.type && li.getAttribute('data-key') === selected.key);
-        if (match) match.classList.add('active');
-      }
+      syncListActiveHighlight();
       updateDocumentTitle();
       renderEditor();
     }

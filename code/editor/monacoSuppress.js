@@ -24,6 +24,7 @@
       warnString.includes('workerMain.js') ||
       warnString.includes('vs/base/worker') ||
       warnString.includes('Duplicate definition of module') ||
+      warnString.includes('Element already has context attribute') ||
       (warnString.includes('Monaco') && warnString.includes('worker'))
     ) {
       return;
