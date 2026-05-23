@@ -8,10 +8,18 @@ import { languageForFileName } from '../editor/monaco.js';
 import { focusDiffAtIndex, disposeDiffEditorModels } from '../editor/editorRender.js';
 import { prepareDiffForViewer } from '../lib/viewerLimits.js';
 import { clearViewerChunkState, setViewerChunkFromPrepared } from '../ui/viewerChunkUi.js';
-import { renderSavedItems } from '../ui/listUi.js';
+import { clearBundleCollapsedForKey, renderSavedItems, syncListActiveHighlight } from '../ui/listUi.js';
 import { updateDocumentTitle, updateFileMeta } from '../ui/documentMeta.js';
+import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
+import { renderEditor } from '../editor/editorRender.js';
 import { saveItemsToStorage } from '../core/persistence.js';
 import { t } from '../../shared/i18n.js';
+import {
+  beginCompareRetrieveSession,
+  cancelCompareRetrieve,
+  clearCompareRetrieveSession,
+  isCompareRetrieveActive
+} from './retrieveSessionUi.js';
 
 const RETRIEVE_BG_CONFIG = {
   PermissionSet: { messageType: 'metadata:retrievePermissionSet', paramName: 'permSetName' },
@@ -19,7 +27,12 @@ const RETRIEVE_BG_CONFIG = {
   FlexiPage: { messageType: 'metadata:retrieveFlexiPage', paramName: 'flexiPageName' }
 };
 
-export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel) {
+/**
+ * @param {number} retrieveGeneration
+ */
+export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel, retrieveGeneration) {
+  if (!isCompareRetrieveActive(retrieveGeneration)) return null;
+
   if (item.type === 'PackageXml') {
     const entry = state.packageXmlLocalContent[item.key];
     if (!entry || entry.content == null) {
@@ -29,8 +42,11 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel) {
     const res = await bg({
       type: 'metadata:retrievePackageXml',
       orgId,
-      packageXml: entry.content
+      packageXml: entry.content,
+      retrieveGeneration
     });
+    if (!isCompareRetrieveActive(retrieveGeneration)) return null;
+    if (res?.cancelled) return null;
     if (!res || !res.ok || !res.zipBase64) {
       const rawError = (res && (res.error || res.reason)) || '';
       if (String(rawError).includes('agotó el tiempo de espera') || String(rawError).includes('timed out')) {
@@ -48,6 +64,7 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel) {
       bytes[i] = binaryString.charCodeAt(i);
     }
     const allFiles = await readZipAllTextFiles(bytes);
+    if (!isCompareRetrieveActive(retrieveGeneration)) return null;
     if (!allFiles.length) {
       showToast(t('toast.zipNoFiles', { side: sideLabel }), 'warn');
       return null;
@@ -63,10 +80,13 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel) {
   const cfg = RETRIEVE_BG_CONFIG[item.type];
   if (!cfg) return null;
 
-  const payload = { type: cfg.messageType, orgId };
+  const payload = { type: cfg.messageType, orgId, retrieveGeneration };
   payload[cfg.paramName] = item.key;
 
   const res = await bg(payload);
+
+  if (!isCompareRetrieveActive(retrieveGeneration)) return null;
+  if (res?.cancelled) return null;
 
   if (!res || !res.ok || !res.zipBase64) {
     const rawError = (res && (res.error || res.reason)) || '';
@@ -79,7 +99,6 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel) {
     return null;
   }
 
-  // Decodificar base64 → bytes
   const binaryString = atob(res.zipBase64);
   const len = binaryString.length;
   const bytes = new Uint8Array(len);
@@ -88,6 +107,7 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel) {
   }
 
   const extracted = await readZipFirstUsableFile(bytes);
+  if (!isCompareRetrieveActive(retrieveGeneration)) return null;
   if (!extracted) {
     showToast(t('toast.zipNoUsable', { side: sideLabel }), 'warn');
     return null;
@@ -110,6 +130,8 @@ export async function retrieveAndLoadFromZip(item) {
     return;
   }
 
+  const retrieveGeneration = await beginCompareRetrieveSession();
+
   /** Un envío por pulsación: `usage:log` → service worker → `appendUsageLog` (POST al endpoint configurado). */
   async function logRetrieveOnce(extra = {}) {
     const entry = {
@@ -126,23 +148,29 @@ export async function retrieveAndLoadFromZip(item) {
   }
 
   try {
-    showToastWithSpinner(t('toast.fetchingBoth'));
+    showToastWithSpinner(t('toast.fetchingBoth'), {
+      onCancel: () => {
+        void cancelCompareRetrieve();
+      }
+    });
 
-    // Retrieve de ambos entornos en paralelo
     const [leftExtracted, rightExtracted] = await Promise.all([
-      retrieveMetadataWithZipFromOrg(leftOrgId, item, 'org izquierda'),
-      retrieveMetadataWithZipFromOrg(rightOrgId, item, 'org derecha')
+      retrieveMetadataWithZipFromOrg(leftOrgId, item, 'org izquierda', retrieveGeneration),
+      retrieveMetadataWithZipFromOrg(rightOrgId, item, 'org derecha', retrieveGeneration)
     ]);
 
     dismissSpinnerToast();
 
+    if (!isCompareRetrieveActive(retrieveGeneration)) {
+      await logRetrieveOnce({ ok: false, reason: 'cancelled' });
+      return;
+    }
+
     if (!leftExtracted || !rightExtracted) {
-      // Los propios helpers ya han mostrado los toasts de error/warn
       await logRetrieveOnce({ ok: false, reason: 'retrieve_failed' });
       return;
     }
 
-    // Necesitamos un diffEditor y monaco cargado
     if (!state.monaco || !state.diffEditor) {
       showToast(t('toast.openDiffFirst'), 'warn');
       await logRetrieveOnce({
@@ -157,8 +185,9 @@ export async function retrieveAndLoadFromZip(item) {
     beginFileViewerLoading();
     try {
     clearViewerChunkState();
-    // Package.xml: árbol de ficheros del ZIP (como bundles LWC) + diff por fichero seleccionado
     if (item.type === 'PackageXml' && leftExtracted.fromPackageXmlRetrieve && rightExtracted.fromPackageXmlRetrieve) {
+      if (!isCompareRetrieveActive(retrieveGeneration)) return;
+
       const leftByPath = {};
       const rightByPath = {};
       for (const f of leftExtracted.allFiles || []) {
@@ -197,77 +226,29 @@ export async function retrieveAndLoadFromZip(item) {
         });
       }
       const bundleKey = `PackageXmlRZ:${item.key}`;
-      state.bundleCollapsed = state.bundleCollapsed || {};
-      // Árbol «Retrieve» cerrado al inicio (undefined/true = colapsado, como LWC/Aura)
-      delete state.bundleCollapsed[bundleKey];
+      clearBundleCollapsedForKey(bundleKey);
 
-      const firstPath = paths[0];
-      const firstChild = state.savedItems.find(
-        (s) => s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.relativePath === firstPath
-      );
-      if (firstChild) {
-        state.selectedItem = firstChild;
-      }
+      state.selectedItem = item;
       saveItemsToStorage();
       renderSavedItems(true);
+      syncListActiveHighlight();
       updateDocumentTitle();
       updateOrgSelectorsLockedState();
+      syncCompareUrlFromState(state);
 
-      const lc = leftByPath[firstPath] ?? '';
-      const rc = rightByPath[firstPath] ?? '';
-      const fn = firstPath.split('/').pop() || 'file';
-      const prepared = await prepareDiffForViewer(lc, rc, { buildAlignedDiff });
-      if (prepared.userMessage) {
-        showToast(prepared.userMessage, prepared.skippedHeavyDiff ? 'warn' : 'info');
-      }
-      setViewerChunkFromPrepared(prepared, fn, fn);
-      state.lastLeftContent = prepared.leftText;
-      state.lastRightContent = prepared.rightText;
-      disposeDiffEditorModels();
-      const original = state.monaco.editor.createModel(prepared.leftText, languageForFileName(fn));
-      const modified = state.monaco.editor.createModel(prepared.rightText, languageForFileName(fn));
-      state.diffEditor.setModel({ original, modified });
+      if (!isCompareRetrieveActive(retrieveGeneration)) return;
+      await renderEditor();
 
-      const diffStatus = document.getElementById('diffStatus');
-      try {
-        const changes = prepared.changes || [];
-        state.diffChanges = changes;
-        if (!changes.length) {
-          state.currentDiffIndex = -1;
-          if (diffStatus) {
-            if (prepared.skippedHeavyDiff) {
-              diffStatus.textContent = t('diff.tooLargeForDiff');
-            } else if (prepared.userMessage) {
-              diffStatus.textContent = t('diff.truncatedNoNav');
-            } else {
-              diffStatus.textContent = t('diff.noDifferences');
-            }
-          }
-          applyDiffDecorations([]);
-        } else {
-          state.currentDiffIndex = 0;
-          applyDiffDecorations(changes);
-          if (typeof state.updateDiffNavButtons === 'function') state.updateDiffNavButtons();
-          focusDiffAtIndex(0);
-        }
-      } catch {
-        state.diffChanges = [];
-        state.currentDiffIndex = -1;
-        if (diffStatus) diffStatus.textContent = t('diff.noDifferences');
-        applyDiffDecorations([]);
-      }
-
-      updateFileMeta(leftExtracted.meta || {}, rightExtracted.meta || {}, true);
-      const ch = prepared.changes || [];
+      const pkgEntry = state.packageXmlLocalContent[item.key];
+      const pkgChars = (pkgEntry?.content ?? '').length;
       await logRetrieveOnce({
         ok: true,
         retrieveMode: 'packageXml',
         zipFileCount: paths.length,
-        selectedPath: firstPath,
-        leftChars: lc.length,
-        rightChars: rc.length,
-        diffBlocks: ch.length,
-        diffLines: getTotalDiffLines(ch)
+        leftChars: pkgChars,
+        rightChars: pkgChars,
+        diffBlocks: 0,
+        diffLines: 0
       });
       showToast(t('toast.retrieveComplete', { count: paths.length }), 'info');
       return;
@@ -278,8 +259,8 @@ export async function retrieveAndLoadFromZip(item) {
     const targetFileName = rightExtracted.fileName;
     const rightFileName = targetFileName || (item.fileName || `${item.key}.permissionset`);
 
-    // Construir diff alineado entre ambos retrieves (izquierda vs derecha), con límites anti-OOM
     const prepared = await prepareDiffForViewer(leftRetrievedContent, rightRetrievedContent, { buildAlignedDiff });
+    if (!isCompareRetrieveActive(retrieveGeneration)) return;
     if (prepared.userMessage) {
       showToast(prepared.userMessage, prepared.skippedHeavyDiff ? 'warn' : 'info');
     }
@@ -291,7 +272,6 @@ export async function retrieveAndLoadFromZip(item) {
     const modified = state.monaco.editor.createModel(prepared.rightText, languageForFileName(rightFileName));
     state.diffEditor.setModel({ original, modified });
 
-    // Recalcular diffs y estado
     const diffStatus = document.getElementById('diffStatus');
     try {
       const changes = prepared.changes || [];
@@ -328,7 +308,6 @@ export async function retrieveAndLoadFromZip(item) {
       }
     }
 
-    // Actualizar la barra de metadatos con los datos de última modificación devueltos por el retrieve
     updateFileMeta(leftExtracted.meta || {}, rightExtracted.meta || {}, true);
 
     const changes = Array.isArray(prepared.changes) ? prepared.changes : [];
@@ -346,7 +325,16 @@ export async function retrieveAndLoadFromZip(item) {
     }
   } catch (e) {
     dismissSpinnerToast();
-    await logRetrieveOnce({ ok: false, error: String(e || '') });
-    showToast(t('toast.retrieveError'), 'error');
+    if (isCompareRetrieveActive(retrieveGeneration)) {
+      await logRetrieveOnce({ ok: false, error: String(e || '') });
+      showToast(t('toast.retrieveError'), 'error');
+    }
+  } finally {
+    clearCompareRetrieveSession(retrieveGeneration);
   }
+}
+
+/** Cancela el retrieve de comparación en curso (p. ej. desde otro módulo). */
+export function cancelActiveCompareRetrieve() {
+  return cancelCompareRetrieve();
 }

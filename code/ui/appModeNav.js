@@ -4,20 +4,32 @@ import { t } from '../../shared/i18n.js';
 import { clearComparisonSelection, handleArtifactTypeSelectChange } from './searchSetup.js';
 import { resetMonacoComparisonView } from '../editor/editorRender.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
+import { COMPARE_TOOLS_COVERED_BY_METADATA } from '../lib/metadataSearch.js';
+import { syncCompareContextTitle } from './compareContextTitle.js';
+import { refreshHelpModalIfOpen } from './appHelp.js';
 
 export const NAV_PREFS_KEY = 'sfocAppNavPrefs';
 
 export const APP_NAV_MODE_HOME = 'home';
 
+export const COMPARATOR_TOOL = 'Comparator';
+
+/** Herramientas de comparación legadas (deep links y prefs). */
+export const LEGACY_COMPARE_TOOLS = new Set([
+  ...COMPARE_TOOLS_COVERED_BY_METADATA,
+  'PackageXml',
+  COMPARATOR_TOOL
+]);
+
 export const MODE_TOOLS = {
-  compare: ['Apex', 'LWC', 'Aura', 'VF'],
-  security: ['PermissionSet', 'Profile', 'FlexiPage'],
+  comparator: [COMPARATOR_TOOL],
   development: [...APP_NAV_DEVELOPMENT_TOOLS],
   monitoring: ['OrgLimits', 'SetupAuditTrail', 'FieldDependency', 'PermissionDiff'],
-  manifests: ['GeneratePackageXml', 'PackageXml']
+  manifests: ['GeneratePackageXml']
 };
 
 export const TOOL_I18N = {
+  Comparator: 'code.appModeComparator',
   Apex: 'code.opApex',
   LWC: 'code.opLwc',
   Aura: 'code.opAura',
@@ -69,6 +81,18 @@ function toggleSubmenu(wrap) {
   }
 }
 
+/** @param {string} mode */
+export function migrateLegacyNavMode(mode) {
+  if (mode === 'compare' || mode === 'security') return 'comparator';
+  return mode;
+}
+
+/** @param {string} tool */
+export function migrateLegacyTool(tool) {
+  if (LEGACY_COMPARE_TOOLS.has(tool) && tool !== COMPARATOR_TOOL) return COMPARATOR_TOOL;
+  return tool;
+}
+
 /** Rellena las subcategorías (tras `loadLang` / traducciones estáticas). */
 export function populateModeSubmenus() {
   document.querySelectorAll('.app-mode-dropdown').forEach((wrap) => {
@@ -111,6 +135,7 @@ export function listAllNavTools() {
 
 /** @param {string} tool */
 export function toolToMode(tool) {
+  if (LEGACY_COMPARE_TOOLS.has(tool)) return 'comparator';
   for (const [mode, tools] of Object.entries(MODE_TOOLS)) {
     if (tools.includes(tool)) return /** @type {keyof typeof MODE_TOOLS} */ (mode);
   }
@@ -119,10 +144,19 @@ export function toolToMode(tool) {
 
 function normalizePrefs(raw) {
   const p = raw && typeof raw === 'object' ? raw : {};
-  return {
-    lastMode: typeof p.lastMode === 'string' ? p.lastMode : APP_NAV_MODE_HOME,
-    lastToolByMode: p.lastToolByMode && typeof p.lastToolByMode === 'object' ? { ...p.lastToolByMode } : {}
-  };
+  let lastMode = typeof p.lastMode === 'string' ? p.lastMode : APP_NAV_MODE_HOME;
+  lastMode = migrateLegacyNavMode(lastMode);
+  const lastToolByMode =
+    p.lastToolByMode && typeof p.lastToolByMode === 'object' ? { ...p.lastToolByMode } : {};
+  if (lastMode === 'manifests' && lastToolByMode.manifests === 'PackageXml') {
+    lastMode = 'comparator';
+    lastToolByMode.comparator = COMPARATOR_TOOL;
+    delete lastToolByMode.manifests;
+  }
+  if (lastMode === 'comparator' && lastToolByMode.comparator) {
+    lastToolByMode.comparator = migrateLegacyTool(lastToolByMode.comparator);
+  }
+  return { lastMode, lastToolByMode };
 }
 
 async function readPrefs() {
@@ -164,11 +198,16 @@ export async function persistAfterOperationChange(_isUserChange) {
  * @param {string} tool
  */
 export async function ensureModeForTool(tool) {
-  const mode = toolToMode(tool);
+  const effectiveTool = migrateLegacyTool(tool);
+  const mode = toolToMode(effectiveTool);
   if (!mode) return;
   closeAllSubmenus();
   if (state.appNavMode === mode) {
     rebuildTypeSelectForMode(mode);
+    const sel = document.getElementById('typeSelect');
+    if (sel && MODE_TOOLS[mode].includes(effectiveTool)) {
+      sel.value = effectiveTool;
+    }
     syncTabSelection();
     return;
   }
@@ -194,6 +233,15 @@ export function rebuildTypeSelectForMode(mode) {
     opt.textContent = t('code.operationPlaceholder');
     sel.appendChild(opt);
     sel.value = '';
+    sel.disabled = true;
+    return;
+  }
+  if (mode === 'comparator') {
+    const opt = document.createElement('option');
+    opt.value = COMPARATOR_TOOL;
+    opt.textContent = t(TOOL_I18N.Comparator);
+    sel.appendChild(opt);
+    sel.value = COMPARATOR_TOOL;
     sel.disabled = true;
     return;
   }
@@ -237,27 +285,7 @@ export function syncTabSelection() {
     item.classList.toggle('is-active', !!(m === mode && tu === tool && tool));
   });
 
-  syncOrgSelectorsContextTitle();
-}
-
-/** Título discreto encima de los selectores de org (comparar código, permisos/páginas y comparar package.xml). */
-function syncOrgSelectorsContextTitle() {
-  const el = document.getElementById('compareContextTitle');
-  if (!el) return;
-  const mode = state.appNavMode;
-  const tool = document.getElementById('typeSelect')?.value || '';
-  const showForTool =
-    !!tool &&
-    ((mode === 'compare' && MODE_TOOLS.compare.includes(/** @type {any} */ (tool))) ||
-      (mode === 'security' && MODE_TOOLS.security.includes(/** @type {any} */ (tool))) ||
-      (mode === 'manifests' && tool === 'PackageXml'));
-  if (showForTool) {
-    el.textContent = t(TOOL_I18N[/** @type {keyof typeof TOOL_I18N} */ (tool)]);
-    el.classList.remove('hidden');
-  } else {
-    el.textContent = '';
-    el.classList.add('hidden');
-  }
+  syncCompareContextTitle();
 }
 
 export function syncSidebarToolRow() {
@@ -279,10 +307,12 @@ function prefsDefaultTool(mode) {
 export async function navigateToModeAndTool(mode, tool, opts = {}) {
   const userInitiated = !!opts.userInitiated;
   closeAllSubmenus();
+  mode = /** @type {typeof mode} */ (migrateLegacyNavMode(mode));
   state.appNavMode = mode;
   rebuildTypeSelectForMode(mode);
   syncTabSelection();
   syncSidebarToolRow();
+  refreshHelpModalIfOpen();
 
   const sel = document.getElementById('typeSelect');
   if (!sel) return;
@@ -298,41 +328,49 @@ export async function navigateToModeAndTool(mode, tool, opts = {}) {
   }
 
   const tools = MODE_TOOLS[mode];
-  const pick = tool && tools.includes(tool) ? tool : prefsDefaultTool(mode);
+  let pick = tool && (tools.includes(tool) || (mode === 'comparator' && LEGACY_COMPARE_TOOLS.has(tool)))
+    ? migrateLegacyTool(tool)
+    : prefsDefaultTool(mode);
+  if (mode === 'comparator') pick = COMPARATOR_TOOL;
   sel.value = pick;
   handleArtifactTypeSelectChange({ isUserChange: userInitiated });
   syncCompareUrlFromState(state);
 }
 
 /**
- * @param {{ urlOp?: string }} args
+ * @param {{ urlOp?: string, urlNav?: string }} args
  */
 export async function initializeAppNavigation(args = {}) {
-  const { urlOp } = args;
+  const { urlOp, urlNav } = args;
   const prefs = await readPrefs();
   let mode = APP_NAV_MODE_HOME;
   let tool = '';
 
-  if (urlOp && toolToMode(urlOp)) {
+  const migratedNav = urlNav ? migrateLegacyNavMode(urlNav) : null;
+  if (migratedNav && migratedNav !== APP_NAV_MODE_HOME && MODE_TOOLS[/** @type {keyof typeof MODE_TOOLS} */ (migratedNav)]) {
+    mode = /** @type {keyof typeof MODE_TOOLS} */ (migratedNav);
+    tool = urlOp ? migrateLegacyTool(urlOp) : prefsDefaultTool(mode);
+    if (mode === 'comparator') tool = COMPARATOR_TOOL;
+  } else if (urlOp && toolToMode(urlOp)) {
     const m = toolToMode(urlOp);
     if (m) {
       mode = m;
-      tool = urlOp;
+      tool = m === 'comparator' ? COMPARATOR_TOOL : migrateLegacyTool(urlOp);
     }
   } else if (prefs.lastMode && prefs.lastMode !== APP_NAV_MODE_HOME && MODE_TOOLS[/** @type {keyof typeof MODE_TOOLS} */ (prefs.lastMode)]) {
     mode = /** @type {keyof typeof MODE_TOOLS} */ (prefs.lastMode);
     tool = prefs.lastToolByMode[mode] || prefsDefaultTool(mode);
+    if (mode === 'comparator') tool = COMPARATOR_TOOL;
   }
 
   state.appNavMode = mode;
   rebuildTypeSelectForMode(mode);
   if (mode !== APP_NAV_MODE_HOME) {
     const s = document.getElementById('typeSelect');
-    if (s && tool && MODE_TOOLS[mode].includes(tool)) {
-      s.value = tool;
+    if (s && tool && (MODE_TOOLS[mode].includes(tool) || (mode === 'comparator' && LEGACY_COMPARE_TOOLS.has(tool)))) {
+      s.value = mode === 'comparator' ? COMPARATOR_TOOL : tool;
     } else if (s) {
-      const fallback = prefsDefaultTool(mode);
-      s.value = fallback;
+      s.value = prefsDefaultTool(mode);
     }
   }
   state.selectedArtifactType = document.getElementById('typeSelect')?.value || '';
@@ -353,6 +391,15 @@ export function setupAppModeTabHandlers() {
     });
   }
 
+  const comparatorBtn = document.getElementById('appModeTabComparator');
+  if (comparatorBtn) {
+    comparatorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllSubmenus();
+      void navigateToModeAndTool('comparator', COMPARATOR_TOOL, { userInitiated: true });
+    });
+  }
+
   document.querySelectorAll('.app-mode-dropdown').forEach((wrap) => {
     const trigger = wrap.querySelector('.app-mode-tab-trigger');
     if (!trigger) return;
@@ -365,7 +412,7 @@ export function setupAppModeTabHandlers() {
     });
   });
 
-  document.addEventListener('click', (e) => {
+  document.addEventListener('click', () => {
     closeAllSubmenus();
     syncTabSelection();
   });

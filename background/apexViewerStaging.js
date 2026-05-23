@@ -1,3 +1,5 @@
+import { randomStagingId } from '../shared/randomId.js';
+
 /** Contenido temporal para visores (log/código) sin límite de cuota de chrome.storage.local. */
 const STAGING = new Map();
 const TTL_MS = 15 * 60 * 1000;
@@ -16,7 +18,7 @@ function prune() {
  */
 export function stageApexViewerPayload(title, content, options = {}) {
   prune();
-  const id = `v_${Date.now()}_${Math.random().toString(36).slice(2, 16)}`;
+  const id = randomStagingId('v_');
   const il = options.initialLine;
   const initialLine =
     il != null && Number.isFinite(Number(il)) ? Math.max(1, Math.floor(Number(il))) : undefined;

@@ -3,15 +3,7 @@
  * Pensado para extensiones MV3 sin content scripts obligatorios.
  */
 
-function hostnameMatchesSfCloud(host) {
-  if (typeof host !== 'string') return false;
-  return (
-    host.endsWith('.salesforce.com') ||
-    host.endsWith('.my.salesforce.com') ||
-    host.endsWith('.force.com') ||
-    host.endsWith('.salesforce-setup.com')
-  );
-}
+import { hostnameMatchesSfCloud } from './sfDomains.js';
 
 function toMyDomainRoot(host) {
   if (host.endsWith('.lightning.force.com')) {
@@ -157,4 +149,101 @@ export async function discoverActiveTabContext() {
 
 export async function getSidForCookieDomain(cookieDomain, topLevelSiteOrigin) {
   return cookieValueForHost(cookieDomain, SID_NAMES, topLevelSiteOrigin);
+}
+
+/** Comprueba si dos URLs de instancia apuntan a la misma org (my domain / lightning). */
+export function instanceUrlsReferToSameOrg(a, b) {
+  if (!a || !b) return false;
+  try {
+    const ha = new URL(a).hostname;
+    const hb = new URL(b).hostname;
+    if (ha === hb) return true;
+    return new URL(toMyDomainRoot(ha)).hostname === new URL(toMyDomainRoot(hb)).hostname;
+  } catch {
+    return false;
+  }
+}
+
+/** Hostnames donde buscar la cookie `sid` para una org guardada. */
+export function buildHostCandidatesForOrg(org) {
+  const hosts = [];
+  const add = (h) => {
+    if (!h || typeof h !== 'string') return;
+    if (!hosts.includes(h)) hosts.push(h);
+  };
+  add(org?.cookieDomain);
+  try {
+    const instHost = new URL(org.instanceUrl).hostname;
+    add(instHost);
+    if (instHost.endsWith('.my.salesforce.com')) {
+      const prefix = instHost.replace('.my.salesforce.com', '');
+      add(`${prefix}.lightning.force.com`);
+      add(`${prefix}.salesforce.com`);
+    } else if (instHost.endsWith('.lightning.force.com')) {
+      const prefix = instHost.replace('.lightning.force.com', '');
+      add(`${prefix}.my.salesforce.com`);
+      add(`${prefix}.salesforce.com`);
+    } else if (instHost.endsWith('.salesforce-setup.com')) {
+      const prefix = instHost.replace('.salesforce-setup.com', '');
+      add(`${prefix}.my.salesforce.com`);
+      add(`${prefix}.salesforce.com`);
+    }
+  } catch {}
+  return hosts;
+}
+
+/** Orígenes top-level de pestañas SF abiertas para la misma instancia (cookies particionadas). */
+export async function collectPartitionOriginsForInstance(instanceUrl) {
+  const origins = new Set();
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (!tab?.url) continue;
+      let parsed;
+      try {
+        parsed = new URL(tab.url);
+      } catch {
+        continue;
+      }
+      if (!hostnameMatchesSfCloud(parsed.hostname)) continue;
+      const tabInstance = toMyDomainRoot(parsed.hostname);
+      if (!instanceUrlsReferToSameOrg(instanceUrl, tabInstance)) continue;
+      origins.add(`${parsed.protocol}//${parsed.hostname}`);
+    }
+  } catch {}
+  return [...origins];
+}
+
+/**
+ * Resuelve SID para una org guardada: varios hosts, id de org, cookies particionadas en pestañas abiertas.
+ * @param {object} org
+ * @param {(orgId: string) => Promise<string>} [getSidByOrgId]
+ */
+export async function resolveSidForSavedOrg(org, getSidByOrgId) {
+  if (!org) return '';
+
+  const hosts = buildHostCandidatesForOrg(org);
+
+  let hit = await firstSidAmongHosts(hosts, undefined);
+  if (hit?.sid) return hit.sid;
+
+  if (getSidByOrgId) {
+    const byId = await getSidByOrgId(org.id);
+    if (byId) return byId;
+  }
+
+  const partitions = await collectPartitionOriginsForInstance(org.instanceUrl);
+  for (const origin of partitions) {
+    hit = await firstSidAmongHosts(hosts, origin);
+    if (hit?.sid) return hit.sid;
+  }
+
+  try {
+    const ctx = await discoverActiveTabContext();
+    if (ctx.ok && ctx.sid && instanceUrlsReferToSameOrg(ctx.instanceUrl, org.instanceUrl)) {
+      return ctx.sid;
+    }
+  } catch {}
+
+  return '';
 }

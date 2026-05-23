@@ -1,13 +1,21 @@
 /**
- * Suprime errores ruidosos de workers de Monaco en la vista de extensiones.
+ * Suprime errores ruidosos de workers de Monaco y avisos benignos de ResizeObserver
+ * (Monaco `automaticLayout` + cambios de panel en la misma pasada de layout).
  */
 (function suppressMonacoErrors() {
   const originalConsoleError = console.error;
   const originalConsoleWarn = console.warn;
 
+  function isResizeObserverLoopNoise(text) {
+    if (!text) return false;
+    const s = String(text);
+    return s.includes('ResizeObserver loop');
+  }
+
   console.error = function (...args) {
     const errorString = args.join(' ');
     if (
+      isResizeObserverLoopNoise(errorString) ||
       errorString.includes('workerMain.js') ||
       errorString.includes('vs/base/worker') ||
       errorString.includes('Failed trying to load default language strings') ||
@@ -35,6 +43,11 @@
   window.addEventListener(
     'error',
     (event) => {
+      if (isResizeObserverLoopNoise(event.message)) {
+        event.stopImmediatePropagation();
+        event.preventDefault();
+        return false;
+      }
       if (
         event.filename &&
         (event.filename.includes('workerMain.js') ||
@@ -52,6 +65,7 @@
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event.reason?.toString() || '';
     if (
+      isResizeObserverLoopNoise(reason) ||
       reason.includes('workerMain.js') ||
       reason.includes('vs/base/worker') ||
       reason.includes('vs/editor') ||

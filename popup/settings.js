@@ -77,6 +77,21 @@ function wireAppearanceSettings() {
   monSel?.addEventListener('change', async () => {
     await saveExtensionSettings({ monacoTheme: normalizeMonacoThemeId(monSel.value) });
   });
+  const telemetryCb = document.getElementById('settingsTelemetryEnabled');
+  void loadExtensionSettings().then((cfg) => {
+    if (telemetryCb) telemetryCb.checked = cfg.telemetryEnabled !== false;
+  });
+  telemetryCb?.addEventListener('change', async () => {
+    const enabling = !!telemetryCb.checked;
+    if (!enabling) {
+      try {
+        await bg({ type: 'telemetry:opt-out' });
+      } catch {
+        /* ignore */
+      }
+    }
+    await saveExtensionSettings({ telemetryEnabled: enabling });
+  });
 }
 
 async function bg(message) {
@@ -327,7 +342,7 @@ function wireOrgsBackup() {
   });
 
   document.getElementById('settingsImportReplace')?.addEventListener('click', () => {
-    if (!confirm(t('settings.backupImportReplaceConfirm'))) return;
+    // Debe ser síncrono en el gesto del usuario; confirm() antes rompe la activación.
     fileInput?.click();
   });
 
@@ -335,6 +350,7 @@ function wireOrgsBackup() {
     const f = fileInput.files && fileInput.files[0];
     fileInput.value = '';
     if (!f) return;
+    if (!confirm(t('settings.backupImportReplaceConfirm'))) return;
     setStatus('');
     let data;
     try {

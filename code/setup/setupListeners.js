@@ -2,7 +2,7 @@ import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { saveScrollPosition } from '../ui/scrollRestore.js';
 import { renderEditor, focusDiffAtIndex, navigateViewerChunk } from '../editor/editorRender.js';
-import { applyWordWrapToCurrentEditors } from '../editor/monaco.js';
+import { applyWordWrapToCurrentEditors, scheduleMonacoLayout } from '../editor/monaco.js';
 import { updateOrgDropdownLayout, updateAuthIndicators, swapOrgs } from '../ui/orgs.js';
 import { renderSavedItems, removeAllItems } from '../ui/listUi.js';
 import { saveItemsToStorage } from '../core/persistence.js';
@@ -11,6 +11,7 @@ import { getTotalDiffLines } from '../editor/diffUtils.js';
 import { downloadDiffHtml } from '../editor/exportDiffHtml.js';
 import { copyUnifiedDiffToClipboard } from '../editor/exportUnifiedDiff.js';
 import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
+import { resolveRetrieveTargetItem } from '../ui/viewerChrome.js';
 import { getSelectedArtifactType } from '../ui/artifactTypeUi.js';
 import { refreshGeneratePackageXmlTypes } from '../ui/generatePackageXmlPanel.js';
 import { resetFieldDependencyToInitial } from '../ui/fieldDependencyPanel.js';
@@ -169,6 +170,7 @@ export function setupResizable() {
   const sidebar = document.querySelector('.sidebar');
   const resizeHandle = document.querySelector('.resize-handle');
   let isResizing = false;
+  let layoutAfterResize = null;
 
   resizeHandle.addEventListener('mousedown', (e) => {
     isResizing = true;
@@ -178,11 +180,11 @@ export function setupResizable() {
 
   document.addEventListener('mousemove', (e) => {
     if (!isResizing) return;
-    
+
     const newWidth = e.clientX;
     const minWidth = 200;
     const maxWidth = 500;
-    
+
     if (newWidth >= minWidth && newWidth <= maxWidth) {
       sidebar.style.width = newWidth + 'px';
     }
@@ -193,6 +195,11 @@ export function setupResizable() {
       isResizing = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
+      if (layoutAfterResize) cancelAnimationFrame(layoutAfterResize);
+      layoutAfterResize = requestAnimationFrame(() => {
+        layoutAfterResize = null;
+        scheduleMonacoLayout();
+      });
     }
   });
 }
@@ -345,6 +352,7 @@ export function setupClearHistoryButton() {
   const clearBtn = document.getElementById('clearHistoryButton');
   if (clearBtn) {
     clearBtn.addEventListener('click', () => {
+      if (!window.confirm(t('code.clearSavedFilesConfirm'))) return;
       removeAllItems();
     });
   }
@@ -533,16 +541,8 @@ export function setupDiffNavigation() {
   // Wire retrieve button (solo para tipos con retrieve)
   if (retrieveAllBtn) {
     retrieveAllBtn.addEventListener('click', async () => {
-      if (!state.selectedItem) return;
-      const item = state.selectedItem;
-      if (
-        item.type !== 'PermissionSet' &&
-        item.type !== 'Profile' &&
-        item.type !== 'FlexiPage' &&
-        item.type !== 'PackageXml'
-      ) {
-        return;
-      }
+      const item = resolveRetrieveTargetItem(state.selectedItem);
+      if (!item) return;
       await retrieveAndLoadFromZip(item);
     });
   }

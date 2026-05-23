@@ -15,6 +15,10 @@ import {
   loadExtensionSettings,
   getApexTestsCoverageMinPercent
 } from '../../shared/extensionSettings.js';
+import { parseApexStackFrameLine } from '../../shared/apexStackTraceParse.js';
+import { escapeHtml } from '../../shared/htmlEscape.js';
+import { sanitizeUiError } from '../../shared/sanitizeUiError.js';
+import { randomStagingId } from '../../shared/randomId.js';
 
 const STORAGE_KEY = 'apexTestRunJobs';
 const MAX_POLLS_ALL_MISSING = 10;
@@ -216,23 +220,6 @@ export function initApexTestsViewLogModal() {
 }
 
 /**
- * P. ej. `Class.CC_MiClase_Test.miMetodo: line 237, column 1`
- * @returns {{ className: string, line: number } | null}
- */
-function parseApexStackFrameLine(line) {
-  const m = String(line).trim().match(/^Class\.(.+):\s*line\s+(\d+)/i);
-  if (!m) return null;
-  const beforeLine = m[1].trim();
-  const lineNum = parseInt(m[2], 10);
-  if (!Number.isFinite(lineNum) || lineNum < 1) return null;
-  const lastDot = beforeLine.lastIndexOf('.');
-  if (lastDot < 1) return null;
-  const className = beforeLine.slice(0, lastDot).trim();
-  if (!className) return null;
-  return { className, line: lineNum };
-}
-
-/**
  * @param {string} stackText
  * @param {string} orgId
  */
@@ -328,13 +315,13 @@ async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
   if (staged.ok && staged.id) {
     window.open(
       chrome.runtime.getURL(
-        `code/apex-log-viewer.html?sid=${encodeURIComponent(staged.id)}${lineQs}`
+        `code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}${lineQs}`
       ),
       '_blank'
     );
     return true;
   }
-  const storageKey = `sfoc_al_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+  const storageKey = randomStagingId('sfoc_al_');
   try {
     await chrome.storage.local.set({
       [storageKey]: {
@@ -355,7 +342,7 @@ async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
     /* cuota storage.local */
   }
   try {
-    const idbId = `idb_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+    const idbId = randomStagingId('idb_');
     await apexViewerIdbPut(idbId, {
       title,
       content,
@@ -470,9 +457,11 @@ async function openRunCoverageModal(orgId, jobIdForApi) {
     minCoveragePercent
   });
   if (!res.ok) {
-    body.innerHTML = `<p class="apex-tests-coverage-error">${
-      res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.coverageLoadError')
-    }</p>`;
+    const errMsg =
+      res.reason === 'NO_SID'
+        ? t('toast.noSession')
+        : sanitizeUiError(res.error) || t('apexTests.coverageLoadError');
+    body.innerHTML = `<p class="apex-tests-coverage-error">${escapeHtml(errMsg)}</p>`;
     return;
   }
   const thresh = Math.min(1, Math.max(0, minCoveragePercent / 100));
@@ -570,7 +559,7 @@ async function openCoverageLineViewer(orgId, jobId, classOrTriggerId, classLabel
     );
     return;
   }
-  const key = `sfoc_cv_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+  const key = randomStagingId('sfoc_cv_');
   try {
     await chrome.storage.local.set({
       [key]: {
@@ -1057,10 +1046,40 @@ function formatApexJobStatus(status) {
   return translated === key ? raw : translated;
 }
 
-function apexJobStatusVisual(status) {
+/** AsyncApexJob `Completed` no implica que todos los métodos hayan pasado. */
+function apexTestRunHasFailures(outcomeCounts, job) {
+  if (outcomeCounts && typeof outcomeCounts === 'object') {
+    const failN =
+      Number(outcomeCounts.Fail || 0) +
+      Number(outcomeCounts.CompileFail || 0);
+    if (failN > 0) return true;
+  }
+  const errs = job?.NumberOfErrors;
+  if (errs != null && Number(errs) > 0) return true;
+  return false;
+}
+
+function formatEffectiveApexJobStatus(status, outcomeCounts, job) {
+  const raw = status != null ? String(status).trim() : '';
+  if (raw === 'Completed' && apexTestRunHasFailures(outcomeCounts, job)) {
+    const key = 'apexTests.jobStatus.CompletedWithFailures';
+    const translated = t(key);
+    return translated === key ? `${formatApexJobStatus(raw)} · ${t('apexTests.outcome.Fail')}` : translated;
+  }
+  return formatApexJobStatus(status);
+}
+
+function apexJobStatusVisual(status, outcomeCounts, job) {
   const raw = status != null ? String(status).trim() : '';
   if (!raw) {
     return { icon: 'dot', tone: 'unknown', label: '—' };
+  }
+  if (raw === 'Completed' && apexTestRunHasFailures(outcomeCounts, job)) {
+    return {
+      icon: 'x',
+      tone: 'failed',
+      label: formatEffectiveApexJobStatus(raw, outcomeCounts, job)
+    };
   }
   switch (raw) {
     case 'Queued':
@@ -1153,8 +1172,8 @@ function createStatusIconSvg(kind) {
   return svg;
 }
 
-function buildApexJobStatusNode(status) {
-  const meta = apexJobStatusVisual(status);
+function buildApexJobStatusNode(status, outcomeCounts, job) {
+  const meta = apexJobStatusVisual(status, outcomeCounts, job);
   const wrap = document.createElement('span');
   wrap.className = `apex-tests-status-chip apex-tests-status-${meta.tone}`;
   const icon = document.createElement('span');
@@ -1227,9 +1246,10 @@ async function openApexMethodFromRunRow(orgId, row) {
   await openApexTestClassInMonaco(orgId, pick, line ? { initialLine: line } : {});
 }
 
-async function loadFailures(orgId, jobId) {
+async function loadFailures(orgId, jobId, opts = {}) {
   const ck = runExpandKey(orgId, jobId);
-  if (failuresCache.has(ck)) return failuresCache.get(ck);
+  const useCache = opts.useCache !== false;
+  if (useCache && failuresCache.has(ck)) return failuresCache.get(ck);
   const res = await bg({ type: 'apexTests:getRunFailures', orgId, jobId });
   if (!res.ok) {
     const err = {
@@ -1239,11 +1259,11 @@ async function loadFailures(orgId, jobId) {
           ? t('toast.noSession')
           : res.error || t('apexTests.runsLoadFailuresError')
     };
-    failuresCache.set(ck, err);
+    if (useCache) failuresCache.set(ck, err);
     return err;
   }
   const ok = { rows: res.failures || [] };
-  failuresCache.set(ck, ok);
+  if (useCache) failuresCache.set(ck, ok);
   return ok;
 }
 
@@ -1266,6 +1286,67 @@ async function loadRunMethods(orgId, jobId, opts = {}) {
   const ok = { rows: res.methods || [] };
   if (useCache) methodsCache.set(ck, ok);
   return ok;
+}
+
+function isFailedApexTestOutcome(outcome) {
+  const o = String(outcome ?? '').trim();
+  return o === 'Fail' || o === 'CompileFail';
+}
+
+/** Une trazas de `getRunFailures` si el listado de métodos no las trae. */
+function mergeFailureStackTracesIntoMethods(methodRows, failureRows) {
+  if (!Array.isArray(methodRows) || !methodRows.length) return methodRows || [];
+  if (!Array.isArray(failureRows) || !failureRows.length) return methodRows;
+  const stackByKey = new Map();
+  for (const f of failureRows) {
+    const st = f?.StackTrace != null ? String(f.StackTrace).trim() : '';
+    if (!st) continue;
+    const cls = apexClassNameFromResult(f);
+    const method = f?.MethodName != null ? String(f.MethodName).trim() : '';
+    stackByKey.set(`${cls}::${method}`, st);
+  }
+  if (!stackByKey.size) return methodRows;
+  return methodRows.map((row) => {
+    const existing = row?.StackTrace != null ? String(row.StackTrace).trim() : '';
+    if (existing) return row;
+    const cls = apexClassNameFromResult(row);
+    const method = row?.MethodName != null ? String(row.MethodName).trim() : '';
+    const st = stackByKey.get(`${cls}::${method}`);
+    return st ? { ...row, StackTrace: st } : row;
+  });
+}
+
+function methodsNeedFailureStackEnrichment(methodRows) {
+  if (!Array.isArray(methodRows) || !methodRows.length) return false;
+  return methodRows.some((row) => {
+    if (!isFailedApexTestOutcome(row.Outcome)) return false;
+    const st = row?.StackTrace != null ? String(row.StackTrace).trim() : '';
+    return !st;
+  });
+}
+
+/** Traza de fallos en vivo (mientras el job corre) y al finalizar. */
+async function enrichMethodsWithStackTraces(orgId, jobId, methodRows, { terminal = false } = {}) {
+  if (!methodsNeedFailureStackEnrichment(methodRows)) return methodRows;
+  const fails = await loadFailures(orgId, jobId, { useCache: !!terminal });
+  if (fails.error || !fails.rows?.length) return methodRows;
+  return mergeFailureStackTracesIntoMethods(methodRows, fails.rows);
+}
+
+function clearRunDetailCaches(orgId, jobId) {
+  const ck = runExpandKey(orgId, jobId);
+  methodsCache.delete(ck);
+  failuresCache.delete(ck);
+}
+
+function buildMethodsDetailTableHeadRow() {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<th>${t('apexTests.runsColClass')}</th>
+    <th>${t('apexTests.runsColMethod')}</th>
+    <th>${t('apexTests.runsColOutcome')}</th>
+    <th>${t('apexTests.runsColMessage')}</th>
+    <th>${t('apexTests.runsColStackTrace')}</th>`;
+  return tr;
 }
 
 function fillMethodsTbody(tb, rows, orgId) {
@@ -1300,10 +1381,21 @@ function fillMethodsTbody(tb, rows, orgId) {
     c4.className = 'apex-tests-runs-msg-cell';
     const msgText = row.Message != null ? String(row.Message).trim() : '';
     c4.textContent = msgText || '—';
+    const c5 = document.createElement('td');
+    c5.className = 'apex-tests-runs-stack-cell';
+    const stackText = row?.StackTrace != null ? String(row.StackTrace).trim() : '';
+    if (isFailedApexTestOutcome(row.Outcome) && stackText) {
+      const pre = buildStackTracePreWithCtrlLinks(stackText, orgId);
+      pre.title = t('apexTests.methodOpenCtrlClickHint');
+      c5.appendChild(pre);
+    } else {
+      c5.textContent = '—';
+    }
     rtr.appendChild(c1);
     rtr.appendChild(c2);
     rtr.appendChild(c3);
     rtr.appendChild(c4);
+    rtr.appendChild(c5);
     tb.appendChild(rtr);
   }
 }
@@ -1316,7 +1408,8 @@ function methodsRowsSignature(rows) {
       const m = row?.MethodName != null ? String(row.MethodName) : '';
       const o = row?.Outcome != null ? String(row.Outcome) : '';
       const msg = row?.Message != null ? String(row.Message) : '';
-      return `${cls}::${m}::${o}::${msg}`;
+      const st = row?.StackTrace != null ? String(row.StackTrace) : '';
+      return `${cls}::${m}::${o}::${msg}::${st}`;
     })
     .join('\n');
 }
@@ -1338,9 +1431,15 @@ async function refreshExpandedMethodsInPlace() {
     .trim()
     .toLowerCase();
   const terminal = ['completed', 'failed', 'aborted', 'error'].includes(st);
-  const data = await loadRunMethods(parsed.orgId, canonicalJobId, { useCache: terminal });
+  const data = await loadRunMethods(parsed.orgId, canonicalJobId, { useCache: false });
   if (!host.isConnected || data.error) return;
-  if (!Array.isArray(data.rows) || !data.rows.length) {
+  let methodRows = data.rows;
+  if (Array.isArray(methodRows) && methodRows.length) {
+    methodRows = await enrichMethodsWithStackTraces(parsed.orgId, canonicalJobId, methodRows, {
+      terminal
+    });
+  }
+  if (!Array.isArray(methodRows) || !methodRows.length) {
     if (!host.querySelector('.apex-tests-runs-detail-empty')) {
       host.innerHTML = '';
       const p = document.createElement('p');
@@ -1355,12 +1454,7 @@ async function refreshExpandedMethodsInPlace() {
     tbl = document.createElement('table');
     tbl.className = 'apex-tests-runs-failures-table';
     const thead = document.createElement('thead');
-    thead.innerHTML = `<tr>
-      <th>${t('apexTests.runsColClass')}</th>
-      <th>${t('apexTests.runsColMethod')}</th>
-      <th>${t('apexTests.runsColOutcome')}</th>
-      <th>${t('apexTests.runsColMessage')}</th>
-    </tr>`;
+    thead.appendChild(buildMethodsDetailTableHeadRow());
     tbl.appendChild(thead);
     tbl.appendChild(document.createElement('tbody'));
     host.innerHTML = '';
@@ -1368,10 +1462,10 @@ async function refreshExpandedMethodsInPlace() {
   }
   const tb = tbl.querySelector('tbody');
   if (!tb) return;
-  const nextSig = methodsRowsSignature(data.rows);
+  const nextSig = methodsRowsSignature(methodRows);
   const prevSig = tb.dataset.rowsSig || '';
   if (nextSig === prevSig) return;
-  fillMethodsTbody(tb, data.rows, parsed.orgId);
+  fillMethodsTbody(tb, methodRows, parsed.orgId);
   tb.dataset.rowsSig = nextSig;
 }
 
@@ -1396,6 +1490,12 @@ async function refreshExpandedJobStatusInPlace() {
 
   mainRow.dataset.jobStatus = nextStatus;
   mainRow.dataset.canonicalJobId = String(run.job.Id || run.canonicalJobId || parsed.jobId);
+  const prevLc = prevStatus.trim().toLowerCase();
+  const nowTerminal = ['completed', 'failed', 'aborted', 'error'].includes(nextStatus);
+  if (nowTerminal && !['completed', 'failed', 'aborted', 'error'].includes(prevLc)) {
+    clearRunDetailCaches(parsed.orgId, mainRow.dataset.canonicalJobId || parsed.jobId);
+    void refreshExpandedMethodsInPlace();
+  }
   // Evita volver a pintar estados obsoletos al cerrar el expandido.
   lastPollResult = null;
   const tdStatus = mainRow.querySelector('.apex-tests-runs-td-status');
@@ -1488,7 +1588,7 @@ function maybeNotifyTestRunCompletions(enriched, pollsByOrgId) {
     const classesSummary = formatApexTestNotificationClassSummary(j, run, jid);
     let notifyMsg = t('apexTests.notifyRunDoneBody', {
       env: envLabel,
-      status: formatApexJobStatus(status),
+      status: formatEffectiveApexJobStatus(status, run.outcomeCounts, run.job),
       classes: classesSummary
     });
     if (notifyMsg.length > 256) notifyMsg = `${notifyMsg.slice(0, 253)}…`;
@@ -1640,14 +1740,14 @@ function renderRunStatusCell(tdStatus, run, runBody) {
   if (names.length) {
     const s1 = document.createElement('span');
     s1.className = 'apex-tests-runs-status-main';
-    s1.appendChild(buildApexJobStatusNode(main));
+    s1.appendChild(buildApexJobStatusNode(main, run.outcomeCounts, run.job));
     tdStatus.appendChild(s1);
     const sub = document.createElement('div');
     sub.className = 'apex-tests-runs-class-sub';
     sub.textContent = names.join(', ');
     tdStatus.appendChild(sub);
   } else {
-    tdStatus.replaceChildren(buildApexJobStatusNode(main));
+    tdStatus.replaceChildren(buildApexJobStatusNode(main, run.outcomeCounts, run.job));
   }
 }
 
@@ -2202,7 +2302,7 @@ async function renderHubRunsTable(opts = {}) {
       tbody.appendChild(trSub);
 
       const failJobId = run.job?.Id || run.canonicalJobId || jobId;
-      const data = await loadRunMethods(rowOrgId, failJobId, { useCache: !!terminal });
+      const data = await loadRunMethods(rowOrgId, failJobId, { useCache: false });
       inner.innerHTML = '';
       if (data.error) {
         const p = document.createElement('p');
@@ -2210,20 +2310,19 @@ async function renderHubRunsTable(opts = {}) {
         p.textContent = data.error;
         inner.appendChild(p);
       }
-      if (data.rows && data.rows.length) {
+      let methodRows = data.rows;
+      if (Array.isArray(methodRows) && methodRows.length) {
+        methodRows = await enrichMethodsWithStackTraces(rowOrgId, failJobId, methodRows, { terminal });
+      }
+      if (methodRows && methodRows.length) {
         const tbl = document.createElement('table');
         tbl.className = 'apex-tests-runs-failures-table';
         const thead = document.createElement('thead');
-        thead.innerHTML = `<tr>
-          <th>${t('apexTests.runsColClass')}</th>
-          <th>${t('apexTests.runsColMethod')}</th>
-          <th>${t('apexTests.runsColOutcome')}</th>
-          <th>${t('apexTests.runsColMessage')}</th>
-        </tr>`;
+        thead.appendChild(buildMethodsDetailTableHeadRow());
         tbl.appendChild(thead);
         const tb = document.createElement('tbody');
-        fillMethodsTbody(tb, data.rows, rowOrgId);
-        tb.dataset.rowsSig = methodsRowsSignature(data.rows);
+        fillMethodsTbody(tb, methodRows, rowOrgId);
+        tb.dataset.rowsSig = methodsRowsSignature(methodRows);
         tbl.appendChild(tb);
         inner.appendChild(tbl);
       } else if (!data.error) {

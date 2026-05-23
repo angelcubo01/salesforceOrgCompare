@@ -70,7 +70,9 @@ const DEFAULTS = {
   /** Patrones LIKE para SOQL (coma): qué ApexClass se consideran “de prueba” al listar. */
   apexTestsClassNameLikePatterns: '%test%',
   /** DeveloperName del registro DebugLevel al activar trazas USER_DEBUG antes de ejecutar tests Apex. */
-  apexTestsTraceDebugLevel: 'SFDC_DevConsole'
+  apexTestsTraceDebugLevel: 'SFDC_DevConsole',
+  /** Telemetría anónima de uso (Google Apps Script). Desactivar en Ajustes. */
+  telemetryEnabled: true
 };
 
 /** @type {typeof DEFAULTS} */
@@ -128,6 +130,10 @@ function normalizeConfig(partial) {
     }
     if (k === 'apexTestsClassNameLikePatterns') {
       next[k] = normalizeApexTestClassPatterns(src[k] != null ? src[k] : undefined);
+      continue;
+    }
+    if (k === 'telemetryEnabled') {
+      next[k] = src[k] !== false;
       continue;
     }
     if (src[k] != null) next[k] = clampField(k, src[k]);
@@ -256,6 +262,11 @@ export function getUiTheme() {
 /** @returns {string} */
 export function getMonacoThemeId() {
   return normalizeMonacoThemeId(cache.monacoTheme);
+}
+
+/** @returns {boolean} */
+export function getTelemetryEnabled() {
+  return cache.telemetryEnabled !== false;
 }
 
 /**

@@ -6,6 +6,63 @@ import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { getFileKey } from '../lib/itemLabels.js';
 import { saveScrollPosition } from './scrollRestore.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
+import { showToast } from './toast.js';
+
+/** Evita sincronizaciones duplicadas al abrir el desplegable (focus + mousedown). */
+let syncOrgsInFlight = null;
+
+/**
+ * Rellena los desplegables de org conservando la selección actual si sigue existiendo.
+ * @param {import('../core/state.js').state.orgsList} orgs
+ * @param {Record<string, string>} aliases
+ * @param {Record<string, string>} groups
+ */
+function populateOrgSelects(orgs, aliases, groups) {
+  state.orgsList = orgs;
+  const left = document.getElementById('leftOrg');
+  const right = document.getElementById('rightOrg');
+  if (!left || !right) return;
+
+  const prevLeft = state.leftOrgId;
+  const prevRight = state.rightOrgId;
+
+  left.innerHTML = '';
+  right.innerHTML = '';
+  left.appendChild(option('', t('orgs.none')));
+  right.appendChild(option('', t('orgs.none')));
+
+  const extrasForLabel = { aliases, groups };
+  for (const o of orgs) {
+    const label = buildOrgPicklistLabel(o, extrasForLabel);
+    left.appendChild(option(o.id, label));
+    right.appendChild(option(o.id, label));
+  }
+
+  const leftValid = prevLeft && orgs.some((o) => o.id === prevLeft);
+  const rightValid = prevRight && orgs.some((o) => o.id === prevRight);
+
+  if (leftValid) {
+    state.leftOrgId = prevLeft;
+    left.value = prevLeft;
+  } else if (!prevLeft && orgs.length > 0) {
+    state.leftOrgId = orgs[0].id;
+    left.value = state.leftOrgId;
+  } else {
+    left.value = state.leftOrgId || '';
+  }
+
+  if (rightValid) {
+    state.rightOrgId = prevRight;
+    right.value = prevRight;
+  } else if (!prevRight && orgs.length >= 2) {
+    state.rightOrgId = orgs[1].id;
+    right.value = state.rightOrgId;
+  } else {
+    right.value = state.rightOrgId || '';
+  }
+
+  ensureRightOrgDistinctFromLeft();
+}
 
 export async function loadSavedOrgs() {
   const [res, auth, extras] = await Promise.all([
@@ -14,33 +71,56 @@ export async function loadSavedOrgs() {
     chrome.storage.sync.get(['orgAliases', 'orgGroups'])
   ]);
   state.authStatuses = auth.ok ? (auth.statuses || {}) : {};
-  const aliases = extras.orgAliases || {};
-  const groups = extras.orgGroups || {};
   const orgs = res.ok ? (res.orgs || []) : [];
-  state.orgsList = orgs;
-  const left = document.getElementById('leftOrg');
-  const right = document.getElementById('rightOrg');
-  left.innerHTML = '';
-  right.innerHTML = '';
-  left.appendChild(option('', t('orgs.none')));
-  right.appendChild(option('', t('orgs.none')));
-  const extrasForLabel = { aliases, groups };
-  for (const o of orgs) {
-    const label = buildOrgPicklistLabel(o, extrasForLabel);
-    left.appendChild(option(o.id, label));
-    right.appendChild(option(o.id, label));
-  }
-  if (!state.leftOrgId && orgs.length > 0) {
-    state.leftOrgId = orgs[0].id;
-    left.value = state.leftOrgId;
-  }
-  if (!state.rightOrgId && orgs.length >= 2) {
-    state.rightOrgId = orgs[1].id;
-    right.value = state.rightOrgId;
-  }
-  ensureRightOrgDistinctFromLeft();
+  populateOrgSelects(orgs, extras.orgAliases || {}, extras.orgGroups || {});
   updateAuthIndicators();
   updateOrgSwapButtonState();
+}
+
+/**
+ * Al abrir un desplegable de org: detecta la pestaña Salesforce activa, añade la org si es nueva
+ * y actualiza la lista sin recargar la aplicación.
+ */
+export async function syncOrgsWhenOpeningSelector() {
+  if (syncOrgsInFlight) return syncOrgsInFlight;
+  syncOrgsInFlight = (async () => {
+    try {
+      const [res, extras] = await Promise.all([
+        bg({ type: 'syncOrgsFromActiveTab' }),
+        chrome.storage.sync.get(['orgAliases', 'orgGroups'])
+      ]);
+      if (!res?.ok) return;
+      state.authStatuses = res.statuses || {};
+      const orgs = res.orgs || [];
+      const aliases = extras.orgAliases || {};
+      const groups = extras.orgGroups || {};
+      populateOrgSelects(orgs, aliases, groups);
+      updateAuthIndicators();
+      updateOrgSwapButtonState();
+      if (res.addedOrg) {
+        const name = buildOrgPicklistLabel(res.addedOrg, { aliases, groups });
+        showToast(t('orgs.autoAdded', { name }), 'info', { bypassCooldown: true });
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      syncOrgsInFlight = null;
+    }
+  })();
+  return syncOrgsInFlight;
+}
+
+/** focus/mousedown en desplegables de org → sincronizar lista y org detectada en pestaña activa. */
+export function setupOrgSelectorAutoSync() {
+  for (const id of ['leftOrg', 'rightOrg']) {
+    const select = document.getElementById(id);
+    if (!select) continue;
+    const run = () => {
+      void syncOrgsWhenOpeningSelector();
+    };
+    select.addEventListener('focus', run);
+    select.addEventListener('mousedown', run);
+  }
 }
 
 /** Si izquierda y derecha son la misma org con ≥2 guardadas, asigna a la derecha otra distinta (p. ej. tras ?orgId=). */

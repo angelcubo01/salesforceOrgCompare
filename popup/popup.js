@@ -1,7 +1,7 @@
-import { EXTENSION_DISPLAY_NAME, UPDATE_PAGE_URL } from '../code/core/constants.js';
-import { t, loadLang, getCurrentLang } from '../shared/i18n.js';
-import { sameGroupKey } from '../shared/orgPrefs.js';
+import { t, loadLang } from '../shared/i18n.js';
+import { sameGroupKey, isOrgAlreadySaved } from '../shared/orgPrefs.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
+import { setupPopupHelp } from './popupHelp.js';
 
 async function bg(message) {
   return await chrome.runtime.sendMessage(message);
@@ -311,10 +311,12 @@ async function refreshSaved() {
   __authStatuses = auth.ok ? (auth.statuses || {}) : {};
   const orgs = res.ok ? (res.orgs || []) : [];
   renderSaved(orgs);
-  window.__savedOrgIds = new Set(orgs.map(o => o.id));
+  window.__savedOrgIds = new Set(orgs.map((o) => o.id));
+  window.__savedOrgs = orgs;
+  return orgs;
 }
 
-async function refreshDetected() {
+async function refreshDetected(savedOrgs) {
   const row = document.getElementById('detectedRow');
   row.innerHTML = '';
   const res = await bg({ type: 'discoverActiveOrg' });
@@ -323,7 +325,8 @@ async function refreshDetected() {
     row.textContent = t('popup.noDetectedTab');
     return;
   }
-  if (window.__savedOrgIds && window.__savedOrgIds.has(res.org.id)) {
+  const list = savedOrgs ?? window.__savedOrgs ?? [];
+  if (isOrgAlreadySaved(res.org, list)) {
     row.classList.add('muted');
     row.textContent = t('popup.alreadyAdded');
   } else {
@@ -348,82 +351,8 @@ async function refreshDetected() {
 }
 
 async function refresh() {
-  await Promise.all([refreshSaved(), refreshDetected()]);
-}
-
-async function checkForExtensionUpdates() {
-  try {
-    const res = await bg({ type: 'version:getUpdateInfo' });
-    if (!res || !res.ok) return;
-
-    const banner = document.getElementById('updateBanner');
-    const bannerText = document.getElementById('updateBannerText');
-    const bannerBtn = document.getElementById('updateBannerButton');
-    const blocker = document.getElementById('updateBlocker');
-    const blockerText = document.getElementById('updateBlockerText');
-    const blockerBtn = document.getElementById('updateBlockerButton');
-
-    const lang = getCurrentLang();
-    const targetUrl = res[`updateUrl_${lang}`] || res.updateUrl || UPDATE_PAGE_URL;
-    const notes = res[`notes_${lang}`] || res.notes || '';
-    const goToUpdatePage = () => {
-      if (!targetUrl || !String(targetUrl).startsWith('https://')) return;
-      chrome.tabs.create({ url: targetUrl });
-    };
-
-    if (res.status === 'majorUpdateRequired') {
-      if (blocker && blockerText && blockerBtn) {
-        blocker.classList.remove('hidden');
-
-        const baseText = t('popup.majorUpdate', {
-          remoteVersion: res.remoteVersion,
-          extensionName: EXTENSION_DISPLAY_NAME,
-          currentVersion: res.currentVersion
-        });
-
-        if (notes && typeof notes === 'string' && notes.trim()) {
-          const notesSafe = notes
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-          blockerText.innerHTML =
-            `${baseText}<br><br><strong>${t('popup.changes')}</strong><br>${notesSafe}`;
-        } else {
-          blockerText.textContent = baseText;
-        }
-
-        blockerBtn.addEventListener('click', goToUpdatePage);
-      }
-      return;
-    }
-
-    if (res.status === 'minorUpdateAvailable') {
-      if (banner && bannerText && bannerBtn) {
-        banner.classList.remove('hidden');
-
-        const baseText = t('popup.minorUpdate', {
-          remoteVersion: res.remoteVersion,
-          currentVersion: res.currentVersion
-        });
-
-        if (notes && typeof notes === 'string' && notes.trim()) {
-          const notesSafe = notes
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-          bannerText.innerHTML =
-            `${baseText}<br><strong>${t('popup.changes')}</strong> ${notesSafe}`;
-        } else {
-          bannerText.textContent = baseText;
-        }
-
-        bannerBtn.addEventListener('click', goToUpdatePage);
-      }
-      return;
-    }
-  } catch {
-    // Silenciar errores de red/parseo de actualización
-  }
+  const savedOrgs = await refreshSaved();
+  await refreshDetected(savedOrgs);
 }
 
 document.getElementById('openCodeBtn').addEventListener('click', async () => {
@@ -442,8 +371,8 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   applyUiThemeToDocument(document);
   await loadLang();
   applyStaticTranslations();
+  setupPopupHelp();
 
-  checkForExtensionUpdates();
   refresh();
 })();
 

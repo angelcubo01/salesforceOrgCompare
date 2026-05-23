@@ -1,5 +1,6 @@
 import { state } from '../core/state.js';
 import { t } from '../../shared/i18n.js';
+import { sanitizeUiError } from '../../shared/sanitizeUiError.js';
 
 export function showToast(message, type = 'info', opts = {}) {
   try {
@@ -12,7 +13,8 @@ export function showToast(message, type = 'info', opts = {}) {
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
-    const bodyText = String(message || '');
+    const bodyText =
+      type === 'error' || type === 'warn' ? sanitizeUiError(message) : String(message || '');
     const title = opts.title != null && String(opts.title).trim() ? String(opts.title).trim() : '';
     if (title) {
       const titleEl = document.createElement('div');
@@ -33,8 +35,12 @@ export function showToast(message, type = 'info', opts = {}) {
   } catch {}
 }
 
-/** Muestra un toast con spinner que permanece hasta que se llame a dismissSpinnerToast(). */
-export function showToastWithSpinner(message) {
+/**
+ * Toast con spinner hasta `dismissSpinnerToast()`.
+ * @param {string} message
+ * @param {{ onCancel?: () => void }} [opts]
+ */
+export function showToastWithSpinner(message, opts = {}) {
   dismissSpinnerToast();
   try {
     const container = document.getElementById('toastContainer');
@@ -42,13 +48,30 @@ export function showToastWithSpinner(message) {
     const toast = document.createElement('div');
     toast.className = 'toast info toast-spinner';
     toast.setAttribute('data-spinner-toast', '1');
+
     const icon = document.createElement('span');
     icon.className = 'toast-spinner-icon';
     icon.setAttribute('aria-hidden', 'true');
+
     const text = document.createElement('span');
+    text.className = 'toast-spinner-text';
     text.textContent = String(message || t('toast.loading'));
+
     toast.appendChild(icon);
     toast.appendChild(text);
+
+    if (typeof opts.onCancel === 'function') {
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button';
+      cancelBtn.className = 'toast-spinner-cancel';
+      cancelBtn.textContent = t('toast.cancel');
+      cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        opts.onCancel();
+      });
+      toast.appendChild(cancelBtn);
+    }
+
     container.appendChild(toast);
     state.spinnerToast = toast;
   } catch {}

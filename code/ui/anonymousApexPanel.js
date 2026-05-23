@@ -8,6 +8,7 @@ import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
 import { applyArtifactTypeUi } from './artifactTypeUi.js';
 import { navigateToModeAndTool } from './appModeNav.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
+import { randomStagingId } from '../../shared/randomId.js';
 
 const ANON_EDITOR_CACHE_KEY = 'sfoc_anon_apex_editor_text';
 const ANON_SAVED_SCRIPTS_KEY = 'sfoc_anon_apex_saved_scripts';
@@ -59,12 +60,12 @@ async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
   });
   if (staged.ok && staged.id) {
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?sid=${encodeURIComponent(staged.id)}${lineQs}`),
+      chrome.runtime.getURL(`code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}${lineQs}`),
       '_blank'
     );
     return true;
   }
-  const storageKey = `sfoc_aa_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+  const storageKey = randomStagingId('sfoc_aa_');
   try {
     await chrome.storage.local.set({
       [storageKey]: {
@@ -83,7 +84,7 @@ async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
     /* storage fallback */
   }
   try {
-    const idbId = `idb_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+    const idbId = randomStagingId('idb_');
     await apexViewerIdbPut(idbId, {
       title,
       content,

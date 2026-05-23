@@ -24,8 +24,16 @@
             <div id="searchPanel" class="search sidebar-search-panel">
               <label for="searchInput" class="sidebar-search-label" data-i18n="code.searchTitle">Búsqueda</label>
               <div class="sidebar-search-input-row">
-                <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholder" placeholder="Buscar por nombre (mín. 3 caracteres)" maxlength="64" />
-                <button id="clearHistoryButton" type="button" class="clear-history-button" data-i18n-title="code.clearSavedFiles">
+                <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholderComparator" placeholder="Buscar componentes (mín. 1 carácter)" maxlength="64" />
+                <button type="button" id="packageXmlLoadBtn" class="sidebar-action-btn" data-i18n-title="code.loadPackageXmlTitle" aria-label="Cargar package.xml">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                  </svg>
+                </button>
+                <input type="file" id="packageXmlFileInput" accept=".xml,application/xml,text/xml" tabindex="-1" hidden />
+                <button id="clearHistoryButton" type="button" class="clear-history-button sidebar-action-btn" data-i18n-title="code.clearSavedFiles">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
@@ -37,10 +45,6 @@
               </div>
             </div>
             <div id="searchResults" class="results sfoc-autocomplete-panel sidebar-search-results" role="listbox" hidden></div>
-            <div id="packageXmlPanel" class="package-xml-panel hidden" aria-label="Importar package.xml">
-              <input type="file" id="packageXmlFileInput" accept=".xml,application/xml,text/xml" tabindex="-1" />
-              <button type="button" id="packageXmlLoadBtn" class="package-xml-load-btn" data-i18n="code.loadFile">Cargar fichero</button>
-            </div>
           </div>
         </div>
         <div id="compareListToolbar" class="compare-list-toolbar hidden" aria-label="Lista de comparación">
@@ -82,39 +86,18 @@
                 Inicio
               </button>
 
-              <div class="app-mode-dropdown" data-mode="compare">
-                <button
-                  type="button"
-                  role="tab"
-                  class="app-mode-tab app-mode-tab-trigger"
-                  id="appModeTabCompare"
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                  aria-selected="false"
-                  data-i18n="code.appModeCompare"
-                  data-i18n-title="code.appModeCompareTitle"
-                ></button>
-                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuCompare">
-                  <div class="app-mode-submenu-inner"></div>
-                </div>
-              </div>
-
-              <div class="app-mode-dropdown" data-mode="security">
-                <button
-                  type="button"
-                  role="tab"
-                  class="app-mode-tab app-mode-tab-trigger"
-                  id="appModeTabSecurity"
-                  aria-haspopup="true"
-                  aria-expanded="false"
-                  aria-selected="false"
-                  data-i18n="code.appModeSecurity"
-                  data-i18n-title="code.appModeSecurityTitle"
-                ></button>
-                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuSecurity">
-                  <div class="app-mode-submenu-inner"></div>
-                </div>
-              </div>
+              <button
+                type="button"
+                role="tab"
+                class="app-mode-tab"
+                id="appModeTabComparator"
+                data-mode="comparator"
+                aria-selected="false"
+                data-i18n="code.appModeComparator"
+                data-i18n-title="code.appModeComparatorTitle"
+              >
+                Comparador
+              </button>
 
               <div class="app-mode-dropdown" data-mode="development">
                 <button
@@ -168,6 +151,16 @@
               </div>
             </div>
         </nav>
+          <button
+            type="button"
+            id="appHelpBtn"
+            class="app-toolbar-help-btn"
+            data-i18n-title="help.openTitle"
+            data-i18n-aria-label="help.openTitle"
+            aria-haspopup="dialog"
+          >
+            <span class="app-toolbar-help-icon" aria-hidden="true">?</span>
+          </button>
         </div>
         <p id="compareContextTitle" class="compare-context-title hidden" aria-live="polite"></p>
         <div id="orgDropdowns" class="org-dropdowns">
@@ -204,38 +197,27 @@
             <div id="appLandingDiscoverBanner" class="app-landing-discover-banner" role="note">
               <p id="appLandingDiscoverBannerText" class="app-landing-discover-banner-text"></p>
             </div>
-            <div id="appLandingHomeBanner" class="app-landing-home-banner hidden" role="status" aria-live="polite">
-              <p id="appLandingHomeBannerText" class="app-landing-home-banner-text"></p>
-            </div>
             <div class="app-landing-grid-wrap">
             <div class="app-landing-grid">
               <article class="app-landing-card app-landing-card-accent-1">
-                <h2 class="app-landing-card-title" data-i18n="code.landingModeCompareTitle"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingModeCompareText"></p>
-                <p class="app-landing-card-tools" data-i18n="code.landingModeCompareTools"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingModeComparatorTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingModeComparatorText"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-2">
-                <h2 class="app-landing-card-title" data-i18n="code.landingModeSecurityTitle"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingModeSecurityText"></p>
-                <p class="app-landing-card-tools" data-i18n="code.landingModeSecurityTools"></p>
-              </article>
-              <article class="app-landing-card app-landing-card-accent-3">
                 <h2 class="app-landing-card-title" data-i18n="code.landingModeDevelopmentTitle"></h2>
                 <p class="app-landing-card-text" data-i18n="code.landingModeDevelopmentText"></p>
-                <p class="app-landing-card-tools" data-i18n="code.landingModeDevelopmentTools"></p>
               </article>
-              <article class="app-landing-card app-landing-card-accent-4">
+              <article class="app-landing-card app-landing-card-accent-3">
                 <h2 class="app-landing-card-title" data-i18n="code.landingModeMonitoringTitle"></h2>
                 <p class="app-landing-card-text" data-i18n="code.landingModeMonitoringText"></p>
-                <p class="app-landing-card-tools" data-i18n="code.landingModeMonitoringTools"></p>
               </article>
-              <article class="app-landing-card app-landing-card-accent-5">
+              <article class="app-landing-card app-landing-card-accent-4">
                 <h2 class="app-landing-card-title" data-i18n="code.landingModeManifestsTitle"></h2>
                 <p class="app-landing-card-text" data-i18n="code.landingModeManifestsText"></p>
-                <p class="app-landing-card-tools" data-i18n="code.landingModeManifestsTools"></p>
               </article>
             </div>
             </div>
+            <p class="app-landing-help-hint" data-i18n="code.landingHelpHint"></p>
             <footer class="app-landing-footer">
               <span class="app-landing-footer-label" data-i18n="code.landingFooterWebsiteLabel"></span>
               <a
@@ -1382,6 +1364,35 @@
       </div>
     </div>
     <div id="toastContainer" class="toast-container"></div>
+
+    <div id="appHelpModal" class="app-help-modal hidden" aria-hidden="true">
+      <div class="app-help-modal-backdrop" data-app-help-backdrop="1"></div>
+      <div
+        class="app-help-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="appHelpModalTitle"
+      >
+        <header class="app-help-modal-head">
+          <h2 id="appHelpModalTitle" class="app-help-modal-title"></h2>
+          <button
+            type="button"
+            id="appHelpModalCloseBtn"
+            class="app-help-modal-close"
+            data-i18n="help.close"
+            data-i18n-aria-label="help.close"
+          >
+            Cerrar
+          </button>
+        </header>
+        <div id="appHelpModalBody" class="app-help-modal-body"></div>
+        <footer id="appHelpModalFooter" class="app-help-modal-foot hidden">
+          <button type="button" id="appHelpModalPrimaryBtn" class="app-help-modal-primary" data-i18n="onboarding.gotIt">
+            Entendido
+          </button>
+        </footer>
+      </div>
+    </div>
 
     <script src="../vendor/jsdiff/diff.min.js"></script>
     <script src="../vendor/monaco-editor/min/vs/loader.js"></script>

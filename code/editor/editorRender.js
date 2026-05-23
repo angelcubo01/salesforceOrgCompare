@@ -1,7 +1,13 @@
 import { loadMonaco, createSingleEditor, createDiffEditor, languageForFileName } from './monaco.js';
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
-import { beginFileViewerLoading, endFileViewerLoading, yieldToPaint, updateOrgSelectorsLockedState } from '../ui/viewerChrome.js';
+import {
+  beginFileViewerLoading,
+  endFileViewerLoading,
+  yieldToPaint,
+  updateOrgSelectorsLockedState,
+  shouldShowRetrieveButtonForItem
+} from '../ui/viewerChrome.js';
 import { getTotalDiffLines, buildAlignedDiff, applyDiffDecorations } from './diffUtils.js';
 import {
   prepareDiffForViewer,
@@ -513,12 +519,7 @@ export async function renderEditor(opts = {}) {
       restoreScrollPosition(item, leftOrgId, rightOrgId);
       updateFileMeta(l, r, true);
       if (retrieveAllBtn) {
-        const hasRetrieveType =
-          item.type === 'PermissionSet' ||
-          item.type === 'Profile' ||
-          item.type === 'FlexiPage' ||
-          (item.type === 'PackageXml' && item.descriptor?.source === 'localFile');
-        if (hasRetrieveType && leftOrgId && rightOrgId) {
+        if (shouldShowRetrieveButtonForItem(item) && leftOrgId && rightOrgId) {
           retrieveAllBtn.classList.remove('hidden');
           retrieveAllBtn.disabled = false;
         } else {
@@ -638,15 +639,10 @@ export async function renderEditor(opts = {}) {
   }
   updateFileMeta(l, r, true);
   if (retrieveAllBtn) {
-    const hasRetrieveType =
-      item.type === 'PermissionSet' ||
-      item.type === 'Profile' ||
-      item.type === 'FlexiPage' ||
-      (item.type === 'PackageXml' && item.descriptor?.source === 'localFile');
-    if (hasRetrieveType && leftOrgId && rightOrgId) {
+    if (shouldShowRetrieveButtonForItem(item) && leftOrgId && rightOrgId) {
       retrieveAllBtn.classList.remove('hidden');
       retrieveAllBtn.disabled = false;
-    } else if (hasRetrieveType) {
+    } else if (shouldShowRetrieveButtonForItem(item)) {
       retrieveAllBtn.classList.remove('hidden');
       retrieveAllBtn.disabled = true;
     } else {

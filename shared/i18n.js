@@ -4,10 +4,6 @@ const translations = {
     'popup.subtitle': 'Comparación, metadatos y más para tus orgs Salesforce',
     'popup.compare': 'Abrir',
     'popup.openCode': 'Abrir la aplicación principal',
-    'popup.viewUpdate': 'Ver actualización',
-    'popup.mandatoryUpdate': 'Nueva versión obligatoria',
-    'popup.mandatoryUpdateText': 'Hay una nueva versión mayor disponible de Salesforce Org Compare. Debes actualizar para seguir usando la extensión.',
-    'popup.goToDownload': 'Ir a la página de descarga',
     'popup.savedOrgs': 'Orgs guardadas',
     'popup.savedOrgsHint':
       'Arrastra el asa ⋮⋮ solo dentro del mismo grupo (o entre orgs sin grupo). Ese orden se usa en los desplegables de la aplicación.',
@@ -22,9 +18,6 @@ const translations = {
     'popup.noDetectedTab': 'No se ha detectado ninguna org de Salesforce en esta pestaña',
     'popup.alreadyAdded': 'La org ya está añadida',
     'popup.add': 'Añadir',
-    'popup.majorUpdate': 'Hay una nueva versión mayor ({remoteVersion}) de {extensionName}. Tu versión actual es {currentVersion}. Debes actualizar para seguir usando la extensión.',
-    'popup.changes': 'Cambios:',
-    'popup.minorUpdate': 'Nueva versión disponible ({remoteVersion}). Estás usando la {currentVersion}.',
     'popup.language': 'Idioma',
     'popup.editAlias': 'Editar alias',
     'popup.aliasPlaceholder': 'Alias (ej. PRO, UAT…)',
@@ -35,6 +28,21 @@ const translations = {
     'popup.orgActionsMenu': 'Acciones',
     'popup.openSettings': 'Ajustes',
     'popup.openSettingsTitle': 'Abrir ajustes en una pestaña nueva',
+    'popup.help.openTitle': 'Ayuda: conectar y gestionar entornos Salesforce',
+    'popup.help.close': 'Cerrar',
+    'popup.help.title': 'Cómo añadir y gestionar entornos',
+    'popup.help.body1':
+      'Abre en el navegador una pestaña con la organización Salesforce en la que quieres trabajar (pantalla de inicio de sesión o cualquier página ya autenticada). La extensión detecta automáticamente la org de esa pestaña.',
+    'popup.help.body2':
+      'En la sección «Org detectada en esta pestaña» verás el entorno actual. Pulsa Añadir para guardarlo en tu lista. Si no aparece nada, recarga la pestaña de Salesforce o inicia sesión primero.',
+    'popup.help.body3':
+      'Cada org guardada tiene un menú de acciones (⋮): puedes poner un alias (por ejemplo PRO, UAT, PRE) y un grupo (Contact Center, etc.) para reconocerlas rápido en la aplicación principal.',
+    'popup.help.body4':
+      'Las orgs guardadas se usan en los desplegables de la aplicación al pulsar Abrir aplicación. Arrastra el asa ⋮⋮ solo dentro del mismo grupo para ordenar cómo aparecen en esos desplegables.',
+    'popup.help.body5':
+      'Si una sesión caduca, usa Reautenticar en el menú de la org. También puedes eliminar una org que ya no necesites.',
+    'popup.help.body6':
+      'La rueda de ajustes abre idioma, apariencia, copia de seguridad de orgs y otras preferencias. Desde ahí puedes exportar o importar tu lista de entornos.',
 
     // ── Ajustes (página dedicada) ──
     'settings.pageTitle': 'Ajustes · Salesforce Org Compare',
@@ -49,6 +57,9 @@ const translations = {
       'Modo claro u oscuro del comparador y herramientas. El editor usa el tema elegido abajo.',
     'settings.uiThemeDark': 'Oscuro',
     'settings.uiThemeLight': 'Claro',
+    'settings.telemetryEnabled': 'Enviar telemetría anónima de uso',
+    'settings.telemetryEnabledHint':
+      'Eventos agregados (tipo de herramienta, ID interno de orgs, sin credenciales) a Google Analytics y, durante la transición, a Google Apps Script. Puedes desactivarlo en cualquier momento.',
     'settings.monacoTheme': 'Tema del editor ',
     'settings.monacoThemeHint':
       'Diff, Apex anónimo, Quick Edit y visores de log/cobertura. «SFOC» son temas adaptados al contraste de la extensión.',
@@ -132,32 +143,24 @@ const translations = {
     'code.appModeBarLabel': 'Elige un área de trabajo',
     'code.appModeHome': 'Inicio',
     'code.appModeHomeTitle': 'Información y guía de la herramienta',
-    'code.appModeCompare': 'Código y pantallas',
-    'code.appModeCompareTitle': 'Comparar Apex, LWC, Aura y Visualforce entre organizaciones',
-    'code.appModeSecurity': 'Permisos y páginas',
-    'code.appModeSecurityTitle': 'Perfiles, permission sets y páginas Lightning',
+    'code.appModeComparator': 'Comparador',
+    'code.appModeComparatorTitle':
+      'Comparar código, permisos, páginas Lightning y manifiestos package.xml entre organizaciones',
     'code.appModeDevelopment': 'Tests y depurar',
     'code.appModeDevelopmentTitle': 'Tests Apex, Apex anónimo, logs de depuración y editor rápido',
     'code.appModeMonitoring': 'Límites y auditoría',
     'code.appModeMonitoringTitle': 'Límites de la org, historial de cambios del setup y dependencias de picklist',
     'code.appModeManifests': 'Manifiestos',
-    'code.appModeManifestsTitle': 'Generar o comparar archivos package.xml',
-    'code.appModeSubmenuCompare': 'Opciones de código y pantallas',
-    'code.appModeSubmenuSecurity': 'Opciones de permisos y páginas',
+    'code.appModeManifestsTitle': 'Generar archivos package.xml',
     'code.appModeSubmenuDevelopment': 'Opciones de tests y depuración',
     'code.appModeSubmenuMonitoring': 'Opciones de límites y auditoría',
     'code.appModeSubmenuManifests': 'Opciones de manifiestos',
     'code.sidebarHomeHint': 'Elige una sección en la barra superior para empezar.',
     'code.searchSelectOperationFirst': 'Elige primero una operación arriba',
     // Grupos del menú
-    'code.optgroupCode': 'Comparar código',
-    'code.optgroupSecurity': 'Seguridad y permisos',
     'code.optgroupDev': 'Desarrollo',
     'code.optgroupMonitor': 'Monitorización',
     'code.optgroupManifest': 'Manifiestos',
-    // Grupos legacy (para compatibilidad)
-    'code.optgroupSource': 'Comparar código',
-    'code.optMetadataZip': 'Seguridad y permisos',
     'code.optgroupAnalysis': 'Monitorización',
     'code.optgroupPackage': 'Manifiestos',
     // Opciones del menú
@@ -188,6 +191,18 @@ const translations = {
     'code.generatePackageXml': 'Generar package.xml',
     'code.searchTitle': 'Búsqueda',
     'code.searchPlaceholder': 'Buscar por nombre (mín. 3 caracteres)',
+    'code.searchPlaceholderComparator': 'Buscar componentes',
+    'code.loadPackageXmlTitle': 'Cargar package.xml desde el equipo',
+    'code.compareContextPackageXml': 'package.xml',
+    'code.compareContext.apexClass': 'Clase Apex',
+    'code.compareContext.apexTrigger': 'Trigger Apex',
+    'code.compareContext.apexPage': 'Página Visualforce',
+    'code.compareContext.apexComponent': 'Componente Visualforce',
+    'code.compareContext.lwc': 'LWC',
+    'code.compareContext.aura': 'Aura',
+    'code.compareContext.permSet': 'Permission set',
+    'code.compareContext.profile': 'Perfil',
+    'code.compareContext.flexipage': 'Página Lightning',
 
     'quickOpen.placeholder': 'Buscar metadatos, herramientas o ficheros…',
     'quickOpen.groupTools': 'Herramientas',
@@ -208,6 +223,8 @@ const translations = {
     'quickOpen.catFlexi': 'Páginas Lightning',
     'code.loadFile': 'Cargar fichero',
     'code.clearSavedFiles': 'Borrar ficheros guardados',
+    'code.clearSavedFilesConfirm':
+      '¿Borrar todos los ficheros del explorador que no estén fijados? Los elementos fijados se conservarán.',
     'code.toggleWhitespace': 'Ignorar espacios en blanco',
     'code.whitespaceOn': 'Espacios ignorados',
     'code.whitespaceOff': 'Comparando espacios',
@@ -245,30 +262,150 @@ const translations = {
     'code.landingDiscoverBannerWinLabel': 'Windows / Linux',
     'code.landingDiscoverBannerMacLabel': 'Mac',
     'code.landingSubtitle':
-      'Todo tu flujo dev y release en una ventana: diff claros, diagnóstico y manifiestos. Registra orgs desde la extensión y elige un modo arriba.',
-    'code.landingModeCompareTitle': 'Comparar código al instante',
-    'code.landingModeCompareText':
-      'Mismo componente, dos orgs: diferencias resaltadas. Perfecto para revisar antes de desplegar.',
-    'code.landingModeCompareTools': 'Incluye · Apex · LWC · Aura · Visualforce',
-    'code.landingModeSecurityTitle': 'Seguridad visible',
-    'code.landingModeSecurityText':
-      'Alinea perfiles, permission sets y páginas Lightning. Menos dudas, más control sobre lo que ve cada usuario.',
-    'code.landingModeSecurityTools': 'Incluye · Permission sets · Perfiles · Lightning',
-    'code.landingModeDevelopmentTitle': 'Desarrollo sin saltos',
+      'Compara entornos, revisa cambios y trabaja con más tranquilidad. Conecta tus organizaciones desde el icono de la extensión en el navegador (popup), elige una sección en la barra superior y empieza en segundos. Si tienes dudas en cualquier momento, pulsa Ayuda junto a los modos de trabajo.',
+    'code.landingModeComparatorTitle': 'Comparar entre entornos',
+    'code.landingModeComparatorText':
+      'Busca por nombre lo que necesites (Apex, componentes Lightning, Visualforce, perfiles, permission sets, páginas Lightning o manifiestos package.xml) y ábrelo en la lista de trabajo. Arriba elige la organización de referencia y la que quieres comparar: las diferencias se resaltan en pantalla sin copiar y pegar en otra herramienta. Puedes descargar el componente (retrieve), exportar el diff o copiar un enlace para compartir la comparación con tu equipo.',
+    'code.landingModeDevelopmentTitle': 'Desarrollar sin cambiar de pantalla',
     'code.landingModeDevelopmentText':
-      'Tests, edición rápida, Apex anónimo y logs donde trabajas; también explorador SOQL/SOSL y comparación de cobertura Apex entre orgs. Menos tabs, más foco.',
-    'code.landingModeDevelopmentTools':
-      'Incluye · Tests Apex · Editor rápido · Anónimo · Debug logs · Explorador SOQL/SOSL · Comparar cobertura Apex',
-    'code.landingModeMonitoringTitle': 'Org en buen estado',
+      'Ejecuta pruebas Apex y revisa resultados y cobertura. Edita clases y triggers con resaltado de sintaxis, valida y despliega en sandbox. Ejecuta Apex anónimo puntual, consulta registros con el explorador integrado, revisa logs de depuración y compara la cobertura de pruebas entre dos organizaciones, todo sin salir de esta ventana.',
+    'code.landingModeMonitoringTitle': 'Vigilar la organización',
     'code.landingModeMonitoringText':
-      'Límites consumidos, cambios en Setup y dependencias entre picklists. Anticipa problemas antes de producción.',
-    'code.landingModeMonitoringTools': 'Incluye · Límites · Auditoría · Dependencias picklist',
-    'code.landingModeManifestsTitle': 'Manifiestos a tu medida',
+      'Consulta el consumo de límites de la organización (almacenamiento, API, etc.) y el historial de cambios en la configuración, con fecha y usuario responsable. Analiza dependencias entre valores de listas desplegables y usa el analizador de permisos para ver quién puede ver o editar objetos, campos y elementos de configuración, con o sin comparación entre dos entornos.',
+    'code.landingModeManifestsTitle': 'Preparar un despliegue',
     'code.landingModeManifestsText':
-      'Genera un package.xml preciso o compara dos manifiestos. Empaqueta solo lo necesario.',
-    'code.landingModeManifestsTools': 'Incluye · Generar package.xml · Comparar package.xml',
+      'Genera un package.xml a medida: elige tipos de metadatos y miembros concretos, revisa el XML resultante y descárgalo o lanza un retrieve en ZIP. Activa el modo comparación para alinear el manifiesto con otra organización antes de publicar. Ideal para paquetes acotados en despliegues incrementales.',
+    'code.landingHelpHint': '¿Necesitas orientación? Pulsa Ayuda en la barra superior en cualquier momento.',
     'code.landingFooterWebsiteLabel': 'Sitio web de la herramienta',
     'code.landingFooterLinkedIn': 'by Ángel Picado',
+
+    // ── Ayuda in-app (modal por modo) ──
+    'help.open': 'Ayuda',
+    'help.openTitle': 'Guía de la sección actual y consejos de uso',
+    'help.close': 'Cerrar',
+    'help.title': 'Ayuda',
+    'help.mode.home.title': 'Primeros pasos',
+    'help.mode.home.body1':
+      'Conecta tus organizaciones Salesforce desde el icono de la extensión en el navegador. Allí puedes añadir orgs detectadas en la pestaña actual, guardar alias y agruparlas (por ejemplo PRO, UAT o Contact Center).',
+    'help.mode.home.body2':
+      'En la barra superior elige un área: Comparador, Tests y depurar, Límites y auditoría, o Manifiestos. Cada área agrupa herramientas relacionadas en un submenú.',
+    'help.mode.home.body3':
+      'Usa la búsqueda rápida global con Ctrl+Shift+P (Windows/Linux) o ⌘⇧P (Mac) para saltar a metadatos, herramientas o scripts guardados sin recorrer menús.',
+    'help.mode.home.body4':
+      'La primera vez que abras una herramienta verás un resumen breve. Puedes volver a leer la guía completa de cada sección con el botón Ayuda.',
+    'help.mode.comparator.title': 'Comparador de metadatos',
+    'help.mode.comparator.body1':
+      'Selecciona las dos organizaciones en los desplegables superiores. Busca un componente por nombre en el panel izquierdo (clases Apex, LWC, Aura, Visualforce, perfiles, permission sets, páginas Lightning, etc.) y ábrelo para ver el diff lado a lado.',
+    'help.mode.comparator.body2':
+      'También puedes cargar un package.xml desde tu equipo y comparar su contenido con una organización, o comparar dos manifiestos entre sí.',
+    'help.mode.comparator.body3':
+      'En la barra del visor puedes ignorar espacios en blanco, copiar el diff en formato unificado, exportar HTML o copiar un enlace para compartir esta comparación.',
+    'help.mode.comparator.body4':
+      'El botón Retrieve descarga el componente activo desde la organización de referencia cuando el tipo lo permite.',
+    'help.mode.comparator.body5':
+      'Los indicadores en la lista muestran si el texto es igual o distinto entre orgs antes de abrir el fichero.',
+    'help.mode.development.title': 'Tests y depuración',
+    'help.mode.development.body1':
+      'Apex Tests Hub: ejecuta pruebas por clase, suite o ámbito, sigue el progreso y exporta resultados. Abre la cobertura por línea cuando lo necesites.',
+    'help.mode.development.body2':
+      'Quick Edit: busca clases y triggers, edítalos con resaltado, valida y despliega en la organización seleccionada.',
+    'help.mode.development.body3':
+      'Apex anónimo: escribe y ejecuta fragmentos, guarda scripts reutilizables y abre los logs generados.',
+    'help.mode.development.body4':
+      'Explorador de consultas: ejecuta consultas de datos, guarda favoritas y compara resultados entre dos orgs. Debug Log Browser y comparador de cobertura completan el flujo de depuración.',
+    'help.mode.monitoring.title': 'Límites, auditoría y permisos',
+    'help.mode.monitoring.body1':
+      'Dashboard de límites: revisa el consumo de cada métrica de la organización. Activa comparación para ver dos entornos a la vez.',
+    'help.mode.monitoring.body2':
+      'Historial de setup: filtra cambios de configuración por usuario, acción o fecha para auditorías.',
+    'help.mode.monitoring.body3':
+      'Dependencias de picklist: elige un objeto y compara cómo se relacionan los valores entre orgs.',
+    'help.mode.monitoring.body4':
+      'Analizador de permisos: consulta por perfil o permission set qué puede ver o editar, o al revés qué perfiles tienen acceso a un objeto o campo. Incluye custom permissions.',
+    'help.mode.monitoring.body5':
+      'En el analizador, escribe el nombre y pulsa Consultar; la tabla solo aparece tras una búsqueda explícita. Con comparación activada se muestran diferencias entre las dos orgs seleccionadas arriba.',
+    'help.mode.manifests.title': 'Manifiestos de despliegue',
+    'help.mode.manifests.body1':
+      'Genera package.xml eligiendo tipos de metadatos y miembros. El XML se actualiza al marcar o desmarcar elementos.',
+    'help.mode.manifests.body2':
+      'Descarga el archivo o lanza Retrieve y descarga un ZIP con el contenido desde la organización de referencia.',
+    'help.mode.manifests.body3':
+      'Modo comparación: alinea la selección con otra organización para ver qué falta o sobra antes de desplegar.',
+
+    // ── Onboarding primera visita por herramienta ──
+    'onboarding.gotIt': 'Entendido',
+    'onboarding.tool.Comparator.title': 'Bienvenido al comparador',
+    'onboarding.tool.Comparator.lead':
+      'Aquí comparas el mismo componente entre dos organizaciones Salesforce con el diff resaltado.',
+    'onboarding.tool.Comparator.step1':
+      'Arriba elige la organización de referencia (izquierda) y la que quieres contrastar (derecha).',
+    'onboarding.tool.Comparator.step2':
+      'Busca por nombre en el panel izquierdo y abre un elemento de la lista para ver las diferencias.',
+    'onboarding.tool.Comparator.step3':
+      'Puedes cargar un package.xml local o usar los botones de la barra para copiar el diff o compartir un enlace.',
+    'onboarding.tool.ApexTests.title': 'Centro de pruebas Apex',
+    'onboarding.tool.ApexTests.lead': 'Ejecuta y revisa pruebas automáticas sin salir del comparador.',
+    'onboarding.tool.ApexTests.step1': 'Selecciona la organización arriba a la izquierda.',
+    'onboarding.tool.ApexTests.step2': 'Elige clases, métodos o suites y lanza la ejecución; el progreso aparece en pantalla.',
+    'onboarding.tool.ApexTests.step3': 'Abre resultados, cobertura por línea o exporta el informe cuando termine.',
+    'onboarding.tool.QuickEdit.title': 'Edición rápida de Apex',
+    'onboarding.tool.QuickEdit.lead': 'Busca, edita, valida y despliega clases y triggers en sandbox.',
+    'onboarding.tool.QuickEdit.step1': 'Escribe en el buscador el nombre de la clase o del trigger.',
+    'onboarding.tool.QuickEdit.step2': 'Edita en el panel con resaltado de sintaxis y guarda cambios locales.',
+    'onboarding.tool.QuickEdit.step3': 'Usa Validar o Desplegar según tu flujo habitual de publicación.',
+    'onboarding.tool.AnonymousApex.title': 'Apex anónimo',
+    'onboarding.tool.AnonymousApex.lead': 'Ejecuta fragmentos de Apex puntuales y revisa la salida.',
+    'onboarding.tool.AnonymousApex.step1': 'Selecciona la organización donde quieres ejecutar.',
+    'onboarding.tool.AnonymousApex.step2': 'Escribe el código, ejecuta y revisa errores o la respuesta.',
+    'onboarding.tool.AnonymousApex.step3': 'Guarda scripts frecuentes y ábrelos desde la biblioteca.',
+    'onboarding.tool.QueryExplorer.title': 'Explorador de consultas',
+    'onboarding.tool.QueryExplorer.lead':
+      'Consulta registros de la organización, guarda consultas útiles y compara resultados entre entornos.',
+    'onboarding.tool.QueryExplorer.step1':
+      'Elige la organización en el desplegable superior izquierdo. Escribe tu consulta (por ejemplo registros de un objeto) y pulsa Ejecutar.',
+    'onboarding.tool.QueryExplorer.step2':
+      'Guarda consultas con nombre para reutilizarlas. Exporta resultados a CSV o JSON si lo necesitas.',
+    'onboarding.tool.QueryExplorer.step3':
+      'Activa Modo comparación para ejecutar la misma consulta en las dos organizaciones y ver diferencias en columnas alineadas.',
+    'onboarding.tool.DebugLogBrowser.title': 'Visor de logs de depuración',
+    'onboarding.tool.DebugLogBrowser.lead': 'Lista, filtra y abre logs de depuración de la organización.',
+    'onboarding.tool.DebugLogBrowser.step1': 'Selecciona la org y actualiza la lista de logs.',
+    'onboarding.tool.DebugLogBrowser.step2': 'Filtra por usuario, aplicación o rango de fechas.',
+    'onboarding.tool.DebugLogBrowser.step3': 'Abre un log para leerlo o elimina logs antiguos en bloque.',
+    'onboarding.tool.ApexCoverageCompare.title': 'Comparar cobertura Apex',
+    'onboarding.tool.ApexCoverageCompare.lead': 'Contrasta el porcentaje de cobertura de clases entre dos orgs.',
+    'onboarding.tool.ApexCoverageCompare.step1': 'Selecciona ambas organizaciones arriba.',
+    'onboarding.tool.ApexCoverageCompare.step2': 'Pulsa Cargar datos para obtener la cobertura de cada lado.',
+    'onboarding.tool.ApexCoverageCompare.step3': 'Revisa el delta y abre el detalle por línea si hace falta profundizar.',
+    'onboarding.tool.OrgLimits.title': 'Límites de la organización',
+    'onboarding.tool.OrgLimits.lead': 'Consulta cuánto has consumido de cada límite operativo.',
+    'onboarding.tool.OrgLimits.step1': 'Elige la organización y pulsa Actualizar límites.',
+    'onboarding.tool.OrgLimits.step2': 'Pasa el cursor sobre las barras para ver cifras concretas.',
+    'onboarding.tool.OrgLimits.step3': 'Activa comparación para ver dos entornos en paralelo.',
+    'onboarding.tool.SetupAuditTrail.title': 'Historial de cambios en setup',
+    'onboarding.tool.SetupAuditTrail.lead': 'Audita quién cambió qué en la configuración de la org.',
+    'onboarding.tool.SetupAuditTrail.step1': 'Selecciona la organización y aplica filtros de usuario o acción.',
+    'onboarding.tool.SetupAuditTrail.step2': 'Ajusta el rango de fechas según tu revisión.',
+    'onboarding.tool.SetupAuditTrail.step3': 'Recorre la tabla para localizar cambios recientes antes de un despliegue.',
+    'onboarding.tool.FieldDependency.title': 'Dependencias de picklist',
+    'onboarding.tool.FieldDependency.lead': 'Compara cómo dependen entre sí los valores de listas desplegables.',
+    'onboarding.tool.FieldDependency.step1': 'Elige un objeto de la lista (org de referencia).',
+    'onboarding.tool.FieldDependency.step2': 'Obtén el metadata y revisa el diff de dependencias entre orgs.',
+    'onboarding.tool.FieldDependency.step3': 'Útil para validar reglas de negocio en campos dependientes.',
+    'onboarding.tool.PermissionDiff.title': 'Analizador de permisos',
+    'onboarding.tool.PermissionDiff.lead':
+      'Consulta y compara permisos sin exportar XML: todo se obtiene en vivo desde la organización.',
+    'onboarding.tool.PermissionDiff.step1':
+      'Tres formas de consulta: por perfil o permission set, por objeto o campo (quién tiene acceso), o por custom permission.',
+    'onboarding.tool.PermissionDiff.step2':
+      'Escribe el nombre (con autocompletado), elige el tipo si aplica y pulsa Consultar. La tabla aparece solo después de buscar.',
+    'onboarding.tool.PermissionDiff.step3':
+      'Activa Modo comparación arriba para ver diferencias entre las dos organizaciones seleccionadas en los desplegables.',
+    'onboarding.tool.GeneratePackageXml.title': 'Generar package.xml',
+    'onboarding.tool.GeneratePackageXml.lead': 'Arma un manifiesto de despliegue a medida.',
+    'onboarding.tool.GeneratePackageXml.step1': 'Selecciona la org de referencia y busca tipos de metadatos.',
+    'onboarding.tool.GeneratePackageXml.step2': 'Marca los miembros que quieres incluir; el XML se genera a la derecha.',
+    'onboarding.tool.GeneratePackageXml.step3': 'Descarga el archivo o lanza Retrieve ZIP. Comparación alinea con otra org.',
 
     // ── Generate package.xml panel ──
     'genPkg.title': 'Generar package.xml',
@@ -414,6 +551,7 @@ const translations = {
     'apexTests.jobStatus.Holding': 'En espera',
     'apexTests.jobStatus.AbortingJob': 'Cancelando',
     'apexTests.jobStatus.Completed': 'Completado',
+    'apexTests.jobStatus.CompletedWithFailures': 'Completado con fallos',
     'apexTests.jobStatus.Failed': 'Fallido',
     'apexTests.jobStatus.Aborted': 'Cancelado',
     'apexTests.jobStatus.Error': 'Error',
@@ -501,6 +639,8 @@ const translations = {
     'toast.zipNoUsable': 'El ZIP de la {side} no contiene ningún fichero de metadata utilizable',
     'toast.selectTwoOrgs': 'Selecciona dos organizaciones para comparar (izquierda y derecha)',
     'toast.fetchingBoth': 'Trayendo de ambos entornos…',
+    'toast.cancel': 'Cancelar',
+    'toast.retrieveCancelled': 'Retrieve cancelado',
     'toast.openDiffFirst': 'Abre primero el diff para este elemento antes de usar retrieve.',
     'toast.zipsNoComparable': 'Los ZIP no contienen ficheros comparables',
     'toast.retrieveComplete': 'Retrieve completado: {count} fichero(s). Usa el árbol bajo el package.xml.',
@@ -570,6 +710,7 @@ const translations = {
 
     // ── Orgs dropdown ──
     'orgs.none': 'Ninguna',
+    'orgs.autoAdded': 'Organización añadida: {name}',
     'orgs.genPkgOnlyLeft': 'En modo «Generar package.xml» solo se usa la organización de la izquierda.',
     'orgs.apexTestsOnlyLeft': 'En «Pruebas Apex» solo se usa la organización de la izquierda.',
     'orgs.lockedHint': 'Selecciona otro elemento en la lista para cambiar entorno (este diff corresponde al retrieve actual).',
@@ -608,11 +749,6 @@ const translations = {
     'viewer.tooLargeSkipDiff': 'Ficheros muy grandes (~{chars} caracteres). Diff línea a línea desactivado para ahorrar memoria; usa «Siguiente» para ver más fragmentos en paralelo.',
     'viewer.alignedChunked': 'Diff alineado muy extenso. Mostrando por fragmentos (líneas); la navegación por bloques de cambio no está disponible en este modo.',
     'viewer.truncated': 'Diff truncado al límite del visor ({max} caracteres por lado). Demasiado grande para paginar sin riesgo de memoria.',
-
-    // ── Version check (code page) ──
-    'version.mustUpdate': 'Debes actualizar la extensión',
-    'version.mustUpdateText': 'Hay una nueva versión mayor ({remoteVersion}) de {extensionName} y tu versión actual es {currentVersion}. Actualiza para seguir utilizando la extensión.',
-    'version.goToDownload': 'Ir a la página de descarga',
 
     // ── Document titles ──
     'docTitle.app': 'Salesforce Org Compare',
@@ -684,10 +820,10 @@ const translations = {
     'queryExplorer.title': 'Explorador SOQL / SOSL',
     'queryExplorer.compareMode': 'Modo comparación',
     'queryExplorer.compareTooltip':
-      'Desactivado: consulta solo org izquierda. Activado: ejecuta la misma consulta en ambas columnas.',
+      'Desactivado: una sola organización. Activado: compara los resultados entre las dos organizaciones seleccionadas arriba.',
     'queryExplorer.apiLabel': 'API',
-    'queryExplorer.apiRest': 'REST (estándar)',
-    'queryExplorer.apiTooling': 'Tooling',
+    'queryExplorer.apiRest': 'Datos de la organización (consultas habituales)',
+    'queryExplorer.apiTooling': 'Metadatos de desarrollo',
     'queryExplorer.languageLabel': 'Lenguaje',
     'queryExplorer.langSoql': 'SOQL',
     'queryExplorer.langSosl': 'SOSL (solo REST)',
@@ -739,7 +875,7 @@ const translations = {
     'orgLimits.title': 'Dashboard de Límites',
     'orgLimits.compareMode': 'Modo comparación',
     'orgLimits.compareTooltip':
-      'Desactivado: consulta solo org izquierda. Activado: compara izquierda y derecha.',
+      'Desactivado: una sola organización. Activado: compara límites entre las dos organizaciones seleccionadas arriba.',
     'orgLimits.refresh': 'Actualizar límites',
     'orgLimits.selectOrg': 'Selecciona una organización en el desplegable superior izquierdo.',
     'orgLimits.selectRightOrg': 'Selecciona también la organización de la derecha.',
@@ -754,16 +890,16 @@ const translations = {
       'Consulta y compara quién puede ver o editar objetos, campos y elementos de configuración.',
     'permDiff.compareMode': 'Modo comparación',
     'permDiff.compareTooltip':
-      'Desactivado: una sola organización. Activado: compara dos organizaciones.',
+      'Desactivado: consulta una organización. Activado: muestra diferencias entre las dos organizaciones seleccionadas arriba.',
     'permDiff.refresh': 'Consultar',
     'permDiff.containerType': 'Tipo',
-    'permDiff.typePermissionSet': 'Permission Set',
+    'permDiff.typePermissionSet': 'permission set',
     'permDiff.typeProfile': 'Perfil',
     'permDiff.containerName': 'Nombre',
     'permDiff.containerNamePh': 'Ej.: Mi_Permission_Set o Administrador',
     'permDiff.selectOrg': 'Selecciona una organización arriba a la izquierda.',
     'permDiff.selectRightOrg': 'Selecciona también la organización de la derecha.',
-    'permDiff.enterName': 'Escribe el nombre del Permission Set o del perfil.',
+    'permDiff.enterName': 'Escribe el nombre del permission set o del perfil.',
     'permDiff.loading': 'Consultando permisos…',
     'permDiff.loaded': 'Consulta completada.',
     'permDiff.fetchError': 'No se pudieron consultar los permisos.',
@@ -806,17 +942,17 @@ const translations = {
     'permDiff.statusDiff': 'Distinto',
     'permDiff.statusLeftOnly': 'Solo izquierda',
     'permDiff.statusRightOnly': 'Solo derecha',
-    'permDiff.dirContainer': 'Por Permission Set o perfil',
+    'permDiff.dirContainer': 'Por permission set o perfil',
     'permDiff.dirResource': 'Por objeto o campo',
     'permDiff.dirCustomPermission': 'Por Custom Permission',
     'permDiff.customPermName': 'Custom Permission',
     'permDiff.customPermNamePh': 'Ej.: CC_Mi_Custom_Permission',
     'permDiff.pickCustomPermFromList': 'Elige un Custom Permission de la lista.',
-    'permDiff.cpTabAssignments': 'Perfiles y Permission Sets',
+    'permDiff.cpTabAssignments': 'Perfiles y permission sets',
     'permDiff.cpTabApex': 'Clases Apex',
     'permDiff.cpIncluded': 'Incluido',
     'permDiff.colApexClass': 'Clase Apex',
-    'permDiff.summaryCpAssignSingle': '{count} perfiles o Permission Sets incluyen {permission}.',
+    'permDiff.summaryCpAssignSingle': '{count} perfiles o permission sets incluyen {permission}.',
     'permDiff.summaryCpAssignCompare':
       '{permission}: {total} asignaciones · {same} iguales · {diff} distintas · {leftOnly} solo izquierda · {rightOnly} solo derecha.',
     'permDiff.summaryCpApexSingle': '{count} clases Apex referencian {permission} en el código.',
@@ -826,20 +962,20 @@ const translations = {
     'permDiff.resourceObject': 'Objeto',
     'permDiff.resourceField': 'Campo',
     'permDiff.showContainers': 'Incluir',
-    'permDiff.containerFilterAll': 'Perfiles y Permission Sets',
+    'permDiff.containerFilterAll': 'Perfiles y permission sets',
     'permDiff.containerFilterProfile': 'Solo perfiles',
-    'permDiff.containerFilterPermSet': 'Solo Permission Sets',
+    'permDiff.containerFilterPermSet': 'Solo permission sets',
     'permDiff.resourceName': 'Nombre',
     'permDiff.resourceNamePh': 'Ej.: Cuenta o Cuenta.Nombre',
     'permDiff.enterResource': 'Escribe el nombre del objeto o del campo.',
-    'permDiff.colContainer': 'Perfil o Permission Set',
+    'permDiff.colContainer': 'Perfil o permission set',
     'permDiff.colContainerType': 'Tipo',
     'permDiff.colPermissions': 'Permisos',
     'permDiff.colNote': 'Detalle',
-    'permDiff.viaPermSet': 'Perfil asociado al Permission Set {name}',
+    'permDiff.viaPermSet': 'Perfil asociado al permission set {name}',
     'permDiff.summaryAccessCompare':
       '{total} asignaciones · {same} iguales · {diff} distintas · {leftOnly} solo izquierda · {rightOnly} solo derecha.',
-    'permDiff.summaryAccessSingle': '{count} perfiles o Permission Sets con acceso a {resource}.',
+    'permDiff.summaryAccessSingle': '{count} perfiles o permission sets con acceso a {resource}.',
     'permDiff.ariaPanel': 'Analizador de permisos',
     'permDiff.ariaDirection': 'Forma de consulta',
     'permDiff.ariaSection': 'Vista de resultados',
@@ -854,10 +990,10 @@ const translations = {
     'permDiff.suggestSearching': 'Buscando…',
     'permDiff.suggestEmpty': 'Sin coincidencias',
     'permDiff.suggestKindProfile': 'Perfil',
-    'permDiff.suggestKindPermSet': 'Permission Set',
+    'permDiff.suggestKindPermSet': 'permission set',
     'permDiff.suggestKindObject': 'Objeto',
     'permDiff.suggestKindField': 'Campo',
-    'permDiff.pickFromList': 'Elige un perfil o Permission Set de la lista.',
+    'permDiff.pickFromList': 'Elige un perfil o permission set de la lista.',
     'permDiff.pickResourceFromList': 'Elige un objeto o campo de la lista.',
     'debugLogs.title': 'Navegador de Debug Logs',
     'debugLogs.search': 'Buscar logs',
@@ -994,10 +1130,6 @@ const translations = {
     'popup.subtitle': 'Compare metadata, run tools, and more across your Salesforce orgs',
     'popup.compare': 'Open app',
     'popup.openCode': 'Open main application',
-    'popup.viewUpdate': 'View update',
-    'popup.mandatoryUpdate': 'Mandatory new version',
-    'popup.mandatoryUpdateText': 'A new major version of Salesforce Org Compare is available. You must update to continue using the extension.',
-    'popup.goToDownload': 'Go to download page',
     'popup.savedOrgs': 'Saved orgs',
     'popup.savedOrgsHint':
       'Drag the ⋮⋮ handle only within the same group (or among ungrouped orgs). That order is used in the application dropdowns.',
@@ -1012,9 +1144,6 @@ const translations = {
     'popup.noDetectedTab': 'No Salesforce org detected in this tab',
     'popup.alreadyAdded': 'Org already added',
     'popup.add': 'Add',
-    'popup.majorUpdate': 'A new major version ({remoteVersion}) of {extensionName} is available. Your current version is {currentVersion}. You must update to continue using the extension.',
-    'popup.changes': 'Changes:',
-    'popup.minorUpdate': 'New version available ({remoteVersion}). You are using {currentVersion}.',
     'popup.language': 'Language',
     'popup.editAlias': 'Edit alias',
     'popup.aliasPlaceholder': 'Alias (e.g. PROD, UAT…)',
@@ -1025,6 +1154,21 @@ const translations = {
     'popup.orgActionsMenu': 'Actions',
     'popup.openSettings': 'Settings',
     'popup.openSettingsTitle': 'Open settings in a new tab',
+    'popup.help.openTitle': 'Help: connect and manage Salesforce environments',
+    'popup.help.close': 'Close',
+    'popup.help.title': 'How to add and manage environments',
+    'popup.help.body1':
+      'Open a browser tab with the Salesforce organization you want to work with (login page or any page where you are already signed in). The extension automatically detects the org for that tab.',
+    'popup.help.body2':
+      'In the “Org detected in this tab” section you will see the current environment. Press Add to save it to your list. If nothing appears, reload the Salesforce tab or sign in first.',
+    'popup.help.body3':
+      'Each saved org has an actions menu (⋮): you can set an alias (for example PRO, UAT, PRE) and a group (Contact Center, etc.) so they are easy to spot in the main app.',
+    'popup.help.body4':
+      'Saved orgs appear in the dropdowns when you open the main app. Drag the ⋮⋮ handle only within the same group to control the order in those dropdowns.',
+    'popup.help.body5':
+      'If a session expires, use Re-authenticate from the org menu. You can also remove an org you no longer need.',
+    'popup.help.body6':
+      'The settings gear opens language, appearance, org backup, and other preferences. From there you can export or import your environment list.',
 
     // ── Settings (dedicated page) ──
     'settings.pageTitle': 'Settings · Salesforce Org Compare',
@@ -1039,6 +1183,9 @@ const translations = {
       'Light or dark UI for the compare view and tools. Editor uses the theme selected below.',
     'settings.uiThemeDark': 'Dark',
     'settings.uiThemeLight': 'Light',
+    'settings.telemetryEnabled': 'Send anonymous usage telemetry',
+    'settings.telemetryEnabledHint':
+      'Aggregated events (tool type, internal org IDs, no credentials) to Google Analytics and, during transition, Google Apps Script. You can turn this off anytime.',
     'settings.monacoTheme': 'Editor theme',
     'settings.monacoThemeHint':
       'Diff, anonymous Apex, Quick Edit, and log/coverage viewers. “SFOC” themes match the extension contrast.',
@@ -1122,32 +1269,24 @@ const translations = {
     'code.appModeBarLabel': 'Choose a work area',
     'code.appModeHome': 'Home',
     'code.appModeHomeTitle': 'About the tool and getting started',
-    'code.appModeCompare': 'Code & pages',
-    'code.appModeCompareTitle': 'Compare Apex, LWC, Aura, and Visualforce across orgs',
-    'code.appModeSecurity': 'Permissions & pages',
-    'code.appModeSecurityTitle': 'Profiles, permission sets, and Lightning pages',
+    'code.appModeComparator': 'Comparator',
+    'code.appModeComparatorTitle':
+      'Compare code, permissions, Lightning pages, and package.xml manifests across orgs',
     'code.appModeDevelopment': 'Test & debug',
     'code.appModeDevelopmentTitle': 'Apex tests, anonymous Apex, debug logs, and quick editor',
     'code.appModeMonitoring': 'Limits & audit',
     'code.appModeMonitoringTitle': 'Org limits, setup change history, and picklist dependencies',
     'code.appModeManifests': 'Manifests',
-    'code.appModeManifestsTitle': 'Generate or compare package.xml files',
-    'code.appModeSubmenuCompare': 'Code & pages options',
-    'code.appModeSubmenuSecurity': 'Permissions & pages options',
+    'code.appModeManifestsTitle': 'Generate package.xml files',
     'code.appModeSubmenuDevelopment': 'Test & debug options',
     'code.appModeSubmenuMonitoring': 'Limits & audit options',
     'code.appModeSubmenuManifests': 'Manifest options',
     'code.sidebarHomeHint': 'Pick a section in the top bar to see tools here.',
     'code.searchSelectOperationFirst': 'Choose an operation above first',
     // Menu groups
-    'code.optgroupCode': 'Compare code',
-    'code.optgroupSecurity': 'Security & permissions',
     'code.optgroupDev': 'Development',
     'code.optgroupMonitor': 'Monitoring',
     'code.optgroupManifest': 'Manifests',
-    // Legacy groups (for compatibility)
-    'code.optgroupSource': 'Compare code',
-    'code.optMetadataZip': 'Security & permissions',
     'code.optgroupAnalysis': 'Monitoring',
     'code.optgroupPackage': 'Manifests',
     // Menu options
@@ -1177,7 +1316,19 @@ const translations = {
     'code.comparePackageXml': 'Compare package.xml files',
     'code.generatePackageXml': 'Generate package.xml',
     'code.searchTitle': 'Search',
-    'code.searchPlaceholder': 'Search by name (min. 3 characters)',
+    'code.searchPlaceholder': 'Search by name',
+    'code.searchPlaceholderComparator': 'Search components',
+    'code.loadPackageXmlTitle': 'Load package.xml from your computer',
+    'code.compareContextPackageXml': 'package.xml',
+    'code.compareContext.apexClass': 'Apex class',
+    'code.compareContext.apexTrigger': 'Apex trigger',
+    'code.compareContext.apexPage': 'Visualforce page',
+    'code.compareContext.apexComponent': 'Visualforce component',
+    'code.compareContext.lwc': 'LWC',
+    'code.compareContext.aura': 'Aura',
+    'code.compareContext.permSet': 'Permission set',
+    'code.compareContext.profile': 'Profile',
+    'code.compareContext.flexipage': 'Lightning page',
 
     'quickOpen.placeholder': 'Search metadata, tools, or saved files…',
     'quickOpen.groupTools': 'Tools',
@@ -1198,6 +1349,8 @@ const translations = {
     'quickOpen.catFlexi': 'Lightning pages',
     'code.loadFile': 'Load file',
     'code.clearSavedFiles': 'Clear saved files',
+    'code.clearSavedFilesConfirm':
+      'Clear all unpinned files from the explorer? Pinned items will be kept.',
     'code.toggleWhitespace': 'Ignore whitespace',
     'code.whitespaceOn': 'Whitespace ignored',
     'code.whitespaceOff': 'Comparing whitespace',
@@ -1235,30 +1388,150 @@ const translations = {
     'code.landingDiscoverBannerWinLabel': 'Windows / Linux',
     'code.landingDiscoverBannerMacLabel': 'Mac',
     'code.landingSubtitle':
-      'Your dev and release flow in one place: crisp diffs, diagnostics, and manifests. Add orgs from the extension, pick a mode above, and go.',
-    'code.landingModeCompareTitle': 'Compare code in seconds',
-    'code.landingModeCompareText':
-      'Same artifact, two orgs: differences highlighted. Ideal for review before you deploy.',
-    'code.landingModeCompareTools': 'Includes · Apex · LWC · Aura · Visualforce',
-    'code.landingModeSecurityTitle': 'Security you can see',
-    'code.landingModeSecurityText':
-      'Line up profiles, permission sets, and Lightning pages. Fewer “why do they see this?” moments, more control.',
-    'code.landingModeSecurityTools': 'Includes · Permission sets · Profiles · Lightning',
-    'code.landingModeDevelopmentTitle': 'Develop without tab-hopping',
+      'Compare environments, review changes, and work with more confidence. Connect your organizations from the extension icon in the browser (popup), pick a section in the top bar, and get started in seconds. If you are unsure, press Help next to the work modes at any time.',
+    'code.landingModeComparatorTitle': 'Compare across environments',
+    'code.landingModeComparatorText':
+      'Search by name for what you need (Apex, Lightning components, Visualforce, profiles, permission sets, Lightning pages, or package.xml manifests) and open it in your working list. Pick reference and compare organizations above: differences are highlighted without copying into another tool. You can retrieve the component, export the diff, or copy a link to share the comparison with your team.',
+    'code.landingModeDevelopmentTitle': 'Develop without switching screens',
     'code.landingModeDevelopmentText':
-      'Tests, quick edits, anonymous Apex, and logs right where you work; plus SOQL/SOSL Explorer and compare Apex coverage across orgs. Less noise, more flow.',
-    'code.landingModeDevelopmentTools':
-      'Includes · Apex tests · Quick edit · Anonymous · Debug logs · SOQL / SOSL Explorer · Compare Apex coverage',
-    'code.landingModeMonitoringTitle': 'Keep the org healthy',
+      'Run Apex tests and review results and coverage. Edit classes and triggers with syntax highlighting, validate, and deploy to sandbox. Run one-off anonymous Apex, query records with the built-in explorer, review debug logs, and compare test coverage across two organizations without leaving this window.',
+    'code.landingModeMonitoringTitle': 'Keep an eye on the org',
     'code.landingModeMonitoringText':
-      'Limits, Setup change history, and picklist dependencies. Spot risk before it hits production.',
-    'code.landingModeMonitoringTools': 'Includes · Org limits · Audit trail · Picklist dependencies',
-    'code.landingModeManifestsTitle': 'Manifests on your terms',
+      'Check org limit usage (storage, API, etc.) and setup change history with dates and responsible users. Analyze picklist dependencies and use the permission analyzer to see who can view or edit objects, fields, and setup items, with optional comparison across two environments.',
+    'code.landingModeManifestsTitle': 'Prepare a deployment',
     'code.landingModeManifestsText':
-      'Generate a precise package.xml or compare two manifests. Package only what you need.',
-    'code.landingModeManifestsTools': 'Includes · Generate package.xml · Compare package.xml',
+      'Build a tailored package.xml: pick metadata types and members, review the resulting XML, and download it or run a ZIP retrieve. Turn on comparison mode to align the manifest with another org before you release. Ideal for focused incremental deployments.',
+    'code.landingHelpHint': 'Need guidance? Press Help in the top bar at any time.',
     'code.landingFooterWebsiteLabel': 'Tool website',
     'code.landingFooterLinkedIn': 'by Ángel Picado',
+
+    // ── In-app help (modal per mode) ──
+    'help.open': 'Help',
+    'help.openTitle': 'Guide for the current section and usage tips',
+    'help.close': 'Close',
+    'help.title': 'Help',
+    'help.mode.home.title': 'Getting started',
+    'help.mode.home.body1':
+      'Connect your Salesforce organizations from the extension icon in the browser. There you can add orgs detected in the current tab, save aliases, and group them (for example PRO, UAT, or Contact Center).',
+    'help.mode.home.body2':
+      'In the top bar pick an area: Comparator, Tests & debug, Limits & audit, or Manifests. Each area groups related tools in a submenu.',
+    'help.mode.home.body3':
+      'Use global quick search with Ctrl+Shift+P (Windows/Linux) or ⌘⇧P (Mac) to jump to metadata, tools, or saved scripts without browsing menus.',
+    'help.mode.home.body4':
+      'The first time you open a tool you will see a short summary. You can read the full guide for each section again with the Help button.',
+    'help.mode.comparator.title': 'Metadata comparator',
+    'help.mode.comparator.body1':
+      'Select two organizations in the top dropdowns. Search for a component by name in the left panel (Apex classes, LWC, Aura, Visualforce, profiles, permission sets, Lightning pages, etc.) and open it to see a side-by-side diff.',
+    'help.mode.comparator.body2':
+      'You can also load a package.xml from your computer and compare it with an org, or compare two manifests with each other.',
+    'help.mode.comparator.body3':
+      'In the viewer toolbar you can ignore whitespace, copy a unified diff, export HTML, or copy a link to share this comparison.',
+    'help.mode.comparator.body4':
+      'The Retrieve button downloads the active component from the reference org when the type supports it.',
+    'help.mode.comparator.body5':
+      'Indicators in the list show whether text is equal or different between orgs before you open the file.',
+    'help.mode.development.title': 'Tests and debugging',
+    'help.mode.development.body1':
+      'Apex Tests Hub: run tests by class, suite, or scope, track progress, and export results. Open line coverage when you need detail.',
+    'help.mode.development.body2':
+      'Quick Edit: search classes and triggers, edit with highlighting, validate, and deploy to the selected org.',
+    'help.mode.development.body3':
+      'Anonymous Apex: write and run snippets, save reusable scripts, and open generated logs.',
+    'help.mode.development.body4':
+      'Query Explorer: run data queries, save favorites, and compare results across two orgs. Debug Log Browser and coverage compare complete the debugging flow.',
+    'help.mode.monitoring.title': 'Limits, audit, and permissions',
+    'help.mode.monitoring.body1':
+      'Org limits dashboard: review usage for each metric. Enable comparison to see two environments at once.',
+    'help.mode.monitoring.body2':
+      'Setup history: filter configuration changes by user, action, or date for audits.',
+    'help.mode.monitoring.body3':
+      'Picklist dependencies: pick an object and compare how values depend on each other across orgs.',
+    'help.mode.monitoring.body4':
+      'Permission analyzer: query by profile or permission set what can be viewed or edited, or the reverse—which profiles have access to an object or field. Includes custom permissions.',
+    'help.mode.monitoring.body5':
+      'In the analyzer, type a name and press Query; the table only appears after an explicit search. With comparison enabled you see differences between the two orgs selected above.',
+    'help.mode.manifests.title': 'Deployment manifests',
+    'help.mode.manifests.body1':
+      'Generate package.xml by choosing metadata types and members. The XML updates as you check or uncheck items.',
+    'help.mode.manifests.body2':
+      'Download the file or run Retrieve and download a ZIP with content from the reference org.',
+    'help.mode.manifests.body3':
+      'Comparison mode aligns the selection with another org so you can see what is missing or extra before you deploy.',
+
+    // ── First-visit onboarding per tool ──
+    'onboarding.gotIt': 'Got it',
+    'onboarding.tool.Comparator.title': 'Welcome to the comparator',
+    'onboarding.tool.Comparator.lead':
+      'Here you compare the same component across two Salesforce organizations with a highlighted diff.',
+    'onboarding.tool.Comparator.step1':
+      'Above, pick the reference organization (left) and the one you want to contrast (right).',
+    'onboarding.tool.Comparator.step2':
+      'Search by name in the left panel and open a list item to see differences.',
+    'onboarding.tool.Comparator.step3':
+      'You can load a local package.xml or use toolbar buttons to copy the diff or share a link.',
+    'onboarding.tool.ApexTests.title': 'Apex Tests Hub',
+    'onboarding.tool.ApexTests.lead': 'Run and review automated tests without leaving the app.',
+    'onboarding.tool.ApexTests.step1': 'Select the organization in the top-left dropdown.',
+    'onboarding.tool.ApexTests.step2': 'Pick classes, methods, or suites and start a run; progress appears on screen.',
+    'onboarding.tool.ApexTests.step3': 'Open results, line coverage, or export the report when finished.',
+    'onboarding.tool.QuickEdit.title': 'Quick Apex edit',
+    'onboarding.tool.QuickEdit.lead': 'Search, edit, validate, and deploy classes and triggers to sandbox.',
+    'onboarding.tool.QuickEdit.step1': 'Type the class or trigger name in the search box.',
+    'onboarding.tool.QuickEdit.step2': 'Edit in the panel with syntax highlighting and keep local changes.',
+    'onboarding.tool.QuickEdit.step3': 'Use Validate or Deploy according to your usual release flow.',
+    'onboarding.tool.AnonymousApex.title': 'Anonymous Apex',
+    'onboarding.tool.AnonymousApex.lead': 'Run one-off Apex snippets and review the output.',
+    'onboarding.tool.AnonymousApex.step1': 'Select the organization where you want to execute.',
+    'onboarding.tool.AnonymousApex.step2': 'Write code, run it, and review errors or the response.',
+    'onboarding.tool.AnonymousApex.step3': 'Save frequent scripts and open them from the library.',
+    'onboarding.tool.QueryExplorer.title': 'Query Explorer',
+    'onboarding.tool.QueryExplorer.lead':
+      'Query org records, save useful queries, and compare results across environments.',
+    'onboarding.tool.QueryExplorer.step1':
+      'Pick the organization in the top-left dropdown. Write your query (for example records from an object) and press Run.',
+    'onboarding.tool.QueryExplorer.step2':
+      'Save named queries for reuse. Export results to CSV or JSON when needed.',
+    'onboarding.tool.QueryExplorer.step3':
+      'Enable Comparison mode to run the same query in both organizations and see differences in aligned columns.',
+    'onboarding.tool.DebugLogBrowser.title': 'Debug log browser',
+    'onboarding.tool.DebugLogBrowser.lead': 'List, filter, and open debug logs for the org.',
+    'onboarding.tool.DebugLogBrowser.step1': 'Select the org and refresh the log list.',
+    'onboarding.tool.DebugLogBrowser.step2': 'Filter by user, application, or date range.',
+    'onboarding.tool.DebugLogBrowser.step3': 'Open a log to read it or delete old logs in bulk.',
+    'onboarding.tool.ApexCoverageCompare.title': 'Compare Apex coverage',
+    'onboarding.tool.ApexCoverageCompare.lead': 'Contrast class coverage percentages between two orgs.',
+    'onboarding.tool.ApexCoverageCompare.step1': 'Select both organizations above.',
+    'onboarding.tool.ApexCoverageCompare.step2': 'Press Load data to fetch coverage on each side.',
+    'onboarding.tool.ApexCoverageCompare.step3': 'Review the delta and open line detail when you need to dig deeper.',
+    'onboarding.tool.OrgLimits.title': 'Org limits',
+    'onboarding.tool.OrgLimits.lead': 'See how much of each operational limit you have used.',
+    'onboarding.tool.OrgLimits.step1': 'Pick the organization and press Refresh limits.',
+    'onboarding.tool.OrgLimits.step2': 'Hover bars for exact figures.',
+    'onboarding.tool.OrgLimits.step3': 'Enable comparison to view two environments side by side.',
+    'onboarding.tool.SetupAuditTrail.title': 'Setup change history',
+    'onboarding.tool.SetupAuditTrail.lead': 'Audit who changed what in org configuration.',
+    'onboarding.tool.SetupAuditTrail.step1': 'Select the org and apply user or action filters.',
+    'onboarding.tool.SetupAuditTrail.step2': 'Adjust the date range for your review.',
+    'onboarding.tool.SetupAuditTrail.step3': 'Browse the table to spot recent changes before a deployment.',
+    'onboarding.tool.FieldDependency.title': 'Picklist dependencies',
+    'onboarding.tool.FieldDependency.lead': 'Compare how picklist values depend on each other.',
+    'onboarding.tool.FieldDependency.step1': 'Choose an object from the list (reference org).',
+    'onboarding.tool.FieldDependency.step2': 'Fetch metadata and review the dependency diff across orgs.',
+    'onboarding.tool.FieldDependency.step3': 'Useful to validate business rules on dependent fields.',
+    'onboarding.tool.PermissionDiff.title': 'Permission analyzer',
+    'onboarding.tool.PermissionDiff.lead':
+      'Query and compare permissions without exporting XML—everything is fetched live from the org.',
+    'onboarding.tool.PermissionDiff.step1':
+      'Three query modes: by profile or permission set, by object or field (who has access), or by custom permission.',
+    'onboarding.tool.PermissionDiff.step2':
+      'Type a name (with autocomplete), choose the type if needed, and press Query. The table only appears after you search.',
+    'onboarding.tool.PermissionDiff.step3':
+      'Enable Comparison mode above to see differences between the two organizations selected in the dropdowns.',
+    'onboarding.tool.GeneratePackageXml.title': 'Generate package.xml',
+    'onboarding.tool.GeneratePackageXml.lead': 'Build a tailored deployment manifest.',
+    'onboarding.tool.GeneratePackageXml.step1': 'Select the reference org and search metadata types.',
+    'onboarding.tool.GeneratePackageXml.step2': 'Check members to include; XML is generated on the right.',
+    'onboarding.tool.GeneratePackageXml.step3': 'Download the file or run Retrieve ZIP. Comparison aligns with another org.',
 
     // ── Generate package.xml panel ──
     'genPkg.title': 'Generate package.xml',
@@ -1404,6 +1677,7 @@ const translations = {
     'apexTests.jobStatus.Holding': 'Holding',
     'apexTests.jobStatus.AbortingJob': 'Aborting',
     'apexTests.jobStatus.Completed': 'Completed',
+    'apexTests.jobStatus.CompletedWithFailures': 'Completed with failures',
     'apexTests.jobStatus.Failed': 'Failed',
     'apexTests.jobStatus.Aborted': 'Aborted',
     'apexTests.jobStatus.Error': 'Error',
@@ -1491,6 +1765,8 @@ const translations = {
     'toast.zipNoUsable': 'The ZIP from the {side} contains no usable metadata file',
     'toast.selectTwoOrgs': 'Select two organizations to compare (left and right)',
     'toast.fetchingBoth': 'Fetching from both environments…',
+    'toast.cancel': 'Cancel',
+    'toast.retrieveCancelled': 'Retrieve cancelled',
     'toast.openDiffFirst': 'Open the diff for this item first before using retrieve.',
     'toast.zipsNoComparable': 'The ZIPs contain no comparable files',
     'toast.retrieveComplete': 'Retrieve completed: {count} file(s). Use the tree under the package.xml.',
@@ -1560,6 +1836,7 @@ const translations = {
 
     // ── Orgs dropdown ──
     'orgs.none': 'None',
+    'orgs.autoAdded': 'Organization added: {name}',
     'orgs.genPkgOnlyLeft': 'In "Generate package.xml" mode only the left organization is used.',
     'orgs.apexTestsOnlyLeft': 'In "Apex tests" mode only the left organization is used.',
     'orgs.lockedHint': 'Select another item in the list to change environment (this diff corresponds to the current retrieve).',
@@ -1598,11 +1875,6 @@ const translations = {
     'viewer.tooLargeSkipDiff': 'Very large files (~{chars} characters). Line-by-line diff disabled to save memory; use "Next" to see more parallel chunks.',
     'viewer.alignedChunked': 'Very large aligned diff. Showing by chunks (lines); block change navigation is not available in this mode.',
     'viewer.truncated': 'Diff truncated to viewer limit ({max} characters per side). Too large to paginate without memory risk.',
-
-    // ── Version check (code page) ──
-    'version.mustUpdate': 'You must update the extension',
-    'version.mustUpdateText': 'A new major version ({remoteVersion}) of {extensionName} is available and your current version is {currentVersion}. Update to continue using the extension.',
-    'version.goToDownload': 'Go to download page',
 
     // ── Document titles ──
     'docTitle.app': 'Salesforce Org Compare',
@@ -1674,10 +1946,10 @@ const translations = {
     'queryExplorer.title': 'SOQL / SOSL Explorer',
     'queryExplorer.compareMode': 'Comparison mode',
     'queryExplorer.compareTooltip':
-      'Disabled: query left org only. Enabled: run the same query in both columns.',
+      'Off: one organization. On: compare results between the two organizations selected above.',
     'queryExplorer.apiLabel': 'API',
-    'queryExplorer.apiRest': 'REST (standard)',
-    'queryExplorer.apiTooling': 'Tooling',
+    'queryExplorer.apiRest': 'Organization data (typical queries)',
+    'queryExplorer.apiTooling': 'Development metadata',
     'queryExplorer.languageLabel': 'Language',
     'queryExplorer.langSoql': 'SOQL',
     'queryExplorer.langSosl': 'SOSL (REST only)',
@@ -1728,7 +2000,7 @@ const translations = {
     'orgLimits.title': 'Org Limits Dashboard',
     'orgLimits.compareMode': 'Comparation mode',
     'orgLimits.compareTooltip':
-      'Disabled: query left org only. Enabled: compare left and right orgs.',
+      'Off: one organization. On: compare limits between the two organizations selected above.',
     'orgLimits.refresh': 'Refresh limits',
     'orgLimits.selectOrg': 'Select an organization in the top-left dropdown.',
     'orgLimits.selectRightOrg': 'Select the right organization too.',
@@ -1742,7 +2014,8 @@ const translations = {
     'permDiff.subtitle':
       'See and compare who can view or edit objects, fields, and setup items.',
     'permDiff.compareMode': 'Comparison mode',
-    'permDiff.compareTooltip': 'Off: one org only. On: compare two orgs.',
+    'permDiff.compareTooltip':
+      'Off: query one organization. On: show differences between the two organizations selected above.',
     'permDiff.refresh': 'Query',
     'permDiff.containerType': 'Type',
     'permDiff.typePermissionSet': 'Permission set',

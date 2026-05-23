@@ -1,8 +1,43 @@
 /**
  * Deep-link de comparación: org izquierda/derecha, modo, operación e ítem en la URL.
  * Parámetros: `left`, `right`, `nav`, `op`, `type`, `key`, `fileName`, `descriptor`.
- * Compatibilidad: `orgId` → org izquierda (legado).
+ * Compatibilidad: `orgId` → org izquierda (legado); `nav=compare|security` → `comparator`.
  */
+
+/** @param {string | null | undefined} nav */
+export function normalizeLegacyNavMode(nav) {
+  if (!nav) return nav ?? null;
+  if (nav === 'compare' || nav === 'security') return 'comparator';
+  if (nav === 'manifests') return 'manifests';
+  return nav;
+}
+
+/**
+ * @param {string | null | undefined} nav
+ * @param {string | null | undefined} op
+ */
+export function normalizeLegacyNavAndOp(nav, op) {
+  const navNorm = normalizeLegacyNavMode(nav);
+  if (nav === 'manifests' && op === 'PackageXml') {
+    return { navMode: 'comparator', op: 'Comparator' };
+  }
+  if (navNorm === 'comparator') {
+    const legacyOps = new Set([
+      'Apex',
+      'LWC',
+      'Aura',
+      'VF',
+      'PermissionSet',
+      'Profile',
+      'FlexiPage',
+      'PackageXml'
+    ]);
+    if (!op || legacyOps.has(op)) {
+      return { navMode: 'comparator', op: 'Comparator' };
+    }
+  }
+  return { navMode: navNorm, op: op ?? null };
+}
 
 /** @type {Record<string, string>} */
 export const ITEM_TYPE_TO_OP = {
@@ -69,8 +104,9 @@ export function parseCompareDeepLink(search) {
     }
   }
 
-  const op = trimParam(params.get('op'));
-  const navMode = trimParam(params.get('nav'));
+  const opRaw = trimParam(params.get('op'));
+  const navRaw = trimParam(params.get('nav'));
+  const { navMode, op } = normalizeLegacyNavAndOp(navRaw, opRaw);
 
   return {
     leftOrgId,
@@ -101,7 +137,7 @@ export function buildCompareSearchParamsFromState(appState) {
   if (appState.rightOrgId) p.set('right', String(appState.rightOrgId));
 
   const item = appState.selectedItem;
-  if (item?.type && item?.key != null && item.key !== '') {
+  if (item?.type && item.type !== 'PackageXml' && item?.key != null && item.key !== '') {
     p.set('type', String(item.type));
     p.set('key', String(item.key));
     if (item.fileName) p.set('fileName', String(item.fileName));
@@ -170,6 +206,7 @@ export function resolveItemFromDeepLink(parsed, appState, savedItems, options = 
   const select = options.select !== false;
   const { itemType, itemKey, fileName, descriptor } = parsed;
   if (!itemType || !itemKey) return { item: null, added: false };
+  if (itemType === 'PackageXml') return { item: null, added: false };
 
   let target = (savedItems || []).find((saved) => {
     if (saved.type !== itemType || saved.key !== itemKey) return false;

@@ -1,7 +1,6 @@
 import { state } from '../core/state.js';
-import { bg } from '../core/bridge.js';
 import { t } from '../../shared/i18n.js';
-import { listAllNavTools, navigateToModeAndTool, toolToMode } from './appModeNav.js';
+import { listAllNavTools, navigateToModeAndTool } from './appModeNav.js';
 import { addSelected, addBundleFiles } from '../flows/addItems.js';
 import {
   getAnonymousApexSavedScriptsIndex,
@@ -9,6 +8,15 @@ import {
 } from './anonymousApexPanel.js';
 import { debounce } from './searchSetup.js';
 import { refreshAuthStatuses } from './orgs.js';
+import {
+  COMPARE_TOOLS_COVERED_BY_METADATA,
+  fillBreadcrumb,
+  metadataSearchItemClasses,
+  kickSilentIndexBuild,
+  normalizeQueryLocal,
+  resolveMetadataMatches,
+  sanitizeApiPrefix
+} from '../lib/metadataSearch.js';
 
 /** Atajo global: Ctrl+Shift+P / ⌘⇧P (evita Ctrl+P = Imprimir en Chrome). */
 const QUICK_OPEN_SHORTCUT = Object.freeze({
@@ -17,44 +25,11 @@ const QUICK_OPEN_SHORTCUT = Object.freeze({
   key: 'p'
 });
 
-const MIN_METADATA_CHARS = 1;
 const MAX_TOTAL_RESULTS = 8;
-
-/** @type {{ artType: string, navTool: string, categoryKey: string, isBundle?: boolean }[]} */
-const METADATA_SEARCH_SPECS = [
-  { artType: 'ApexClass', navTool: 'Apex', categoryKey: 'quickOpen.catApexClass' },
-  { artType: 'ApexTrigger', navTool: 'Apex', categoryKey: 'quickOpen.catApexTrigger' },
-  { artType: 'ApexPage', navTool: 'VF', categoryKey: 'quickOpen.catApexPage' },
-  { artType: 'ApexComponent', navTool: 'VF', categoryKey: 'quickOpen.catApexComponent' },
-  { artType: 'LWC', navTool: 'LWC', categoryKey: 'quickOpen.catLwc', isBundle: true },
-  { artType: 'Aura', navTool: 'Aura', categoryKey: 'quickOpen.catAura', isBundle: true },
-  { artType: 'PermissionSet', navTool: 'PermissionSet', categoryKey: 'quickOpen.catPermSet' },
-  { artType: 'Profile', navTool: 'Profile', categoryKey: 'quickOpen.catProfile' },
-  { artType: 'FlexiPage', navTool: 'FlexiPage', categoryKey: 'quickOpen.catFlexi' }
-];
-
-const SPEC_BY_ART_TYPE = Object.fromEntries(METADATA_SEARCH_SPECS.map((s) => [s.artType, s]));
-
-/**
- * Herramientas «Comparar …» ya cubiertas por el índice de metadatos (Apex, LWC, Aura, VF, etc.).
- * En Quick Open no mostramos ambas: el resultado de metadato abre el comparador con el componente cargado.
- */
-const COMPARE_TOOLS_COVERED_BY_METADATA = new Set(
-  METADATA_SEARCH_SPECS.map((s) => s.navTool)
-);
 
 let isOpen = false;
 let searchGeneration = 0;
-let indexBuildGeneration = 0;
 let activeResultIndex = -1;
-
-/** @type {{ orgId: string | null, loading: boolean, ready: boolean, entries: { artType: string, navTool: string, categoryKey: string, isBundle?: boolean, name: string, id?: string, searchHay: string }[] }} */
-let nameIndex = {
-  orgId: null,
-  loading: false,
-  ready: false,
-  entries: []
-};
 
 /** Etiqueta del atajo para la UI (Windows/Linux vs macOS). */
 export function getQuickOpenShortcutLabel() {
@@ -78,20 +53,6 @@ function getFirstAuthenticatedOrgId() {
   return null;
 }
 
-function normalizeQueryLocal(raw) {
-  return String(raw || '')
-    .trim()
-    .replace(/[\u0000-\u001F\u007F]/g, '')
-    .slice(0, 120)
-    .toLowerCase();
-}
-
-function sanitizeApiPrefix(raw) {
-  let prefix = String(raw || '').trim();
-  if (prefix.length > 64) prefix = prefix.slice(0, 64);
-  return prefix.replace(/[\u0000-\u001F\u007F]/g, '');
-}
-
 /**
  * @param {string} query
  * @param {{ orgAuthenticated?: boolean }} [opts]
@@ -109,121 +70,6 @@ function filterTools(query, opts = {}) {
 function filterSavedScripts(query) {
   if (!query) return [];
   return getAnonymousApexSavedScriptsIndex().filter((s) => s.searchHay.includes(query));
-}
-
-/**
- * @param {Record<string, unknown>[]} items
- */
-function mapApiIndexToEntries(items) {
-  /** @type {typeof nameIndex.entries} */
-  const out = [];
-  for (const row of items) {
-    const artType = String(row.artifactType || row.type || '');
-    const spec = SPEC_BY_ART_TYPE[artType];
-    if (!spec) continue;
-    if (spec.isBundle) {
-      const name = String(row.developerName || '');
-      if (!name) continue;
-      out.push({
-        artType: spec.artType,
-        navTool: spec.navTool,
-        categoryKey: spec.categoryKey,
-        isBundle: true,
-        name,
-        id: row.id != null ? String(row.id) : undefined,
-        searchHay: name.toLowerCase()
-      });
-      continue;
-    }
-    const name = String(row.name || '');
-    if (!name) continue;
-    out.push({
-      artType: spec.artType,
-      navTool: spec.navTool,
-      categoryKey: spec.categoryKey,
-      name,
-      searchHay: name.toLowerCase()
-    });
-  }
-  return out;
-}
-
-function resetNameIndex() {
-  nameIndex = { orgId: null, loading: false, ready: false, entries: [] };
-}
-
-function waitForNameIndex() {
-  return new Promise((resolve) => {
-    const tick = () => {
-      if (!nameIndex.loading) {
-        resolve(undefined);
-        return;
-      }
-      setTimeout(tick, 50);
-    };
-    tick();
-  });
-}
-
-/** Carga todos los nombres de la org (silencioso, en segundo plano). */
-async function ensureNameIndex(orgId) {
-  if (!orgId) return;
-  if (nameIndex.orgId === orgId && nameIndex.ready) return;
-  if (nameIndex.orgId === orgId && nameIndex.loading) {
-    await waitForNameIndex();
-    return;
-  }
-
-  const gen = ++indexBuildGeneration;
-  nameIndex = { orgId, loading: true, ready: false, entries: [] };
-
-  try {
-    const res = await bg({ type: 'quickOpen:buildIndex', orgId });
-    if (gen !== indexBuildGeneration) return;
-    if (res?.ok && Array.isArray(res.items)) {
-      nameIndex.entries = mapApiIndexToEntries(res.items);
-      nameIndex.ready = true;
-    }
-  } catch {
-    if (gen === indexBuildGeneration) resetNameIndex();
-  } finally {
-    if (gen === indexBuildGeneration) nameIndex.loading = false;
-  }
-}
-
-function kickSilentIndexBuild(orgId) {
-  if (!orgId) return;
-  if (nameIndex.orgId === orgId && (nameIndex.ready || nameIndex.loading)) return;
-  void ensureNameIndex(orgId).then(() => {
-    if (!isOpen) return;
-    const input = /** @type {HTMLInputElement | null} */ (document.getElementById('quickOpenInput'));
-    if (input?.value.trim()) runQuickOpenSearchDebounced();
-  });
-}
-
-function filterMetadataFromIndex(query) {
-  if (!query || !nameIndex.ready) return [];
-  return nameIndex.entries.filter((e) => e.searchHay.includes(query));
-}
-
-/**
- * @param {string} orgId
- * @param {string} apiPrefix
- */
-async function searchMetadataByPrefix(orgId, apiPrefix) {
-  const batches = await Promise.all(
-    METADATA_SEARCH_SPECS.map(async (spec) => {
-      const r = await bg({ type: 'searchIndex', orgId, artifactType: spec.artType, prefix: apiPrefix });
-      if (!r.ok) return [];
-      return mapApiIndexToEntries(
-        (Array.isArray(r.items) ? r.items : []).map((item) => ({
-          ...item,
-          artifactType: spec.artType
-        }))
-      );
-    })
-  );
-  return batches.flat();
 }
 
 function capSearchResults(tools, scripts, metadata) {
@@ -249,21 +95,6 @@ function renderStatusMessage(container, kind, message) {
   container.appendChild(p);
   container.classList.remove('hidden');
   syncInputExpanded(true);
-}
-
-function fillBreadcrumb(crumbs, groupLabel, name) {
-  crumbs.innerHTML = '';
-  const g = document.createElement('span');
-  g.className = 'quick-open-crumb-group';
-  g.textContent = groupLabel;
-  const sep = document.createElement('span');
-  sep.className = 'quick-open-crumb-sep';
-  sep.setAttribute('aria-hidden', 'true');
-  sep.textContent = '›';
-  const n = document.createElement('span');
-  n.className = 'quick-open-crumb-name';
-  n.textContent = name;
-  crumbs.append(g, sep, n);
 }
 
 function renderResults(results, payload) {
@@ -316,7 +147,7 @@ function renderResults(results, payload) {
   for (const entry of metadata) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'quick-open-item quick-open-item--metadata';
+    btn.className = metadataSearchItemClasses(entry.artType);
     btn.setAttribute('role', 'option');
     const crumbs = document.createElement('span');
     crumbs.className = 'quick-open-crumbs';
@@ -348,25 +179,13 @@ function highlightActiveResult(results) {
 }
 
 async function selectMetadataResult(entry) {
-  const mode = toolToMode(entry.navTool);
-  if (!mode) return;
-  await navigateToModeAndTool(mode, entry.navTool, { userInitiated: true });
+  await navigateToModeAndTool('comparator', 'Comparator', { userInitiated: true });
   if (entry.isBundle && entry.id) {
     await addBundleFiles(entry.artType, { id: entry.id, developerName: entry.name });
   } else {
     addSelected({ type: entry.artType, key: entry.name, descriptor: { name: entry.name } });
   }
   closeQuickOpen();
-}
-
-async function resolveMetadataMatches(orgId, queryLocal, apiPrefix) {
-  if (nameIndex.orgId === orgId && nameIndex.ready) {
-    return filterMetadataFromIndex(queryLocal);
-  }
-  if (apiPrefix.length >= MIN_METADATA_CHARS) {
-    return searchMetadataByPrefix(orgId, apiPrefix);
-  }
-  return [];
 }
 
 async function runQuickOpenSearchAsync() {
@@ -400,7 +219,11 @@ async function runQuickOpenSearchAsync() {
     return;
   }
 
-  kickSilentIndexBuild(orgId);
+  kickSilentIndexBuild(orgId, () => {
+    if (!isOpen) return;
+    const inp = /** @type {HTMLInputElement | null} */ (document.getElementById('quickOpenInput'));
+    if (inp?.value.trim()) runQuickOpenSearchDebounced();
+  });
 
   const metadata = await resolveMetadataMatches(orgId, queryLocal, apiPrefix);
   if (gen !== searchGeneration) return;

@@ -26,6 +26,41 @@ export function isRetrieveZipTreeItem(item) {
   return !!(item && item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile');
 }
 
+export function hasPackageXmlRetrieveTree(parentKey) {
+  return !!(parentKey && state.packageRetrieveZipCache[parentKey]);
+}
+
+/** Manifiesto local con árbol de retrieve ya cargado (no se muestra la fila hoja del padre). */
+export function isPackageXmlRetrieveRootItem(item) {
+  return !!(
+    item?.type === 'PackageXml' &&
+    item.descriptor?.source === 'localFile' &&
+    hasPackageXmlRetrieveTree(item.key)
+  );
+}
+
+export function getPackageXmlLocalRootItem(parentKey) {
+  return state.savedItems.find(
+    (s) => s.type === 'PackageXml' && s.descriptor?.source === 'localFile' && s.key === parentKey
+  );
+}
+
+/** Botón Retrieve solo en el manifiesto raíz, no en ficheros del árbol. */
+export function shouldShowRetrieveButtonForItem(item) {
+  if (!item || !state.leftOrgId || !state.rightOrgId) return false;
+  if (item.type === 'PermissionSet' || item.type === 'Profile' || item.type === 'FlexiPage') return true;
+  if (item.type === 'PackageXml' && item.descriptor?.source === 'localFile') return true;
+  return false;
+}
+
+/** Ítem a pasar a retrieveAndLoadFromZip (null si es un hijo del ZIP). */
+export function resolveRetrieveTargetItem(item) {
+  if (!item) return null;
+  if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile') return null;
+  if (shouldShowRetrieveButtonForItem(item)) return item;
+  return null;
+}
+
 export function updateOrgSelectorsLockedState() {
   try {
   const left = document.getElementById('leftOrg');

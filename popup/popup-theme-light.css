@@ -41,6 +41,30 @@ html[data-ui-theme="light"] .setup-btn:focus {
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
 }
 
+html[data-ui-theme="light"] .popup-help-modal-panel {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .popup-help-modal-head {
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .popup-help-modal-title {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .popup-help-modal-close {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .popup-help-modal-body p {
+  color: #475569;
+}
+
 html[data-ui-theme="light"] button {
   background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
   border: 1px solid #cbd5e1;
@@ -168,45 +192,4 @@ html[data-ui-theme="light"] .row button.small {
 
 html[data-ui-theme="light"] .row button.small:hover {
   background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
-}
-
-html[data-ui-theme="light"] .update-banner {
-  border: 1px solid #ca8a04;
-  background: linear-gradient(135deg, rgba(254, 243, 199, 0.95), rgba(253, 230, 138, 0.88));
-  color: #713f12;
-}
-
-html[data-ui-theme="light"] .update-banner button.small {
-  background: #ca8a04;
-  color: #ffffff;
-  border-color: #a16207;
-}
-
-html[data-ui-theme="light"] .update-banner button.small:hover {
-  background: #a16207;
-  border-color: #854d0e;
-}
-
-html[data-ui-theme="light"] .update-blocker {
-  background: rgba(15, 23, 42, 0.35);
-}
-
-html[data-ui-theme="light"] .update-blocker-dialog {
-  background: #ffffff;
-  border: 1px solid #fca5a5;
-  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
-}
-
-html[data-ui-theme="light"] .update-blocker-dialog h2 {
-  color: #991b1b;
-}
-
-html[data-ui-theme="light"] .update-blocker-dialog p {
-  color: #7f1d1d;
-}
-
-html[data-ui-theme="light"] .update-blocker-dialog button {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border-color: #f87171;
-  color: #ffffff;
 }

@@ -31,7 +31,7 @@ function getQueryKeys() {
   const lineRaw = q.get('line');
   const lineNum = lineRaw != null && lineRaw !== '' ? parseInt(lineRaw, 10) : NaN;
   return {
-    sid: q.get('sid') || '',
+    sid: q.get('staged') || q.get('sid') || '',
     k: q.get('k') || '',
     idb: q.get('idb') || '',
     line: Number.isFinite(lineNum) && lineNum > 0 ? lineNum : 0

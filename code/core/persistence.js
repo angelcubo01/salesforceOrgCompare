@@ -7,19 +7,45 @@ export function option(value, label) {
   return o;
 }
 
+/** Todo package.xml (manifiesto, árbol retrieve, hijos ZIP) es de sesión: no persiste al recargar. */
+export function isEphemeralPackageXmlItem(item) {
+  return item?.type === 'PackageXml';
+}
+
+/** Clave de fijado (`type:key`) de un package.xml efímero. */
+export function isEphemeralPackageXmlPinKey(pinKeyStr) {
+  return typeof pinKeyStr === 'string' && pinKeyStr.startsWith('PackageXml:');
+}
+
+/** Al restaurar sesión: ningún package.xml ni fijado de package.xml. */
+export function restoreSessionWithoutEphemeralPackageXml() {
+  state.savedItems = state.savedItems.filter((i) => !isEphemeralPackageXmlItem(i));
+  state.packageXmlLocalContent = {};
+  state.packageRetrieveZipCache = {};
+
+  if (state.selectedItem && isEphemeralPackageXmlItem(state.selectedItem)) {
+    state.selectedItem = null;
+  }
+
+  const nextPins = state.pinnedKeys.filter((pk) => !isEphemeralPackageXmlPinKey(pk));
+  if (nextPins.length !== state.pinnedKeys.length) {
+    state.pinnedKeys = nextPins;
+    savePinnedKeys();
+  }
+  prunePinnedKeysToSavedItems();
+}
+
 export function saveItemsToStorage() {
-  const storable = state.savedItems.filter(
-    (i) =>
-      !(i.type === 'PackageXml' && i.descriptor?.source === 'localFile') &&
-      !(i.type === 'PackageXml' && i.descriptor?.source === 'retrieveZipFile')
-  );
+  const storable = state.savedItems.filter((i) => !isEphemeralPackageXmlItem(i));
   chrome.storage.local.set({ savedCodeItems: storable });
 }
 
 export function loadItemsFromStorage() {
   return new Promise((resolve) => {
     chrome.storage.local.get(['savedCodeItems'], (result) => {
-      state.savedItems = result.savedCodeItems || [];
+      state.savedItems = (result.savedCodeItems || []).filter((i) => !isEphemeralPackageXmlItem(i));
+      restoreSessionWithoutEphemeralPackageXml();
+      saveItemsToStorage();
       resolve(state.savedItems);
     });
   });
@@ -43,8 +69,6 @@ export function setupPersistSavedItemsOnPageClose() {
   });
 }
 
-/** @deprecated Usar setupPersistSavedItemsOnPageClose */
-export const setupClearFileHistoryOnPageClose = setupPersistSavedItemsOnPageClose;
 
 /** Elimina entradas de `pinnedKeys` que no tienen ítem en la lista cargada (p. ej. no persistibles). */
 export function prunePinnedKeysToSavedItems() {
@@ -65,7 +89,13 @@ export function pinKey(item) {
 export async function loadPinnedKeys() {
   try {
     const res = await chrome.storage.local.get('pinnedKeys');
-    state.pinnedKeys = Array.isArray(res.pinnedKeys) ? res.pinnedKeys.slice(0, MAX_PINNED) : [];
+    const raw = Array.isArray(res.pinnedKeys) ? res.pinnedKeys : [];
+    state.pinnedKeys = raw
+      .filter((pk) => !isEphemeralPackageXmlPinKey(pk))
+      .slice(0, MAX_PINNED);
+    if (raw.length !== state.pinnedKeys.length) {
+      savePinnedKeys();
+    }
   } catch {}
   return state.pinnedKeys;
 }
@@ -75,6 +105,7 @@ export function savePinnedKeys() {
 }
 
 export function togglePin(item) {
+  if (item?.type === 'PackageXml') return null;
   const key = pinKey(item);
   const idx = state.pinnedKeys.indexOf(key);
   if (idx >= 0) {

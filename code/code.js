@@ -10,6 +10,7 @@ import {
 } from './core/persistence.js';
 import {
   loadSavedOrgs,
+  setupOrgSelectorAutoSync,
   updateOrgDropdownLayout,
   updateAuthIndicators,
   ensureRightOrgDistinctFromLeft
@@ -18,7 +19,6 @@ import { renderSavedItems, setupCompareListToolbar } from './ui/listUi.js';
 import { updateDocumentTitle } from './ui/documentMeta.js';
 import { renderEditor } from './editor/editorRender.js';
 import { updateOrgSelectorsLockedState } from './ui/viewerChrome.js';
-import { maybeEnforceUpdate } from './setup/versionCheck.js';
 import {
   wireSelectors,
   setupResizable,
@@ -40,7 +40,8 @@ import {
   persistAfterOperationChange,
   navigateToModeAndTool
 } from './ui/appModeNav.js';
-import { applyArtifactTypeUi } from './ui/artifactTypeUi.js';
+import { applyArtifactTypeUi, getSelectedArtifactType } from './ui/artifactTypeUi.js';
+import { setupAppHelp, maybeShowToolOnboarding } from './ui/appHelp.js';
 import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
 import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
@@ -56,7 +57,7 @@ import {
   setupClearApexTestJobsOnPageClose,
   updateApexTestsHubPollingState
 } from './ui/apexTestsHubRuns.js';
-import { loadLang, t, getCurrentLang } from '../shared/i18n.js';
+import { loadLang, t } from '../shared/i18n.js';
 import {
   loadExtensionSettings,
   EXTENSION_CONFIG_KEY,
@@ -70,9 +71,7 @@ import {
   syncCompareUrlFromState
 } from './lib/compareDeepLink.js';
 import { applyDeepLinkOrgs, applyDeepLinkItemHint } from './lib/compareDeepLinkUi.js';
-import {
-  resolveLandingDiscoverBannerContent
-} from '../shared/landingDiscoverBanner.js';
+import { buildDiscoverBannerLineHtml } from '../shared/landingDiscoverBanner.js';
 
 function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((elem) => {
@@ -100,42 +99,11 @@ function applyLandingFooterLinks() {
   }
 }
 
-/** Banner azul de descubrimiento (Quick Open); texto por i18n o version.json remoto. */
-async function applyLandingDiscoverBanner() {
+/** Banner azul de descubrimiento (Quick Open); texto por i18n. */
+function applyLandingDiscoverBanner() {
   const textEl = document.getElementById('appLandingDiscoverBannerText');
   if (!textEl) return;
-  const lang = getCurrentLang() === 'es' ? 'es' : 'en';
-  let remote = null;
-  try {
-    const res = await bg({ type: 'version:getUpdateInfo', forceRefreshRemote: false });
-    if (res?.ok) remote = res;
-  } catch {
-    /* ignore */
-  }
-  const { html } = resolveLandingDiscoverBannerContent(remote, lang, t);
-  textEl.innerHTML = html;
-}
-
-async function applyLandingHomeBanner() {
-  const wrap = document.getElementById('appLandingHomeBanner');
-  const textEl = document.getElementById('appLandingHomeBannerText');
-  if (!wrap || !textEl) return;
-  wrap.classList.add('hidden');
-  textEl.textContent = '';
-  try {
-    const res = await bg({ type: 'version:getUpdateInfo', forceRefreshRemote: true });
-    if (!res || !res.ok) return;
-    const lang = getCurrentLang();
-    const es = String(res.homeBanner_es || '').trim();
-    const en = String(res.homeBanner_en || '').trim();
-    const gen = String(res.homeBanner || '').trim();
-    const message = lang === 'es' ? es || gen || en : en || gen || es;
-    if (!message) return;
-    textEl.textContent = message;
-    wrap.classList.remove('hidden');
-  } catch {
-    /* ignore */
-  }
+  textEl.innerHTML = buildDiscoverBannerLineHtml(t);
 }
 
 async function init() {
@@ -155,17 +123,14 @@ async function init() {
         refreshQuickEditEditorTheme();
       })();
     }
+    if (area === 'sync' && changes.savedOrgs) {
+      void loadSavedOrgs();
+    }
   });
   applyStaticTranslations();
   applyLandingFooterLinks();
 
-  const blocked = await maybeEnforceUpdate();
-  if (blocked) {
-    return;
-  }
-
   applyLandingDiscoverBanner();
-  await applyLandingHomeBanner();
 
   await loadSavedOrgs();
   await loadPinnedKeys();
@@ -173,7 +138,12 @@ async function init() {
   prunePinnedKeysToSavedItems();
 
   const typeSelect = document.getElementById('typeSelect');
-  const urlDeepLink = parseCompareDeepLink(window.location.search);
+  let urlDeepLink = parseCompareDeepLink(window.location.search);
+  if (urlDeepLink.itemType === 'PackageXml') {
+    state.selectedItem = null;
+    urlDeepLink = { ...urlDeepLink, itemType: null, itemKey: null, fileName: null, descriptor: null };
+    syncCompareUrlFromState(state);
+  }
   const urlOp =
     urlDeepLink.op ||
     (urlDeepLink.itemType && urlDeepLink.itemKey
@@ -183,6 +153,7 @@ async function init() {
   setOnAfterArtifactTypeChange((isUserChange) => {
     syncCompareUrlFromState(state);
     void persistAfterOperationChange(isUserChange);
+    void maybeShowToolOnboarding(getSelectedArtifactType());
   });
 
   if (urlDeepLink.navMode) {
@@ -195,6 +166,7 @@ async function init() {
     state.selectedArtifactType = typeSelect.value || '';
   }
   applyArtifactTypeUi();
+  void maybeShowToolOnboarding(getSelectedArtifactType());
 
   applyDeepLinkOrgs(urlDeepLink);
   if (urlDeepLink.leftOrgId && !urlDeepLink.rightOrgId) {
@@ -203,14 +175,16 @@ async function init() {
 
   renderSavedItems();
 
-  if (urlDeepLink.itemType && urlDeepLink.itemKey) {
+  if (urlDeepLink.itemType && urlDeepLink.itemKey && urlDeepLink.itemType !== 'PackageXml') {
     setTimeout(() => applyDeepLinkItemHint(urlDeepLink), 80);
   }
   
   wireSelectors();
+  setupOrgSelectorAutoSync();
   setupSearch();
   setupQuickOpen();
   setupAppModeTabHandlers();
+  setupAppHelp();
   setupGeneratePackageXmlPanel();
   setupApexTestsPanel();
   setupAnonymousApexPanel();

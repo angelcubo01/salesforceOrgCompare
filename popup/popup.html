@@ -16,6 +16,16 @@
       <div class="topbar-right">
         <button
           type="button"
+          id="openPopupHelpBtn"
+          class="setup-btn"
+          data-i18n-title="popup.help.openTitle"
+          data-i18n-aria-label="popup.help.openTitle"
+          aria-haspopup="dialog"
+        >
+          <span class="popup-help-icon" aria-hidden="true">?</span>
+        </button>
+        <button
+          type="button"
           id="openSettingsBtn"
           class="setup-btn"
           data-i18n-title="popup.openSettingsTitle"
@@ -48,21 +58,6 @@
       </div>
     </header>
 
-    <div id="updateBanner" class="update-banner hidden">
-      <span id="updateBannerText"></span>
-      <button id="updateBannerButton" class="small" data-i18n="popup.viewUpdate">Ver actualización</button>
-    </div>
-
-    <div id="updateBlocker" class="update-blocker hidden">
-      <div class="update-blocker-dialog">
-        <h2 data-i18n="popup.mandatoryUpdate">Nueva versión obligatoria</h2>
-        <p id="updateBlockerText" data-i18n="popup.mandatoryUpdateText">
-          Hay una nueva versión mayor disponible de Salesforce Org Compare. Debes actualizar para seguir usando la extensión.
-        </p>
-        <button id="updateBlockerButton" data-i18n="popup.goToDownload">Ir a la página de descarga</button>
-      </div>
-    </div>
-
     <section>
       <h3 data-i18n="popup.savedOrgs">Orgs guardadas</h3>
       <p class="section-hint" data-i18n="popup.savedOrgsHint">Arrastra el asa ⋮⋮ solo dentro del mismo grupo (o entre orgs sin grupo). Ese orden se usa en los desplegables de la aplicación.</p>
@@ -73,6 +68,30 @@
       <h3 data-i18n="popup.detectedOrg">Org detectada en esta pestaña</h3>
       <div id="detectedRow" class="row muted" data-i18n="popup.noDetected">No se ha detectado ninguna org Salesforce</div>
     </section>
+
+    <div id="popupHelpModal" class="popup-help-modal hidden" aria-hidden="true">
+      <div class="popup-help-modal-backdrop" data-popup-help-backdrop="1"></div>
+      <div
+        class="popup-help-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="popupHelpModalTitle"
+      >
+        <header class="popup-help-modal-head">
+          <h2 id="popupHelpModalTitle" class="popup-help-modal-title"></h2>
+          <button
+            type="button"
+            id="popupHelpModalCloseBtn"
+            class="popup-help-modal-close"
+            data-i18n="popup.help.close"
+            data-i18n-aria-label="popup.help.close"
+          >
+            Cerrar
+          </button>
+        </header>
+        <div id="popupHelpModalBody" class="popup-help-modal-body"></div>
+      </div>
+    </div>
 
     <script type="module" src="./popup.js"></script>
   </body>

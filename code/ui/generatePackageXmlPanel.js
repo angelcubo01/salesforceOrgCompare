@@ -3,8 +3,12 @@ import { bg } from '../core/bridge.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { addSelected } from '../flows/addItems.js';
 import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
+import { ensureModeForTool } from './appModeNav.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { applyArtifactTypeUi } from './artifactTypeUi.js';
+import { ensureRightOrgDistinctFromLeft } from './orgs.js';
+import { handleArtifactTypeSelectChange } from './searchSetup.js';
+import { syncListActiveHighlight } from './listUi.js';
 import { t } from '../../shared/i18n.js';
 /** @type {Array<{ xmlName: string, label: string, directoryName: string, inFolder: boolean }>} */
 let describeCache = [];
@@ -398,9 +402,14 @@ export function setupGeneratePackageXmlPanel() {
           showToast(t('toast.noPackageXml'), 'warn');
           return;
         }
+
+        state.generatePackageXmlCompareMode = true;
+        if (compareToggle) compareToggle.checked = true;
+        syncCompareButtonVisibility();
+        syncRetrieveButtonsVisibility();
+
         const key = `local-${Date.now()}-package`;
-        state.packageXmlLocalContent[key] = { fileName: 'package.xml', content: xml };
-        addSelected({
+        const packageItem = {
           type: 'PackageXml',
           key,
           descriptor: {
@@ -408,19 +417,20 @@ export function setupGeneratePackageXmlPanel() {
             originalFileName: 'package.xml',
             source: 'localFile'
           }
-        });
-        const op = document.getElementById('typeSelect');
-        if (!op) return;
-        const { ensureModeForTool } = await import('./appModeNav.js');
-        await ensureModeForTool('PackageXml');
-        op.value = 'PackageXml';
-        op.dispatchEvent(new Event('change', { bubbles: true }));
-        setTimeout(() => {
-          const current = state.selectedItem;
-          if (current?.type === 'PackageXml' && current?.descriptor?.source === 'localFile') {
-            void retrieveAndLoadFromZip(current);
-          }
-        }, 0);
+        };
+        state.packageXmlLocalContent[key] = { fileName: 'package.xml', content: xml };
+        addSelected(packageItem);
+
+        await ensureModeForTool('Comparator');
+        handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
+        ensureRightOrgDistinctFromLeft();
+
+        const item =
+          state.savedItems.find((s) => s.type === 'PackageXml' && s.key === key) || packageItem;
+        state.selectedItem = item;
+        syncListActiveHighlight();
+
+        await retrieveAndLoadFromZip(item);
       })();
     });
   }

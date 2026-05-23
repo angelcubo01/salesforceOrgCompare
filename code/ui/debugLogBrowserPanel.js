@@ -4,6 +4,8 @@ import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
+import { escapeHtml } from '../../shared/htmlEscape.js';
+import { randomStagingId } from '../../shared/randomId.js';
 
 let lastRows = [];
 let currentPage = 1;
@@ -64,12 +66,12 @@ async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
   });
   if (staged.ok && staged.id) {
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?sid=${encodeURIComponent(staged.id)}`),
+      chrome.runtime.getURL(`code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}`),
       '_blank'
     );
     return true;
   }
-  const storageKey = `sfoc_dlb_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+  const storageKey = randomStagingId('sfoc_dlb_');
   try {
     await chrome.storage.local.set({
       [storageKey]: { title, content, ...(downloadFileName ? { downloadFileName } : {}) }
@@ -83,7 +85,7 @@ async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
     /* fallback */
   }
   try {
-    const idbId = `idb_${Date.now()}_${Math.random().toString(36).slice(2, 14)}`;
+    const idbId = randomStagingId('idb_');
     await apexViewerIdbPut(idbId, { title, content, ...(downloadFileName ? { downloadFileName } : {}) });
     window.open(
       chrome.runtime.getURL(`code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}`),
@@ -238,12 +240,12 @@ function renderRows() {
     const userId = row?.LogUserId ? String(row.LogUserId) : '';
     const userCell = userName || userId || '—';
     tr.innerHTML = `
-      <td class="debug-log-browser-id-cell">${logId || '—'}</td>
-      <td>${formatDateTime(row?.StartTime)}</td>
-      <td>${userCell}</td>
-      <td>${row?.Operation ? String(row.Operation) : '—'}</td>
-      <td>${Number.isFinite(Number(row?.DurationMilliseconds)) ? String(row.DurationMilliseconds) : '—'}</td>
-      <td>${formatBytes(row?.LogLength)}</td>
+      <td class="debug-log-browser-id-cell">${escapeHtml(logId || '—')}</td>
+      <td>${escapeHtml(formatDateTime(row?.StartTime))}</td>
+      <td>${escapeHtml(userCell)}</td>
+      <td>${escapeHtml(row?.Operation ? String(row.Operation) : '—')}</td>
+      <td>${escapeHtml(Number.isFinite(Number(row?.DurationMilliseconds)) ? String(row.DurationMilliseconds) : '—')}</td>
+      <td>${escapeHtml(formatBytes(row?.LogLength))}</td>
       <td class="debug-log-browser-action-cell"></td>
     `;
     const actionCell = tr.querySelector('.debug-log-browser-action-cell');

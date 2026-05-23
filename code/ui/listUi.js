@@ -1,6 +1,6 @@
 import { state } from '../core/state.js';
 import { saveItemsToStorage, isPinned, togglePin, pinKey, savePinnedKeys } from '../core/persistence.js';
-import { retrieveZipContentEqual, updateOrgSelectorsLockedState } from './viewerChrome.js';
+import { updateOrgSelectorsLockedState } from './viewerChrome.js';
 import { saveScrollPosition } from './scrollRestore.js';
 import { updateDocumentTitle } from './documentMeta.js';
 import { getFileExtension } from '../lib/itemLabels.js';
@@ -61,6 +61,14 @@ function bundleEntriesMatchFilter(entries, query) {
   return entries.some(({ item }) => itemMatchesFilter(item, query));
 }
 
+/** Indentación del árbol: un paso = columna del chevron (como VS Code). */
+function setTreeDepth(el, depth) {
+  const d = Math.max(0, Math.min(Number(depth) || 0, 6));
+  for (let i = 0; i <= 6; i++) el.classList.remove(`tree-depth-${i}`);
+  el.classList.add(`tree-depth-${d}`);
+  el.setAttribute('data-tree-depth', String(d));
+}
+
 /** Hueco de chevron en hojas raíz (misma columna que carpetas). */
 function createChevronSpacer() {
   const span = document.createElement('span');
@@ -114,6 +122,45 @@ function getCompareListElements() {
   };
 }
 
+/** @typedef {'pinned' | 'scroll'} BundleCollapseScope */
+
+/** @param {BundleCollapseScope} scope @param {string} bundleKey */
+function bundleCollapseStorageKey(scope, bundleKey) {
+  return `${scope}:${bundleKey}`;
+}
+
+/** @param {BundleCollapseScope} scope @param {Record<string, boolean>} bundleCollapsed @param {string} bundleKey @param {string} query */
+function isBundleCollapsed(scope, bundleCollapsed, bundleKey, query) {
+  if (scope === 'pinned') return false;
+  if (query) return false;
+  const k = bundleCollapseStorageKey(scope, bundleKey);
+  if (Object.prototype.hasOwnProperty.call(bundleCollapsed, k)) {
+    return bundleCollapsed[k] !== false;
+  }
+  if (scope === 'scroll' && Object.prototype.hasOwnProperty.call(bundleCollapsed, bundleKey)) {
+    return bundleCollapsed[bundleKey] !== false;
+  }
+  return true;
+}
+
+/** @param {BundleCollapseScope} scope @param {Record<string, boolean>} bundleCollapsed @param {string} bundleKey */
+function toggleBundleCollapsed(scope, bundleCollapsed, bundleKey) {
+  if (scope === 'pinned') return;
+  const k = bundleCollapseStorageKey(scope, bundleKey);
+  const collapsed = isBundleCollapsed(scope, bundleCollapsed, bundleKey, '');
+  bundleCollapsed[k] = !collapsed;
+  state.bundleCollapsed = bundleCollapsed;
+}
+
+/** Limpia colapso en fijados y en lista principal (p. ej. tras un retrieve nuevo). */
+export function clearBundleCollapsedForKey(bundleKey) {
+  state.bundleCollapsed = state.bundleCollapsed || {};
+  for (const scope of /** @type {const} */ (['pinned', 'scroll'])) {
+    delete state.bundleCollapsed[bundleCollapseStorageKey(scope, bundleKey)];
+  }
+  delete state.bundleCollapsed[bundleKey];
+}
+
 /** @param {HTMLElement | null} root */
 function queryListItemByIndex(root, idx) {
   if (!root || idx < 0) return null;
@@ -165,18 +212,253 @@ function createBundleHeader(opts) {
   header.appendChild(actions);
 
   header.addEventListener('click', opts.onToggle);
+  if (!opts.extraClass?.includes('tree-depth-')) setTreeDepth(header, 0);
   return header;
 }
 
-/** Muestra «Filtrar lista…» cuando el panel de lista está activo y hay elementos. */
+/** Cabecera `package.xml` tras retrieve: icono de fichero, sin contador; clic selecciona el manifiesto. */
+function createPackageRetrieveRootHeader({ parentItem, bundleKey, collapsed, onToggle, onSelect }) {
+  const header = document.createElement('li');
+  header.className = 'bundle-header package-xml-root-header';
+  header.setAttribute('data-bundle-key', bundleKey);
+  header.setAttribute('data-package-rz-header', parentItem.key);
+
+  const chevron = document.createElement('span');
+  chevron.className = 'bundle-chevron' + (collapsed ? ' is-collapsed' : '');
+  chevron.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onToggle(e);
+  });
+
+  const label = document.createElement('span');
+  label.className = 'bundle-label';
+  const title = parentItem.descriptor?.originalFileName || 'package.xml';
+  label.textContent = title;
+  label.title = title;
+
+  header.appendChild(chevron);
+  header.appendChild(createTreeIcon('xml'));
+  header.appendChild(label);
+
+  const actions = document.createElement('div');
+  actions.className = 'list-item-actions list-item-actions--bundle';
+  const removeButton = document.createElement('button');
+  removeButton.type = 'button';
+  removeButton.className = 'action-button remove-button';
+  removeButton.textContent = '−';
+  removeButton.title = t('list.removeBundleFromList');
+  removeButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    removeBundleFromList(bundleKey);
+  });
+  actions.appendChild(removeButton);
+  actions.addEventListener('click', (e) => e.stopPropagation());
+  header.appendChild(actions);
+
+  header.addEventListener('click', (e) => {
+    if (e.target.closest('.bundle-chevron') || e.target.closest('.list-item-actions')) return;
+    onSelect();
+  });
+  setTreeDepth(header, 0);
+  return header;
+}
+
+/** @returns {{ files: Array<{ ch: object, name: string }>, dirs: Map<string, { files: object[], dirs: Map<string, object> }> }} */
+function createPackageRetrieveDirNode() {
+  return { files: [], dirs: new Map() };
+}
+
+/** @param {Array<{ descriptor?: { relativePath?: string } }>} children */
+function buildPackageRetrieveTree(children) {
+  const root = createPackageRetrieveDirNode();
+  for (const ch of children) {
+    const rp = String(ch.descriptor?.relativePath || '').replace(/\\/g, '/');
+    const parts = rp.split('/').filter(Boolean);
+    if (!parts.length) continue;
+    let node = root;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const seg = parts[i];
+      if (!node.dirs.has(seg)) node.dirs.set(seg, createPackageRetrieveDirNode());
+      node = node.dirs.get(seg);
+    }
+    node.files.push({ ch, name: parts[parts.length - 1] });
+  }
+  return root;
+}
+
+function packageDirCollapseKey(parentItemKey, dirPath) {
+  return `PackageXmlRZ:${parentItemKey}:dir:${dirPath}`;
+}
+
+/** @param {ReturnType<typeof createPackageRetrieveDirNode>} node */
+function packageTreeMatchesFilter(node, query) {
+  if (!query) return true;
+  const q = query.toLowerCase();
+  for (const { ch, name } of node.files) {
+    if (itemMatchesFilter(ch, query) || name.toLowerCase().includes(q)) return true;
+  }
+  for (const [dirName, child] of node.dirs) {
+    if (dirName.toLowerCase().includes(q)) return true;
+    if (packageTreeMatchesFilter(child, query)) return true;
+  }
+  return false;
+}
+
+/**
+ * Contenido bajo una carpeta de primer nivel (nivel 2 respecto a package.xml).
+ * Subcarpetas también en nivel 2, como hijos del bundle LWC.
+ * @returns {number}
+ */
+function appendPackageFolderContentsToList(
+  listEl,
+  node,
+  pathPrefix,
+  parentItemKey,
+  bundleKey,
+  bundleCollapsed,
+  query,
+  collapseScope
+) {
+  let added = 0;
+  const dirNames = [...node.dirs.keys()].sort((a, b) => a.localeCompare(b));
+  const sortedFiles = [...node.files].sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const dirName of dirNames) {
+    const childNode = node.dirs.get(dirName);
+    const dirPath = pathPrefix ? `${pathPrefix}/${dirName}` : dirName;
+    if (!packageTreeMatchesFilter(childNode, query)) continue;
+
+    const dirKey = packageDirCollapseKey(parentItemKey, dirPath);
+    const dirCollapsed = isBundleCollapsed(collapseScope, bundleCollapsed, dirKey, query);
+    const dirHdr = createBundleHeader({
+      bundleKey: dirKey,
+      typeLabel: 'Dir',
+      title: dirName,
+      collapsed: dirCollapsed,
+      extraClass: 'package-rz-folder tree-depth-2',
+      onToggle: (e) => {
+        e.stopPropagation();
+        toggleBundleCollapsed(collapseScope, bundleCollapsed, dirKey);
+        renderSavedItems(true);
+      }
+    });
+    setTreeDepth(dirHdr, 2);
+    dirHdr.setAttribute('data-package-rz-dir', dirPath);
+    listEl.appendChild(dirHdr);
+    added++;
+
+    if (!dirCollapsed) {
+      added += appendPackageFolderContentsToList(
+        listEl,
+        childNode,
+        dirPath,
+        parentItemKey,
+        bundleKey,
+        bundleCollapsed,
+        query,
+        collapseScope
+      );
+    }
+  }
+
+  for (const { ch, name } of sortedFiles) {
+    if (query && !itemMatchesFilter(ch, query) && !name.toLowerCase().includes(query)) continue;
+    const idx = state.savedItems.indexOf(ch);
+    const cli = createListItem(ch, idx);
+    cli.setAttribute('data-bundle-key', bundleKey);
+    setTreeDepth(cli, 2);
+    const nameEl = cli.querySelector('.list-item-name');
+    if (nameEl) {
+      nameEl.textContent = name;
+      nameEl.title = ch.descriptor?.relativePath || name;
+    }
+    listEl.appendChild(cli);
+    added++;
+  }
+
+  return added;
+}
+
+/**
+ * Árbol package.xml: nivel 0 = package.xml, 1 = carpetas raíz del ZIP, 2 = su contenido.
+ * @returns {number}
+ */
+function appendPackageRetrieveTreeToList(
+  listEl,
+  rootNode,
+  parentItemKey,
+  bundleKey,
+  bundleCollapsed,
+  query,
+  collapseScope
+) {
+  let added = 0;
+  const dirNames = [...rootNode.dirs.keys()].sort((a, b) => a.localeCompare(b));
+  const rootFiles = [...rootNode.files].sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const dirName of dirNames) {
+    const childNode = rootNode.dirs.get(dirName);
+    if (!packageTreeMatchesFilter(childNode, query)) continue;
+
+    const dirKey = packageDirCollapseKey(parentItemKey, dirName);
+    const dirCollapsed = isBundleCollapsed(collapseScope, bundleCollapsed, dirKey, query);
+    const dirHdr = createBundleHeader({
+      bundleKey: dirKey,
+      typeLabel: 'Dir',
+      title: dirName,
+      collapsed: dirCollapsed,
+      extraClass: 'package-rz-folder tree-depth-1',
+      onToggle: (e) => {
+        e.stopPropagation();
+        toggleBundleCollapsed(collapseScope, bundleCollapsed, dirKey);
+        renderSavedItems(true);
+      }
+    });
+    setTreeDepth(dirHdr, 1);
+    dirHdr.setAttribute('data-package-rz-dir', dirName);
+    listEl.appendChild(dirHdr);
+    added++;
+
+    if (!dirCollapsed) {
+      added += appendPackageFolderContentsToList(
+        listEl,
+        childNode,
+        dirName,
+        parentItemKey,
+        bundleKey,
+        bundleCollapsed,
+        query,
+        collapseScope
+      );
+    }
+  }
+
+  for (const { ch, name } of rootFiles) {
+    if (query && !itemMatchesFilter(ch, query) && !name.toLowerCase().includes(query)) continue;
+    const idx = state.savedItems.indexOf(ch);
+    const cli = createListItem(ch, idx);
+    cli.setAttribute('data-bundle-key', bundleKey);
+    setTreeDepth(cli, 1);
+    const nameEl = cli.querySelector('.list-item-name');
+    if (nameEl) {
+      nameEl.textContent = name;
+      nameEl.title = ch.descriptor?.relativePath || name;
+    }
+    listEl.appendChild(cli);
+    added++;
+  }
+
+  return added;
+}
+
+/** Muestra «Filtrar lista…» siempre que el panel de lista lateral esté activo. */
 export function syncCompareListToolbarVisibility() {
   const toolbar = document.getElementById('compareListToolbar');
   const body = document.getElementById('compareListBody');
   if (!toolbar) return;
 
   const listVisible = body && !body.classList.contains('hidden');
-  const hasItems = (state.savedItems || []).length > 0;
-  toolbar.classList.toggle('hidden', !(listVisible && hasItems));
+  toolbar.classList.toggle('hidden', !listVisible);
 }
 
 export function setupCompareListToolbar() {
@@ -218,17 +500,103 @@ function savedItemIndex(item) {
   return state.savedItems.indexOf(item);
 }
 
+/** @param {import('../core/state.js').state.savedItems[0]} item */
+function getLwcAuraBundleKey(item) {
+  if (
+    (item.type === 'LWC' || item.type === 'Aura') &&
+    item.fileName &&
+    typeof item.key === 'string' &&
+    item.key.includes('/')
+  ) {
+    const bundleName = item.key.split('/')[0];
+    return `${item.type}:${bundleName}`;
+  }
+  return null;
+}
+
+/**
+ * Cabecera de bundle LWC/Aura + hijos en un contenedor de lista.
+ * @param {HTMLElement} listEl
+ * @param {string} bundleKey
+ * @param {import('../core/state.js').state.savedItems} bundleItems
+ * @param {Record<string, boolean>} bundleCollapsed
+ * @param {string} query
+ * @param {{ markPinnedLeaves?: boolean }} [opts]
+ * @returns {number} filas visibles añadidas
+ */
+function appendLwcAuraBundleToList(listEl, bundleKey, bundleItems, bundleCollapsed, query, opts = {}) {
+  const collapseScope = opts.collapseScope === 'pinned' ? 'pinned' : 'scroll';
+  const colon = bundleKey.indexOf(':');
+  const type = bundleKey.slice(0, colon);
+  const bundleName = bundleKey.slice(colon + 1);
+  const entries = bundleItems.map((item) => ({ item }));
+
+  if (!bundleEntriesMatchFilter(entries, query) && !bundleNameMatchesFilter(bundleName, query)) {
+    return 0;
+  }
+
+  const alwaysExpanded = collapseScope === 'pinned';
+  const collapsed = alwaysExpanded
+    ? false
+    : isBundleCollapsed(collapseScope, bundleCollapsed, bundleKey, query);
+  const header = createBundleHeader({
+    bundleKey,
+    typeLabel: getTypeShortLabel(type),
+    title: bundleName,
+    fileCount: entries.length,
+    collapsed,
+    extraClass: alwaysExpanded ? 'bundle-header--pinned-expanded' : '',
+    onToggle: alwaysExpanded
+      ? () => {}
+      : () => {
+          toggleBundleCollapsed(collapseScope, bundleCollapsed, bundleKey);
+          renderSavedItems(true);
+        }
+  });
+  setTreeDepth(header, 0);
+  listEl.appendChild(header);
+
+  let added = 1;
+  if (!collapsed) {
+    const sorted = sortBundleFileEntries(entries);
+    for (const { item } of sorted) {
+      if (!itemMatchesFilter(item, query)) continue;
+      const li = createListItem(item, savedItemIndex(item));
+      setTreeDepth(li, 1);
+      li.setAttribute('data-bundle-key', bundleKey);
+      if (opts.markPinnedLeaves && isPinned(item)) {
+        li.classList.add('pinned-item');
+      }
+      listEl.appendChild(li);
+      added++;
+    }
+  }
+  return added;
+}
+
 /** Una sola fila activa (la que se muestra en el editor). */
 export function syncListActiveHighlight() {
   const { pinned, scroll } = getCompareListElements();
   for (const root of [pinned, scroll]) {
     if (!root) continue;
-    for (const el of root.querySelectorAll('li[data-item-index]')) {
+    for (const el of root.querySelectorAll('li[data-item-index], li.package-xml-root-header')) {
       el.classList.remove('active');
     }
   }
   const sel = state.selectedItem;
   if (!sel) return;
+
+  if (
+    sel.type === 'PackageXml' &&
+    sel.descriptor?.source === 'localFile' &&
+    state.packageRetrieveZipCache[sel.key]
+  ) {
+    for (const root of [pinned, scroll]) {
+      root?.querySelector(`[data-package-rz-header="${CSS.escape(sel.key)}"]`)?.classList.add('active');
+    }
+    return;
+  }
+
   const idx = state.savedItems.findIndex(
     (s) =>
       s.type === sel.type &&
@@ -266,18 +634,50 @@ export function renderSavedItems(preserveOrder = true) {
     else unpinnedItems.push(item);
   }
 
-  if (pinnedList && pinnedItems.length > 0) {
+  /** @type {Map<string, import('../core/state.js').state.savedItems>} */
+  const pinnedBundles = new Map();
+  const pinnedStandalone = [];
+  for (const item of pinnedItems) {
+    const bundleKey = getLwcAuraBundleKey(item);
+    if (bundleKey) {
+      if (!pinnedBundles.has(bundleKey)) pinnedBundles.set(bundleKey, []);
+      pinnedBundles.get(bundleKey).push(item);
+    } else {
+      pinnedStandalone.push(item);
+    }
+  }
+
+  const bundleCollapsed = state.bundleCollapsed || {};
+
+  if (pinnedList && (pinnedStandalone.length > 0 || pinnedBundles.size > 0)) {
     pinnedList.classList.add('compare-tree');
     let anyPinnedVisible = false;
-    for (const item of pinnedItems) {
+
+    for (const item of pinnedStandalone) {
       if (!itemMatchesFilter(item, query)) continue;
       anyPinnedVisible = true;
-      const idx = state.savedItems.indexOf(item);
-      const li = createListItem(item, idx);
+      const li = createListItem(item, savedItemIndex(item));
+      setTreeDepth(li, 0);
       li.classList.add('pinned-item');
       pinnedList.appendChild(li);
       visibleCount++;
     }
+
+    for (const [bundleKey, bundleItems] of pinnedBundles) {
+      const added = appendLwcAuraBundleToList(
+        pinnedList,
+        bundleKey,
+        bundleItems,
+        bundleCollapsed,
+        query,
+        { markPinnedLeaves: true, collapseScope: 'pinned' }
+      );
+      if (added > 0) {
+        anyPinnedVisible = true;
+        visibleCount += added;
+      }
+    }
+
     pinnedList.classList.toggle('hidden', !anyPinnedVisible);
   } else if (pinnedList) {
     pinnedList.classList.add('hidden');
@@ -285,7 +685,6 @@ export function renderSavedItems(preserveOrder = true) {
 
   itemsToRender = unpinnedItems;
 
-  const bundleCollapsed = state.bundleCollapsed || {};
   const bundles = new Map();
   const nonBundleItems = [];
 
@@ -293,22 +692,24 @@ export function renderSavedItems(preserveOrder = true) {
     if (item.descriptor?.source === 'retrieveZipFile') {
       return;
     }
-    if (
-      (item.type === 'LWC' || item.type === 'Aura') &&
-      item.fileName &&
-      typeof item.key === 'string' &&
-      item.key.includes('/')
-    ) {
-      const bundleName = item.key.split('/')[0];
-      const bundleKey = `${item.type}:${bundleName}`;
-      if (!bundles.has(bundleKey)) bundles.set(bundleKey, []);
-      bundles.get(bundleKey).push({ item });
+    const lwcAuraBundleKey = getLwcAuraBundleKey(item);
+    if (lwcAuraBundleKey) {
+      if (!bundles.has(lwcAuraBundleKey)) bundles.set(lwcAuraBundleKey, []);
+      bundles.get(lwcAuraBundleKey).push({ item });
     } else {
       nonBundleItems.push({ item });
     }
   });
 
   for (const { item } of nonBundleItems) {
+    if (
+      item.type === 'PackageXml' &&
+      item.descriptor?.source === 'localFile' &&
+      !state.packageXmlLocalContent[item.key]
+    ) {
+      continue;
+    }
+
     const isPackageXmlTree =
       item.type === 'PackageXml' &&
       item.descriptor?.source === 'localFile' &&
@@ -318,185 +719,73 @@ export function renderSavedItems(preserveOrder = true) {
       const children = state.savedItems.filter(
         (s) => s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.parentKey === item.key
       );
-      const labelHay = t('list.packageXmlFiles', {
-        count: state.packageRetrieveZipCache[item.key]?.paths?.length || 0
-      }).toLowerCase();
+      const labelHay = 'package.xml';
       const showPkg =
         itemMatchesFilter(item, query) ||
         children.some((ch) => itemMatchesFilter(ch, query)) ||
         labelHay.includes(query);
       if (!showPkg) continue;
-    } else if (!itemMatchesFilter(item, query)) {
+    } else if (!isPackageXmlTree && !itemMatchesFilter(item, query)) {
       continue;
     }
 
-    const li = createListItem(item, savedItemIndex(item));
-    list.appendChild(li);
-    visibleCount++;
+    if (!isPackageXmlTree) {
+      const li = createListItem(item, savedItemIndex(item));
+      setTreeDepth(li, 0);
+      list.appendChild(li);
+      visibleCount++;
+    }
 
     if (isPackageXmlTree) {
-      const cache = state.packageRetrieveZipCache[item.key];
       const bundleKey = `PackageXmlRZ:${item.key}`;
       const children = state.savedItems.filter(
         (s) => s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.parentKey === item.key
       );
 
-      const collapsed = query ? false : bundleCollapsed[bundleKey] !== false;
+      const collapsed = isBundleCollapsed('scroll', bundleCollapsed, bundleKey, query);
 
-      const hdr = createBundleHeader({
+      const hdr = createPackageRetrieveRootHeader({
+        parentItem: item,
         bundleKey,
-        typeLabel: 'Pkg',
-        title: t('list.packageXmlFiles', { count: cache.paths?.length || 0 }),
-        fileCount: children.length,
         collapsed,
-        extraClass: 'bundle-child',
-        onToggle: (e) => {
-          e.stopPropagation();
-          const isCollapsed = bundleCollapsed[bundleKey] !== false;
-          bundleCollapsed[bundleKey] = !isCollapsed;
-          state.bundleCollapsed = bundleCollapsed;
+        onToggle: () => {
+          toggleBundleCollapsed('scroll', bundleCollapsed, bundleKey);
           renderSavedItems(true);
+        },
+        onSelect: () => {
+          if (state.selectedItem) {
+            saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
+          }
+          state.selectedItem = item;
+          syncListActiveHighlight();
+          updateDocumentTitle();
+          syncCompareUrlFromState(state);
+          renderEditor();
         }
       });
-      hdr.setAttribute('data-package-rz-header', item.key);
       list.appendChild(hdr);
+      visibleCount++;
 
       if (!collapsed) {
-        children.sort((a, b) =>
-          String(a.descriptor?.relativePath || '').localeCompare(String(b.descriptor?.relativePath || ''))
+        const tree = buildPackageRetrieveTree(children);
+        visibleCount += appendPackageRetrieveTreeToList(
+          list,
+          tree,
+          item.key,
+          bundleKey,
+          bundleCollapsed,
+          query,
+          'scroll'
         );
-
-        const ROOT_KEY = '__root__';
-        const groups = new Map();
-        for (const ch of children) {
-          const rp = String(ch.descriptor?.relativePath || '');
-          const parts = rp.split('/').filter(Boolean);
-          let folderKey;
-          let labelInGroup;
-          if (parts.length <= 1) {
-            folderKey = ROOT_KEY;
-            labelInGroup = parts[0] || rp;
-          } else {
-            folderKey = parts[0];
-            labelInGroup = parts.slice(1).join('/');
-          }
-          if (!groups.has(folderKey)) groups.set(folderKey, []);
-          groups.get(folderKey).push({ ch, labelInGroup });
-        }
-
-        const folderOrder = [...groups.keys()].sort((a, b) => {
-          if (a === ROOT_KEY) return 1;
-          if (b === ROOT_KEY) return -1;
-          return a.localeCompare(b);
-        });
-
-        function appendRetrieveZipRow(ch, labelInGroup, deep) {
-          if (!itemMatchesFilter(ch, query)) return;
-          const idx = state.savedItems.indexOf(ch);
-          const cli = createListItem(ch, idx);
-          cli.classList.add('bundle-child');
-          if (deep) cli.classList.add('bundle-child-deep');
-          cli.setAttribute('data-bundle-key', bundleKey);
-          const nameEl = cli.querySelector('.list-item-name');
-          if (nameEl) {
-            const eq = retrieveZipContentEqual(item.key, ch.descriptor.relativePath);
-            const prefix = eq === null ? '' : eq ? t('list.equalPrefix') : t('list.differentPrefix');
-            nameEl.textContent = prefix + labelInGroup;
-            nameEl.title =
-              (eq === null ? '' : eq ? t('list.equalTooltip') : t('list.differentTooltip')) +
-              ' — ' +
-              ch.descriptor.relativePath;
-            cli.classList.remove('retrieve-zip-equal', 'retrieve-zip-diff');
-            if (eq !== null) cli.classList.add(eq ? 'retrieve-zip-equal' : 'retrieve-zip-diff');
-          }
-          list.appendChild(cli);
-          visibleCount++;
-        }
-
-        for (const folderKey of folderOrder) {
-          const entries = groups.get(folderKey) || [];
-          entries.sort((a, b) =>
-            String(a.ch.descriptor?.relativePath || '').localeCompare(String(b.ch.descriptor?.relativePath || ''))
-          );
-
-          const folderEntriesMatch =
-            !query ||
-            folderKey.toLowerCase().includes(query) ||
-            entries.some(({ ch }) => itemMatchesFilter(ch, query));
-
-          if (!folderEntriesMatch) continue;
-
-          if (folderKey !== ROOT_KEY) {
-            const dirKey = `PackageXmlRZ:${item.key}:dir:${folderKey}`;
-            const dirCollapsed = query ? false : bundleCollapsed[dirKey] !== false;
-            const dirHdr = createBundleHeader({
-              bundleKey: dirKey,
-              typeLabel: 'Dir',
-              title: folderKey,
-              fileCount: entries.length,
-              collapsed: dirCollapsed,
-              extraClass: 'bundle-child package-rz-folder',
-              onToggle: (e) => {
-                e.stopPropagation();
-                const isDirCollapsed = bundleCollapsed[dirKey] !== false;
-                bundleCollapsed[dirKey] = !isDirCollapsed;
-                state.bundleCollapsed = bundleCollapsed;
-                renderSavedItems(true);
-              }
-            });
-            dirHdr.setAttribute('data-package-rz-dir', folderKey);
-            list.appendChild(dirHdr);
-
-            if (!dirCollapsed) {
-              for (const { ch, labelInGroup } of entries) {
-                appendRetrieveZipRow(ch, labelInGroup, true);
-              }
-            }
-          } else {
-            for (const { ch, labelInGroup } of entries) {
-              appendRetrieveZipRow(ch, labelInGroup, false);
-            }
-          }
-        }
       }
     }
   }
 
   for (const [bundleKey, entries] of bundles.entries()) {
-    const [type, bundleName] = bundleKey.split(':');
-    if (!bundleEntriesMatchFilter(entries, query) && !bundleNameMatchesFilter(bundleName, query)) {
-      continue;
-    }
-
-    const collapsed = query ? false : bundleCollapsed[bundleKey] !== false;
-
-    const header = createBundleHeader({
-      bundleKey,
-      typeLabel: getTypeShortLabel(type),
-      title: bundleName,
-      fileCount: entries.length,
-      collapsed,
-      onToggle: () => {
-        const isCollapsed = bundleCollapsed[bundleKey] !== false;
-        bundleCollapsed[bundleKey] = !isCollapsed;
-        state.bundleCollapsed = bundleCollapsed;
-        renderSavedItems(true);
-      }
+    const bundleItems = entries.map(({ item }) => item);
+    visibleCount += appendLwcAuraBundleToList(list, bundleKey, bundleItems, bundleCollapsed, query, {
+      collapseScope: 'scroll'
     });
-
-    list.appendChild(header);
-
-    if (!collapsed) {
-      const sorted = sortBundleFileEntries(entries);
-      for (const { item } of sorted) {
-        if (!itemMatchesFilter(item, query)) continue;
-        const li = createListItem(item, savedItemIndex(item));
-        li.classList.add('bundle-child');
-        li.setAttribute('data-bundle-key', bundleKey);
-        list.appendChild(li);
-        visibleCount++;
-      }
-    }
   }
 
   if (query && visibleCount === 0 && (state.savedItems || []).length > 0) {
@@ -517,15 +806,13 @@ export function createListItem(item, displayIndex) {
   textSpan.className = 'list-item-name';
 
   if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile' && item.descriptor?.relativePath) {
-    const eq = retrieveZipContentEqual(item.descriptor.parentKey, item.descriptor.relativePath);
-    const prefix = eq === null ? '' : eq ? t('list.equalPrefix') : t('list.differentPrefix');
-    textSpan.textContent = prefix + item.descriptor.relativePath;
-    textSpan.title =
-      (eq === null ? '' : eq ? t('list.equalTooltip') : t('list.differentTooltip')) +
-      ' — ' +
-      item.descriptor.relativePath;
-    if (eq !== null) li.classList.add(eq ? 'retrieve-zip-equal' : 'retrieve-zip-diff');
-    li.appendChild(createTreeIcon('xml'));
+    const rp = item.descriptor.relativePath;
+    const filename = rp.includes('/') ? rp.split('/').pop() : rp;
+    textSpan.textContent = filename;
+    textSpan.title = rp;
+    const ext = getFileExtension(filename);
+    li.setAttribute('data-filetype', ext);
+    li.appendChild(createTreeIcon(treeIconKindFromExtension(ext)));
   } else if ((item.type === 'LWC' || item.type === 'Aura') && item.fileName) {
     let filename = item.fileName;
     if (filename.includes('/')) {
@@ -605,7 +892,11 @@ export function createListItem(item, displayIndex) {
     renderSavedItems(true);
   });
 
-  actions.append(downloadButton, removeButton, pinButton);
+  if (item.type === 'PackageXml') {
+    actions.append(downloadButton, removeButton);
+  } else {
+    actions.append(downloadButton, removeButton, pinButton);
+  }
   li.appendChild(actions);
   li.setAttribute('data-type', item.type);
   li.setAttribute('data-key', item.key);
@@ -640,13 +931,9 @@ export function removeBundleFromList(bundleKey) {
         if (item.descriptor?.source !== 'retrieveZipFile' || item.descriptor?.parentKey !== parentKey) {
           return true;
         }
-        const rp = String(item.descriptor?.relativePath || '');
-        const parts = rp.split('/').filter(Boolean);
-        if (folder === '__root__') {
-          return parts.length > 1;
-        }
-        if (parts[0] !== folder) return true;
-        return false;
+        const rp = String(item.descriptor?.relativePath || '').replace(/\\/g, '/');
+        if (rp === folder || rp.startsWith(`${folder}/`)) return false;
+        return true;
       });
     } else {
       const parentKey = bundleKey.slice('PackageXmlRZ:'.length);

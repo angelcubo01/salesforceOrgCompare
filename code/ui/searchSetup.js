@@ -2,12 +2,11 @@ import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { showToast } from './toast.js';
 import { addSelected, addBundleFiles } from '../flows/addItems.js';
-import { applyArtifactTypeUi } from './artifactTypeUi.js';
+import { applyArtifactTypeUi, isComparatorMode, isFullScreenToolMode } from './artifactTypeUi.js';
 import { renderEditor, resetMonacoComparisonView } from '../editor/editorRender.js';
 import { syncListActiveHighlight } from './listUi.js';
 import { updateDocumentTitle } from './documentMeta.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
-import { isFullScreenToolMode } from './artifactTypeUi.js';
 import { refreshGeneratePackageXmlTypes } from './generatePackageXmlPanel.js';
 import { refreshFieldDependencyPanel } from './fieldDependencyPanel.js';
 import { refreshApexTestsPanel, resetApexTestsShellToHub } from './apexTestsPanel.js';
@@ -20,6 +19,19 @@ import { refreshPermissionDiffPanel } from './permissionDiffPanel.js';
 import { refreshQuickEditPanel } from './quickEditPanel.js';
 import { refreshApexCoverageComparePanel } from './apexCoverageComparePanel.js';
 import { t } from '../../shared/i18n.js';
+import {
+  capMetadataResults,
+  fillBreadcrumb,
+  isNameIndexReady,
+  metadataSearchItemClasses,
+  kickSilentIndexBuild,
+  MIN_METADATA_CHARS,
+  normalizeQueryLocal,
+  resolveMetadataMatches,
+  sanitizeApiPrefix
+} from '../lib/metadataSearch.js';
+
+const SIDEBAR_MAX_METADATA_RESULTS = 20;
 
 /** @type {(isUserChange: boolean) => void} */
 let onAfterArtifactTypeChange = () => {};
@@ -30,6 +42,9 @@ export function setOnAfterArtifactTypeChange(fn) {
 
 /** @type {((() => void) | null)} */
 let runSearchFn = null;
+
+let sidebarSearchGeneration = 0;
+let sidebarActiveResultIndex = -1;
 
 export function updateSearchUiForType() {
   applyArtifactTypeUi();
@@ -57,6 +72,9 @@ export function handleArtifactTypeSelectChange(options = {}) {
     clearComparisonSelection();
   }
   updateSearchUiForType();
+  if (isComparatorMode() && state.leftOrgId) {
+    kickSilentIndexBuild(state.leftOrgId);
+  }
   if (runSearchFn && isUserChange) void runSearchFn();
   if (isFullScreenToolMode()) {
     resetMonacoComparisonView();
@@ -91,7 +109,6 @@ export function handlePackageXmlFileSelected(file) {
   reader.onload = () => {
     const text = reader.result != null ? String(reader.result) : '';
     const key = `local-${Date.now()}-package`;
-    // Siempre tratamos el manifiesto como package.xml (sin mostrar el nombre real en UI).
     state.packageXmlLocalContent[key] = { fileName: 'package.xml', content: text };
     addSelected({
       type: 'PackageXml',
@@ -118,6 +135,7 @@ export function hideSidebarSearchResults() {
   if (!results) return;
   results.hidden = true;
   results.innerHTML = '';
+  sidebarActiveResultIndex = -1;
 }
 
 function showSidebarSearchResults() {
@@ -142,9 +160,9 @@ function positionSidebarSearchResults() {
   const rect = row.getBoundingClientRect();
   const gap = 4;
   const viewportPad = 8;
-  const minW = Math.max(rect.width, 280);
-  const maxW = Math.min(560, window.innerWidth - viewportPad * 2);
-  const width = Math.min(maxW, Math.max(minW, 320));
+  const minW = 520;
+  const maxW = Math.min(780, window.innerWidth - viewportPad * 2);
+  const width = Math.min(maxW, Math.max(minW, rect.width + 240));
   let left = rect.left;
   if (left + width > window.innerWidth - viewportPad) {
     left = window.innerWidth - viewportPad - width;
@@ -159,6 +177,150 @@ function positionSidebarSearchResults() {
   results.style.width = `${width}px`;
   results.style.maxHeight = `${maxH}px`;
   results.style.bottom = 'auto';
+}
+
+function highlightSidebarActiveResult(results) {
+  const items = results.querySelectorAll('.quick-open-item');
+  items.forEach((el, i) => {
+    el.classList.toggle('is-active', i === sidebarActiveResultIndex);
+    if (i === sidebarActiveResultIndex) el.scrollIntoView({ block: 'nearest' });
+  });
+}
+
+/**
+ * @param {HTMLElement} results
+ * @param {'status'|'empty'} kind
+ * @param {string} message
+ */
+function renderSidebarStatusMessage(results, kind, message) {
+  results.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = kind === 'status' ? 'quick-open-status' : 'quick-open-empty';
+  p.textContent = message;
+  results.appendChild(p);
+  showSidebarSearchResults();
+}
+
+/**
+ * Fila de carga con spinner (mismo aspecto que un resultado).
+ * @param {HTMLElement} results
+ * @param {string} message
+ */
+function renderSidebarSearchLoading(results, message) {
+  results.innerHTML = '';
+  sidebarActiveResultIndex = -1;
+  const row = document.createElement('div');
+  row.className = 'sidebar-search-loading-item';
+  row.setAttribute('role', 'status');
+  row.setAttribute('aria-live', 'polite');
+  const spinner = document.createElement('span');
+  spinner.className = 'sidebar-search-loading-spinner';
+  spinner.setAttribute('aria-hidden', 'true');
+  const text = document.createElement('span');
+  text.className = 'sidebar-search-loading-text';
+  text.textContent = message;
+  row.append(spinner, text);
+  results.appendChild(row);
+  showSidebarSearchResults();
+}
+
+/**
+ * @param {import('../lib/metadataSearch.js').MetadataSearchEntry} entry
+ */
+function selectComparatorMetadataResult(entry) {
+  if (entry.isBundle && entry.id) {
+    void addBundleFiles(entry.artType, { id: entry.id, developerName: entry.name });
+  } else {
+    addSelected({ type: entry.artType, key: entry.name, descriptor: { name: entry.name } });
+  }
+  hideSidebarSearchResults();
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) searchInput.value = '';
+}
+
+/**
+ * @param {HTMLElement} results
+ * @param {import('../lib/metadataSearch.js').MetadataSearchEntry[]} metadata
+ */
+function renderComparatorSearchResults(results, metadata) {
+  results.innerHTML = '';
+  sidebarActiveResultIndex = -1;
+  if (!metadata.length) {
+    renderSidebarStatusMessage(results, 'empty', t('quickOpen.noResults'));
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  for (const entry of metadata) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = metadataSearchItemClasses(entry.artType);
+    btn.setAttribute('role', 'option');
+    const crumbs = document.createElement('span');
+    crumbs.className = 'quick-open-crumbs';
+    fillBreadcrumb(crumbs, t(entry.categoryKey), entry.name);
+    btn.appendChild(crumbs);
+    btn.addEventListener('click', () => selectComparatorMetadataResult(entry));
+    frag.appendChild(btn);
+  }
+  results.appendChild(frag);
+  showSidebarSearchResults();
+  highlightSidebarActiveResult(results);
+}
+
+async function runComparatorSearchImpl() {
+  const input = /** @type {HTMLInputElement | null} */ (document.getElementById('searchInput'));
+  const results = document.getElementById('searchResults');
+  if (!input || !results) return;
+
+  const gen = ++sidebarSearchGeneration;
+  const queryLocal = normalizeQueryLocal(input.value);
+  const apiPrefix = sanitizeApiPrefix(input.value);
+
+  if (!queryLocal) {
+    hideSidebarSearchResults();
+    return;
+  }
+
+  const orgId = state.leftOrgId;
+  if (!orgId) {
+    renderSidebarStatusMessage(results, 'status', t('quickOpen.noAuth'));
+    return;
+  }
+
+  kickSilentIndexBuild(orgId, () => {
+    if (input.value.trim() && gen === sidebarSearchGeneration) void runComparatorSearchImpl();
+  });
+
+  const loadingMessage = !isNameIndexReady(orgId)
+    ? t('quickOpen.loadingIndex')
+    : t('quickOpen.searching');
+  renderSidebarSearchLoading(results, loadingMessage);
+
+  const metadata = await resolveMetadataMatches(orgId, queryLocal, apiPrefix);
+  if (gen !== sidebarSearchGeneration) return;
+
+  const capped = capMetadataResults(metadata, SIDEBAR_MAX_METADATA_RESULTS);
+  if (!capped.length && apiPrefix.length < MIN_METADATA_CHARS) {
+    hideSidebarSearchResults();
+    return;
+  }
+  renderComparatorSearchResults(results, capped);
+}
+
+function isSearchDisabledForTool(selectedType) {
+  return (
+    !selectedType ||
+    selectedType === 'GeneratePackageXml' ||
+    selectedType === 'ApexTests' ||
+    selectedType === 'AnonymousApex' ||
+    selectedType === 'QueryExplorer' ||
+    selectedType === 'OrgLimits' ||
+    selectedType === 'DebugLogBrowser' ||
+    selectedType === 'SetupAuditTrail' ||
+    selectedType === 'PermissionDiff' ||
+    selectedType === 'FieldDependency'
+  );
 }
 
 export function setupSearch() {
@@ -182,29 +344,18 @@ export function setupSearch() {
   }
 
   async function runSearchImpl() {
-    const selectedType = typeSelect ? typeSelect.value : '';
-    if (!selectedType) {
-      hideSidebarSearchResults();
+    if (isComparatorMode()) {
+      await runComparatorSearchImpl();
       return;
     }
-    if (
-      selectedType === 'PackageXml' ||
-      selectedType === 'GeneratePackageXml' ||
-      selectedType === 'ApexTests' ||
-      selectedType === 'AnonymousApex' ||
-      selectedType === 'QueryExplorer' ||
-      selectedType === 'OrgLimits' ||
-      selectedType === 'DebugLogBrowser' ||
-      selectedType === 'SetupAuditTrail' ||
-      selectedType === 'PermissionDiff' ||
-      selectedType === 'FieldDependency'
-    ) {
+
+    const selectedType = typeSelect ? typeSelect.value : '';
+    if (isSearchDisabledForTool(selectedType)) {
       hideSidebarSearchResults();
       return;
     }
     let prefix = input.value.trim();
     if (prefix.length > 64) prefix = prefix.slice(0, 64);
-    // Basic sanitation: collapse control characters
     prefix = prefix.replace(/[\u0000-\u001F\u007F]/g, '');
     const orgId = state.leftOrgId;
     if (!orgId || !prefix || prefix.length < 3) {
@@ -232,7 +383,10 @@ export function setupSearch() {
     let count = 0;
     for (const art of types) {
       const r = await bg({ type: 'searchIndex', orgId, artifactType: art, prefix });
-      if (!r.ok) { showToast(t('toast.searchFailed'), 'warn'); continue; }
+      if (!r.ok) {
+        showToast(t('toast.searchFailed'), 'warn');
+        continue;
+      }
       if (art === 'LWC' || art === 'Aura') {
         for (const b of r.items) {
           const div = document.createElement('div');
@@ -270,12 +424,10 @@ export function setupSearch() {
     void runSearchImpl();
   };
 
-  // Cambiar tipo de metadata relanza la búsqueda actual
   typeSelect?.addEventListener('change', () => {
     handleArtifactTypeSelectChange({ isUserChange: true });
   });
 
-  /** Tras F5, no relanzar búsqueda ni comparación solo por tener texto en el input. */
   let skipSearchOnNextFocus = false;
   if (typeof performance !== 'undefined') {
     const nav = performance.getEntriesByType?.('navigation')?.[0];
@@ -285,8 +437,40 @@ export function setupSearch() {
   }
   updateSearchUiForType();
 
-  input.addEventListener('input', debounce(runSearchImpl, 300));
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { void runSearchImpl(); } });
+  input.addEventListener('input', debounce(runSearchImpl, 200));
+  input.addEventListener('keydown', (e) => {
+    if (!isComparatorMode()) {
+      if (e.key === 'Enter') void runSearchImpl();
+      return;
+    }
+
+    const items = results?.querySelectorAll('.quick-open-item') || [];
+
+    if (e.key === 'ArrowDown' && items.length) {
+      e.preventDefault();
+      sidebarActiveResultIndex = Math.min(items.length - 1, sidebarActiveResultIndex + 1);
+      highlightSidebarActiveResult(results);
+      return;
+    }
+
+    if (e.key === 'ArrowUp' && items.length) {
+      e.preventDefault();
+      sidebarActiveResultIndex = Math.max(0, sidebarActiveResultIndex <= 0 ? 0 : sidebarActiveResultIndex - 1);
+      highlightSidebarActiveResult(results);
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (items.length) {
+        const idx = sidebarActiveResultIndex >= 0 ? sidebarActiveResultIndex : 0;
+        items[idx]?.click();
+      } else {
+        void runSearchImpl();
+      }
+    }
+  });
+
   input.addEventListener('focus', () => {
     if (skipSearchOnNextFocus) {
       skipSearchOnNextFocus = false;
@@ -317,5 +501,8 @@ export function setupSearch() {
 
 export function debounce(fn, wait = 300) {
   let t = null;
-  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); };
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), wait);
+  };
 }

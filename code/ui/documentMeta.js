@@ -1,7 +1,7 @@
 import { state } from '../core/state.js';
-import { retrieveZipContentEqual } from './viewerChrome.js';
 import { getDisplayFileName } from '../lib/itemLabels.js';
 import { t } from '../../shared/i18n.js';
+import { syncCompareContextTitle } from './compareContextTitle.js';
 
 export function formatLastModified(meta) {
   if (!meta) return '—';
@@ -74,53 +74,29 @@ export function updateDocumentTitle() {
     } else {
       document.title = t('docTitle.app');
     }
-    return;
-  }
-  if (state.selectedArtifactType === 'GeneratePackageXml') {
+  } else if (state.selectedArtifactType === 'GeneratePackageXml') {
     document.title = t('docTitle.generatePkg');
-    return;
-  }
-  if (state.selectedArtifactType === 'FieldDependency') {
+  } else if (state.selectedArtifactType === 'FieldDependency') {
     document.title = t('docTitle.fieldDep');
-    return;
-  }
-  if (state.selectedArtifactType === 'ApexTests') {
+  } else if (state.selectedArtifactType === 'ApexTests') {
     document.title = t('docTitle.apexTests');
-    return;
-  }
-  if (state.selectedArtifactType === 'AnonymousApex') {
+  } else if (state.selectedArtifactType === 'AnonymousApex') {
     document.title = t('docTitle.anonymousApex');
-    return;
-  }
-  if (state.selectedArtifactType === 'OrgLimits') {
+  } else if (state.selectedArtifactType === 'OrgLimits') {
     document.title = t('docTitle.orgLimits');
-    return;
-  }
-  if (state.selectedArtifactType === 'PermissionDiff') {
+  } else if (state.selectedArtifactType === 'PermissionDiff') {
     document.title = t('docTitle.permissionDiff');
-    return;
-  }
-  if (state.selectedArtifactType === 'QueryExplorer') {
+  } else if (state.selectedArtifactType === 'QueryExplorer') {
     document.title = t('docTitle.queryExplorer');
-    return;
-  }
-  if (state.selectedArtifactType === 'SetupAuditTrail') {
+  } else if (state.selectedArtifactType === 'SetupAuditTrail') {
     document.title = t('docTitle.setupAuditTrail');
-    return;
-  }
-  if (state.selectedArtifactType === 'QuickEdit') {
+  } else if (state.selectedArtifactType === 'QuickEdit') {
     document.title = t('docTitle.quickEdit');
-    return;
-  }
-  if (state.selectedArtifactType === 'ApexCoverageCompare') {
+  } else if (state.selectedArtifactType === 'ApexCoverageCompare') {
     document.title = t('docTitle.coverageCompare');
-    return;
+  } else {
+    const sel = state.selectedItem;
+    document.title = getDisplayFileName(sel);
   }
-  const sel = state.selectedItem;
-  let fileName = getDisplayFileName(sel);
-  if (sel?.type === 'PackageXml' && sel.descriptor?.source === 'retrieveZipFile' && sel.descriptor?.relativePath) {
-    const eq = retrieveZipContentEqual(sel.descriptor.parentKey, sel.descriptor.relativePath);
-    if (eq !== null) fileName = `${eq ? t('list.equalPrefix') : t('list.differentPrefix')}${fileName}`;
-  }
-  document.title = fileName;
+  syncCompareContextTitle();
 }

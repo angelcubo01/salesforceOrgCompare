@@ -2,7 +2,8 @@
  * Aplica deep-link al DOM / estado y selecciona ítem en la lista lateral.
  */
 import { state } from '../core/state.js';
-import { saveItemsToStorage } from '../core/persistence.js';
+import { restoreSessionWithoutEphemeralPackageXml, saveItemsToStorage } from '../core/persistence.js';
+import { syncCompareUrlFromState } from './compareDeepLink.js';
 import { renderSavedItems, syncListActiveHighlight } from '../ui/listUi.js';
 import { updateDocumentTitle } from '../ui/documentMeta.js';
 import { applyArtifactTypeUi } from '../ui/artifactTypeUi.js';
@@ -10,6 +11,7 @@ import {
   operationSelectValueForItemType,
   resolveItemFromDeepLink
 } from './compareDeepLink.js';
+import { COMPARATOR_TOOL, LEGACY_COMPARE_TOOLS } from '../ui/appModeNav.js';
 
 /**
  * @param {{ leftOrgId?: string | null, rightOrgId?: string | null }} parsed
@@ -34,13 +36,28 @@ export function applyDeepLinkOrgs(parsed) {
 export function applyDeepLinkItemHint(parsed) {
   if (!parsed.itemType || !parsed.itemKey) return;
 
-  const op = parsed.op || operationSelectValueForItemType(parsed.itemType);
+  if (parsed.itemType === 'PackageXml') {
+    state.selectedItem = null;
+    restoreSessionWithoutEphemeralPackageXml();
+    syncCompareUrlFromState(state);
+    renderSavedItems();
+    updateDocumentTitle();
+    return;
+  }
+
+  let op = parsed.op || operationSelectValueForItemType(parsed.itemType);
+  if (state.appNavMode === 'comparator' || LEGACY_COMPARE_TOOLS.has(op)) {
+    op = COMPARATOR_TOOL;
+  }
   const typeSelect = document.getElementById('typeSelect');
   if (op && typeSelect) {
     const hasOp = [...typeSelect.options].some((o) => o.value === op);
     if (hasOp) {
       typeSelect.value = op;
       state.selectedArtifactType = op;
+    } else if (state.appNavMode === 'comparator') {
+      typeSelect.value = COMPARATOR_TOOL;
+      state.selectedArtifactType = COMPARATOR_TOOL;
     }
   }
   applyArtifactTypeUi();
@@ -65,9 +82,4 @@ export function applyDeepLinkItemHint(parsed) {
   }
 
   updateDocumentTitle();
-}
-
-/** @deprecated Usar applyDeepLinkItemHint (no abre comparación hasta elegir en búsqueda). */
-export function selectListItemFromDeepLink(parsed) {
-  applyDeepLinkItemHint(parsed);
 }

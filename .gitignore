@@ -24,3 +24,4 @@ Desktop.ini
 # Node / tests
 node_modules/
 coverage/
+shared/telemetryConfig.js

@@ -73,6 +73,21 @@ body {
   color: #cbd5e1;
 }
 
+.settings-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 4px;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.settings-checkbox-row input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
 .settings-select {
   width: 100%;
   max-width: 280px;

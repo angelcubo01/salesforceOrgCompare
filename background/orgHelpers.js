@@ -1,22 +1,9 @@
-import { discoverActiveTabContext, getSidForCookieDomain } from '../shared/orgDiscovery.js';
+import { discoverActiveTabContext, getSidForCookieDomain, resolveSidForSavedOrg } from '../shared/orgDiscovery.js';
 import { probeApiVersion, getOrganizationInfo } from '../shared/salesforceApi.js';
+import { ALLOWED_SF_SUFFIXES } from '../shared/sfDomains.js';
 import { authStatusCache, versionCache } from './caches.js';
 
-/** Dominios donde aceptamos cookies `sid` al buscar sesión en segundo plano. */
-export const ALLOWED_SF_SUFFIXES = [
-  'salesforce.com',
-  'lightning.force.com',
-  'force.com',
-  'salesforce-setup.com',
-  'salesforce.mil',
-  'force.mil',
-  'sfcrmapps.cn',
-  'sfcrmproducts.cn',
-  'cloudforce.com',
-  'cloudforce.mil',
-  'visualforce.com',
-  'visual.force.com'
-];
+export { ALLOWED_SF_SUFFIXES };
 
 /** Etiqueta corta (p. ej. sandbox) a partir del hostname del subdominio. */
 export function inferEnvLabelFromHostname(host) {
@@ -51,6 +38,11 @@ export async function gatherSidCandidatesForHostname(activeHost) {
     }
   } catch {}
   return candidates;
+}
+
+/** SID para API/SOAP: mismos criterios que la pestaña Salesforce abierta. */
+export async function resolveSidForOrg(org) {
+  return resolveSidForSavedOrg(org, getSidForOrgId);
 }
 
 export async function getSidForOrgId(orgId) {
@@ -155,8 +147,7 @@ export async function checkOrgAuthStatus(org, force = false) {
       if (cached) return cached;
     }
 
-    let sid = await getSidForCookieDomain(org.cookieDomain);
-    if (!sid) sid = await getSidForOrgId(org.id);
+    const sid = await resolveSidForOrg(org);
     if (!sid) {
       authStatusCache.set(cacheKey, 'expired');
       return 'expired';

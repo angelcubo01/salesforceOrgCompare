@@ -27,6 +27,47 @@ class MetadataRateLimiter {
 const metadataRateLimiter = new MetadataRateLimiter(5, 1000);
 const DEBUG_LOGS = false;
 
+/**
+ * Escapa texto para insertarlo de forma segura dentro de un elemento XML.
+ * @param {unknown} s
+ */
+function escapeXmlText(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** @param {string} label @param {string} [xml] */
+function logSoapXmlDebug(label, xml) {
+  if (!DEBUG_LOGS || !xml) return;
+  const snippet = xml.length > 500 ? `${xml.slice(0, 500)}…` : xml;
+  console.error(label, snippet);
+}
+
+export class RetrieveCancelledError extends Error {
+  constructor() {
+    super('Retrieve cancelled');
+    this.name = 'RetrieveCancelledError';
+    this.code = 'RETRIEVE_CANCELLED';
+  }
+}
+
+/** @param {() => boolean} [isCancelled] */
+function throwIfRetrieveCancelled(isCancelled) {
+  if (typeof isCancelled === 'function' && isCancelled()) {
+    throw new RetrieveCancelledError();
+  }
+}
+
+/** @param {number} ms @param {() => boolean} [isCancelled] */
+async function retrievePollDelay(ms, isCancelled) {
+  throwIfRetrieveCancelled(isCancelled);
+  await new Promise((resolve) => setTimeout(resolve, ms));
+  throwIfRetrieveCancelled(isCancelled);
+}
+
 // Low-level SOAP call helper for Metadata API
 async function metadataSoapCall(instanceUrl, sid, apiVersion, bodyInnerXml) {
   await metadataRateLimiter.waitForSlot();
@@ -39,7 +80,7 @@ async function metadataSoapCall(instanceUrl, sid, apiVersion, bodyInnerXml) {
     `xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">` +
     `<env:Header>` +
     `<SessionHeader xmlns="http://soap.sforce.com/2006/04/metadata">` +
-    `<sessionId>${sid}</sessionId>` +
+    `<sessionId>${escapeXmlText(sid)}</sessionId>` +
     `</SessionHeader>` +
     `</env:Header>` +
     `<env:Body>${bodyInnerXml}</env:Body>` +
@@ -108,7 +149,8 @@ function extractFileProps(xml, typeName, memberFullName) {
 
 // Implementación genérica de retrieve para un único tipo de Metadata API.
 // Devuelve { zipBase64, meta } donde meta viene de <fileProperties>.
-async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, memberFullName) {
+async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, memberFullName, opts = {}) {
+  const isCancelled = opts.isCancelled;
   const apiVerNum = Number(apiVersion) || 60.0;
   const apiVer = apiVerNum.toFixed(1); // "60.0"
 
@@ -135,11 +177,12 @@ async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, mem
     memberFullName,
   });
 
+  throwIfRetrieveCancelled(isCancelled);
   const retrieveResponseXml = await metadataSoapCall(instanceUrl, sid, apiVer, retrieveBody);
 
   const asyncId = extractTagValue(retrieveResponseXml, 'id');
   if (!asyncId) {
-    console.error('[MetadataRetrieve] No async id in retrieve response', retrieveResponseXml);
+    logSoapXmlDebug('[MetadataRetrieve] No async id in retrieve response', retrieveResponseXml);
     throw new Error('Metadata retrieve did not return an async id');
   }
 
@@ -148,6 +191,7 @@ async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, mem
   // 2) Poll checkRetrieveStatus until done and succeeded, with zipFile included
   const maxAttempts = 30;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    throwIfRetrieveCancelled(isCancelled);
     const statusBody =
       `<checkRetrieveStatus xmlns="http://soap.sforce.com/2006/04/metadata">` +
       `<asyncProcessId>${asyncId}</asyncProcessId>` +
@@ -189,7 +233,7 @@ async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, mem
     }
 
     // Still in progress – wait and retry
-    await new Promise((resolve) => setTimeout(resolve, 3500));
+    await retrievePollDelay(3500, isCancelled);
   }
 
   console.error('[MetadataRetrieve] Timed out waiting for retrieve', {
@@ -202,16 +246,16 @@ async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, mem
 }
 
 // Wrappers específicos por tipo (API pública)
-export async function retrievePermissionSetZip(instanceUrl, sid, apiVersion, permSetName) {
-  return retrieveSingleTypeZip(instanceUrl, sid, apiVersion, 'PermissionSet', permSetName);
+export async function retrievePermissionSetZip(instanceUrl, sid, apiVersion, permSetName, opts = {}) {
+  return retrieveSingleTypeZip(instanceUrl, sid, apiVersion, 'PermissionSet', permSetName, opts);
 }
 
-export async function retrieveProfileZip(instanceUrl, sid, apiVersion, profileName) {
-  return retrieveSingleTypeZip(instanceUrl, sid, apiVersion, 'Profile', profileName);
+export async function retrieveProfileZip(instanceUrl, sid, apiVersion, profileName, opts = {}) {
+  return retrieveSingleTypeZip(instanceUrl, sid, apiVersion, 'Profile', profileName, opts);
 }
 
-export async function retrieveFlexiPageZip(instanceUrl, sid, apiVersion, flexiPageName) {
-  return retrieveSingleTypeZip(instanceUrl, sid, apiVersion, 'FlexiPage', flexiPageName);
+export async function retrieveFlexiPageZip(instanceUrl, sid, apiVersion, flexiPageName, opts = {}) {
+  return retrieveSingleTypeZip(instanceUrl, sid, apiVersion, 'FlexiPage', flexiPageName, opts);
 }
 
 /**
@@ -236,7 +280,8 @@ function parsePackageXmlForRetrieve(packageXmlString) {
 /**
  * Retrieve unpackaged según el contenido de un package.xml (todos los <types> del manifiesto).
  */
-export async function retrievePackageXmlZip(instanceUrl, sid, apiVersion, packageXmlString) {
+export async function retrievePackageXmlZip(instanceUrl, sid, apiVersion, packageXmlString, opts = {}) {
+  const isCancelled = opts.isCancelled;
   const { typesXml, version } = parsePackageXmlForRetrieve(packageXmlString);
   const apiVerNum = Number(version) || Number(apiVersion) || 60.0;
   const apiVer = apiVerNum.toFixed(1);
@@ -257,16 +302,18 @@ export async function retrievePackageXmlZip(instanceUrl, sid, apiVersion, packag
     console.log('[MetadataRetrieve] Launching retrieve from package.xml', { apiVer });
   }
 
+  throwIfRetrieveCancelled(isCancelled);
   const retrieveResponseXml = await metadataSoapCall(instanceUrl, sid, apiVer, retrieveBody);
 
   const asyncId = extractTagValue(retrieveResponseXml, 'id');
   if (!asyncId) {
-    console.error('[MetadataRetrieve] No async id in retrieve response (package.xml)', retrieveResponseXml);
+    logSoapXmlDebug('[MetadataRetrieve] No async id in retrieve response (package.xml)', retrieveResponseXml);
     throw new Error('Metadata retrieve did not return an async id');
   }
 
   const maxAttempts = 60;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    throwIfRetrieveCancelled(isCancelled);
     const statusBody =
       `<checkRetrieveStatus xmlns="http://soap.sforce.com/2006/04/metadata">` +
       `<asyncProcessId>${asyncId}</asyncProcessId>` +
@@ -296,23 +343,12 @@ export async function retrievePackageXmlZip(instanceUrl, sid, apiVersion, packag
       );
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 3500));
+    await retrievePollDelay(3500, isCancelled);
   }
 
   throw new Error(
     `Metadata retrieve agotó el tiempo de espera tras ${maxAttempts} intentos (package.xml).`
   );
-}
-
-/**
- * Escapa texto para insertarlo de forma segura dentro de un elemento XML.
- */
-function escapeXmlText(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 /**
@@ -880,7 +916,7 @@ export async function deployZipBase64(instanceUrl, sid, apiVersion, zipBase64, o
 
   const asyncId = extractTagValue(deployResponseXml, 'id');
   if (!asyncId) {
-    console.error('[MetadataDeploy] No async id in deploy response', deployResponseXml);
+    logSoapXmlDebug('[MetadataDeploy] No async id in deploy response', deployResponseXml);
     throw new Error('Metadata deploy did not return an async id');
   }
 

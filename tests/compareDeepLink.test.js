@@ -3,7 +3,8 @@ import {
   parseCompareDeepLink,
   buildCompareSearchParamsFromState,
   operationSelectValueForItemType,
-  resolveItemFromDeepLink
+  resolveItemFromDeepLink,
+  normalizeLegacyNavAndOp
 } from '../code/lib/compareDeepLink.js';
 
 describe('parseCompareDeepLink', () => {
@@ -22,8 +23,8 @@ describe('parseCompareDeepLink', () => {
     const p = parseCompareDeepLink(q);
     expect(p.leftOrgId).toBe('org-left');
     expect(p.rightOrgId).toBe('org-right');
-    expect(p.navMode).toBe('compare');
-    expect(p.op).toBe('LWC');
+    expect(p.navMode).toBe('comparator');
+    expect(p.op).toBe('Comparator');
     expect(p.itemType).toBe('LWC');
     expect(p.itemKey).toBe('myCmp');
     expect(p.fileName).toBe('myCmp.js');
@@ -35,6 +36,17 @@ describe('parseCompareDeepLink', () => {
     expect(p.leftOrgId).toBe('legacy-left');
     expect(p.rightOrgId).toBeNull();
   });
+
+  it('normaliza nav security y manifests PackageXml a comparator', () => {
+    expect(normalizeLegacyNavAndOp('security', 'Profile')).toEqual({
+      navMode: 'comparator',
+      op: 'Comparator'
+    });
+    expect(normalizeLegacyNavAndOp('manifests', 'PackageXml')).toEqual({
+      navMode: 'comparator',
+      op: 'Comparator'
+    });
+  });
 });
 
 describe('buildCompareSearchParamsFromState', () => {
@@ -42,8 +54,8 @@ describe('buildCompareSearchParamsFromState', () => {
     const appState = {
       leftOrgId: 'L1',
       rightOrgId: 'R1',
-      appNavMode: 'compare',
-      selectedArtifactType: 'Apex',
+      appNavMode: 'comparator',
+      selectedArtifactType: 'Comparator',
       selectedItem: {
         type: 'ApexClass',
         key: 'MyClass',
@@ -55,7 +67,8 @@ describe('buildCompareSearchParamsFromState', () => {
     expect(p.get('right')).toBe('R1');
     expect(p.get('type')).toBe('ApexClass');
     expect(p.get('key')).toBe('MyClass');
-    expect(p.get('nav')).toBe('compare');
+    expect(p.get('nav')).toBe('comparator');
+    expect(p.get('op')).toBe('Comparator');
   });
 });
 

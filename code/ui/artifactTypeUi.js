@@ -60,6 +60,10 @@ export function isOperationPlaceholder() {
   return !getSelectedArtifactType();
 }
 
+export function isComparatorMode() {
+  return state.appNavMode === 'comparator' || getSelectedArtifactType() === 'Comparator';
+}
+
 /** Modos de herramienta a pantalla completa sin editor (Monaco). */
 export function isFullScreenToolMode() {
   return (
@@ -82,10 +86,9 @@ function syncHomeLayoutChrome() {
   const mode = state.appNavMode;
   const home = mode === 'home';
   const tool = getSelectedArtifactType();
-  const manifestsWithoutComparePkg = mode === 'manifests' && tool !== 'PackageXml';
   const hideForDevTools = APP_NAV_DEVELOPMENT_TOOLS.includes(tool);
   const hideSidebar =
-    home || mode === 'monitoring' || manifestsWithoutComparePkg || hideForDevTools;
+    home || mode === 'monitoring' || mode === 'manifests' || hideForDevTools;
   document.body.classList.toggle('app-mode-home', home);
   document.querySelector('.content .sidebar')?.classList.toggle('hidden', hideSidebar);
 }
@@ -109,9 +112,17 @@ function syncSearchInputState() {
     panel?.classList.add('search-panel-locked');
   } else {
     input.disabled = false;
-    input.placeholder = t('code.searchPlaceholder');
+    input.placeholder = isComparatorMode()
+      ? t('code.searchPlaceholderComparator')
+      : t('code.searchPlaceholder');
     panel?.classList.remove('search-panel-locked');
   }
+}
+
+function syncComparatorActionButtons() {
+  const pkgBtn = document.getElementById('packageXmlLoadBtn');
+  const show = isComparatorMode();
+  pkgBtn?.classList.toggle('hidden', !show);
 }
 
 /**
@@ -167,7 +178,6 @@ export function applyArtifactTypeUi() {
   document.body.classList.toggle('artifact-no-operation', isNone);
 
   const searchPanel = document.getElementById('searchPanel');
-  const packagePanel = document.getElementById('packageXmlPanel');
   const clearBtn = document.getElementById('clearHistoryButton');
   const compareListBody = document.getElementById('compareListBody');
   const compareListToolbar = document.getElementById('compareListToolbar');
@@ -194,8 +204,8 @@ export function applyArtifactTypeUi() {
     }
     landingPanel?.classList.remove('hidden');
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -225,8 +235,8 @@ export function applyArtifactTypeUi() {
 
   function applySingleLeftOrgToolUi() {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -257,8 +267,8 @@ export function applyArtifactTypeUi() {
 
   if (isGen) {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -299,8 +309,8 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
   } else if (isAnonymousApex) {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -336,8 +346,8 @@ export function applyArtifactTypeUi() {
     }
   } else if (isQueryExplorer) {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -373,8 +383,8 @@ export function applyArtifactTypeUi() {
     }
   } else if (isPermissionDiff) {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -410,8 +420,8 @@ export function applyArtifactTypeUi() {
     }
   } else if (isOrgLimits) {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -457,8 +467,8 @@ export function applyArtifactTypeUi() {
     quickEditPanel?.classList.remove('hidden');
   } else if (isApexCoverageCompare) {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -482,8 +492,8 @@ export function applyArtifactTypeUi() {
     }
   } else if (isFieldDep) {
     searchPanel?.classList.add('hidden');
-    packagePanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
     compareListBody?.classList.add('hidden');
     compareListToolbar?.classList.add('hidden');
     standardPanel?.classList.add('hidden');
@@ -509,11 +519,10 @@ export function applyArtifactTypeUi() {
       rightReauth.classList.remove('hidden');
     }
   } else {
-    const isPkg = op === 'PackageXml';
-    searchPanel?.classList.toggle('hidden', isPkg);
-    packagePanel?.classList.toggle('hidden', !isPkg);
+    searchPanel?.classList.remove('hidden');
     clearBtn?.classList.remove('hidden');
     compareListBody?.classList.remove('hidden');
+    compareListToolbar?.classList.remove('hidden');
     standardPanel?.classList.remove('hidden');
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
@@ -550,12 +559,12 @@ export function applyArtifactTypeUi() {
     isFieldDep ||
     isQuickEdit ||
     isApexCoverageCompare ||
-    op === 'PackageXml' ||
     isNone
   ) {
     hideSidebarSearchResults();
   }
 
+  syncComparatorActionButtons();
   syncSearchInputState();
 
   updateOrgDropdownLayout();

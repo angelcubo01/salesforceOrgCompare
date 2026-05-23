@@ -211,6 +211,24 @@ export function createSingleEditor(monaco, container) {
   });
 }
 
+/** Evita bucles ResizeObserver al relayout tras cambiar sidebar/paneles. */
+export function scheduleMonacoLayout() {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      try {
+        if (state.diffEditor) state.diffEditor.layout();
+      } catch {
+        /* ignore */
+      }
+      try {
+        if (state.editor) state.editor.layout();
+      } catch {
+        /* ignore */
+      }
+    });
+  });
+}
+
 export function createDiffEditor(monaco, container) {
   const wrap = state.wordWrapEnabled ? 'on' : 'off';
   const th = resolveMonacoThemeId();

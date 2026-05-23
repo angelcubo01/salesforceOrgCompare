@@ -4,6 +4,7 @@ import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
+import { randomStagingId } from '../../shared/randomId.js';
 
 /**
  * @type {Array<{
@@ -169,7 +170,7 @@ async function openSplitLineCoverageViewer(
     const rightCovered = rightOk && Array.isArray(rightRes.coveredLines) ? rightRes.coveredLines : [];
     const rightUncovered = rightOk && Array.isArray(rightRes.uncoveredLines) ? rightRes.uncoveredLines : [];
 
-    const key = `sfoc_cv_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const key = randomStagingId('sfoc_cv_');
     const classBit = classLabel || leftRes?.name || rightRes?.name || '';
     const title = `${classBit} · ${leftLabel} | ${rightLabel} · ${t('coverageCompare.viewSplit')}`;
     try {
@@ -240,7 +241,7 @@ async function openLineCoverageViewer(orgId, apexClassOrTriggerId, classLabel) {
     }
     const env = getCompactOrgLabel(orgId);
     const title = `${classLabel || res.name || apexClassOrTriggerId} · ${env} · ${t('docTitle.apexCoverage')}`;
-    const key = `sfoc_cv_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+    const key = randomStagingId('sfoc_cv_');
     const coveredLines = Array.isArray(res.coveredLines) ? res.coveredLines : [];
     const uncoveredLines = Array.isArray(res.uncoveredLines) ? res.uncoveredLines : [];
     try {

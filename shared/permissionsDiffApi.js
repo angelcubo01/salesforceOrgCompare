@@ -409,54 +409,6 @@ export async function searchPermissionContainers(instanceUrl, sid, apiVersion, c
 }
 
 /**
- * Búsqueda interactiva unificada (contenedores, objetos y campos).
- * @param {{ mode?: 'container'|'resource'|'all', containerType?: string, resourceType?: 'object'|'field' }} scope
- */
-export async function searchPermissionDiffInteractive(
-  instanceUrl,
-  sid,
-  apiVersion,
-  queryText,
-  scope = {}
-) {
-  const q = String(queryText || '').trim();
-  if (!q.length) return [];
-  const mode = scope.mode || 'all';
-  const out = [];
-
-  if (mode === 'container' || mode === 'all') {
-    const ct = scope.containerType === 'Profile' ? 'Profile' : scope.containerType === 'PermissionSet' ? 'PermissionSet' : null;
-    if (ct === 'Profile' || !ct) {
-      out.push(...(await searchPermissionContainers(instanceUrl, sid, apiVersion, 'Profile', q)));
-    }
-    if (ct === 'PermissionSet' || !ct) {
-      out.push(...(await searchPermissionContainers(instanceUrl, sid, apiVersion, 'PermissionSet', q)));
-    }
-  }
-
-  if (mode === 'resource' || mode === 'all') {
-    const rt = scope.resourceType === 'field' ? 'field' : scope.resourceType === 'object' ? 'object' : null;
-    if (!rt || rt === 'object') {
-      const objects = await searchPermissionResources(instanceUrl, sid, apiVersion, 'object', q);
-      out.push(...objects.map((o) => ({ kind: 'object', name: o.name })));
-    }
-    if (!rt || rt === 'field') {
-      const objectApiName = q.includes('.') ? q.split('.')[0] : '';
-      const fields = await searchPermissionResources(instanceUrl, sid, apiVersion, 'field', q, objectApiName);
-      out.push(...fields.map((f) => ({ kind: 'field', name: f.name })));
-    }
-  }
-
-  const seen = new Set();
-  return out.filter((item) => {
-    const key = `${item.kind}:${item.name}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  }).slice(0, 50);
-}
-
-/**
  * Carga ObjectPermissions, FieldPermissions y SetupEntityAccess vía REST (sin retrieve XML).
  * @param {'Profile'|'PermissionSet'} containerType
  */

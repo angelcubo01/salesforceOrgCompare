@@ -1,9 +1,8 @@
 /**
  * Trazas Apex (TraceFlag USER_DEBUG): programar parada 10 s después de que el job de tests termine.
  */
-import { getSidForCookieDomain } from '../shared/orgDiscovery.js';
 import { deleteTraceFlagById } from '../shared/salesforceApi.js';
-import { getSidForOrgId, loadSavedOrgs } from './orgHelpers.js';
+import { loadSavedOrgs, resolveSidForOrg } from './orgHelpers.js';
 
 const APEX_JOBS_KEY = 'apexTestRunJobs';
 const PENDING_PREFIX = 'apexTracePending_';
@@ -144,8 +143,7 @@ export function installApexTraceAlarmListener() {
       const saved = await loadSavedOrgs();
       const org = saved[pending.orgId];
       if (!org) return;
-      let sid = await getSidForCookieDomain(org.cookieDomain);
-      if (!sid) sid = await getSidForOrgId(org.id);
+      const sid = await resolveSidForOrg(org);
       if (!sid) return;
       await deleteTraceFlagById(org.instanceUrl, sid, org.apiVersion, pending.traceFlagId);
       await clearTraceFlagFromStoredJobs(pending.traceFlagId);

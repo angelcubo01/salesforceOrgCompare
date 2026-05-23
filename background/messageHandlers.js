@@ -1,4 +1,3 @@
-import { getSidForCookieDomain } from '../shared/orgDiscovery.js';
 import {
   searchIndex as apiSearchIndex,
   fetchSource as apiFetchSource,
@@ -36,7 +35,7 @@ import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './a
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
 function queryExplorerCatchErrorPayload(e) {
-  const error = String(e?.message || e);
+  const error = sanitizeUiError(e?.message || e);
   /** @type {{ ok: false, error: string, errorCode?: string }} */
   const out = { ok: false, error };
   if (e && typeof e === 'object' && e.salesforceErrorCode) {
@@ -61,13 +60,13 @@ import {
   searchPermissionContainers,
   fetchAccessByResource,
   searchPermissionResources,
-  searchPermissionDiffInteractive,
   searchCustomPermissions,
   fetchAssignmentsForCustomPermission
 } from '../shared/permissionsDiffApi.js';
 import { indexCache, sourceCache, versionCache, authStatusCache } from './caches.js';
 import { DEBUG_LOGS } from './config.js';
-import { appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
+import { appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
+import { sendGa4TelemetryOptOut, sendGa4TestPing } from './ga4Telemetry.js';
 import {
   loadExtensionSettings,
   getApexTestsClassNameLikePatterns,
@@ -76,6 +75,30 @@ import {
 } from '../shared/extensionSettings.js';
 import { stageApexViewerPayload, takeApexViewerPayload } from './apexViewerStaging.js';
 import { isTestSetupApexTestResult } from '../shared/apexTestMakeDataMethod.js';
+import { isOrgAlreadySaved } from '../shared/orgPrefs.js';
+import { RetrieveCancelledError } from '../shared/metadataRetrieve.js';
+import { sanitizeUiError } from '../shared/sanitizeUiError.js';
+import { isTrustedExtensionSender } from '../shared/trustedSender.js';
+import { pickUsageLogEntry } from '../shared/usageLogEntry.js';
+import {
+  beginRetrieveSession,
+  cancelRetrieveSessions,
+  isRetrieveGenerationCurrent,
+  retrieveCancelOpts
+} from './retrieveSession.js';
+
+function retrieveCancelledResponse() {
+  return { ok: false, cancelled: true };
+}
+
+/** @param {unknown} e @param {(response: object) => void} deliver */
+function sendRetrieveErrorResponse(e, deliver) {
+  if (e instanceof RetrieveCancelledError || (e && typeof e === 'object' && e.code === 'RETRIEVE_CANCELLED')) {
+    deliver(retrieveCancelledResponse());
+  } else {
+    deliver({ ok: false, error: sanitizeUiError(e) });
+  }
+}
 
 function buildApexClassNameLikeWhere(patterns) {
   const list = patterns && patterns.length ? patterns : ['%test%'];
@@ -195,15 +218,11 @@ function mergeApexCoverageJsonField(raw, coveredSet, uncoveredSet) {
     }
   }
 }
-import { getUpdateStatus } from './versionUpdate.js';
 import {
   buildOrgFromActiveTab,
   checkOrgAuthStatus,
-  inferEnvLabelFromHostname,
-  ensureVersion,
-  gatherSidCandidatesForHostname,
-  getSidForOrgId,
   getOrderedSavedOrgs,
+  resolveSidForOrg,
   loadSavedOrgOrder,
   loadSavedOrgs,
   makeIndexKey,
@@ -245,92 +264,65 @@ function sanitizeOrgForConfigImport(raw, idKey) {
 }
 
 export function installMessageHandlers() {
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((message, sender, rawRespond) => {
+    if (!isTrustedExtensionSender(sender)) {
+      rawRespond({ ok: false, reason: 'UNTRUSTED_SENDER' });
+      return false;
+    }
+    /** @param {object} payload */
+    const reply = (payload) => {
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        Object.prototype.hasOwnProperty.call(payload, 'error') &&
+        payload.error != null &&
+        payload.error !== ''
+      ) {
+        rawRespond({ ...payload, error: sanitizeUiError(payload.error) });
+      } else {
+        rawRespond(payload);
+      }
+    };
     (async () => {
       try {
         switch (message?.type) {
-          case 'version:getUpdateInfo': {
-            const status = await getUpdateStatus({
-              bypassMemoryCache: message.forceRefreshRemote === true
-            });
-            sendResponse(status);
-            break;
-          }
-          case 'index:listApex': {
-            const { orgId } = message;
-            const saved = await loadSavedOrgs();
-            const org = saved[orgId];
-            if (!org) throw new Error('Org not saved');
-            const sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
-            try {
-              const classes = (await apiSearchIndex(org.instanceUrl, sid, org.apiVersion, 'ApexClass', '')) || [];
-              const triggers = (await apiSearchIndex(org.instanceUrl, sid, org.apiVersion, 'ApexTrigger', '')) || [];
-              sendResponse({ ok: true, apex: { classes, triggers } });
-            } catch (e) {
-              sendResponse({ ok: false, error: String(e) });
-            }
-            break;
-          }
-          case 'index:listLwc': {
-            const { orgId } = message;
-            const saved = await loadSavedOrgs();
-            const org = saved[orgId];
-            if (!org) throw new Error('Org not saved');
-            const sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
-            try {
-              const bundles = (await apiSearchIndex(org.instanceUrl, sid, org.apiVersion, 'LWC', '')) || [];
-              sendResponse({ ok: true, bundles });
-            } catch (e) {
-              sendResponse({ ok: false, error: String(e) });
-            }
-            break;
-          }
-          case 'env:add': {
-            const host = String(message.host || '')
-              .replace(/^https?:\/\//, '')
-              .replace(/\/$/, '');
-            if (!host) return sendResponse({ ok: false, error: 'Missing host' });
-            const candidates = await gatherSidCandidatesForHostname(host);
-            for (const c of candidates) {
-              try {
-                let instanceUrl;
-                if (host.includes('lightning.force')) {
-                  instanceUrl = `https://${host.replace('lightning.force.com', 'my.salesforce.com')}`;
-                } else if (host.includes('salesforce-setup')) {
-                  const sub = host.replace('.salesforce-setup.com', '');
-                  if (sub.endsWith('.my')) {
-                    instanceUrl = `https://${sub}.salesforce.com`;
-                  } else {
-                    instanceUrl = `https://${sub}.my.salesforce.com`;
-                  }
-                } else {
-                  instanceUrl = `https://${host}`;
-                }
-                const apiVersion = await ensureVersion(instanceUrl, c.value);
-                const org = await getOrganizationInfo(instanceUrl, c.value, apiVersion);
-                const environment = {
-                  id: org.id,
-                  displayName: org.name,
-                  label: inferEnvLabelFromHostname(host),
-                  instanceUrl,
-                  cookieDomain: host,
-                  apiVersion,
-                  isSandbox: org.isSandbox
-                };
-                const saved = await loadSavedOrgs();
-                saved[environment.id] = environment;
-                await saveSavedOrgs(saved);
-                await syncOrgOrderAfterAdd(environment.id);
-                return sendResponse({ ok: true, environment });
-              } catch {}
-            }
-            return sendResponse({ ok: false, error: 'Not logged in or SID not found for host' });
-          }
           case 'discoverActiveOrg': {
             const res = await buildOrgFromActiveTab();
-            sendResponse(res);
+            reply(res);
+            break;
+          }
+          case 'retrieve:begin': {
+            reply({ ok: true, generation: beginRetrieveSession() });
+            break;
+          }
+          case 'retrieve:cancel': {
+            reply({ ok: true, generation: cancelRetrieveSessions() });
+            break;
+          }
+          case 'syncOrgsFromActiveTab': {
+            const discovered = await buildOrgFromActiveTab();
+            let addedOrg = null;
+            if (discovered.ok && discovered.org) {
+              const saved = await loadSavedOrgs();
+              const list = Object.values(saved);
+              if (!isOrgAlreadySaved(discovered.org, list)) {
+                saved[discovered.org.id] = discovered.org;
+                await saveSavedOrgs(saved);
+                await syncOrgOrderAfterAdd(discovered.org.id);
+                addedOrg = discovered.org;
+                authStatusCache.del(`auth:${discovered.org.id}`);
+              }
+            }
+            const orgs = await getOrderedSavedOrgs();
+            const entries = await Promise.all(
+              orgs.map(async (org) => [org.id, await checkOrgAuthStatus(org, true)])
+            );
+            reply({
+              ok: true,
+              orgs,
+              addedOrg,
+              statuses: Object.fromEntries(entries)
+            });
             break;
           }
           case 'addOrg': {
@@ -340,7 +332,7 @@ export function installMessageHandlers() {
             saved[org.id] = org;
             await saveSavedOrgs(saved);
             await syncOrgOrderAfterAdd(org.id);
-            sendResponse({ ok: true });
+            reply({ ok: true });
             break;
           }
           case 'reorderSavedOrgs': {
@@ -351,12 +343,12 @@ export function installMessageHandlers() {
               if (!seen.has(id)) incoming.push(id);
             }
             await saveSavedOrgOrder(incoming);
-            sendResponse({ ok: true });
+            reply({ ok: true });
             break;
           }
           case 'listSavedOrgs': {
             const orgs = await getOrderedSavedOrgs();
-            sendResponse({ ok: true, orgs });
+            reply({ ok: true, orgs });
             break;
           }
           case 'auth:getStatuses': {
@@ -365,21 +357,21 @@ export function installMessageHandlers() {
             const force = !!message.force;
             const entries = await Promise.all(orgs.map(async (org) => [org.id, await checkOrgAuthStatus(org, force)]));
             const statuses = Object.fromEntries(entries);
-            sendResponse({ ok: true, statuses });
+            reply({ ok: true, statuses });
             break;
           }
           case 'auth:reauth': {
             const saved = await loadSavedOrgs();
             const orgId = message.orgId;
             const org = saved[orgId];
-            if (!org) return sendResponse({ ok: false, error: 'Org not found' });
+            if (!org) return reply({ ok: false, error: 'Org not found' });
             const url = `${String(org.instanceUrl).replace(/\/$/, '')}/?login=true`;
             try {
               await chrome.tabs.create({ url });
               authStatusCache.del(`auth:${org.id}`);
-              sendResponse({ ok: true });
+              reply({ ok: true });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e) });
+              reply({ ok: false, error: String(e) });
             }
             break;
           }
@@ -388,7 +380,7 @@ export function installMessageHandlers() {
             delete saved[message.orgId];
             await saveSavedOrgs(saved);
             await syncOrgOrderAfterRemove(message.orgId);
-            sendResponse({ ok: true });
+            reply({ ok: true });
             break;
           }
           case 'orgs:exportConfig': {
@@ -400,7 +392,7 @@ export function installMessageHandlers() {
               const clean = sanitizeOrgForConfigExport(row);
               if (clean) orgs[id] = clean;
             }
-            sendResponse({
+            reply({
               ok: true,
               payload: {
                 formatVersion: 1,
@@ -417,7 +409,7 @@ export function installMessageHandlers() {
             const data = message.data;
             const replace = !!message.replace;
             if (!data || typeof data !== 'object' || !data.orgs || typeof data.orgs !== 'object') {
-              sendResponse({ ok: false, error: 'INVALID_PAYLOAD' });
+              reply({ ok: false, error: 'INVALID_PAYLOAD' });
               break;
             }
             const next = replace ? {} : await loadSavedOrgs();
@@ -446,7 +438,7 @@ export function installMessageHandlers() {
               orgGroups: replace ? mergeGroups : { ...(cur.orgGroups || {}), ...mergeGroups }
             });
             authStatusCache.clear();
-            sendResponse({ ok: true, count: Object.keys(next).length });
+            reply({ ok: true, count: Object.keys(next).length });
             break;
           }
           case 'searchIndex': {
@@ -454,24 +446,23 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             const key = makeIndexKey(orgId, artifactType, prefix);
             const cached = indexCache.get(key);
-            if (cached) return sendResponse({ ok: true, items: cached, cached: true });
+            if (cached) return reply({ ok: true, items: cached, cached: true });
 
             try {
               const items = await apiSearchIndex(org.instanceUrl, sid, org.apiVersion, artifactType, prefix || '');
               indexCache.set(key, items);
-              sendResponse({ ok: true, items });
+              reply({ ok: true, items });
             } catch (e) {
               if (e && (e.status === 401 || e.status === 403)) {
                 indexCache.clear();
                 sourceCache.clear();
               }
-              sendResponse({ ok: false, error: 'Request failed. Please retry or re-authenticate.' });
+              reply({ ok: false, error: 'Request failed. Please retry or re-authenticate.' });
             }
             break;
           }
@@ -480,9 +471,8 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             try {
               const items = await buildQuickOpenMetadataIndex(
@@ -490,13 +480,13 @@ export function installMessageHandlers() {
                 sid,
                 org.apiVersion
               );
-              sendResponse({ ok: true, items });
+              reply({ ok: true, items });
             } catch (e) {
               if (e && (e.status === 401 || e.status === 403)) {
                 indexCache.clear();
                 sourceCache.clear();
               }
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -505,9 +495,8 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             if (listOnly) {
               try {
@@ -518,13 +507,13 @@ export function installMessageHandlers() {
                   artifactType,
                   descriptor
                 );
-                sendResponse({ ok: true, files });
+                reply({ ok: true, files });
               } catch (e) {
                 if (e && (e.status === 401 || e.status === 403)) {
                   indexCache.clear();
                   sourceCache.clear();
                 }
-                sendResponse({ ok: false, error: 'Request failed. Please retry or re-authenticate.' });
+                reply({ ok: false, error: 'Request failed. Please retry or re-authenticate.' });
               }
               break;
             }
@@ -552,7 +541,7 @@ export function installMessageHandlers() {
                   descriptor
                 );
                 if (liveSig === normalizedCached.versionSignature) {
-                  sendResponse({ ok: true, files: normalizedCached.files, cached: true });
+                  reply({ ok: true, files: normalizedCached.files, cached: true });
                   break;
                 }
               } catch {
@@ -566,44 +555,47 @@ export function installMessageHandlers() {
                 files,
                 versionSignature: sourceSignatureFromFiles(files)
               });
-              sendResponse({ ok: true, files });
+              reply({ ok: true, files });
             } catch (e) {
               if (e && (e.status === 401 || e.status === 403)) {
                 indexCache.clear();
                 sourceCache.clear();
               }
-              sendResponse({ ok: false, error: 'Request failed. Please retry or re-authenticate.' });
+              reply({ ok: false, error: 'Request failed. Please retry or re-authenticate.' });
             }
             break;
           }
           case 'usage:log': {
-            const entry = message.entry || {};
-            const { leftOrgId, rightOrgId } = entry;
-            const saved = await loadSavedOrgs();
-
-            const leftOrg = leftOrgId ? saved[leftOrgId] : null;
-            const rightOrg = rightOrgId ? saved[rightOrgId] : null;
-
+            const picked = pickUsageLogEntry(message.entry || {});
             try {
               if (DEBUG_LOGS)
                 console.log('[usage:log] received', {
-                  kind: entry.kind,
-                  artifactType: entry.artifactType,
-                  leftOrgId,
-                  rightOrgId,
-                  viaRetrieveZip: !!entry.viaRetrieveZip,
-                  phase: entry.phase
+                  kind: picked.kind,
+                  artifactType: picked.artifactType,
+                  leftOrgId: picked.leftOrgId,
+                  rightOrgId: picked.rightOrgId,
+                  viaRetrieveZip: !!picked.viaRetrieveZip,
+                  phase: picked.phase
                 });
             } catch {}
-
-            await appendUsageLog({
-              ...entry,
-              leftInstanceUrl: leftOrg ? leftOrg.instanceUrl : '',
-              rightInstanceUrl: rightOrg ? rightOrg.instanceUrl : '',
-              leftOrgName: leftOrg ? leftOrg.displayName : '',
-              rightOrgName: rightOrg ? rightOrg.displayName : ''
-            });
-            sendResponse({ ok: true });
+            await appendUsageLog(picked);
+            reply({ ok: true });
+            break;
+          }
+          case 'telemetry:opt-out': {
+            try {
+              await sendGa4TelemetryOptOut();
+              await appendTelemetryOptOutLog();
+            } catch {}
+            reply({ ok: true });
+            break;
+          }
+          case 'telemetry:test-ga4': {
+            let ga4Ok = false;
+            try {
+              ga4Ok = await sendGa4TestPing();
+            } catch {}
+            reply({ ok: true, ga4Ok });
             break;
           }
           case 'apexViewer:stage': {
@@ -613,19 +605,19 @@ export function installMessageHandlers() {
                 initialLine: il != null ? Number(il) : undefined,
                 downloadFileName: message.downloadFileName
               });
-              sendResponse({ ok: true, id });
+              reply({ ok: true, id });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexViewer:take': {
             const v = takeApexViewerPayload(message.id);
             if (!v) {
-              sendResponse({ ok: false, error: 'NOT_FOUND' });
+              reply({ ok: false, error: 'NOT_FOUND' });
               break;
             }
-            sendResponse({
+            reply({
               ok: true,
               title: v.title,
               content: v.content,
@@ -635,13 +627,15 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:retrievePermissionSet': {
-            const { orgId, permSetName } = message;
+            const { orgId, permSetName, retrieveGeneration: gen } = message;
+            if (!isRetrieveGenerationCurrent(gen)) {
+              return reply(retrieveCancelledResponse());
+            }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             try {
               let memberFullName = String(permSetName || '').trim();
@@ -664,9 +658,13 @@ export function installMessageHandlers() {
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
-                memberFullName
+                memberFullName,
+                retrieveCancelOpts(gen)
               );
-              sendResponse({
+              if (!isRetrieveGenerationCurrent(gen)) {
+                return reply(retrieveCancelledResponse());
+              }
+              reply({
                 ok: true,
                 zipBase64,
                 fileName: `${memberFullName}_permissionset.zip`,
@@ -675,27 +673,33 @@ export function installMessageHandlers() {
                 lastModifiedDate: meta?.lastModifiedDate || ''
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e) });
+              sendRetrieveErrorResponse(e, reply);
             }
             break;
           }
           case 'metadata:retrieveProfile': {
-            const { orgId, profileName } = message;
+            const { orgId, profileName, retrieveGeneration: gen } = message;
+            if (!isRetrieveGenerationCurrent(gen)) {
+              return reply(retrieveCancelledResponse());
+            }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             try {
               const { zipBase64, meta } = await retrieveProfileZip(
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
-                profileName
+                profileName,
+                retrieveCancelOpts(gen)
               );
-              sendResponse({
+              if (!isRetrieveGenerationCurrent(gen)) {
+                return reply(retrieveCancelledResponse());
+              }
+              reply({
                 ok: true,
                 zipBase64,
                 fileName: `${profileName}_profile.zip`,
@@ -704,27 +708,33 @@ export function installMessageHandlers() {
                 lastModifiedDate: meta?.lastModifiedDate || ''
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e) });
+              sendRetrieveErrorResponse(e, reply);
             }
             break;
           }
           case 'metadata:retrieveFlexiPage': {
-            const { orgId, flexiPageName } = message;
+            const { orgId, flexiPageName, retrieveGeneration: gen } = message;
+            if (!isRetrieveGenerationCurrent(gen)) {
+              return reply(retrieveCancelledResponse());
+            }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             try {
               const { zipBase64, meta } = await retrieveFlexiPageZip(
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
-                flexiPageName
+                flexiPageName,
+                retrieveCancelOpts(gen)
               );
-              sendResponse({
+              if (!isRetrieveGenerationCurrent(gen)) {
+                return reply(retrieveCancelledResponse());
+              }
+              reply({
                 ok: true,
                 zipBase64,
                 fileName: `${flexiPageName}_flexipage.zip`,
@@ -733,22 +743,24 @@ export function installMessageHandlers() {
                 lastModifiedDate: meta?.lastModifiedDate || ''
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e) });
+              sendRetrieveErrorResponse(e, reply);
             }
             break;
           }
           case 'metadata:retrievePackageXml': {
-            const { orgId, packageXml } = message;
+            const { orgId, packageXml, retrieveGeneration: gen } = message;
+            if (!isRetrieveGenerationCurrent(gen)) {
+              return reply(retrieveCancelledResponse());
+            }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             const raw = String(packageXml || '').trim();
             if (!raw) {
-              return sendResponse({ ok: false, error: 'package.xml vacío' });
+              return reply({ ok: false, error: 'package.xml vacío' });
             }
 
             try {
@@ -756,9 +768,13 @@ export function installMessageHandlers() {
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
-                raw
+                raw,
+                retrieveCancelOpts(gen)
               );
-              sendResponse({
+              if (!isRetrieveGenerationCurrent(gen)) {
+                return reply(retrieveCancelledResponse());
+              }
+              reply({
                 ok: true,
                 zipBase64,
                 fileName: 'package_retrieve.zip',
@@ -767,7 +783,7 @@ export function installMessageHandlers() {
                 lastModifiedDate: meta?.lastModifiedDate || ''
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e) });
+              sendRetrieveErrorResponse(e, reply);
             }
             break;
           }
@@ -776,15 +792,14 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             const ver = org.apiVersion;
             try {
               const metadataObjects = await describeMetadata(org.instanceUrl, sid, ver);
-              sendResponse({ ok: true, metadataObjects, apiVersionUsed: String(ver) });
+              reply({ ok: true, metadataObjects, apiVersionUsed: String(ver) });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -793,9 +808,8 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             const ver = org.apiVersion;
             try {
               const records = await listMetadataWithFolderFallback(
@@ -805,9 +819,9 @@ export function installMessageHandlers() {
                 String(metadataType || ''),
                 folder != null && folder !== '' ? String(folder) : undefined
               );
-              sendResponse({ ok: true, records, apiVersionUsed: String(ver) });
+              reply({ ok: true, records, apiVersionUsed: String(ver) });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -816,9 +830,8 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             const ver = org.apiVersion;
             try {
               const zipBase64 = createDeployZipBase64(
@@ -842,7 +855,7 @@ export function installMessageHandlers() {
                   pollIntervalMs: 1500
                 }
               );
-              sendResponse({
+              reply({
                 ok: result.success,
                 asyncId: result.asyncId,
                 status: result.status,
@@ -850,7 +863,7 @@ export function installMessageHandlers() {
                 componentFailures: result.componentFailures
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -859,9 +872,8 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             try {
               /** LIKE en servidor: evita paginar miles de ApexClass (muchas llamadas con restQueryAll). */
               await loadExtensionSettings();
@@ -890,9 +902,9 @@ export function installMessageHandlers() {
                   name: r.Name
                 }));
               classes.sort((a, b) => String(a.name).localeCompare(String(b.name)));
-              sendResponse({ ok: true, classes });
+              reply({ ok: true, classes });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -905,11 +917,10 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             if (!raw.length) {
-              sendResponse({ ok: true, byClass: [] });
+              reply({ ok: true, byClass: [] });
               break;
             }
             try {
@@ -941,7 +952,7 @@ export function installMessageHandlers() {
               }
               const uniqueIds = [...new Set(ids)];
               if (!uniqueIds.length) {
-                sendResponse({ ok: true, byClass: [] });
+                reply({ ok: true, byClass: [] });
                 break;
               }
               const byClass = [];
@@ -976,9 +987,9 @@ export function installMessageHandlers() {
                   /* clase omitida por Tooling */
                 }
               }
-              sendResponse({ ok: true, byClass });
+              reply({ ok: true, byClass });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -987,9 +998,8 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) return sendResponse({ ok: false, reason: 'NO_SID' });
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             const body = sanitizeRunTestsBodyForApi(
               runBody && typeof runBody === 'object' ? runBody : {}
             );
@@ -1012,7 +1022,7 @@ export function installMessageHandlers() {
               if (traceFlagId && !jobId) {
                 await scheduleNoJobTraceCleanup(orgId, traceFlagId);
               }
-              sendResponse({
+              reply({
                 ok: true,
                 result,
                 traceFlagId: traceFlagId || undefined
@@ -1025,7 +1035,7 @@ export function installMessageHandlers() {
                   /* ignore */
                 }
               }
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1034,13 +1044,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             const startedAtIso = new Date().toISOString();
@@ -1109,7 +1118,7 @@ export function installMessageHandlers() {
                   logId = '';
                 }
               }
-              sendResponse({
+              reply({
                 ok: true,
                 result,
                 startedAtIso,
@@ -1117,7 +1126,7 @@ export function installMessageHandlers() {
                 ...(logId ? { logId } : {})
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             } finally {
               if (traceFlagId) {
                 try {
@@ -1132,26 +1141,25 @@ export function installMessageHandlers() {
           case 'anonymousApex:getLogBody': {
             const { orgId, logId } = message;
             if (!logId) {
-              sendResponse({ ok: false, error: 'Missing logId' });
+              reply({ ok: false, error: 'Missing logId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
-              sendResponse({ ok: true, body });
+              reply({ ok: true, body });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1160,20 +1168,19 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const limits = await fetchOrgLimits(org.instanceUrl, sid, org.apiVersion);
-              sendResponse({ ok: true, limits });
+              reply({ ok: true, limits });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1182,13 +1189,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1200,37 +1206,9 @@ export function installMessageHandlers() {
                 ct,
                 queryText
               );
-              sendResponse({ ok: true, items });
+              reply({ ok: true, items });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
-            }
-            break;
-          }
-          case 'permissionsDiff:searchInteractive': {
-            const { orgId, queryText, scope } = message;
-            const saved = await loadSavedOrgs();
-            const org = saved[orgId];
-            if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
-              break;
-            }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
-              break;
-            }
-            try {
-              const items = await searchPermissionDiffInteractive(
-                org.instanceUrl,
-                sid,
-                org.apiVersion,
-                queryText,
-                scope || {}
-              );
-              sendResponse({ ok: true, items });
-            } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1239,13 +1217,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1258,9 +1235,9 @@ export function installMessageHandlers() {
                 queryText,
                 objectApiName
               );
-              sendResponse({ ok: true, items });
+              reply({ ok: true, items });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1269,13 +1246,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1292,9 +1268,9 @@ export function installMessageHandlers() {
                 resourceInput,
                 { containerFilter: filter }
               );
-              sendResponse({ ok: true, ...data });
+              reply({ ok: true, ...data });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1303,13 +1279,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1319,9 +1294,9 @@ export function installMessageHandlers() {
                 org.apiVersion,
                 queryText
               );
-              sendResponse({ ok: true, items });
+              reply({ ok: true, items });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1330,13 +1305,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1351,9 +1325,9 @@ export function installMessageHandlers() {
                 customPermissionInput,
                 { containerFilter: filter }
               );
-              sendResponse({ ok: true, ...data });
+              reply({ ok: true, ...data });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1362,13 +1336,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1380,7 +1353,7 @@ export function installMessageHandlers() {
                 ct,
                 containerName
               );
-              sendResponse({
+              reply({
                 ok: true,
                 container: data.container,
                 objectPermissions: data.objectPermissions,
@@ -1388,7 +1361,7 @@ export function installMessageHandlers() {
                 setupEntityAccess: data.setupEntityAccess
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1397,26 +1370,25 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             const q = queryText != null ? String(queryText).trim() : '';
             const cont = pagePath != null && String(pagePath).trim() ? String(pagePath).trim() : '';
             if (!q && !cont) {
-              sendResponse({ ok: false, error: 'Empty query' });
+              reply({ ok: false, error: 'Empty query' });
               break;
             }
             try {
               const pathOrQ = cont || q;
               if (variant === 'rest-soql') {
                 const r = await restSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
-                sendResponse({
+                reply({
                   ok: true,
                   records: r.records,
                   totalSize: r.totalSize,
@@ -1425,7 +1397,7 @@ export function installMessageHandlers() {
                 });
               } else if (variant === 'tooling-soql') {
                 const r = await toolingSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
-                sendResponse({
+                reply({
                   ok: true,
                   records: r.records,
                   totalSize: r.totalSize,
@@ -1434,7 +1406,7 @@ export function installMessageHandlers() {
                 });
               } else if (variant === 'rest-sosl') {
                 const r = await restSoslSearchPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
-                sendResponse({
+                reply({
                   ok: true,
                   records: r.records,
                   totalSize: r.totalSize,
@@ -1442,10 +1414,10 @@ export function installMessageHandlers() {
                   nextPath: r.nextPath
                 });
               } else {
-                sendResponse({ ok: false, error: 'Invalid variant' });
+                reply({ ok: false, error: 'Invalid variant' });
               }
             } catch (e) {
-              sendResponse(queryExplorerCatchErrorPayload(e));
+              reply(queryExplorerCatchErrorPayload(e));
             }
             break;
           }
@@ -1454,20 +1426,19 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const sobjects = await restDescribeGlobal(org.instanceUrl, sid, org.apiVersion);
-              sendResponse({ ok: true, sobjects });
+              reply({ ok: true, sobjects });
             } catch (e) {
-              sendResponse(queryExplorerCatchErrorPayload(e));
+              reply(queryExplorerCatchErrorPayload(e));
             }
             break;
           }
@@ -1476,57 +1447,19 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const describe = await restDescribeSobject(org.instanceUrl, sid, org.apiVersion, objectApiName);
-              sendResponse({ ok: true, describe });
+              reply({ ok: true, describe });
             } catch (e) {
-              sendResponse(queryExplorerCatchErrorPayload(e));
-            }
-            break;
-          }
-          case 'queryExplorer:runAll': {
-            const { orgId, variant, queryText } = message;
-            const saved = await loadSavedOrgs();
-            const org = saved[orgId];
-            if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
-              break;
-            }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
-            if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
-              break;
-            }
-            const q = queryText != null ? String(queryText).trim() : '';
-            if (!q) {
-              sendResponse({ ok: false, error: 'Empty query' });
-              break;
-            }
-            try {
-              if (variant === 'rest-soql') {
-                const records = await restQueryAll(org.instanceUrl, sid, org.apiVersion, q);
-                sendResponse({ ok: true, records, totalSize: records.length });
-              } else if (variant === 'tooling-soql') {
-                const records = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, q);
-                sendResponse({ ok: true, records, totalSize: records.length });
-              } else if (variant === 'rest-sosl') {
-                const records = await restSoslSearchAll(org.instanceUrl, sid, org.apiVersion, q);
-                sendResponse({ ok: true, records, totalSize: records.length });
-              } else {
-                sendResponse({ ok: false, error: 'Invalid variant' });
-              }
-            } catch (e) {
-              sendResponse(queryExplorerCatchErrorPayload(e));
+              reply(queryExplorerCatchErrorPayload(e));
             }
             break;
           }
@@ -1536,15 +1469,13 @@ export function installMessageHandlers() {
             const orgL = saved[leftOrgId];
             const orgR = saved[rightOrgId];
             if (!orgL || !orgR) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sidL = await getSidForCookieDomain(orgL.cookieDomain);
-            if (!sidL) sidL = await getSidForOrgId(orgL.id);
-            let sidR = await getSidForCookieDomain(orgR.cookieDomain);
-            if (!sidR) sidR = await getSidForOrgId(orgR.id);
+            const sidL = await resolveSidForOrg(orgL);
+            const sidR = await resolveSidForOrg(orgR);
             if (!sidL || !sidR) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1552,13 +1483,13 @@ export function installMessageHandlers() {
                 queryApexCodeCoverageAggregate(orgL.instanceUrl, sidL, orgL.apiVersion),
                 queryApexCodeCoverageAggregate(orgR.instanceUrl, sidR, orgR.apiVersion)
               ]);
-              sendResponse({
+              reply({
                 ok: true,
                 leftRows: Array.isArray(leftRows) ? leftRows : [],
                 rightRows: Array.isArray(rightRows) ? rightRows : []
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1566,19 +1497,18 @@ export function installMessageHandlers() {
             const { orgId, apexClassOrTriggerId, className } = message;
             const rawId = String(apexClassOrTriggerId || '').replace(/[^a-zA-Z0-9]/g, '');
             if (!rawId) {
-              sendResponse({ ok: false, error: 'Missing apexClassOrTriggerId' });
+              reply({ ok: false, error: 'Missing apexClassOrTriggerId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1616,7 +1546,7 @@ export function installMessageHandlers() {
                   body = '';
                 }
               }
-              sendResponse({
+              reply({
                 ok: true,
                 body,
                 name: className != null ? String(className) : '',
@@ -1624,7 +1554,7 @@ export function installMessageHandlers() {
                 uncoveredLines: [...uncovered].sort((a, b) => a - b)
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1633,28 +1563,27 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const since = String(sinceIso || '');
               const until = String(untilIso || '');
               if (!since || !until) {
-                sendResponse({ ok: false, error: 'Missing date range' });
+                reply({ ok: false, error: 'Missing date range' });
                 break;
               }
               const logs = await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
                 limit: 15000
               });
-              sendResponse({ ok: true, logs: Array.isArray(logs) ? logs : [] });
+              reply({ ok: true, logs: Array.isArray(logs) ? logs : [] });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1663,20 +1592,19 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const result = await deleteAllApexLogs(org.instanceUrl, sid, org.apiVersion);
-              sendResponse({ ok: true, ...result });
+              reply({ ok: true, ...result });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1685,20 +1613,19 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map((x) => String(x || '').replace(/[^a-zA-Z0-9]/g, '')).filter(Boolean))];
               const namesById = {};
               if (!ids.length) {
-                sendResponse({ ok: true, namesById });
+                reply({ ok: true, namesById });
                 break;
               }
               for (let i = 0; i < ids.length; i += 100) {
@@ -1722,35 +1649,34 @@ export function installMessageHandlers() {
                   namesById[id] = name;
                 }
               }
-              sendResponse({ ok: true, namesById });
+              reply({ ok: true, namesById });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'debugLogs:getBody': {
             const { orgId, logId } = message;
             if (!logId) {
-              sendResponse({ ok: false, error: 'Missing logId' });
+              reply({ ok: false, error: 'Missing logId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
-              sendResponse({ ok: true, body });
+              reply({ ok: true, body });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1759,20 +1685,19 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const since = String(sinceIso || '');
               const until = String(untilIso || '');
               if (!since || !until) {
-                sendResponse({ ok: false, error: 'Missing date range' });
+                reply({ ok: false, error: 'Missing date range' });
                 break;
               }
               const soqlDateTime = (v) => {
@@ -1787,9 +1712,9 @@ export function installMessageHandlers() {
               const untilDt = soqlDateTime(until);
               const soql = `SELECT Id, CreatedDate, CreatedById, CreatedBy.Name, CreatedBy.Username, Section, Action, Display FROM SetupAuditTrail WHERE CreatedDate >= ${sinceDt} AND CreatedDate <= ${untilDt} ORDER BY CreatedDate DESC LIMIT ${parsedLimit}`;
               const rows = await restQueryAll(org.instanceUrl, sid, org.apiVersion, soql);
-              sendResponse({ ok: true, rows: Array.isArray(rows) ? rows : [] });
+              reply({ ok: true, rows: Array.isArray(rows) ? rows : [] });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1797,19 +1722,18 @@ export function installMessageHandlers() {
             const { orgId, jobIds } = message;
             const ids = Array.isArray(jobIds) ? jobIds.filter(Boolean).map(String).slice(0, 30) : [];
             if (!ids.length) {
-              sendResponse({ ok: true, runs: [] });
+              reply({ ok: true, runs: [] });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -1979,9 +1903,9 @@ export function installMessageHandlers() {
                 });
               }
               await scheduleTerminalJobsTraceCleanup(orgId, runs);
-              sendResponse({ ok: true, runs });
+              reply({ ok: true, runs });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -1990,13 +1914,12 @@ export function installMessageHandlers() {
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             const sfId15 = (id) => {
@@ -2104,28 +2027,27 @@ export function installMessageHandlers() {
                   classname: primary.classname != null ? String(primary.classname) : ''
                 });
               }
-              sendResponse({ ok: true, jobs });
+              reply({ ok: true, jobs });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexTests:getRunFailures': {
             const { orgId, jobId } = message;
             if (!jobId) {
-              sendResponse({ ok: false, error: 'Missing jobId' });
+              reply({ ok: false, error: 'Missing jobId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -2145,64 +2067,67 @@ export function installMessageHandlers() {
               }
               const raw = rows || [];
               const failures = raw.filter((r) => !isTestSetupApexTestResult(r));
-              sendResponse({ ok: true, failures });
+              reply({ ok: true, failures });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexTests:getRunMethods': {
             const { orgId, jobId } = message;
             if (!jobId) {
-              sendResponse({ ok: false, error: 'Missing jobId' });
+              reply({ ok: false, error: 'Missing jobId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
               const esc = escapeSoqlLiteral(jobId);
               let rows;
               try {
-                const soql = `SELECT ApexClass.Name, MethodName, Outcome, Message, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
+                const soql = `SELECT ApexClass.Name, MethodName, Outcome, Message, StackTrace, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
                 rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
               } catch {
-                const soql2 = `SELECT ApexClass.Name, MethodName, Outcome, Message FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
-                rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql2);
+                try {
+                  const soql2 = `SELECT ApexClass.Name, MethodName, Outcome, Message, StackTrace FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
+                  rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql2);
+                } catch {
+                  const soql3 = `SELECT ApexClass.Name, MethodName, Outcome, Message FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
+                  rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql3);
+                }
               }
               const raw = Array.isArray(rows) ? rows : [];
               const methods = raw.filter((r) => !isTestSetupApexTestResult(r));
-              sendResponse({ ok: true, methods });
+              reply({ ok: true, methods });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexTests:getRunCoverage': {
             const { orgId, jobId, minCoveragePercent: minCoveragePercentMsg } = message;
             if (!jobId) {
-              sendResponse({ ok: false, error: 'Missing jobId' });
+              reply({ ok: false, error: 'Missing jobId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -2225,7 +2150,7 @@ export function installMessageHandlers() {
                 ...new Set((testClassRows || []).map((r) => r.ApexClassId).filter(Boolean).map(String))
               ];
               if (!testClassIds.length) {
-                sendResponse({ ok: true, classes: [], note: 'NO_TEST_RESULTS' });
+                reply({ ok: true, classes: [], note: 'NO_TEST_RESULTS' });
                 break;
               }
               /** Misma lógica que Developer Console: unir Coverage JSON de todas las filas del run. */
@@ -2311,9 +2236,9 @@ export function installMessageHandlers() {
                 covered: row.covered,
                 total: row.total
               }));
-              sendResponse({ ok: true, classes });
+              reply({ ok: true, classes });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -2322,19 +2247,18 @@ export function installMessageHandlers() {
               message;
             const wantLogBody = intent === 'body';
             if (!jobId) {
-              sendResponse({ ok: false, error: 'Missing jobId' });
+              reply({ ok: false, error: 'Missing jobId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -2347,7 +2271,7 @@ export function installMessageHandlers() {
               const rawLogId = logIdParam != null ? String(logIdParam).replace(/[^a-zA-Z0-9]/g, '') : '';
               if (wantLogBody && rawLogId) {
                 const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, rawLogId);
-                sendResponse({
+                reply({
                   ok: true,
                   logId: rawLogId,
                   body
@@ -2371,13 +2295,13 @@ export function installMessageHandlers() {
               }
 
               if (!createdById) {
-                sendResponse({ ok: false, error: 'NO_LOG_USER' });
+                reply({ ok: false, error: 'NO_LOG_USER' });
                 break;
               }
 
               const jobCreatedMs = parseMs(createdDate);
               if (jobCreatedMs == null) {
-                sendResponse({ ok: false, error: 'NO_JOB_START' });
+                reply({ ok: false, error: 'NO_JOB_START' });
                 break;
               }
 
@@ -2467,33 +2391,32 @@ export function installMessageHandlers() {
               );
 
               if (!logs.length) {
-                sendResponse({ ok: false, error: 'NO_APEX_LOGS_TRACES' });
+                reply({ ok: false, error: 'NO_APEX_LOGS_TRACES' });
                 break;
               }
 
               const slimLogs = logs.map((l) => ({ Id: l.Id }));
-              sendResponse({ ok: true, pick: true, logs: slimLogs });
+              reply({ ok: true, pick: true, logs: slimLogs });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexTests:getCoverageLineView': {
             const { orgId, jobId, classOrTriggerId, className } = message;
             if (!jobId || !classOrTriggerId) {
-              sendResponse({ ok: false, error: 'Missing jobId or classOrTriggerId' });
+              reply({ ok: false, error: 'Missing jobId or classOrTriggerId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -2514,7 +2437,7 @@ export function installMessageHandlers() {
                 ...new Set((testClassRows || []).map((r) => r.ApexClassId).filter(Boolean).map(String))
               ];
               if (!testClassIds.length) {
-                sendResponse({ ok: false, error: 'NO_TEST_RESULTS' });
+                reply({ ok: false, error: 'NO_TEST_RESULTS' });
                 break;
               }
               const covered = new Set();
@@ -2559,7 +2482,7 @@ export function installMessageHandlers() {
                   body = '';
                 }
               }
-              sendResponse({
+              reply({
                 ok: true,
                 body,
                 name: className != null ? String(className) : '',
@@ -2567,26 +2490,25 @@ export function installMessageHandlers() {
                 uncoveredLines: [...uncovered].sort((a, b) => a - b)
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexTests:getTestClassSource': {
             const { orgId, classId, className } = message;
             if (!classId && !className) {
-              sendResponse({ ok: false, error: 'Missing classId or className' });
+              reply({ ok: false, error: 'Missing classId or className' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
@@ -2612,16 +2534,16 @@ export function installMessageHandlers() {
               const row = rows && rows[0];
               const bodyText = row && row.Body != null ? String(row.Body) : '';
               if (!bodyText) {
-                sendResponse({ ok: false, error: 'NOT_FOUND' });
+                reply({ ok: false, error: 'NOT_FOUND' });
                 break;
               }
-              sendResponse({
+              reply({
                 ok: true,
                 name: row.Name != null ? String(row.Name) : '',
                 body: bodyText
               });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
@@ -2646,28 +2568,27 @@ export function installMessageHandlers() {
                   }
                 );
               });
-              sendResponse({ ok: true });
+              reply({ ok: true });
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           case 'apexTests:abortRun': {
             const { orgId, jobId } = message;
             if (!jobId) {
-              sendResponse({ ok: false, error: 'Missing jobId' });
+              reply({ ok: false, error: 'Missing jobId' });
               break;
             }
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
-              sendResponse({ ok: false, error: 'Org not saved' });
+              reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            let sid = await getSidForCookieDomain(org.cookieDomain);
-            if (!sid) sid = await getSidForOrgId(org.id);
+            const sid = await resolveSidForOrg(org);
             if (!sid) {
-              sendResponse({ ok: false, reason: 'NO_SID' });
+              reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             /**
@@ -2679,7 +2600,7 @@ export function installMessageHandlers() {
               const soql = `SELECT Id, Status FROM ApexTestQueueItem WHERE ParentJobId = '${jid}'`;
               const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
               if (!rows || !rows.length) {
-                sendResponse({
+                reply({
                   ok: false,
                   reason: 'NO_QUEUE_ITEMS',
                   error:
@@ -2712,9 +2633,9 @@ export function installMessageHandlers() {
                 }
               }
               if (patched > 0) {
-                sendResponse({ ok: true });
+                reply({ ok: true });
               } else {
-                sendResponse({
+                reply({
                   ok: false,
                   reason: 'NO_ABORTABLE_QUEUE_ITEMS',
                   error:
@@ -2723,12 +2644,12 @@ export function installMessageHandlers() {
                 });
               }
             } catch (e) {
-              sendResponse({ ok: false, error: String(e?.message || e) });
+              reply({ ok: false, error: String(e?.message || e) });
             }
             break;
           }
           default:
-            sendResponse({
+            reply({
               ok: false,
               reason: 'UNKNOWN_MESSAGE',
               error:
@@ -2736,7 +2657,7 @@ export function installMessageHandlers() {
             });
         }
       } catch (e) {
-        sendResponse({ ok: false, error: String(e) });
+        reply({ ok: false, error: String(e) });
       }
     })();
     return true;

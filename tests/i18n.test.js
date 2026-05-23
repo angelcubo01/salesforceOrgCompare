@@ -25,14 +25,8 @@ describe('i18n', () => {
 
   it('sustituye parámetros {name}', () => {
     setLang('en');
-    const text = t('popup.majorUpdate', {
-      remoteVersion: '2.0',
-      extensionName: 'SFOC',
-      currentVersion: '1.0'
-    });
-    expect(text).toContain('2.0');
-    expect(text).toContain('SFOC');
-    expect(text).toContain('1.0');
+    const text = t('toast.copied', { name: 'MyClass' });
+    expect(text).toContain('MyClass');
   });
 
   it('devuelve la clave si no existe traducción', () => {
