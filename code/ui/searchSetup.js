@@ -15,9 +15,12 @@ import { refreshQueryExplorerPanel } from './queryExplorerPanel.js';
 import { refreshOrgLimitsPanel } from './orgLimitsPanel.js';
 import { refreshDebugLogBrowserPanel } from './debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from './setupAuditTrailPanel.js';
+import { refreshFieldHistoryPanel } from './fieldHistoryPanel.js';
 import { refreshPermissionDiffPanel } from './permissionDiffPanel.js';
 import { refreshQuickEditPanel } from './quickEditPanel.js';
 import { refreshApexCoverageComparePanel } from './apexCoverageComparePanel.js';
+import { refreshCustomSettingsComparePanel } from './customSettingsComparePanel.js';
+import { refreshCustomMetadataComparePanel } from './customMetadataComparePanel.js';
 import { t } from '../../shared/i18n.js';
 import {
   capMetadataResults,
@@ -92,8 +95,11 @@ export function handleArtifactTypeSelectChange(options = {}) {
   void refreshPermissionDiffPanel();
   void refreshDebugLogBrowserPanel();
   void refreshSetupAuditTrailPanel();
+  void refreshFieldHistoryPanel();
   void refreshQuickEditPanel();
   void refreshApexCoverageComparePanel();
+  void refreshCustomSettingsComparePanel();
+  void refreshCustomMetadataComparePanel();
   refreshFieldDependencyPanel();
   onAfterArtifactTypeChange(isUserChange);
 }
@@ -318,6 +324,7 @@ function isSearchDisabledForTool(selectedType) {
     selectedType === 'OrgLimits' ||
     selectedType === 'DebugLogBrowser' ||
     selectedType === 'SetupAuditTrail' ||
+    selectedType === 'FieldHistory' ||
     selectedType === 'PermissionDiff' ||
     selectedType === 'FieldDependency'
   );

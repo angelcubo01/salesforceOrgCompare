@@ -71,7 +71,7 @@ const DEFAULTS = {
   apexTestsClassNameLikePatterns: '%test%',
   /** DeveloperName del registro DebugLevel al activar trazas USER_DEBUG antes de ejecutar tests Apex. */
   apexTestsTraceDebugLevel: 'SFDC_DevConsole',
-  /** Telemetría anónima de uso (Google Apps Script). Desactivar en Ajustes. */
+  /** Telemetría anónima de uso (PostHog). Desactivar en Ajustes. */
   telemetryEnabled: true
 };
 

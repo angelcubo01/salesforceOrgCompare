@@ -146,7 +146,8 @@ export function updateOrgDropdownLayout() {
       !document.body.classList.contains('artifact-generate-package-xml-compare')) ||
     document.body.classList.contains('artifact-apex-tests') ||
     document.body.classList.contains('artifact-debug-log-browser') ||
-    document.body.classList.contains('artifact-setup-audit-trail')
+    document.body.classList.contains('artifact-setup-audit-trail') ||
+    document.body.classList.contains('artifact-field-history')
   ) {
     rightDropdown.classList.add('hidden');
     leftDropdown.classList.remove('single-mode');

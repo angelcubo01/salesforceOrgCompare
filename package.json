@@ -7,9 +7,12 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "posthog:survey": "node scripts/createPosthogCsatSurvey.mjs",
+    "posthog:survey:update": "node scripts/createPosthogCsatSurvey.mjs --update"
   },
   "devDependencies": {
+    "posthog-js": "^1.379.0",
     "vitest": "^3.1.4"
   }
 }

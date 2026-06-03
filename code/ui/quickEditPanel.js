@@ -4,6 +4,7 @@ import { loadMonaco, resolveMonacoThemeId, createStandaloneEditorSafe } from '..
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
+import { captureUiException } from '../../shared/posthogClient.js';
 
 const QUICK_EDIT_SEARCH_MIN_PX = 288;
 
@@ -268,6 +269,7 @@ async function searchComponents() {
     }
     bumpListWidth();
   } catch (e) {
+    captureUiException(e, { artifact_type: 'ApexClassQuickEdit', phase: 'search' });
     resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
     bumpListWidth();
   }
@@ -344,6 +346,7 @@ async function loadComponent(type, item) {
       searchInput.value = '';
     }
   } catch (e) {
+    captureUiException(e, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
     setStatus(`${t('quickEdit.loadError')}: ${e.message}`, 'error');
   }
 }
@@ -431,6 +434,7 @@ async function deployComponent(checkOnly = false) {
       void logQuickEditUsage(actionType, false, errorMsg);
     }
   } catch (e) {
+    captureUiException(e, { artifact_type: 'ApexClassQuickEdit', phase: checkOnly ? 'validate' : 'deploy' });
     const errorMsg = `${t('quickEdit.deployError')}: ${e.message}`;
     setDeployStatus(errorMsg, 'error');
     showToast(errorMsg, 'error');

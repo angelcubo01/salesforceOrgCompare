@@ -63,10 +63,20 @@ import {
   searchCustomPermissions,
   fetchAssignmentsForCustomPermission
 } from '../shared/permissionsDiffApi.js';
+import {
+  resolveHistoryContext,
+  queryFieldHistoryRows,
+  isValidSalesforceRecordId
+} from '../shared/fieldHistoryApi.js';
+import {
+  listCustomSettingTypes,
+  listCustomMetadataTypes,
+  fetchSetupRecordsForType
+} from '../shared/setupRecordsCompareApi.js';
 import { indexCache, sourceCache, versionCache, authStatusCache } from './caches.js';
 import { DEBUG_LOGS } from './config.js';
-import { appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
-import { sendGa4TelemetryOptOut, sendGa4TestPing } from './ga4Telemetry.js';
+import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
+import { sendPosthogException } from './posthogTelemetry.js';
 import {
   loadExtensionSettings,
   getApexTestsClassNameLikePatterns,
@@ -148,6 +158,57 @@ async function adjustOutcomeCountsExcludingTestSetup(
   const next = { ...outcomeCounts };
   next.Pass = Math.max(0, Number(next.Pass || 0) - setupPassCount);
   return next;
+}
+
+/**
+ * @param {Record<string, unknown>} row
+ */
+function aggregateCountFromRow(row) {
+  for (const [key, val] of Object.entries(row)) {
+    if (key === 'attributes' || key === 'Outcome' || key === 'AsyncApexJobId') continue;
+    if (typeof val === 'number') return val;
+  }
+  return 0;
+}
+
+/**
+ * Conteos Outcome por job en una sola query (jobs terminales).
+ * @returns {Promise<Map<string, Record<string, number>> | null>} null = usar fallback por job
+ */
+async function batchOutcomeCountsForTerminalJobs(instanceUrl, sid, apiVersion, jobIdsForResults) {
+  const map = new Map();
+  if (!jobIdsForResults.length) return map;
+  const inList = jobIdsForResults
+    .map((id) => `'${escapeSoqlLiteral(String(id))}'`)
+    .join(',');
+  try {
+    const aggSoql = `SELECT AsyncApexJobId, Outcome, COUNT(Id) FROM ApexTestResult WHERE AsyncApexJobId IN (${inList}) GROUP BY AsyncApexJobId, Outcome`;
+    const agg = await toolingQuery(instanceUrl, sid, apiVersion, aggSoql);
+    for (const row of agg || []) {
+      const jid = row.AsyncApexJobId != null ? String(row.AsyncApexJobId) : '';
+      if (!jid) continue;
+      const k = row.Outcome != null ? String(row.Outcome) : '?';
+      const n = aggregateCountFromRow(row);
+      if (!map.has(jid)) map.set(jid, {});
+      const oc = map.get(jid);
+      oc[k] = (oc[k] || 0) + n;
+    }
+    await Promise.all(
+      [...map.entries()].map(async ([jid, oc]) => {
+        const adjusted = await adjustOutcomeCountsExcludingTestSetup(
+          instanceUrl,
+          sid,
+          apiVersion,
+          jid,
+          oc
+        );
+        map.set(jid, adjusted);
+      })
+    );
+    return map;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -286,6 +347,14 @@ export function installMessageHandlers() {
     (async () => {
       try {
         switch (message?.type) {
+          case 'sfoc:ping': {
+            reply({
+              ok: true,
+              extensionId: chrome.runtime.id,
+              version: chrome.runtime.getManifest().version
+            });
+            break;
+          }
           case 'discoverActiveOrg': {
             const res = await buildOrgFromActiveTab();
             reply(res);
@@ -584,18 +653,30 @@ export function installMessageHandlers() {
           }
           case 'telemetry:opt-out': {
             try {
-              await sendGa4TelemetryOptOut();
               await appendTelemetryOptOutLog();
             } catch {}
             reply({ ok: true });
             break;
           }
-          case 'telemetry:test-ga4': {
-            let ga4Ok = false;
+          case 'telemetry:opt-in': {
             try {
-              ga4Ok = await sendGa4TestPing();
+              await appendTelemetryOptInLog();
             } catch {}
-            reply({ ok: true, ga4Ok });
+            reply({ ok: true });
+            break;
+          }
+          case 'telemetry:exception': {
+            try {
+              const err = new Error(String(message.message || 'unknown').slice(0, 2000));
+              if (message.name) err.name = String(message.name).slice(0, 128);
+              if (message.stack) err.stack = String(message.stack).slice(0, 8000);
+              const ctx =
+                message.context && typeof message.context === 'object' ? message.context : {};
+              const sent = await sendPosthogException(err, ctx);
+              reply({ ok: sent });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
             break;
           }
           case 'apexViewer:stage': {
@@ -1184,6 +1265,100 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'customSettingsCompare:listTypes': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const types = await listCustomSettingTypes(org.instanceUrl, sid, org.apiVersion);
+              reply({ ok: true, types });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'customSettingsCompare:fetchRecords': {
+            const { orgId, typeApiName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const payload = await fetchSetupRecordsForType(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                typeApiName
+              );
+              reply({ ok: true, ...payload });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'customMetadataCompare:listTypes': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const types = await listCustomMetadataTypes(org.instanceUrl, sid, org.apiVersion);
+              reply({ ok: true, types });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'customMetadataCompare:fetchRecords': {
+            const { orgId, typeApiName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const payload = await fetchSetupRecordsForType(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                typeApiName
+              );
+              reply({ ok: true, ...payload });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
           case 'permissionsDiff:search': {
             const { orgId, containerType, queryText } = message;
             const saved = await loadSavedOrgs();
@@ -1718,6 +1893,98 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'fieldHistory:context': {
+            const { orgId, objectApiName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const input = String(objectApiName || '').trim();
+              if (!input) {
+                reply({ ok: false, error: 'Missing object name' });
+                break;
+              }
+              const ctx = await resolveHistoryContext(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                input
+              );
+              reply({
+                ok: true,
+                objectApiName: ctx.objectApiName,
+                historyObject: ctx.historyObject,
+                parentField: ctx.parentField,
+                trackedFields: ctx.trackedFields,
+                historyQueryable: ctx.historyQueryable,
+                historyEnabled: ctx.historyEnabled
+              });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'fieldHistory:list': {
+            const { orgId, objectApiName, historyObject, parentField, recordId, sinceIso, untilIso, fieldNames, limit } =
+              message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const rid = String(recordId || '').trim();
+              if (!isValidSalesforceRecordId(rid)) {
+                reply({ ok: false, error: 'Invalid record Id' });
+                break;
+              }
+              const since = String(sinceIso || '');
+              const until = String(untilIso || '');
+              if (!since || !until) {
+                reply({ ok: false, error: 'Missing date range' });
+                break;
+              }
+              if (new Date(since).getTime() > new Date(until).getTime()) {
+                reply({ ok: false, error: 'Invalid date range' });
+                break;
+              }
+              const histObj = String(historyObject || '').trim();
+              const parentFld = String(parentField || '').trim();
+              const objName = String(objectApiName || '').trim();
+              if (!histObj || !parentFld) {
+                reply({ ok: false, error: 'Missing history context' });
+                break;
+              }
+              const rows = await queryFieldHistoryRows(org.instanceUrl, sid, org.apiVersion, {
+                objectApiName: objName,
+                historyObject: histObj,
+                parentField: parentFld,
+                recordId: rid,
+                sinceIso: since,
+                untilIso: until,
+                fieldNames: Array.isArray(fieldNames) ? fieldNames : undefined,
+                limit
+              });
+              reply({ ok: true, rows });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
           case 'apexTests:pollRuns': {
             const { orgId, jobIds } = message;
             const ids = Array.isArray(jobIds) ? jobIds.filter(Boolean).map(String).slice(0, 30) : [];
@@ -1793,6 +2060,29 @@ export function installMessageHandlers() {
               };
 
               const runs = [];
+              /** @type {Map<string, Record<string, number>> | null} */
+              let batchOutcomes = null;
+              const terminalJobIdsForBatch = [];
+              for (const jobId of ids) {
+                const queueRowsPre = servletByParent15.get(sfId15(jobId)) || [];
+                let jobPre = lookupJob(jobId);
+                if (!jobPre && queueRowsPre.length) {
+                  const primary = pickPrimaryApexTestServletRow(queueRowsPre);
+                  if (primary) jobPre = { Id: primary.parentid, Status: primary.status };
+                }
+                if (jobPre && isTerminalJobStatus(jobPre.Status)) {
+                  terminalJobIdsForBatch.push(String(jobPre.Id));
+                }
+              }
+              if (terminalJobIdsForBatch.length) {
+                batchOutcomes = await batchOutcomeCountsForTerminalJobs(
+                  org.instanceUrl,
+                  sid,
+                  org.apiVersion,
+                  [...new Set(terminalJobIdsForBatch)]
+                );
+              }
+
               for (const jobId of ids) {
                 const queueRows = servletByParent15.get(sfId15(jobId)) || [];
                 let job = null;
@@ -1843,6 +2133,15 @@ export function installMessageHandlers() {
                 let outcomeCounts = null;
                 const terminal = isTerminalJobStatus(job.Status);
                 if (terminal) {
+                  if (batchOutcomes) {
+                    const k15 =
+                      jobIdForResults.length >= 15 ? jobIdForResults.slice(0, 15) : jobIdForResults;
+                    outcomeCounts =
+                      batchOutcomes.get(jobIdForResults) ||
+                      batchOutcomes.get(k15) ||
+                      null;
+                  }
+                  if (outcomeCounts == null && terminal) {
                   try {
                     const aggSoql = `SELECT Outcome, COUNT(Id) FROM ApexTestResult WHERE AsyncApexJobId = '${escapeSoqlLiteral(
                       jobIdForResults
@@ -1851,12 +2150,7 @@ export function installMessageHandlers() {
                     outcomeCounts = {};
                     for (const row of agg || []) {
                       const k = row.Outcome != null ? String(row.Outcome) : '?';
-                      let n = 0;
-                      for (const [key, val] of Object.entries(row)) {
-                        if (key === 'attributes' || key === 'Outcome') continue;
-                        if (typeof val === 'number') n = val;
-                      }
-                      outcomeCounts[k] = n;
+                      outcomeCounts[k] = aggregateCountFromRow(row);
                     }
                     outcomeCounts = await adjustOutcomeCountsExcludingTestSetup(
                       org.instanceUrl,
@@ -1892,6 +2186,7 @@ export function installMessageHandlers() {
                         outcomeCounts = null;
                       }
                     }
+                  }
                   }
                 }
                 runs.push({

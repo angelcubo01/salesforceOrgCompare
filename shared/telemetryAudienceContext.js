@@ -1,4 +1,4 @@
-/** Contexto de audiencia/dispositivo seguro para GA4 (sin PII ni fingerprinting fino). */
+/** Contexto de audiencia/dispositivo seguro para PostHog (sin PII ni fingerprinting fino). */
 
 /** @type {Record<string, string> | null} */
 let cache = null;
@@ -72,15 +72,26 @@ export function resetTelemetryAudienceCache() {
 }
 
 /**
- * Formato user_properties de GA4 Measurement Protocol.
+ * Propiedades de persona PostHog ($set) a partir del contexto de audiencia.
  * @param {Record<string, string>} audience
  */
-export function buildGa4UserProperties(audience) {
-  /** @type {Record<string, { value: string }>} */
+export function buildPostHogPersonProperties(audience) {
+  /** @type {Record<string, string>} */
   const out = {};
   for (const [key, raw] of Object.entries(audience)) {
     if (raw == null || raw === '') continue;
-    out[key] = { value: String(raw).slice(0, 36) };
+    out[key] = String(raw).slice(0, 128);
+  }
+  return out;
+}
+
+/** @deprecated Alias legacy para tests; usar buildPostHogPersonProperties. */
+export function buildGa4UserProperties(audience) {
+  const flat = buildPostHogPersonProperties(audience);
+  /** @type {Record<string, { value: string }>} */
+  const out = {};
+  for (const [key, value] of Object.entries(flat)) {
+    out[key] = { value };
   }
   return out;
 }

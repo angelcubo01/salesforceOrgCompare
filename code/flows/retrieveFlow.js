@@ -5,7 +5,7 @@ import { readZipFirstUsableFile, normalizeRetrieveZipPath, readZipAllTextFiles }
 import { beginFileViewerLoading, endFileViewerLoading, updateOrgSelectorsLockedState } from '../ui/viewerChrome.js';
 import { getTotalDiffLines, buildAlignedDiff, applyDiffDecorations } from '../editor/diffUtils.js';
 import { languageForFileName } from '../editor/monaco.js';
-import { focusDiffAtIndex, disposeDiffEditorModels } from '../editor/editorRender.js';
+import { focusDiffAtIndex, replaceDiffEditorModels } from '../editor/editorRender.js';
 import { prepareDiffForViewer } from '../lib/viewerLimits.js';
 import { clearViewerChunkState, setViewerChunkFromPrepared } from '../ui/viewerChunkUi.js';
 import { clearBundleCollapsedForKey, renderSavedItems, syncListActiveHighlight } from '../ui/listUi.js';
@@ -13,6 +13,8 @@ import { updateDocumentTitle, updateFileMeta } from '../ui/documentMeta.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { renderEditor } from '../editor/editorRender.js';
 import { saveItemsToStorage } from '../core/persistence.js';
+import { captureUiException } from '../../shared/posthogClient.js';
+import { usageDescriptorFromItem } from '../../shared/usageLogEntry.js';
 import { t } from '../../shared/i18n.js';
 import {
   beginCompareRetrieveSession,
@@ -137,7 +139,7 @@ export async function retrieveAndLoadFromZip(item) {
     const entry = {
       kind: 'codeComparison',
       artifactType: item.type,
-      descriptor: item.descriptor,
+      descriptor: usageDescriptorFromItem(item),
       leftOrgId,
       rightOrgId,
       comparisonUrl: window.location.href,
@@ -267,10 +269,9 @@ export async function retrieveAndLoadFromZip(item) {
     setViewerChunkFromPrepared(prepared, rightFileName, rightFileName);
     state.lastLeftContent = prepared.leftText;
     state.lastRightContent = prepared.rightText;
-    disposeDiffEditorModels();
     const original = state.monaco.editor.createModel(prepared.leftText, languageForFileName(rightFileName));
     const modified = state.monaco.editor.createModel(prepared.rightText, languageForFileName(rightFileName));
-    state.diffEditor.setModel({ original, modified });
+    replaceDiffEditorModels(original, modified);
 
     const diffStatus = document.getElementById('diffStatus');
     try {
@@ -325,6 +326,7 @@ export async function retrieveAndLoadFromZip(item) {
     }
   } catch (e) {
     dismissSpinnerToast();
+    captureUiException(e, { artifact_type: 'Retrieve', phase: 'retrieve' });
     if (isCompareRetrieveActive(retrieveGeneration)) {
       await logRetrieveOnce({ ok: false, error: String(e || '') });
       showToast(t('toast.retrieveError'), 'error');

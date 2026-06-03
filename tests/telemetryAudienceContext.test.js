@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   parseBrowserFromUserAgent,
+  buildPostHogPersonProperties,
   buildGa4UserProperties,
   audienceParamsForEvent,
   resetTelemetryAudienceCache
@@ -13,6 +14,14 @@ describe('parseBrowserFromUserAgent', () => {
     );
     expect(r.browser).toBe('chrome');
     expect(r.browser_major).toBe('148');
+  });
+});
+
+describe('buildPostHogPersonProperties', () => {
+  it('propiedades planas para $set', () => {
+    const p = buildPostHogPersonProperties({ timezone: 'Europe/Madrid', os_platform: 'win' });
+    expect(p.timezone).toBe('Europe/Madrid');
+    expect(p.os_platform).toBe('win');
   });
 });
 

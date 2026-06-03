@@ -3,6 +3,11 @@ export const TELEMETRY_INSTALL_ID_KEY = 'sfoc_telemetry_install_id';
 
 const INSTALL_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** @param {unknown} value */
+export function isValidTelemetryInstallId(value) {
+  return typeof value === 'string' && INSTALL_ID_RE.test(value.trim());
+}
+
 function newInstallId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
@@ -37,19 +42,55 @@ export async function getOrCreateTelemetryInstallId() {
   return id;
 }
 
+/**
+ * Fija el ID de usuario PostHog (p. ej. al importar copia de seguridad).
+ * @param {unknown} id
+ * @returns {Promise<boolean>}
+ */
+export async function setTelemetryInstallId(id) {
+  const trimmed = String(id || '').trim();
+  if (!isValidTelemetryInstallId(trimmed)) return false;
+  try {
+    await chrome.storage.local.set({ [TELEMETRY_INSTALL_ID_KEY]: trimmed });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Restaura el ID de telemetría desde una copia importada.
+ * @param {unknown} incoming
+ * @param {{ replace?: boolean }} [opts]
+ * @returns {Promise<boolean>}
+ */
+export async function applyTelemetryInstallIdFromBackup(incoming, opts = {}) {
+  if (!isValidTelemetryInstallId(incoming)) return false;
+  const id = String(incoming).trim();
+  if (opts.replace) return setTelemetryInstallId(id);
+  try {
+    const r = await chrome.storage.local.get(TELEMETRY_INSTALL_ID_KEY);
+    const current = r[TELEMETRY_INSTALL_ID_KEY];
+    if (isValidTelemetryInstallId(current)) return false;
+  } catch {
+    /* ignore */
+  }
+  return setTelemetryInstallId(id);
+}
+
 /** Crea el ID en install/arranque del SW para poder correlacionar sesiones desde el primer evento. */
 export function ensureTelemetryInstallId() {
   void getOrCreateTelemetryInstallId();
 }
 
-const SESSION_KEY = 'sfoc_telemetry_ga4_session';
+const SESSION_KEY = 'sfoc_telemetry_session';
 
 function todayUtc() {
   return new Date().toISOString().slice(0, 10);
 }
 
 /**
- * session_id numérico para GA4 MP (rotación diaria, estilo sesión web).
+ * session_id para PostHog (rotación diaria, estilo sesión web).
  * @returns {Promise<string>}
  */
 export async function getOrCreateTelemetrySessionId() {

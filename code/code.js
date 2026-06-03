@@ -50,7 +50,16 @@ import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.
 import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryExplorerPanel.js';
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
 import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
+import {
+  setupCustomSettingsComparePanel,
+  refreshCustomSettingsComparePanel
+} from './ui/customSettingsComparePanel.js';
+import {
+  setupCustomMetadataComparePanel,
+  refreshCustomMetadataComparePanel
+} from './ui/customMetadataComparePanel.js';
 import { setupSetupAuditTrailPanel, refreshSetupAuditTrailPanel } from './ui/setupAuditTrailPanel.js';
+import { setupFieldHistoryPanel, refreshFieldHistoryPanel } from './ui/fieldHistoryPanel.js';
 import { setupPermissionDiffPanel, refreshPermissionDiffPanel } from './ui/permissionDiffPanel.js';
 import { setupQuickEditPanel, refreshQuickEditPanel } from './ui/quickEditPanel.js';
 import {
@@ -72,6 +81,8 @@ import {
 } from './lib/compareDeepLink.js';
 import { applyDeepLinkOrgs, applyDeepLinkItemHint } from './lib/compareDeepLinkUi.js';
 import { buildDiscoverBannerLineHtml } from '../shared/landingDiscoverBanner.js';
+import { ensureExtensionExceptionReporting, initPosthogClient } from '../shared/posthogClient.js';
+import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
 
 function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((elem) => {
@@ -109,6 +120,9 @@ function applyLandingDiscoverBanner() {
 async function init() {
   await loadLang();
   await loadExtensionSettings();
+  await wakeServiceWorker();
+  ensureExtensionExceptionReporting();
+  await initPosthogClient();
   applyUiThemeToDocument(document);
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[EXTENSION_CONFIG_KEY]) {
@@ -193,7 +207,10 @@ async function init() {
   setupQueryExplorerPanel();
   setupDebugLogBrowserPanel();
   setupApexCoverageComparePanel();
+  setupCustomSettingsComparePanel();
+  setupCustomMetadataComparePanel();
   setupSetupAuditTrailPanel();
+  setupFieldHistoryPanel();
   setupQuickEditPanel();
   setupFieldDependencyPanel();
   renderEditor();
@@ -205,7 +222,10 @@ async function init() {
   void refreshQueryExplorerPanel();
   void refreshDebugLogBrowserPanel();
   void refreshApexCoverageComparePanel();
+  void refreshCustomSettingsComparePanel();
+  void refreshCustomMetadataComparePanel();
   void refreshSetupAuditTrailPanel();
+  void refreshFieldHistoryPanel();
   void refreshQuickEditPanel();
   setupResizable();
   setupCompareListToolbar();

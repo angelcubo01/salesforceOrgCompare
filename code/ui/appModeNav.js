@@ -24,7 +24,15 @@ export const LEGACY_COMPARE_TOOLS = new Set([
 export const MODE_TOOLS = {
   comparator: [COMPARATOR_TOOL],
   development: [...APP_NAV_DEVELOPMENT_TOOLS],
-  monitoring: ['OrgLimits', 'SetupAuditTrail', 'FieldDependency', 'PermissionDiff'],
+  monitoring: [
+    'OrgLimits',
+    'SetupAuditTrail',
+    'FieldHistory',
+    'FieldDependency',
+    'PermissionDiff',
+    'CustomSettingsCompare',
+    'CustomMetadataCompare'
+  ],
   manifests: ['GeneratePackageXml']
 };
 
@@ -45,8 +53,11 @@ export const TOOL_I18N = {
   DebugLogBrowser: 'code.opDebugLogs',
   OrgLimits: 'code.opOrgLimits',
   SetupAuditTrail: 'code.opSetupAuditTrail',
+  FieldHistory: 'code.opFieldHistory',
   FieldDependency: 'code.opFieldDep',
   PermissionDiff: 'code.opPermissionDiff',
+  CustomSettingsCompare: 'code.opCustomSettingsCompare',
+  CustomMetadataCompare: 'code.opCustomMetadataCompare',
   GeneratePackageXml: 'code.opPkgGenerate',
   PackageXml: 'code.opPkgCompare'
 };

@@ -44,9 +44,10 @@ describe('onboardingPrefs', () => {
     expect(prefs.helpOpened).toBe(true);
   });
 
-  it('lista de herramientas alineada con onboarding (12)', () => {
-    expect(ALL_ONBOARDING_TOOLS).toHaveLength(12);
+  it('lista de herramientas alineada con onboarding (13)', () => {
+    expect(ALL_ONBOARDING_TOOLS).toHaveLength(13);
     expect(ALL_ONBOARDING_TOOLS).toContain('Comparator');
+    expect(ALL_ONBOARDING_TOOLS).toContain('FieldHistory');
     expect(ALL_ONBOARDING_TOOLS).toContain('PermissionDiff');
     expect(ALL_ONBOARDING_TOOLS).toContain('QueryExplorer');
   });

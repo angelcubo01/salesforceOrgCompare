@@ -21,9 +21,12 @@ import { refreshQueryExplorerPanel } from '../ui/queryExplorerPanel.js';
 import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
 import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from '../ui/setupAuditTrailPanel.js';
+import { refreshFieldHistoryPanel } from '../ui/fieldHistoryPanel.js';
 import { refreshPermissionDiffPanel } from '../ui/permissionDiffPanel.js';
 import { refreshQuickEditPanel } from '../ui/quickEditPanel.js';
 import { refreshApexCoverageComparePanel } from '../ui/apexCoverageComparePanel.js';
+import { refreshCustomSettingsComparePanel } from '../ui/customSettingsComparePanel.js';
+import { refreshCustomMetadataComparePanel } from '../ui/customMetadataComparePanel.js';
 import { t } from '../../shared/i18n.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { hideSidebarSearchResults } from '../ui/searchSetup.js';
@@ -71,11 +74,20 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'SetupAuditTrail') {
       void refreshSetupAuditTrailPanel();
     }
+    if (getSelectedArtifactType() === 'FieldHistory') {
+      void refreshFieldHistoryPanel();
+    }
     if (getSelectedArtifactType() === 'QuickEdit') {
       void refreshQuickEditPanel();
     }
     if (getSelectedArtifactType() === 'ApexCoverageCompare') {
       void refreshApexCoverageComparePanel();
+    }
+    if (getSelectedArtifactType() === 'CustomSettingsCompare') {
+      void refreshCustomSettingsComparePanel();
+    }
+    if (getSelectedArtifactType() === 'CustomMetadataCompare') {
+      void refreshCustomMetadataComparePanel();
     }
   });
   right.addEventListener('change', () => {
@@ -111,6 +123,12 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'ApexCoverageCompare') {
       void refreshApexCoverageComparePanel();
+    }
+    if (getSelectedArtifactType() === 'CustomSettingsCompare') {
+      void refreshCustomSettingsComparePanel();
+    }
+    if (getSelectedArtifactType() === 'CustomMetadataCompare') {
+      void refreshCustomMetadataComparePanel();
     }
   });
 
@@ -155,11 +173,20 @@ export function wireSelectors() {
         if (getSelectedArtifactType() === 'SetupAuditTrail') {
           void refreshSetupAuditTrailPanel();
         }
+        if (getSelectedArtifactType() === 'FieldHistory') {
+          void refreshFieldHistoryPanel();
+        }
         if (getSelectedArtifactType() === 'QuickEdit') {
           void refreshQuickEditPanel();
         }
         if (getSelectedArtifactType() === 'ApexCoverageCompare') {
           void refreshApexCoverageComparePanel();
+        }
+        if (getSelectedArtifactType() === 'CustomSettingsCompare') {
+          void refreshCustomSettingsComparePanel();
+        }
+        if (getSelectedArtifactType() === 'CustomMetadataCompare') {
+          void refreshCustomMetadataComparePanel();
         }
       })();
     });

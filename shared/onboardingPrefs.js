@@ -12,6 +12,7 @@ export const ALL_ONBOARDING_TOOLS = Object.freeze([
   'ApexCoverageCompare',
   'OrgLimits',
   'SetupAuditTrail',
+  'FieldHistory',
   'FieldDependency',
   'PermissionDiff',
   'GeneratePackageXml'

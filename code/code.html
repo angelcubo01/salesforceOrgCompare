@@ -151,16 +151,38 @@
               </div>
             </div>
         </nav>
-          <button
-            type="button"
-            id="appHelpBtn"
-            class="app-toolbar-help-btn"
-            data-i18n-title="help.openTitle"
-            data-i18n-aria-label="help.openTitle"
-            aria-haspopup="dialog"
-          >
-            <span class="app-toolbar-help-icon" aria-hidden="true">?</span>
-          </button>
+          <div class="app-toolbar-trailing">
+            <a
+              href="https://buymeacoffee.com/angelpicado"
+              id="appBuyMeCoffeeLink"
+              class="app-toolbar-bmc-btn"
+              target="_blank"
+              rel="noopener noreferrer"
+              data-i18n-title="toolbar.supportMeTitle"
+            >
+              <svg class="app-toolbar-bmc-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M17 8H3v9a4 4 0 004 4h10a4 4 0 004-4V8z"
+                  stroke="#FFDD00"
+                  stroke-width="1.75"
+                  stroke-linejoin="round"
+                />
+                <path d="M17 10h1.5a2.5 2.5 0 010 5H17" stroke="#FFDD00" stroke-width="1.75" stroke-linecap="round" />
+                <path d="M7 4v3M12 4v3M17 4v3" stroke="#FFDD00" stroke-width="1.75" stroke-linecap="round" />
+              </svg>
+              <span class="app-toolbar-bmc-label" data-i18n="toolbar.supportMe">Apóyame</span>
+            </a>
+            <button
+              type="button"
+              id="appHelpBtn"
+              class="app-toolbar-help-btn"
+              data-i18n-title="help.openTitle"
+              data-i18n-aria-label="help.openTitle"
+              aria-haspopup="dialog"
+            >
+              <span class="app-toolbar-help-icon" aria-hidden="true">?</span>
+            </button>
+          </div>
         </div>
         <p id="compareContextTitle" class="compare-context-title hidden" aria-live="polite"></p>
         <div id="orgDropdowns" class="org-dropdowns">
@@ -595,7 +617,7 @@
               <button
                 type="button"
                 id="apexTestsBackToHubBtn"
-                class="apex-tests-back-btn"
+                class="apex-tests-toolbar-btn"
                 data-i18n="apexTests.backToHub"
               >
                 Volver
@@ -609,6 +631,48 @@
               >
                 Ejecutar tests
               </button>
+              <button
+                type="button"
+                id="apexTestsClearSelectionBtn"
+                class="apex-tests-toolbar-btn apex-tests-clear-selection-btn"
+                disabled
+                data-i18n="apexTests.clearSelection"
+              >
+                Borrar selección
+              </button>
+              <div class="apex-tests-profile-bar">
+                <input
+                  id="apexTestsProfileName"
+                  type="text"
+                  class="apex-tests-profile-name sfoc-query-input"
+                  data-i18n-placeholder="apexTests.runProfileNamePh"
+                  placeholder="Nombre del perfil…"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  id="apexTestsSaveProfileBtn"
+                  class="apex-tests-toolbar-btn"
+                  data-i18n="apexTests.runProfileSave"
+                >
+                  Guardar perfil
+                </button>
+                <select
+                  id="apexTestsProfileSelect"
+                  class="apex-tests-profile-select sfoc-query-select"
+                  aria-label="Perfil"
+                >
+                  <option value="">—</option>
+                </select>
+                <button
+                  type="button"
+                  id="apexTestsRunProfileBtn"
+                  class="apex-tests-toolbar-btn"
+                  data-i18n="apexTests.runProfileRun"
+                >
+                  Ejecutar perfil
+                </button>
+              </div>
             </div>
             <div id="apexTestsScaleViewport" class="apex-tests-scale-viewport">
               <div id="apexTestsScaleSizer" class="apex-tests-scale-sizer">
@@ -650,6 +714,12 @@
                       </div>
                       <div class="apex-tests-table-col">
                         <div class="apex-tests-table-panel">
+                          <div
+                            id="apexTestsMethodTabs"
+                            class="apex-tests-method-tabs hidden"
+                            role="tablist"
+                            aria-label="Clases seleccionadas"
+                          ></div>
                           <div id="apexTestsMethodLoading" class="apex-tests-loading-overlay hidden" aria-hidden="true">
                             <span class="apex-tests-spinner" aria-hidden="true"></span>
                           </div>
@@ -1027,6 +1097,116 @@
             <div id="apexCoverageCompareTableMount" class="coverage-compare-table-mount"></div>
           </div>
         </div>
+        <div
+          id="customSettingsComparePanel"
+          class="setup-records-compare-panel org-limits-panel hidden"
+          aria-label="Custom settings compare"
+        >
+          <div class="setup-records-compare-panel-inner org-limits-panel-inner">
+            <div class="setup-records-compare-sticky-head">
+              <div class="org-limits-head">
+                <h2 class="org-limits-title" data-i18n="customSettingsCompare.title">Comparar Custom Settings</h2>
+                <div class="org-limits-head-controls setup-records-compare-head-controls">
+                  <label class="setup-records-compare-type-filter-wrap">
+                    <span class="setup-records-compare-type-filter-label" data-i18n="customSettingsCompare.filterTypes"
+                      >Filtrar tipos</span
+                    >
+                    <input
+                      type="search"
+                      id="customSettingsCompareTypeFilter"
+                      class="setup-records-compare-type-filter"
+                      data-i18n-placeholder="customSettingsCompare.filterTypesPh"
+                      placeholder="Prefijo o nombre…"
+                    />
+                  </label>
+                  <label class="setup-records-compare-type-select-wrap" for="customSettingsCompareTypeSelect">
+                    <span class="setup-records-compare-type-filter-label" data-i18n="customSettingsCompare.selectTypeLabel"
+                      >Tipo</span
+                    >
+                    <select id="customSettingsCompareTypeSelect" class="setup-records-compare-type-select"></select>
+                  </label>
+                  <label class="setup-records-compare-diff-only-head" for="customSettingsCompareDiffOnly">
+                    <input type="checkbox" id="customSettingsCompareDiffOnly" checked />
+                    <span data-i18n="customSettingsCompare.diffOnly">Solo diferencias</span>
+                  </label>
+                  <button
+                    type="button"
+                    id="customSettingsCompareChangeTypeBtn"
+                    class="setup-records-compare-secondary-btn hidden"
+                    data-i18n="customSettingsCompare.changeType"
+                  >
+                    Cambiar tipo
+                  </button>
+                  <button
+                    type="button"
+                    id="customSettingsCompareRefreshBtn"
+                    class="org-limits-refresh-btn"
+                    data-i18n="customSettingsCompare.refresh"
+                  >
+                    Cargar comparación
+                  </button>
+                </div>
+              </div>
+              <p id="customSettingsCompareStatus" class="org-limits-status" role="status"></p>
+            </div>
+            <div id="customSettingsCompareTableMount" class="setup-records-compare-table-mount"></div>
+          </div>
+        </div>
+        <div
+          id="customMetadataComparePanel"
+          class="setup-records-compare-panel org-limits-panel hidden"
+          aria-label="Custom metadata compare"
+        >
+          <div class="setup-records-compare-panel-inner org-limits-panel-inner">
+            <div class="setup-records-compare-sticky-head">
+              <div class="org-limits-head">
+                <h2 class="org-limits-title" data-i18n="customMetadataCompare.title">Comparar Custom Metadata</h2>
+                <div class="org-limits-head-controls setup-records-compare-head-controls">
+                  <label class="setup-records-compare-type-filter-wrap">
+                    <span class="setup-records-compare-type-filter-label" data-i18n="customMetadataCompare.filterTypes"
+                      >Filtrar tipos</span
+                    >
+                    <input
+                      type="search"
+                      id="customMetadataCompareTypeFilter"
+                      class="setup-records-compare-type-filter"
+                      data-i18n-placeholder="customMetadataCompare.filterTypesPh"
+                      placeholder="Prefijo o nombre…"
+                    />
+                  </label>
+                  <label class="setup-records-compare-type-select-wrap" for="customMetadataCompareTypeSelect">
+                    <span class="setup-records-compare-type-filter-label" data-i18n="customMetadataCompare.selectTypeLabel"
+                      >Tipo</span
+                    >
+                    <select id="customMetadataCompareTypeSelect" class="setup-records-compare-type-select"></select>
+                  </label>
+                  <label class="setup-records-compare-diff-only-head" for="customMetadataCompareDiffOnly">
+                    <input type="checkbox" id="customMetadataCompareDiffOnly" checked />
+                    <span data-i18n="customMetadataCompare.diffOnly">Solo diferencias</span>
+                  </label>
+                  <button
+                    type="button"
+                    id="customMetadataCompareChangeTypeBtn"
+                    class="setup-records-compare-secondary-btn hidden"
+                    data-i18n="customMetadataCompare.changeType"
+                  >
+                    Cambiar tipo
+                  </button>
+                  <button
+                    type="button"
+                    id="customMetadataCompareRefreshBtn"
+                    class="org-limits-refresh-btn"
+                    data-i18n="customMetadataCompare.refresh"
+                  >
+                    Cargar comparación
+                  </button>
+                </div>
+              </div>
+              <p id="customMetadataCompareStatus" class="org-limits-status" role="status"></p>
+            </div>
+            <div id="customMetadataCompareTableMount" class="setup-records-compare-table-mount"></div>
+          </div>
+        </div>
         <div id="permissionDiffPanel" class="permission-diff-panel hidden" aria-label="Analizador de permisos">
           <div class="permission-diff-panel-inner">
             <div class="permission-diff-head">
@@ -1246,6 +1426,136 @@
               <div id="quickEditEditorMount" class="quick-edit-editor-mount"></div>
               <p id="quickEditStatus" class="quick-edit-status" role="status"></p>
               <p id="quickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
+            </div>
+          </div>
+        </div>
+        <div id="fieldHistoryPanel" class="field-history-panel hidden" aria-label="Field History Viewer">
+          <div class="field-history-panel-inner">
+            <div class="field-history-head">
+              <h2 class="field-history-title" data-i18n="fieldHistory.title">Historial de campos (Field History)</h2>
+            </div>
+            <p id="fieldHistoryStatus" class="field-history-status" role="status"></p>
+            <div class="field-history-object-row">
+              <div class="field-history-field field-history-object-wrap">
+                <label for="fieldHistoryObjectInput" class="field-history-field-label" data-i18n="fieldHistory.filterObject">Objeto</label>
+                <input
+                  id="fieldHistoryObjectInput"
+                  type="text"
+                  class="field-history-input field-history-control"
+                  autocomplete="off"
+                  data-i18n-placeholder="fieldHistory.objectPh"
+                  placeholder="Account, Case, MyObj__c…"
+                />
+                <div id="fieldHistoryObjectSuggestions" class="field-history-suggestions hidden" role="listbox"></div>
+              </div>
+              <div class="field-history-field field-history-object-action">
+                <span class="field-history-field-label field-history-label-spacer" aria-hidden="true">&nbsp;</span>
+                <button type="button" id="fieldHistoryLoadObjectBtn" class="field-history-open-btn" data-i18n="fieldHistory.loadObject">
+                  Cargar objeto
+                </button>
+              </div>
+            </div>
+            <div id="fieldHistoryTrackedWrap" class="field-history-tracked-wrap">
+              <h3 class="field-history-subtitle" data-i18n="fieldHistory.trackedTitle">Campos con track history</h3>
+              <div class="field-history-tracked-table-wrap">
+                <table class="field-history-tracked-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" data-i18n="fieldHistory.colFieldApi">API</th>
+                      <th scope="col" data-i18n="fieldHistory.colFieldLabel">Etiqueta</th>
+                      <th scope="col" data-i18n="fieldHistory.colFieldType">Tipo</th>
+                    </tr>
+                  </thead>
+                  <tbody id="fieldHistoryTrackedTbody"></tbody>
+                </table>
+                <p id="fieldHistoryTrackedEmpty" class="field-history-tracked-empty hidden" data-i18n="fieldHistory.noTrackedFields">
+                  Ningún campo con track history en este objeto.
+                </p>
+              </div>
+            </div>
+            <div class="field-history-query-row">
+              <div class="field-history-field">
+                <label for="fieldHistoryRecordId" class="field-history-field-label" data-i18n="fieldHistory.filterRecordId">Id de registro</label>
+                <input
+                  id="fieldHistoryRecordId"
+                  type="text"
+                  class="field-history-input field-history-control"
+                  spellcheck="false"
+                  data-i18n-placeholder="fieldHistory.recordIdPh"
+                  placeholder="001… o 500…"
+                />
+              </div>
+              <div class="field-history-field">
+                <label for="fieldHistoryUserFilter" class="field-history-field-label" data-i18n="fieldHistory.filterUser">Usuario</label>
+                <select id="fieldHistoryUserFilter" class="field-history-input field-history-select field-history-control">
+                  <option value="" data-i18n="fieldHistory.userAll">Todos los usuarios</option>
+                </select>
+              </div>
+              <div class="field-history-field">
+                <label for="fieldHistoryTextFilter" class="field-history-field-label" data-i18n="fieldHistory.filterText">Texto</label>
+                <input
+                  id="fieldHistoryTextFilter"
+                  type="text"
+                  class="field-history-input field-history-control"
+                  data-i18n-placeholder="fieldHistory.textFilterPh"
+                  placeholder="Filtrar valores o campo"
+                />
+              </div>
+            </div>
+            <div class="field-history-field field-history-fields-row">
+              <label for="fieldHistoryFieldFilter" class="field-history-field-label" data-i18n="fieldHistory.filterFields">Campos (opcional)</label>
+              <select id="fieldHistoryFieldFilter" class="field-history-input field-history-multiselect" multiple size="3"></select>
+            </div>
+            <div class="field-history-dates-row">
+              <div class="field-history-field">
+                <label for="fieldHistorySince" class="field-history-field-label" data-i18n="fieldHistory.filterSince">Desde</label>
+                <input id="fieldHistorySince" type="datetime-local" class="field-history-input field-history-control" />
+              </div>
+              <div class="field-history-field">
+                <label for="fieldHistoryUntil" class="field-history-field-label" data-i18n="fieldHistory.filterUntil">Hasta</label>
+                <input id="fieldHistoryUntil" type="datetime-local" class="field-history-input field-history-control" />
+              </div>
+              <div class="field-history-field field-history-dates-action">
+                <span class="field-history-field-label field-history-label-spacer" aria-hidden="true">&nbsp;</span>
+                <button type="button" id="fieldHistoryLoadBtn" class="field-history-open-btn field-history-primary-btn" data-i18n="fieldHistory.loadHistory" disabled>
+                  Cargar historial
+                </button>
+              </div>
+            </div>
+            <p class="field-history-hint" data-i18n="fieldHistory.retentionHint">
+              Salesforce conserva el field history un tiempo limitado (habitualmente hasta 18 meses).
+            </p>
+            <div class="field-history-pagination field-history-pagination-top">
+              <button type="button" id="fieldHistoryPrevPage" class="field-history-open-btn">←</button>
+              <span id="fieldHistoryPageLabel" class="field-history-page-label">1/1</span>
+              <button type="button" id="fieldHistoryNextPage" class="field-history-open-btn">→</button>
+            </div>
+            <div class="field-history-table-wrap">
+              <table class="field-history-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-i18n="fieldHistory.colCreated">Fecha</th>
+                    <th scope="col" data-i18n="fieldHistory.colUser">Usuario</th>
+                    <th scope="col" data-i18n="fieldHistory.colField">Campo</th>
+                    <th scope="col" data-i18n="fieldHistory.colOld">Anterior</th>
+                    <th scope="col" data-i18n="fieldHistory.colNew">Nuevo</th>
+                  </tr>
+                </thead>
+                <tbody id="fieldHistoryTbody"></tbody>
+              </table>
+              <p id="fieldHistoryEmpty" class="field-history-empty hidden" data-i18n="fieldHistory.empty">
+                No hay entradas de field history con los filtros actuales.
+              </p>
+            </div>
+            <div class="field-history-pagination field-history-pagination-bottom">
+              <div class="field-history-field field-history-page-size-wrap">
+                <label for="fieldHistoryPageSize" class="field-history-field-label" data-i18n="fieldHistory.filterPageSize">Filas por página</label>
+                <select id="fieldHistoryPageSize" class="field-history-input field-history-select field-history-page-size">
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>

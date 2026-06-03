@@ -90,10 +90,16 @@ export function updateDocumentTitle() {
     document.title = t('docTitle.queryExplorer');
   } else if (state.selectedArtifactType === 'SetupAuditTrail') {
     document.title = t('docTitle.setupAuditTrail');
+  } else if (state.selectedArtifactType === 'FieldHistory') {
+    document.title = t('docTitle.fieldHistory');
   } else if (state.selectedArtifactType === 'QuickEdit') {
     document.title = t('docTitle.quickEdit');
   } else if (state.selectedArtifactType === 'ApexCoverageCompare') {
     document.title = t('docTitle.coverageCompare');
+  } else if (state.selectedArtifactType === 'CustomSettingsCompare') {
+    document.title = t('docTitle.customSettingsCompare');
+  } else if (state.selectedArtifactType === 'CustomMetadataCompare') {
+    document.title = t('docTitle.customMetadataCompare');
   } else {
     const sel = state.selectedItem;
     document.title = getDisplayFileName(sel);

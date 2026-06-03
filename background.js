@@ -3,13 +3,21 @@
  */
 import { installApexTraceAlarmListener } from './background/apexTestTraceAlarms.js';
 import { installCookieCacheInvalidation, installMessageHandlers } from './background/messageHandlers.js';
+import { installExtensionLifecycleTelemetry } from './background/extensionLifecycleTelemetry.js';
+import {
+  maybeReportInitialTelemetryPreference,
+  installServiceWorkerExceptionCapture
+} from './background/posthogTelemetry.js';
 import { ensureTelemetryInstallId } from './shared/telemetryInstallId.js';
 
-installMessageHandlers();
-installCookieCacheInvalidation();
-installApexTraceAlarmListener();
-ensureTelemetryInstallId();
-
-chrome.runtime.onInstalled.addListener(() => {
+try {
+  installMessageHandlers();
+  installCookieCacheInvalidation();
+  installApexTraceAlarmListener();
+  installExtensionLifecycleTelemetry();
   ensureTelemetryInstallId();
-});
+  installServiceWorkerExceptionCapture();
+  void maybeReportInitialTelemetryPreference();
+} catch (e) {
+  console.error('[SFOC] service worker no pudo arrancar', e);
+}

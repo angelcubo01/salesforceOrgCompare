@@ -38,7 +38,9 @@ const HELP_MODE_BODY_KEYS = {
     'help.mode.monitoring.body2',
     'help.mode.monitoring.body3',
     'help.mode.monitoring.body4',
-    'help.mode.monitoring.body5'
+    'help.mode.monitoring.body5',
+    'help.mode.monitoring.body6',
+    'help.mode.monitoring.body7'
   ],
   manifests: ['help.mode.manifests.body1', 'help.mode.manifests.body2', 'help.mode.manifests.body3']
 };

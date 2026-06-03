@@ -19,6 +19,7 @@ import {
 import { getNativeDiffMaxChars } from '../../shared/extensionSettings.js';
 import { showToast } from '../ui/toast.js';
 import { t } from '../../shared/i18n.js';
+import { usageDescriptorFromItem } from '../../shared/usageLogEntry.js';
 import { clearViewerChunkState, updateViewerChunkBar, setViewerChunkFromPrepared } from '../ui/viewerChunkUi.js';
 import { getItemKey } from '../lib/itemLabels.js';
 import { saveScrollPosition, restoreScrollPosition } from '../ui/scrollRestore.js';
@@ -64,14 +65,37 @@ function diffPreparedCacheKey(itemKey, leftOrgId, rightOrgId, l, r) {
   return `${itemKey}|${leftOrgId}|${rightOrgId}|${lSig}|${rSig}`;
 }
 
+/**
+ * Sustituye modelos del diff editor (asignar antes de dispose; evita error Monaco).
+ * @param {import('monaco-editor').editor.ITextModel} original
+ * @param {import('monaco-editor').editor.ITextModel} modified
+ */
+export function replaceDiffEditorModels(original, modified) {
+  if (!state.diffEditor) return;
+  const prev = state.diffEditor.getModel();
+  state.diffEditor.setModel({ original, modified });
+  if (prev) {
+    try {
+      if (prev.original && prev.original !== original) prev.original.dispose();
+    } catch {}
+    try {
+      if (prev.modified && prev.modified !== modified) prev.modified.dispose();
+    } catch {}
+  }
+}
+
 export function disposeDiffEditorModels() {
   if (!state.diffEditor) return;
   try {
-    const m = state.diffEditor.getModel();
-    if (m) {
-      m.original?.dispose();
-      m.modified?.dispose();
-    }
+    const prev = state.diffEditor.getModel();
+    if (!prev) return;
+    state.diffEditor.setModel(null);
+    try {
+      prev.original?.dispose();
+    } catch {}
+    try {
+      prev.modified?.dispose();
+    } catch {}
   } catch {}
 }
 
@@ -101,12 +125,15 @@ export function resetMonacoComparisonView() {
   if (diffStatus) diffStatus.textContent = t('diff.noDifferences');
 }
 
-function disposeSingleEditorModel() {
+function replaceSingleEditorModel(model) {
   if (!state.editor) return;
-  try {
-    const m = state.editor.getModel();
-    if (m) m.dispose();
-  } catch {}
+  const prev = state.editor.getModel();
+  state.editor.setModel(model);
+  if (prev && prev !== model) {
+    try {
+      prev.dispose();
+    } catch {}
+  }
 }
 
 export async function renderEditor(opts = {}) {
@@ -353,10 +380,11 @@ export async function renderEditor(opts = {}) {
         entry: {
           kind: 'codeComparison',
           artifactType: item.type,
-          descriptor: item.descriptor,
+          descriptor: usageDescriptorFromItem(item),
           leftOrgId,
           rightOrgId,
           comparisonUrl: window.location.href,
+          phase: 'render',
           leftFilesCount: Array.isArray(left) ? left.length : 0,
           rightFilesCount: Array.isArray(right) ? right.length : 0
         }
@@ -380,9 +408,8 @@ export async function renderEditor(opts = {}) {
     if (sliceL.hasNext) {
       showToast(t('toast.fileTooLarge', { total: sliceL.total.toLocaleString() }), 'warn');
     }
-    disposeSingleEditorModel();
     const model = state.monaco.editor.createModel(sliceL.text, languageForFileName(file.fileName));
-    state.editor.setModel(model);
+    replaceSingleEditorModel(model);
     restoreScrollPosition(item, leftOrgId, rightOrgId);
     state.diffChanges = [];
     state.currentDiffIndex = -1;
@@ -429,9 +456,8 @@ export async function renderEditor(opts = {}) {
     if (sliceR.hasNext) {
       showToast(t('toast.fileTooLarge', { total: sliceR.total.toLocaleString() }), 'warn');
     }
-    disposeSingleEditorModel();
     const model = state.monaco.editor.createModel(sliceR.text, languageForFileName(file.fileName));
-    state.editor.setModel(model);
+    replaceSingleEditorModel(model);
     restoreScrollPosition(item, leftOrgId, rightOrgId);
     state.diffChanges = [];
     state.currentDiffIndex = -1;
@@ -537,8 +563,6 @@ export async function renderEditor(opts = {}) {
     clearViewerChunkState();
     state.lastLeftContent = leftRaw;
     state.lastRightContent = rightRaw;
-    disposeDiffEditorModels();
-
     if (state.diffListenerDisposable) {
       state.diffListenerDisposable.dispose();
       state.diffListenerDisposable = null;
@@ -571,7 +595,7 @@ export async function renderEditor(opts = {}) {
 
     const original = state.monaco.editor.createModel(leftRaw, languageForFileName(l.fileName));
     const modified = state.monaco.editor.createModel(rightRaw, languageForFileName(r.fileName));
-    state.diffEditor.setModel({ original, modified });
+    replaceDiffEditorModels(original, modified);
     restoreScrollPosition(item, leftOrgId, rightOrgId);
 
     setTimeout(() => {
@@ -595,10 +619,9 @@ export async function renderEditor(opts = {}) {
 
     state.lastLeftContent = prepared.leftText;
     state.lastRightContent = prepared.rightText;
-    disposeDiffEditorModels();
     const original = state.monaco.editor.createModel(prepared.leftText, languageForFileName(l.fileName));
     const modified = state.monaco.editor.createModel(prepared.rightText, languageForFileName(r.fileName));
-    state.diffEditor.setModel({ original, modified });
+    replaceDiffEditorModels(original, modified);
     restoreScrollPosition(item, leftOrgId, rightOrgId);
 
     if (state.diffListenerDisposable) {
@@ -678,12 +701,8 @@ export function navigateViewerChunk(direction) {
       const prevOff = Math.max(0, cur.start - step);
       nextSlice = sliceViewerChunk(vc.fullText, prevOff);
     }
-    try {
-      const m = state.editor.getModel();
-      if (m) m.dispose();
-    } catch {}
     const model = state.monaco.editor.createModel(nextSlice.text, languageForFileName(vc.fileName));
-    state.editor.setModel(model);
+    replaceSingleEditorModel(model);
     state.viewerChunk = {
       ...vc,
       offset: nextSlice.start,
@@ -709,10 +728,9 @@ export function navigateViewerChunk(direction) {
     }
     const nextL = sliceViewerChunk(vc.fullLeft, nextOff);
     const nextR = sliceViewerChunk(vc.fullRight, nextOff);
-    disposeDiffEditorModels();
     const original = state.monaco.editor.createModel(nextL.text, languageForFileName(vc.lFileName));
     const modified = state.monaco.editor.createModel(nextR.text, languageForFileName(vc.rFileName));
-    state.diffEditor.setModel({ original, modified });
+    replaceDiffEditorModels(original, modified);
     applyDiffDecorations([]);
     state.lastLeftContent = nextL.text;
     state.lastRightContent = nextR.text;
@@ -739,10 +757,9 @@ export function navigateViewerChunk(direction) {
       newStartLine = sliceAlignedPrevChunkStart(vc.leftFull, vc.rightFull, vc.startLine);
     }
     const chunk = sliceAlignedLinesChunk(vc.leftFull, vc.rightFull, newStartLine);
-    disposeDiffEditorModels();
     const original = state.monaco.editor.createModel(chunk.leftText, languageForFileName(vc.lFileName));
     const modified = state.monaco.editor.createModel(chunk.rightText, languageForFileName(vc.rFileName));
-    state.diffEditor.setModel({ original, modified });
+    replaceDiffEditorModels(original, modified);
     applyDiffDecorations([]);
     state.lastLeftContent = chunk.leftText;
     state.lastRightContent = chunk.rightText;

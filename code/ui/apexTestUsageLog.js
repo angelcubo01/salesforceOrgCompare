@@ -12,7 +12,7 @@ function classNamesFromRunBody(runBody) {
 }
 
 /**
- * Monitorización vía Google Apps Script (`USAGE_LOG_ENDPOINT`): mismo patrón que comparaciones / retrieve.
+ * Monitorización vía PostHog: mismo patrón que comparaciones / retrieve.
  * @param {string[] | undefined} classNamesHint Nombres desde la selección del runner (resuelve classId → nombre).
  */
 export async function logApexTestRunUsage(orgId, runBody, classNamesHint) {

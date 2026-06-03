@@ -17,6 +17,16 @@ import {
   normalizeMonacoThemeId,
   applyUiThemeToDocument
 } from '../shared/extensionSettings.js';
+import { initPosthogClient, syncPosthogAppLanguage, syncPosthogOptOut } from '../shared/posthogClient.js';
+import {
+  getOrCreateTelemetryInstallId,
+  applyTelemetryInstallIdFromBackup
+} from '../shared/telemetryInstallId.js';
+import {
+  APEX_TEST_RUN_PROFILES_STORAGE_KEY,
+  mergeApexTestRunProfiles,
+  normalizeApexTestRunProfileList
+} from '../shared/apexTestRunProfilesCore.js';
 
 const MONACO_THEME_I18N_KEYS = {
   'sfoc-editor-dark': 'settings.monacoThemeSfocDark',
@@ -83,14 +93,13 @@ function wireAppearanceSettings() {
   });
   telemetryCb?.addEventListener('change', async () => {
     const enabling = !!telemetryCb.checked;
-    if (!enabling) {
-      try {
-        await bg({ type: 'telemetry:opt-out' });
-      } catch {
-        /* ignore */
-      }
+    try {
+      await bg({ type: enabling ? 'telemetry:opt-in' : 'telemetry:opt-out' });
+    } catch {
+      /* ignore */
     }
     await saveExtensionSettings({ telemetryEnabled: enabling });
+    await syncPosthogOptOut(enabling);
   });
 }
 
@@ -287,6 +296,7 @@ function wireLanguageSelect() {
   sel.addEventListener('change', () => {
     setLang(sel.value);
     document.documentElement.lang = sel.value === 'en' ? 'en' : 'es';
+    syncPosthogAppLanguage();
     applyStaticTranslations();
     document.title = t('settings.pageTitle');
     refreshAdvancedFieldI18n();
@@ -308,9 +318,15 @@ function wireOrgsBackup() {
 
   document.getElementById('settingsExportOrgs')?.addEventListener('click', async () => {
     setStatus('');
-    const [res, local] = await Promise.all([
+    const [res, local, telemetryInstallId] = await Promise.all([
       bg({ type: 'orgs:exportConfig' }),
-      chrome.storage.local.get([EXTENSION_CONFIG_KEY, 'savedCodeItems', 'pinnedKeys'])
+      chrome.storage.local.get([
+        EXTENSION_CONFIG_KEY,
+        'savedCodeItems',
+        'pinnedKeys',
+        APEX_TEST_RUN_PROFILES_STORAGE_KEY
+      ]),
+      getOrCreateTelemetryInstallId()
     ]);
     if (!res?.ok || !res.payload) {
       setStatus(t('settings.backupExportError'), true);
@@ -324,7 +340,11 @@ function wireOrgsBackup() {
         extensionSettings: local?.[EXTENSION_CONFIG_KEY] || null,
         savedCodeItems: Array.isArray(local?.savedCodeItems) ? local.savedCodeItems : [],
         pinnedKeys: Array.isArray(local?.pinnedKeys) ? local.pinnedKeys : [],
-        anonymousApexScripts: readLocalAnonScripts()
+        anonymousApexScripts: readLocalAnonScripts(),
+        apexTestRunProfiles: normalizeApexTestRunProfileList(
+          local?.[APEX_TEST_RUN_PROFILES_STORAGE_KEY]
+        ),
+        telemetryInstallId
       }
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -388,6 +408,10 @@ function wireOrgsBackup() {
     const incomingAnonScripts = Array.isArray(data.localConfig.anonymousApexScripts)
       ? data.localConfig.anonymousApexScripts
       : [];
+    const incomingProfiles = Array.isArray(data.localConfig.apexTestRunProfiles)
+      ? normalizeApexTestRunProfileList(data.localConfig.apexTestRunProfiles)
+      : null;
+    const incomingTelemetryId = data.localConfig.telemetryInstallId;
 
     if (importReplace) {
       const replacePayload = {
@@ -402,8 +426,17 @@ function wireOrgsBackup() {
         await chrome.storage.local.set(replacePayload);
       }
       writeLocalAnonScripts(incomingAnonScripts);
+      if (incomingProfiles !== null) {
+        await chrome.storage.local.set({ [APEX_TEST_RUN_PROFILES_STORAGE_KEY]: incomingProfiles });
+      }
+      await applyTelemetryInstallIdFromBackup(incomingTelemetryId, { replace: true });
     } else {
-      const current = await chrome.storage.local.get([EXTENSION_CONFIG_KEY, 'savedCodeItems', 'pinnedKeys']);
+      const current = await chrome.storage.local.get([
+        EXTENSION_CONFIG_KEY,
+        'savedCodeItems',
+        'pinnedKeys',
+        APEX_TEST_RUN_PROFILES_STORAGE_KEY
+      ]);
       const mergedSettings = {
         ...(current?.[EXTENSION_CONFIG_KEY] || {}),
         ...(incomingSettings || {})
@@ -425,6 +458,14 @@ function wireOrgsBackup() {
         mergedScripts.push(s);
       }
       writeLocalAnonScripts(mergedScripts);
+      if (incomingProfiles !== null) {
+        const mergedProfiles = mergeApexTestRunProfiles(
+          normalizeApexTestRunProfileList(current?.[APEX_TEST_RUN_PROFILES_STORAGE_KEY]),
+          incomingProfiles
+        );
+        await chrome.storage.local.set({ [APEX_TEST_RUN_PROFILES_STORAGE_KEY]: mergedProfiles });
+      }
+      await applyTelemetryInstallIdFromBackup(incomingTelemetryId, { replace: false });
     }
 
     setStatus(t('settings.backupImportOk', { count: res.count ?? 0 }), false);
@@ -434,6 +475,7 @@ function wireOrgsBackup() {
 async function main() {
   await loadLang();
   await loadExtensionSettings();
+  await initPosthogClient();
   applyUiThemeToDocument(document);
   document.documentElement.lang = getCurrentLang() === 'en' ? 'en' : 'es';
   document.title = t('settings.pageTitle');

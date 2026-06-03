@@ -1,4 +1,5 @@
 import { t } from '../../shared/i18n.js';
+import { captureUsageLogOnClient } from '../../shared/posthogClient.js';
 
 /**
  * Mensajería con el service worker (background).
@@ -8,6 +9,9 @@ export async function bg(message) {
   try {
     if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
       return { ok: false, error: t('bridge.noExtensionApi') };
+    }
+    if (message?.type === 'usage:log') {
+      void captureUsageLogOnClient(message.entry || {});
     }
     const res = await chrome.runtime.sendMessage(message);
     if (res === undefined) {
