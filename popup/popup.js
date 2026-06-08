@@ -1,3 +1,4 @@
+import '../shared/installEarlyExceptionCapture.js';
 import { t, loadLang } from '../shared/i18n.js';
 import { sameGroupKey, isOrgAlreadySaved } from '../shared/orgPrefs.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';

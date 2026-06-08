@@ -11,8 +11,8 @@ import { refreshAuthStatuses } from './orgs.js';
 import {
   COMPARE_TOOLS_COVERED_BY_METADATA,
   fillBreadcrumb,
-  metadataSearchItemClasses,
   kickSilentIndexBuild,
+  metadataSearchItemClasses,
   normalizeQueryLocal,
   resolveMetadataMatches,
   sanitizeApiPrefix

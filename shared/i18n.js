@@ -59,7 +59,7 @@ const translations = {
     'settings.uiThemeLight': 'Claro',
     'settings.telemetryEnabled': 'Enviar telemetría anónima de uso',
     'settings.telemetryEnabledHint':
-      'Eventos agregados (tipo de herramienta, sin IDs de org ni credenciales) a PostHog (EU). Puedes desactivarlo en cualquier momento.',
+      'Eventos de uso (herramienta, org de referencia) y, opcionalmente, grabaciones de interfaz en PostHog (EU). Los informes de errores técnicos ($exception) son independientes de este ajuste. Puedes desactivarlo en cualquier momento.',
     'settings.monacoTheme': 'Tema del editor ',
     'settings.monacoThemeHint':
       'Diff, Apex anónimo, Quick Edit y visores de log/cobertura. «SFOC» son temas adaptados al contraste de la extensión.',
@@ -285,6 +285,16 @@ const translations = {
     // ── Ayuda in-app (modal por modo) ──
     'toolbar.supportMe': 'Apóyame',
     'toolbar.supportMeTitle': 'Apoya el desarrollo en Buy Me a Coffee (se abre en una pestaña nueva)',
+    'toolbar.support': 'Soporte',
+    'toolbar.supportTitle': 'Contactar con soporte (chat de incidencias)',
+    'toolbar.supportUnavailable':
+      'El chat de soporte no está disponible. Activa Support en PostHog EU y habilita el widget in-app. ID de extensión: {id}',
+    'toolbar.supportNotReady':
+      'PostHog Support aún no ha cargado. Espera unos segundos y vuelve a intentarlo.',
+    'toolbar.supportDomainMismatch':
+      'Dominio no permitido en PostHog. En Support → Settings → Allowed domains, sustituye chrome-extension://* por solo este ID: {id}',
+    'toolbar.supportFlagOff':
+      'El chat de soporte aún no está disponible para tu instalación (activación gradual).',
     'help.open': 'Ayuda',
     'help.openTitle': 'Guía de la sección actual y consejos de uso',
     'help.close': 'Cerrar',
@@ -1335,7 +1345,7 @@ const translations = {
     'settings.uiThemeLight': 'Light',
     'settings.telemetryEnabled': 'Send anonymous usage telemetry',
     'settings.telemetryEnabledHint':
-      'Aggregated events (tool type, no org IDs or credentials) to PostHog (EU). You can turn this off anytime.',
+      'Usage events (tool type, reference org) and optional interface session recordings to PostHog (EU). Technical error reports ($exception) are independent of this setting. You can turn this off anytime.',
     'settings.monacoTheme': 'Editor theme',
     'settings.monacoThemeHint':
       'Diff, anonymous Apex, Quick Edit, and log/coverage viewers. “SFOC” themes match the extension contrast.',
@@ -1561,6 +1571,16 @@ const translations = {
     // ── In-app help (modal per mode) ──
     'toolbar.supportMe': 'Support me',
     'toolbar.supportMeTitle': 'Support development on Buy Me a Coffee (opens in a new tab)',
+    'toolbar.support': 'Support',
+    'toolbar.supportTitle': 'Contact support (issue chat)',
+    'toolbar.supportUnavailable':
+      'Support chat is unavailable. Enable Support in PostHog EU and turn on the in-app widget. Extension ID: {id}',
+    'toolbar.supportNotReady':
+      'PostHog Support has not loaded yet. Wait a few seconds and try again.',
+    'toolbar.supportDomainMismatch':
+      'Domain not allowed in PostHog. In Support → Settings → Allowed domains, replace chrome-extension://* with this ID only: {id}',
+    'toolbar.supportFlagOff':
+      'Support chat is not available for your install yet (gradual rollout).',
     'help.open': 'Help',
     'help.openTitle': 'Guide for the current section and usage tips',
     'help.close': 'Close',

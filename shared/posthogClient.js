@@ -1,5 +1,6 @@
 import '../vendor/posthog-js/dist/array.no-external.js';
 import '../vendor/posthog-js/dist/surveys.js';
+import '../vendor/posthog-js/dist/conversations.js';
 import posthog from '../vendor/posthog-js/dist/module.no-external.js';
 import {
   POSTHOG_API_KEY,
@@ -16,6 +17,7 @@ import { getTelemetryEnabled } from './extensionSettings.js';
 import { getCurrentLang } from './i18n.js';
 import { pickUsageLogEntry } from './usageLogEntry.js';
 import { enrichUsageLogWithOrgContext } from './telemetryOrgContext.js';
+import { applyUserContextToEntry } from './telemetryUserContext.js';
 import { usageEntryToPosthogEvent } from './posthogEventMap.js';
 import {
   POSTHOG_CSAT_MIN_COMPARISON_EVENTS,
@@ -25,7 +27,17 @@ import {
   markCsatSurveyCompletedLocally
 } from './posthogSurveyPrefs.js';
 import { reportExtensionException } from './extensionExceptionReport.js';
+import { installExtensionPageExceptionCapture as installEarlyCapture } from './installEarlyExceptionCapture.js';
 import { isPosthogApiConfigured, isPosthogCsatConfigured } from './posthogConfigured.js';
+import { canShowCsatSurvey } from './posthogCsatSurvey.js';
+import {
+  hookSessionReplayOnFeatureFlags,
+  installSessionReplayDebugHook,
+  maybeStartSessionReplay,
+  stopSessionReplay
+} from './posthogSessionReplay.js';
+import { initPosthogSupport, dismissPosthogConversationsWidget, enablePosthogConversationsWidget } from './posthogSupport.js';
+import { hookSupportOnFeatureFlags, isPosthogSupportFlagEnabled } from './posthogSupportFlag.js';
 
 const POSTHOG_UI_HOST = 'https://eu.posthog.com';
 
@@ -39,6 +51,17 @@ function isPosthogConfigured() {
 /** Idioma activo de la app (Ajustes / i18n), no el del navegador. */
 function appLanguageCode() {
   return getCurrentLang() === 'en' ? 'en' : 'es';
+}
+
+/** Inicializa PostHog Support solo si el flag remoto `sfoc_support` está activo. */
+async function maybeInitPosthogSupport(ph) {
+  if (!ph) return;
+  if (!(await isPosthogSupportFlagEnabled(ph))) {
+    dismissPosthogConversationsWidget(ph);
+    return;
+  }
+  await enablePosthogConversationsWidget(ph);
+  await initPosthogSupport(ph);
 }
 
 function applyAppLanguageToPosthog(ph = posthog) {
@@ -71,6 +94,56 @@ function hookCsatSurveyLifecycle(ph = posthog) {
 }
 
 /**
+ * @param {{ rightOrgId?: string | null, leftOrgId?: string | null }} [opts]
+ */
+async function resolveUserLabelFromServiceWorker(opts = {}) {
+  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return null;
+  try {
+    const res = await chrome.runtime.sendMessage({
+      type: 'telemetry:resolveUserLabel',
+      rightOrgId: opts.rightOrgId || null,
+      leftOrgId: opts.leftOrgId || null
+    });
+    if (res?.ok && res.sfUserLabel) return res;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/**
+ * Registra super properties y person properties del usuario Salesforce en posthog-js.
+ * @param {{ rightOrgId?: string | null, leftOrgId?: string | null }} [opts]
+ */
+export async function syncPosthogSfUserContext(opts = {}) {
+  if (!initialized || !isPosthogConfigured()) return;
+  const telemetryEnabled = await getTelemetryEnabled();
+  if (!telemetryEnabled || posthog.has_opted_out_capturing?.()) return;
+
+  const ctx = await resolveUserLabelFromServiceWorker(opts);
+  if (!ctx?.sfUserLabel) return;
+
+  /** @type {Record<string, string>} */
+  const userProps = { sf_user_label: String(ctx.sfUserLabel).slice(0, 200) };
+
+  posthog.register(userProps);
+
+  const installId = await getOrCreateTelemetryInstallId();
+  const audience = await getTelemetryAudienceContext();
+  posthog.identify(installId, {
+    ...buildPostHogPersonProperties(audience),
+    ...userProps,
+    app_ui_language: appLanguageCode(),
+    language: appLanguageCode(),
+    telemetry_enabled: 'true'
+  });
+
+  if (POSTHOG_DEBUG) {
+    console.log('[posthog] sf user context synced', userProps.sf_user_label);
+  }
+}
+
+/**
  * Inicializa PostHog en páginas de extensión (code.html, popup).
  * @param {{ persistence?: 'localStorage' | 'memory' }} [opts]
  */
@@ -79,7 +152,7 @@ function hookCsatSurveyLifecycle(ph = posthog) {
  */
 export function ensureExtensionExceptionReporting() {
   if (!isPosthogApiConfigured() || typeof window === 'undefined') return;
-  installExtensionPageExceptionCapture();
+  installEarlyCapture();
 }
 
 export async function initPosthogClient(opts = {}) {
@@ -99,19 +172,37 @@ export async function initPosthogClient(opts = {}) {
     disable_external_dependency_loading: true,
     autocapture: false,
     capture_pageview: false,
+    /** Arranque manual tras feature flags (sfoc_session_replay). */
     disable_session_recording: true,
+    session_recording: {
+      maskAllInputs: true,
+      blockClass: 'ph-no-capture',
+      blockSelector:
+        '.ph-no-capture, .sfoc-no-replay, .monaco-editor, .monaco-diff-editor, .file-meta-row, .file-meta-value, .viewer-chunk-bar, .viewer-chunk-label',
+      maskTextSelector: '.ph-mask-text, .monaco-editor .view-line, .file-meta-value'
+    },
     /** Solo mostramos CSAT manualmente tras N comparison_run. */
     disable_surveys_automatic_display: true,
+    /** Support solo tras flag remoto sfoc_support (evita burbuja flotante por defecto). */
+    disable_conversations: true,
     /** Sin autocapture SDK: errores van al SW (funciona con telemetría de uso desactivada). */
     capture_exceptions: false,
     opt_out_capturing_by_default: !telemetryEnabled,
     loaded: async (ph) => {
       if (!telemetryEnabled) {
         ph.opt_out_capturing();
+        stopSessionReplay(ph);
         return;
       }
       applyAppLanguageToPosthog(ph);
+      dismissPosthogConversationsWidget(ph);
       hookCsatSurveyLifecycle(ph);
+      hookSessionReplayOnFeatureFlags(ph);
+      installSessionReplayDebugHook(ph);
+      hookSupportOnFeatureFlags(ph, (enabled) => {
+        if (enabled) void maybeInitPosthogSupport(ph);
+        else dismissPosthogConversationsWidget(ph);
+      });
       const audience = await getTelemetryAudienceContext();
       ph.identify(installId, {
         ...buildPostHogPersonProperties(audience),
@@ -119,9 +210,15 @@ export async function initPosthogClient(opts = {}) {
         language: lang,
         telemetry_enabled: 'true'
       });
+      if (typeof ph.reloadFeatureFlags === 'function') {
+        ph.reloadFeatureFlags();
+      }
       if (typeof ph.reloadSurveys === 'function') {
         ph.reloadSurveys();
       }
+      await syncPosthogSfUserContext();
+      void maybeStartSessionReplay(ph);
+      void maybeInitPosthogSupport(ph);
     }
   });
 
@@ -158,46 +255,27 @@ export async function syncPosthogOptOut(enabled) {
       telemetry_enabled: 'true'
     });
     installExtensionPageExceptionCapture();
+    hookSessionReplayOnFeatureFlags(posthog);
+    installSessionReplayDebugHook(posthog);
+    if (typeof posthog.reloadFeatureFlags === 'function') {
+      posthog.reloadFeatureFlags();
+    }
+    await syncPosthogSfUserContext();
+    void maybeStartSessionReplay(posthog);
+    void maybeInitPosthogSupport(posthog);
   } else {
     posthog.opt_out_capturing();
+    stopSessionReplay(posthog);
+    dismissPosthogConversationsWidget(posthog);
   }
 }
 
 /**
  * window.error / unhandledrejection → service worker → PostHog $exception.
- * Independiente del opt-out de telemetría de uso (comparison_run, etc.).
+ * La instalación real ocurre en installEarlyExceptionCapture.js (primer import de cada página).
  */
 export function installExtensionPageExceptionCapture() {
-  if (typeof window === 'undefined' || window.__sfocPageExceptionHooked) return;
-  window.__sfocPageExceptionHooked = true;
-
-  const onError = (event) => {
-    const err =
-      event.error instanceof Error ? event.error : new Error(String(event.message || 'unknown'));
-    void reportExtensionException(err, {
-      sfoc_source: 'extension',
-      error_source: 'window.error',
-      error_handled: 0,
-      filename: String(event.filename || '').slice(0, 256),
-      lineno: event.lineno || 0,
-      colno: event.colno || 0
-    });
-  };
-
-  const onRejection = (event) => {
-    const reason = event.reason;
-    const err = reason instanceof Error ? reason : new Error(String(reason || 'unhandled rejection'));
-    void reportExtensionException(err, {
-      sfoc_source: 'extension',
-      error_source: 'unhandledrejection',
-      error_handled: 0
-    });
-  };
-
-  window.__sfocOnErrorHandler = onError;
-  window.__sfocOnRejectionHandler = onRejection;
-  window.addEventListener('error', onError);
-  window.addEventListener('unhandledrejection', onRejection);
+  installEarlyCapture();
 }
 
 /** @deprecated Usar installExtensionPageExceptionCapture. */
@@ -240,15 +318,26 @@ async function maybeShowCsatSurvey() {
 
   applyAppLanguageToPosthog();
 
-  const show = () => {
+  const tryShow = async () => {
+    const { ok, reason } = await canShowCsatSurvey(posthog, POSTHOG_CSAT_SURVEY_ID);
+    if (!ok) {
+      if (POSTHOG_DEBUG) {
+        console.log('[posthog] CSAT skipped: server declined', {
+          surveyId: POSTHOG_CSAT_SURVEY_ID,
+          reason
+        });
+      }
+      return;
+    }
+
     if (typeof posthog.displaySurvey !== 'function') {
       if (POSTHOG_DEBUG) console.warn('[posthog] displaySurvey no disponible');
       return;
     }
-    posthog.displaySurvey(POSTHOG_CSAT_SURVEY_ID, {
-      ignoreConditions: true,
-      ignoreDelay: true
-    });
+
+    /** Respeta estado y condiciones del dashboard (no forzar con ignoreConditions). */
+    posthog.displaySurvey(POSTHOG_CSAT_SURVEY_ID);
+
     if (POSTHOG_DEBUG) {
       console.log('[posthog] CSAT survey displayed', {
         surveyId: POSTHOG_CSAT_SURVEY_ID,
@@ -259,19 +348,16 @@ async function maybeShowCsatSurvey() {
   };
 
   if (typeof posthog.onSurveysLoaded === 'function') {
-    posthog.onSurveysLoaded(() => show());
+    posthog.onSurveysLoaded(() => {
+      void tryShow();
+    });
+    if (typeof posthog.reloadSurveys === 'function') {
+      posthog.reloadSurveys();
+    }
     return;
   }
 
-  if (typeof posthog.getSurveys === 'function') {
-    posthog.getSurveys((surveys) => {
-      const ok = Array.isArray(surveys) && surveys.some((s) => s.id === POSTHOG_CSAT_SURVEY_ID);
-      if (ok) show();
-    }, false);
-    return;
-  }
-
-  show();
+  await tryShow();
 }
 
 /**
@@ -285,7 +371,15 @@ export async function captureUsageLogOnClient(rawEntry) {
   }
   if (!initialized || posthog.has_opted_out_capturing()) return;
 
-  const entry = pickUsageLogEntry(await enrichUsageLogWithOrgContext(rawEntry));
+  let enriched = await enrichUsageLogWithOrgContext(rawEntry);
+  const userCtx = await resolveUserLabelFromServiceWorker({
+    rightOrgId: enriched.rightOrgId,
+    leftOrgId: enriched.leftOrgId
+  });
+  if (userCtx) {
+    enriched = applyUserContextToEntry(enriched, userCtx);
+  }
+  const entry = pickUsageLogEntry(enriched);
   const audience = await getTelemetryAudienceContext();
   const mapped = usageEntryToPosthogEvent(entry, {
     extensionVersion: audience.extension_version || '',

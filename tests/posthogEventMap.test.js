@@ -98,6 +98,21 @@ describe('usageEntryToPosthogEvent', () => {
     expect(ev?.properties.extension_version).toBe('2.6');
   });
 
+  it('incluye solo sf_user_label cuando el entry lo trae', () => {
+    const ev = usageEntryToPosthogEvent({
+      kind: 'codeComparison',
+      artifactType: 'ApexClass',
+      sfUserLabel: 'Alice (Acme)',
+      sfUsername: 'user@x.com',
+      sfUserName: 'Alice',
+      sfOrgDisplayName: 'Acme'
+    });
+    expect(ev?.properties.sf_user_label).toBe('Alice (Acme)');
+    expect(ev?.properties.sf_username).toBeUndefined();
+    expect(ev?.properties.sf_user_name).toBeUndefined();
+    expect(ev?.properties.sf_org_display_name).toBeUndefined();
+  });
+
   it('incluye nombre de compañía y URLs de sandbox', () => {
     const ev = usageEntryToPosthogEvent({
       kind: 'codeComparison',

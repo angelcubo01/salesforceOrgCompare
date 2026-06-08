@@ -1,3 +1,4 @@
+import '../shared/installEarlyExceptionCapture.js';
 import {
   loadLang,
   setLang,

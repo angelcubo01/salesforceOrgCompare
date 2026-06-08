@@ -160,6 +160,51 @@ export function findStandaloneEditorOnMount(monaco, mount) {
   return null;
 }
 
+/** Selectores Monaco que pueden filtrar texto al DOM tras el mount. */
+const MONACO_REPLAY_MASK_SELECTORS =
+  '.monaco-editor, .monaco-diff-editor, .overflow-guard, .view-lines, .view-line, .margin';
+
+/** Evita que Session Replay capture código en Monaco. */
+function markMountNoReplay(mount) {
+  if (!mount?.classList) return;
+  mount.classList.add('ph-no-capture');
+  try {
+    mount.querySelectorAll(MONACO_REPLAY_MASK_SELECTORS).forEach((el) => {
+      el.classList.add('ph-no-capture');
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+/** @param {import('monaco-editor').editor.IStandaloneCodeEditor | import('monaco-editor').editor.IStandaloneDiffEditor | null | undefined} editor */
+function markEditorNoReplay(editor) {
+  if (!editor) return;
+  try {
+    const node = editor.getContainerDomNode?.();
+    markMountNoReplay(node);
+    if (typeof editor.getOriginalEditor === 'function') {
+      markEditorNoReplay(editor.getOriginalEditor());
+      markEditorNoReplay(editor.getModifiedEditor());
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Reaplica máscaras tras layout async de Monaco (p. ej. diff lado a lado). */
+export function refreshMonacoReplayMasks(root = document.getElementById('monacoContainer')) {
+  if (!root) return;
+  markMountNoReplay(root);
+  try {
+    root.querySelectorAll(MONACO_REPLAY_MASK_SELECTORS).forEach((el) => {
+      el.classList.add('ph-no-capture');
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Limpia restos DOM de un create anterior sin dispose (p. ej. recarga del panel). */
 export function prepareStandaloneEditorMount(mount) {
   if (!mount) return;
@@ -186,13 +231,18 @@ export function createStandaloneEditorSafe(monaco, mount, options, cached = null
   const existing = findStandaloneEditorOnMount(monaco, mount);
   if (existing) return existing;
   prepareStandaloneEditorMount(mount);
-  return monaco.editor.create(mount, options);
+  markMountNoReplay(mount);
+  const editor = monaco.editor.create(mount, options);
+  markEditorNoReplay(editor);
+  requestAnimationFrame(() => refreshMonacoReplayMasks(mount));
+  return editor;
 }
 
 export function createSingleEditor(monaco, container) {
+  markMountNoReplay(container);
   const wrap = state.wordWrapEnabled ? 'on' : 'off';
   const th = resolveMonacoThemeId();
-  return monaco.editor.create(container, {
+  const editor = monaco.editor.create(container, {
     value: '',
     readOnly: true,
     language: 'plaintext',
@@ -209,6 +259,9 @@ export function createSingleEditor(monaco, container) {
       horizontal: 'auto'
     }
   });
+  markEditorNoReplay(editor);
+  requestAnimationFrame(() => refreshMonacoReplayMasks(container));
+  return editor;
 }
 
 /** Evita bucles ResizeObserver al relayout tras cambiar sidebar/paneles. */
@@ -225,11 +278,13 @@ export function scheduleMonacoLayout() {
       } catch {
         /* ignore */
       }
+      refreshMonacoReplayMasks();
     });
   });
 }
 
 export function createDiffEditor(monaco, container) {
+  markMountNoReplay(container);
   const wrap = state.wordWrapEnabled ? 'on' : 'off';
   const th = resolveMonacoThemeId();
   const diff = monaco.editor.createDiffEditor(container, {
@@ -279,6 +334,14 @@ export function createDiffEditor(monaco, container) {
   } catch (e) {
     // ignore if APIs differ on this monaco version
   }
+  markEditorNoReplay(diff);
+  try {
+    markEditorNoReplay(diff.getOriginalEditor());
+    markEditorNoReplay(diff.getModifiedEditor());
+  } catch {
+    /* ignore */
+  }
+  requestAnimationFrame(() => refreshMonacoReplayMasks(container));
   return diff;
 }
 

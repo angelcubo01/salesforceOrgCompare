@@ -132,6 +132,7 @@ async function loadTypesForLeftOrg(config) {
     if (status) status.textContent = t(i18nKey(config, 'selectLeft'));
     return;
   }
+
   try {
     const res = await bg({ type: config.listTypesType, orgId: state.leftOrgId });
     if (!res?.ok) {

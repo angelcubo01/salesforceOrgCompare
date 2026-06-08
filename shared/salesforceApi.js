@@ -1355,9 +1355,10 @@ function toSfJsonUtcDateTime(exp) {
 }
 
 /**
- * Id de usuario de la sesión actual (Bearer) vía `/services/oauth2/userinfo`.
+ * Usuario de la sesión actual (Bearer) vía `/services/oauth2/userinfo`.
+ * @returns {Promise<{ userId: string, username: string, name: string }>}
  */
-export async function fetchSessionUserId(instanceUrl, sid) {
+export async function fetchSessionUserInfo(instanceUrl, sid) {
   await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');
   const url = `${base}/services/oauth2/userinfo`;
@@ -1371,13 +1372,28 @@ export async function fetchSessionUserId(instanceUrl, sid) {
     throw err;
   }
   const json = await res.json();
-  if (json.user_id) return String(json.user_id).replace(/[^a-zA-Z0-9]/g, '');
-  const sub = json.sub;
-  if (typeof sub === 'string' && sub.includes('/')) {
-    const last = sub.split('/').pop();
-    return String(last || '').replace(/[^a-zA-Z0-9]/g, '');
+
+  let userId = '';
+  if (json.user_id) userId = String(json.user_id).replace(/[^a-zA-Z0-9]/g, '');
+  else {
+    const sub = json.sub;
+    if (typeof sub === 'string' && sub.includes('/')) {
+      const last = sub.split('/').pop();
+      userId = String(last || '').replace(/[^a-zA-Z0-9]/g, '');
+    }
   }
-  throw new Error('userinfo: no user id');
+  if (!userId) throw new Error('userinfo: no user id');
+
+  const username = String(json.preferred_username || json.username || '').trim().slice(0, 120);
+  const name = String(json.name || '').trim().slice(0, 120);
+
+  return { userId, username, name };
+}
+
+/** Id de usuario de la sesión actual (Bearer) vía `/services/oauth2/userinfo`. */
+export async function fetchSessionUserId(instanceUrl, sid) {
+  const info = await fetchSessionUserInfo(instanceUrl, sid);
+  return info.userId;
 }
 
 async function queryDebugLevelIdForTraces(instanceUrl, sid, apiVersion, developerName) {

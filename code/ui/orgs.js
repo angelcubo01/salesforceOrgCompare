@@ -7,9 +7,40 @@ import { getFileKey } from '../lib/itemLabels.js';
 import { saveScrollPosition } from './scrollRestore.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { showToast } from './toast.js';
+import { syncPosthogSfUserContext } from '../../shared/posthogClient.js';
 
 /** Evita sincronizaciones duplicadas al abrir el desplegable (focus + mousedown). */
 let syncOrgsInFlight = null;
+
+/** Tras el primer relleno de desplegables, no reasignar org por defecto si el usuario eligió None. */
+let orgSelectDefaultsApplied = false;
+
+/**
+ * Resuelve la org derecha tras refrescar la lista (exportado para tests).
+ * @param {string | null | undefined} prevRight
+ * @param {{ id: string }[]} orgs
+ * @param {boolean} defaultsApplied
+ * @returns {string | null}
+ */
+export function pickRightOrgSelection(prevRight, orgs, defaultsApplied) {
+  const rightValid = prevRight && orgs.some((o) => o.id === prevRight);
+  if (rightValid) return prevRight;
+  if (!prevRight && orgs.length >= 2 && !defaultsApplied) return orgs[1].id;
+  return prevRight || null;
+}
+
+/**
+ * @param {string | null | undefined} prevLeft
+ * @param {{ id: string }[]} orgs
+ * @param {boolean} defaultsApplied
+ * @returns {string | null}
+ */
+export function pickLeftOrgSelection(prevLeft, orgs, defaultsApplied) {
+  const leftValid = prevLeft && orgs.some((o) => o.id === prevLeft);
+  if (leftValid) return prevLeft;
+  if (!prevLeft && orgs.length > 0 && !defaultsApplied) return orgs[0].id;
+  return prevLeft || null;
+}
 
 /**
  * Rellena los desplegables de org conservando la selección actual si sigue existiendo.
@@ -38,30 +69,24 @@ function populateOrgSelects(orgs, aliases, groups) {
     right.appendChild(option(o.id, label));
   }
 
-  const leftValid = prevLeft && orgs.some((o) => o.id === prevLeft);
-  const rightValid = prevRight && orgs.some((o) => o.id === prevRight);
+  state.leftOrgId = pickLeftOrgSelection(prevLeft, orgs, orgSelectDefaultsApplied);
+  left.value = state.leftOrgId || '';
 
-  if (leftValid) {
-    state.leftOrgId = prevLeft;
-    left.value = prevLeft;
-  } else if (!prevLeft && orgs.length > 0) {
-    state.leftOrgId = orgs[0].id;
-    left.value = state.leftOrgId;
-  } else {
-    left.value = state.leftOrgId || '';
-  }
+  state.rightOrgId = pickRightOrgSelection(prevRight, orgs, orgSelectDefaultsApplied);
+  right.value = state.rightOrgId || '';
 
-  if (rightValid) {
-    state.rightOrgId = prevRight;
-    right.value = prevRight;
-  } else if (!prevRight && orgs.length >= 2) {
-    state.rightOrgId = orgs[1].id;
-    right.value = state.rightOrgId;
-  } else {
-    right.value = state.rightOrgId || '';
-  }
+  orgSelectDefaultsApplied = true;
 
   ensureRightOrgDistinctFromLeft();
+  syncTelemetryUserFromOrgState();
+}
+
+/** Sincroniza usuario Salesforce en PostHog al cambiar orgs (telemetría activa). */
+export function syncTelemetryUserFromOrgState() {
+  void syncPosthogSfUserContext({
+    rightOrgId: state.rightOrgId,
+    leftOrgId: state.leftOrgId
+  });
 }
 
 export async function loadSavedOrgs() {
@@ -263,6 +288,7 @@ export async function swapOrgs() {
 
   updateOrgDropdownLayout();
   updateAuthIndicators();
+  syncTelemetryUserFromOrgState();
   syncCompareUrlFromState(state);
 
   const { hideSidebarSearchResults } = await import('./searchSetup.js');

@@ -1,3 +1,4 @@
+import '../shared/installEarlyExceptionCapture.js';
 import { loadMonaco, createSingleEditor } from './editor/monaco.js';
 import { loadLang, t } from '../shared/i18n.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';

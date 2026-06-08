@@ -21,6 +21,8 @@ export function updateViewerChunkBar() {
 
   bar.classList.remove('hidden');
   bar.setAttribute('aria-hidden', 'false');
+  bar.classList.add('ph-no-capture');
+  label.classList.add('ph-no-capture');
 
   prev.disabled = !vc.hasPrev;
   next.disabled = !vc.hasNext;

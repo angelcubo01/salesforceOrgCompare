@@ -15,6 +15,7 @@ const USAGE_LOG_ALLOWED_KEYS = new Set([
   'rightInstanceUrl',
   'leftEnvLabel',
   'rightEnvLabel',
+  'sfUserLabel',
   'viaRetrieveZip',
   'descriptor',
   'comparisonUrl',
@@ -61,6 +62,7 @@ const USAGE_LOG_STRING_KEYS = new Set([
   'rightInstanceUrl',
   'leftEnvLabel',
   'rightEnvLabel',
+  'sfUserLabel',
   'reason',
   'error',
   'errorMessage'

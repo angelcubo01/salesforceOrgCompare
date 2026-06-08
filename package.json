@@ -9,7 +9,14 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "posthog:survey": "node scripts/createPosthogCsatSurvey.mjs",
-    "posthog:survey:update": "node scripts/createPosthogCsatSurvey.mjs --update"
+    "posthog:survey:update": "node scripts/createPosthogCsatSurvey.mjs --update",
+    "posthog:replay-flag": "node scripts/createPosthogSessionReplayFlag.mjs",
+    "posthog:replay-flag:update": "node scripts/createPosthogSessionReplayFlag.mjs --update",
+    "posthog:user-dashboard": "node scripts/createPosthogUserDashboard.mjs",
+    "posthog:user-dashboard:update": "node scripts/createPosthogUserDashboard.mjs --update",
+    "posthog:support-domain": "node scripts/createPosthogSupportExtensionDomain.mjs",
+    "posthog:support-flag": "node scripts/createPosthogSupportFlag.mjs",
+    "posthog:support-flag:update": "node scripts/createPosthogSupportFlag.mjs --update"
   },
   "devDependencies": {
     "posthog-js": "^1.379.0",

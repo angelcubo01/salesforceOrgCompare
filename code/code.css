@@ -908,7 +908,7 @@ body.modifier-pressed .list.compare-list-pinned > li[data-item-index]:hover {
 .list-tree-icon--permset::after { content: 'PS'; font-size: 7px; letter-spacing: -0.05em; }
 .list-tree-icon--permset { background: #d97706; color: #fff; }
 .list-tree-icon--profile::after { content: 'P'; }
-.list-tree-icon--profile { background: #0891b2; color: #fff; }
+.list-tree-icon--profile { background: #e11d48; color: #fff; }
 .list-tree-icon--auradoc::after { content: 'D'; font-size: 9px; }
 .list-tree-icon--auradoc { background: #8b5cf6; color: #fff; }
 .list-tree-icon--file::after { content: '·'; font-size: 14px; }
@@ -3987,6 +3987,50 @@ body.artifact-apex-tests #editorContainer.editor {
   font-size: 15px;
   font-weight: 700;
   line-height: 1;
+}
+
+.app-toolbar-support-btn {
+  position: static;
+  transform: none;
+  appearance: none;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.55);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: none;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    opacity 0.15s ease;
+}
+.app-toolbar-support-btn.hidden {
+  display: none;
+}
+.app-toolbar-support-btn:hover:not(:disabled) {
+  color: #f1f5f9;
+  background: rgba(51, 65, 85, 0.65);
+  border-color: rgba(148, 163, 184, 0.35);
+}
+.app-toolbar-support-btn:focus-visible {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.28);
+}
+.app-toolbar-support-icon {
+  display: block;
 }
 
 .app-help-modal {

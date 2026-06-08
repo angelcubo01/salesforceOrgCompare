@@ -1,10 +1,11 @@
 import { state } from '../core/state.js';
 import {
   buildAlignedDiff as buildAlignedDiffSync,
-  getTotalDiffLines
+  getTotalDiffLines,
+  advanceDiffIndex
 } from '../../shared/alignedDiffCore.js';
 
-export { getTotalDiffLines };
+export { getTotalDiffLines, advanceDiffIndex };
 
 let jsDiffWorker = null;
 let jsDiffReqSeq = 0;

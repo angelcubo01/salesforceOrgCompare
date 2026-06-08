@@ -1,3 +1,4 @@
+import '../shared/installEarlyExceptionCapture.js';
 import './editor/monacoSuppress.js';
 import { state } from './core/state.js';
 import { bg } from './core/bridge.js';
@@ -42,6 +43,7 @@ import {
 } from './ui/appModeNav.js';
 import { applyArtifactTypeUi, getSelectedArtifactType } from './ui/artifactTypeUi.js';
 import { setupAppHelp, maybeShowToolOnboarding } from './ui/appHelp.js';
+import { setupAppSupport, refreshAppSupportUi } from './ui/appSupport.js';
 import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
 import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
@@ -135,6 +137,7 @@ async function init() {
         const { refreshQuickEditEditorTheme } = await import('./ui/quickEditPanel.js');
         refreshAnonymousApexEditorTheme();
         refreshQuickEditEditorTheme();
+        await refreshAppSupportUi();
       })();
     }
     if (area === 'sync' && changes.savedOrgs) {
@@ -199,6 +202,7 @@ async function init() {
   setupQuickOpen();
   setupAppModeTabHandlers();
   setupAppHelp();
+  setupAppSupport();
   setupGeneratePackageXmlPanel();
   setupApexTestsPanel();
   setupAnonymousApexPanel();

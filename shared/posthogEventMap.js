@@ -145,6 +145,12 @@ function appendOrgContext(entry, properties) {
   if (rightEnv) properties.right_env_label = rightEnv.slice(0, 64);
 }
 
+/** @param {Record<string, unknown>} entry @param {Record<string, string | number>} properties */
+function appendUserContext(entry, properties) {
+  const label = String(entry.sfUserLabel || '').trim();
+  if (label) properties.sf_user_label = label.slice(0, 200);
+}
+
 /** @param {Record<string, unknown>} entry */
 function appendRootMetrics(entry, properties) {
   const num = (k, prop) => {
@@ -250,6 +256,7 @@ export function usageEntryToPosthogEvent(entry, ctx = {}) {
   if (left && right) properties.two_orgs_selected = 1;
 
   appendOrgContext(entry, properties);
+  appendUserContext(entry, properties);
 
   if (entry.viaRetrieveZip) properties.via_retrieve_zip = 1;
 

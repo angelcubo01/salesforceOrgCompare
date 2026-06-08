@@ -534,6 +534,7 @@ export async function renderEditor(opts = {}) {
                 lines: totalLines
               });
             }
+            focusDiffAtIndex(0);
           }
           if (typeof state.updateDiffNavButtons === 'function') state.updateDiffNavButtons();
         } catch {
@@ -581,6 +582,7 @@ export async function renderEditor(opts = {}) {
           if (diffStatus) {
             diffStatus.textContent = t('diff.status', { current: 1, total: lineChanges.length, lines: totalLines });
           }
+          focusDiffAtIndex(0);
         }
         if (typeof state.updateDiffNavButtons === 'function') state.updateDiffNavButtons();
       } catch {

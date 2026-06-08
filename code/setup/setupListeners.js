@@ -3,11 +3,11 @@ import { bg } from '../core/bridge.js';
 import { saveScrollPosition } from '../ui/scrollRestore.js';
 import { renderEditor, focusDiffAtIndex, navigateViewerChunk } from '../editor/editorRender.js';
 import { applyWordWrapToCurrentEditors, scheduleMonacoLayout } from '../editor/monaco.js';
-import { updateOrgDropdownLayout, updateAuthIndicators, swapOrgs } from '../ui/orgs.js';
+import { updateOrgDropdownLayout, updateAuthIndicators, swapOrgs, syncTelemetryUserFromOrgState } from '../ui/orgs.js';
 import { renderSavedItems, removeAllItems } from '../ui/listUi.js';
 import { saveItemsToStorage } from '../core/persistence.js';
 import { downloadAllFiles, copyAllFileNames, copyCompareDeepLink } from '../flows/fileActions.js';
-import { getTotalDiffLines } from '../editor/diffUtils.js';
+import { getTotalDiffLines, advanceDiffIndex } from '../editor/diffUtils.js';
 import { downloadDiffHtml } from '../editor/exportDiffHtml.js';
 import { copyUnifiedDiffToClipboard } from '../editor/exportUnifiedDiff.js';
 import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
@@ -44,6 +44,7 @@ export function wireSelectors() {
     state.leftOrgId = left.value || null;
     updateOrgDropdownLayout();
     updateAuthIndicators();
+    syncTelemetryUserFromOrgState();
     hideSidebarSearchResults();
     syncCompareUrlFromState(state);
     renderEditor({ leftChanged: true, rightChanged: false, prevLeftOrgId: prevLeft });
@@ -98,6 +99,7 @@ export function wireSelectors() {
     state.rightOrgId = right.value || null;
     updateOrgDropdownLayout();
     updateAuthIndicators();
+    syncTelemetryUserFromOrgState();
     syncCompareUrlFromState(state);
     renderEditor({ leftChanged: false, rightChanged: true, prevRightOrgId: prevRight });
     if (getSelectedArtifactType() === 'FieldDependency') {
@@ -453,9 +455,9 @@ export function setupDiffNavigation() {
   const retrieveAllBtn = document.getElementById('retrieveAllBtn');
 
   function updateButtons() {
-    const hasDiffs = state.diffChanges && state.diffChanges.length > 0 && state.currentDiffIndex >= 0;
-    if (prevBtn) prevBtn.disabled = !hasDiffs || state.currentDiffIndex <= 0;
-    if (nextBtn) nextBtn.disabled = !hasDiffs || state.currentDiffIndex >= state.diffChanges.length - 1;
+    const hasDiffs = state.diffChanges && state.diffChanges.length > 0;
+    if (prevBtn) prevBtn.disabled = !hasDiffs;
+    if (nextBtn) nextBtn.disabled = !hasDiffs;
     if (copyUnifiedDiffBtn) {
       copyUnifiedDiffBtn.disabled = !state.diffEditor || !hasDiffs;
     }
@@ -466,42 +468,30 @@ export function setupDiffNavigation() {
       if (!hasDiffs) {
         diffStatus.textContent = t('diff.noDifferences');
       } else {
+        const idx = state.currentDiffIndex >= 0 ? state.currentDiffIndex : 0;
         const totalLines = getTotalDiffLines(state.diffChanges);
-        diffStatus.textContent = t('diff.status', { current: state.currentDiffIndex + 1, total: state.diffChanges.length, lines: totalLines });
+        diffStatus.textContent = t('diff.status', {
+          current: idx + 1,
+          total: state.diffChanges.length,
+          lines: totalLines
+        });
       }
     }
   }
 
+  function navigateDiff(direction) {
+    if (!state.diffChanges?.length) return;
+    state.currentDiffIndex = advanceDiffIndex(state.currentDiffIndex, direction, state.diffChanges.length);
+    focusDiffAtIndex(state.currentDiffIndex);
+    updateButtons();
+  }
+
   if (prevBtn) {
-    prevBtn.addEventListener('click', () => {
-      if (!state.diffChanges || !state.diffChanges.length) return;
-      if (state.diffEditor && typeof state.diffEditor.goToDiff === 'function') {
-        state.diffEditor.goToDiff('previous');
-        state.currentDiffIndex = Math.max(0, state.currentDiffIndex - 1);
-        updateButtons();
-        return;
-      }
-      if (state.currentDiffIndex <= 0) return;
-      state.currentDiffIndex -= 1;
-      focusDiffAtIndex(state.currentDiffIndex);
-      updateButtons();
-    });
+    prevBtn.addEventListener('click', () => navigateDiff(-1));
   }
 
   if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
-      if (!state.diffChanges || !state.diffChanges.length) return;
-      if (state.diffEditor && typeof state.diffEditor.goToDiff === 'function') {
-        state.diffEditor.goToDiff('next');
-        state.currentDiffIndex = Math.min(state.diffChanges.length - 1, state.currentDiffIndex + 1);
-        updateButtons();
-        return;
-      }
-      if (state.currentDiffIndex >= state.diffChanges.length - 1) return;
-      state.currentDiffIndex += 1;
-      focusDiffAtIndex(state.currentDiffIndex);
-      updateButtons();
-    });
+    nextBtn.addEventListener('click', () => navigateDiff(1));
   }
 
   state.updateDiffNavButtons = updateButtons;

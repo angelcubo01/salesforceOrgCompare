@@ -40,6 +40,10 @@ export function updateFileMeta(leftFile, rightFile, hasRightOrg) {
     const rightSpan = document.getElementById('rightFileMeta');
     if (!row || !leftSpan || !rightSpan) return;
 
+    row.classList.add('ph-no-capture');
+    leftSpan.classList.add('ph-no-capture');
+    rightSpan.classList.add('ph-no-capture');
+
     if (!leftFile && !rightFile) {
       leftSpan.textContent = '—';
       rightSpan.textContent = hasRightOrg ? '—' : '';

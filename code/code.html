@@ -44,7 +44,7 @@
                 </button>
               </div>
             </div>
-            <div id="searchResults" class="results sfoc-autocomplete-panel sidebar-search-results" role="listbox" hidden></div>
+            <div id="searchResults" class="results sfoc-autocomplete-panel sidebar-search-results ph-no-capture" role="listbox" hidden></div>
           </div>
         </div>
         <div id="compareListToolbar" class="compare-list-toolbar hidden" aria-label="Lista de comparación">
@@ -58,7 +58,7 @@
             placeholder="Filtrar lista…"
           />
         </div>
-        <div id="compareListBody" class="compare-list-body">
+        <div id="compareListBody" class="compare-list-body ph-no-capture">
           <ul id="leftListPinned" class="list compare-list-pinned hidden" aria-label="Fijados"></ul>
           <div id="compareListScrollHost" class="compare-list-scroll-host">
             <ul id="leftList" class="list compare-tree" aria-label="Lista de comparación"></ul>
@@ -174,6 +174,23 @@
             </a>
             <button
               type="button"
+              id="appSupportBtn"
+              class="app-toolbar-support-btn hidden"
+              data-i18n-title="toolbar.supportTitle"
+              data-i18n-aria-label="toolbar.supportTitle"
+            >
+              <svg class="app-toolbar-support-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+                <path
+                  d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
               id="appHelpBtn"
               class="app-toolbar-help-btn"
               data-i18n-title="help.openTitle"
@@ -184,8 +201,8 @@
             </button>
           </div>
         </div>
-        <p id="compareContextTitle" class="compare-context-title hidden" aria-live="polite"></p>
-        <div id="orgDropdowns" class="org-dropdowns">
+        <p id="compareContextTitle" class="compare-context-title ph-no-capture hidden" aria-live="polite"></p>
+        <div id="orgDropdowns" class="org-dropdowns ph-no-capture">
           <div class="org-dropdown-left">
             <select id="leftOrg"></select>
             <button id="leftReauthBtn" class="reauth-btn" data-i18n="code.reauth" data-i18n-title="code.reauth">Reautenticar</button>
@@ -324,25 +341,25 @@
             </button>
           </div>
         </div>
-        <div id="fileMetaRow" class="file-meta-row">
+        <div id="fileMetaRow" class="file-meta-row ph-no-capture">
           <div class="file-meta-col file-meta-left">
-            <span id="leftFileMeta" class="file-meta-value" title="">—</span>
+            <span id="leftFileMeta" class="file-meta-value ph-no-capture" title="">—</span>
           </div>
           <div class="file-meta-col file-meta-right">
-            <span id="rightFileMeta" class="file-meta-value" title="">—</span>
+            <span id="rightFileMeta" class="file-meta-value ph-no-capture" title="">—</span>
           </div>
         </div>
         </div>
-        <div id="viewerChunkBar" class="viewer-chunk-bar hidden" role="region" aria-label="Navegación por fragmentos del visor">
+        <div id="viewerChunkBar" class="viewer-chunk-bar ph-no-capture hidden" role="region" aria-label="Navegación por fragmentos del visor">
           <button type="button" id="viewerChunkPrev" class="viewer-chunk-btn" disabled data-i18n-title="code.prevChunkTitle" data-i18n="code.prevChunk">
             ← Anterior
           </button>
-          <span id="viewerChunkLabel" class="viewer-chunk-label"></span>
+          <span id="viewerChunkLabel" class="viewer-chunk-label ph-no-capture"></span>
           <button type="button" id="viewerChunkNext" class="viewer-chunk-btn" disabled data-i18n-title="code.nextChunkTitle" data-i18n="code.nextChunk">
             Siguiente →
           </button>
         </div>
-        <div id="monacoContainer" class="monaco-container">
+        <div id="monacoContainer" class="monaco-container ph-no-capture">
           <div id="noOrgMessage" class="no-org-message hidden">
           <div class="no-org-content">
             <h3 data-i18n="code.selectOrg">Selecciona una organización</h3>
@@ -356,7 +373,7 @@
           </div>
         </div>
         </div>
-        <div id="generatePackageXmlPanel" class="generate-package-xml-panel hidden" aria-label="Generar package.xml">
+        <div id="generatePackageXmlPanel" class="generate-package-xml-panel ph-no-capture hidden" aria-label="Generar package.xml">
           <div class="generate-package-xml-panel-inner">
             <div class="generate-package-xml-head">
               <h2 class="generate-package-xml-title" data-i18n="genPkg.title">Generar package.xml</h2>
@@ -461,7 +478,7 @@
             </div>
           </div>
         </div>
-        <div id="apexTestsPanel" class="apex-tests-panel hidden" aria-label="Pruebas Apex">
+        <div id="apexTestsPanel" class="apex-tests-panel ph-no-capture hidden" aria-label="Pruebas Apex">
           <div id="apexTestsHubView" class="apex-tests-hub-view">
             <div class="apex-tests-hub-header">
               <div class="apex-tests-hub-header-text">
@@ -839,7 +856,7 @@
               </div>
             </div>
             <p id="anonymousApexOrgStatus" class="anonymous-apex-org-status" role="status"></p>
-            <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount"></div>
+            <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount ph-no-capture"></div>
             <div class="anonymous-apex-actions">
               <button type="button" id="anonymousApexRunBtn" class="anonymous-apex-run-btn" data-i18n="anonymousApex.run">
                 Ejecutar
@@ -849,7 +866,7 @@
               </button>
             </div>
             <p id="anonymousApexExecStatus" class="anonymous-apex-exec-status" role="status"></p>
-            <div id="anonymousApexResultWrap" class="anonymous-apex-result-grid hidden">
+            <div id="anonymousApexResultWrap" class="anonymous-apex-result-grid ph-no-capture hidden">
               <div class="anonymous-apex-result-card anonymous-apex-result-card-full">
                 <h3 data-i18n="anonymousApex.executionResult">Resultado de ejecución</h3>
                 <pre id="anonymousApexResultCombined">—</pre>
@@ -867,7 +884,7 @@
                 </div>
               </div>
             </div>
-            <div id="anonymousApexScriptsModal" class="anonymous-apex-scripts-modal hidden" aria-hidden="true">
+            <div id="anonymousApexScriptsModal" class="anonymous-apex-scripts-modal ph-no-capture hidden" aria-hidden="true">
               <div class="anonymous-apex-log-picker-backdrop" data-anonymous-scripts-backdrop="1"></div>
               <div
                 class="anonymous-apex-scripts-modal-panel anonymous-apex-log-picker-panel"
@@ -957,7 +974,7 @@
               <div class="query-explorer-editor-wrap">
                 <div
                   id="queryExplorerEditorMount"
-                  class="query-explorer-editor-mount sfoc-query-input"
+                  class="query-explorer-editor-mount sfoc-query-input ph-no-capture"
                   role="textbox"
                   aria-multiline="true"
                   data-i18n-aria-label="queryExplorer.queryLabel"
@@ -989,7 +1006,7 @@
                   JSON
                 </button>
               </div>
-              <div id="queryExplorerSingleTableMount" class="query-explorer-table-scroll"></div>
+              <div id="queryExplorerSingleTableMount" class="query-explorer-table-scroll ph-no-capture"></div>
             </div>
             <div id="queryExplorerCompareWrap" class="query-explorer-compare-wrap hidden">
               <div class="query-explorer-split">
@@ -1007,7 +1024,7 @@
                       JSON
                     </button>
                   </div>
-                  <div id="queryExplorerLeftTableMount" class="query-explorer-table-scroll"></div>
+                  <div id="queryExplorerLeftTableMount" class="query-explorer-table-scroll ph-no-capture"></div>
                 </div>
                 <div class="query-explorer-split-pane" data-side="right">
                   <h3 id="queryExplorerCompareRightTitle" class="query-explorer-pane-title"></h3>
@@ -1023,13 +1040,13 @@
                       JSON
                     </button>
                   </div>
-                  <div id="queryExplorerRightTableMount" class="query-explorer-table-scroll"></div>
+                  <div id="queryExplorerRightTableMount" class="query-explorer-table-scroll ph-no-capture"></div>
                 </div>
               </div>
             </div>
             <div
               id="queryExplorerSavedQueriesModal"
-              class="anonymous-apex-scripts-modal hidden"
+              class="anonymous-apex-scripts-modal ph-no-capture hidden"
               aria-hidden="true"
             >
               <div class="anonymous-apex-log-picker-backdrop" data-query-explorer-saved-backdrop="1"></div>
@@ -1207,7 +1224,7 @@
             <div id="customMetadataCompareTableMount" class="setup-records-compare-table-mount"></div>
           </div>
         </div>
-        <div id="permissionDiffPanel" class="permission-diff-panel hidden" aria-label="Analizador de permisos">
+        <div id="permissionDiffPanel" class="permission-diff-panel ph-no-capture hidden" aria-label="Analizador de permisos">
           <div class="permission-diff-panel-inner">
             <div class="permission-diff-head">
               <div>
@@ -1324,10 +1341,10 @@
               </div>
             </div>
             <p id="orgLimitsStatus" class="org-limits-status" role="status"></p>
-            <div id="orgLimitsCards" class="org-limits-cards"></div>
+            <div id="orgLimitsCards" class="org-limits-cards ph-no-capture"></div>
           </div>
         </div>
-        <div id="debugLogBrowserPanel" class="debug-log-browser-panel hidden" aria-label="Debug Log Browser">
+        <div id="debugLogBrowserPanel" class="debug-log-browser-panel ph-no-capture hidden" aria-label="Debug Log Browser">
           <div class="debug-log-browser-panel-inner">
             <div class="debug-log-browser-head">
               <h2 class="debug-log-browser-title" data-i18n="debugLogs.title">Navegador de Debug Logs</h2>
@@ -1423,13 +1440,13 @@
                   <button type="button" id="quickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
                 </div>
               </div>
-              <div id="quickEditEditorMount" class="quick-edit-editor-mount"></div>
+              <div id="quickEditEditorMount" class="quick-edit-editor-mount ph-no-capture"></div>
               <p id="quickEditStatus" class="quick-edit-status" role="status"></p>
               <p id="quickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
             </div>
           </div>
         </div>
-        <div id="fieldHistoryPanel" class="field-history-panel hidden" aria-label="Field History Viewer">
+        <div id="fieldHistoryPanel" class="field-history-panel ph-no-capture hidden" aria-label="Field History Viewer">
           <div class="field-history-panel-inner">
             <div class="field-history-head">
               <h2 class="field-history-title" data-i18n="fieldHistory.title">Historial de campos (Field History)</h2>
@@ -1559,7 +1576,7 @@
             </div>
           </div>
         </div>
-        <div id="setupAuditTrailPanel" class="setup-audit-panel hidden" aria-label="Setup Audit Trail Viewer">
+        <div id="setupAuditTrailPanel" class="setup-audit-panel ph-no-capture hidden" aria-label="Setup Audit Trail Viewer">
           <div class="setup-audit-panel-inner">
             <div class="setup-audit-head">
               <h2 class="setup-audit-title" data-i18n="setupAudit.title">Historial de Setup (Audit Trail)</h2>
@@ -1644,7 +1661,7 @@
 
     <div
       id="quickOpenOverlay"
-      class="quick-open-overlay hidden"
+      class="quick-open-overlay ph-no-capture hidden"
       role="dialog"
       aria-modal="true"
       aria-label="Búsqueda rápida"

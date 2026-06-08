@@ -21,6 +21,22 @@ export function getTotalDiffLines(changes) {
 }
 
 /**
+ * Índice siguiente/anterior con bucle. Si el índice no es válido, «next» → 0 y «previous» → último.
+ * @param {number} currentIndex
+ * @param {1 | -1} direction
+ * @param {number} total
+ * @returns {number}
+ */
+export function advanceDiffIndex(currentIndex, direction, total) {
+  if (!total || total <= 0) return -1;
+  if (currentIndex < 0 || currentIndex >= total) {
+    return direction === 1 ? 0 : total - 1;
+  }
+  if (direction === 1) return (currentIndex + 1) % total;
+  return (currentIndex - 1 + total) % total;
+}
+
+/**
  * Convierte partes de `Diff.diffLines` en texto alineado y metadatos de cambios.
  * @param {Array<{ value?: string, added?: boolean, removed?: boolean }>} parts
  */

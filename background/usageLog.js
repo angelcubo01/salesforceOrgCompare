@@ -1,5 +1,6 @@
 import { loadExtensionSettings } from '../shared/extensionSettings.js';
 import { enrichUsageLogWithOrgContext } from '../shared/telemetryOrgContext.js';
+import { enrichEntryWithUserContext } from './telemetryUserResolver.js';
 import {
   sendPosthogUsageEvent,
   sendPosthogTelemetryOptIn,
@@ -15,7 +16,8 @@ export async function appendUsageLog(entry) {
   try {
     const cfg = await loadExtensionSettings();
     if (cfg.telemetryEnabled === false) return;
-    const enriched = await enrichUsageLogWithOrgContext(entry);
+    let enriched = await enrichUsageLogWithOrgContext(entry);
+    enriched = await enrichEntryWithUserContext(enriched);
     await sendPosthogUsageEvent(enriched);
   } catch {
     // no-op

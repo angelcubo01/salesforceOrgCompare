@@ -77,6 +77,7 @@ import { indexCache, sourceCache, versionCache, authStatusCache } from './caches
 import { DEBUG_LOGS } from './config.js';
 import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
 import { sendPosthogException } from './posthogTelemetry.js';
+import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
 import {
   loadExtensionSettings,
   getApexTestsClassNameLikePatterns,
@@ -663,6 +664,25 @@ export function installMessageHandlers() {
               await appendTelemetryOptInLog();
             } catch {}
             reply({ ok: true });
+            break;
+          }
+          case 'telemetry:resolveUserLabel': {
+            try {
+              const ctx = await resolveTelemetryUserLabel({
+                rightOrgId: message.rightOrgId,
+                leftOrgId: message.leftOrgId
+              });
+              if (!ctx?.sfUserLabel) {
+                reply({ ok: false });
+                break;
+              }
+              reply({
+                ok: true,
+                sfUserLabel: ctx.sfUserLabel
+              });
+            } catch {
+              reply({ ok: false });
+            }
             break;
           }
           case 'telemetry:exception': {

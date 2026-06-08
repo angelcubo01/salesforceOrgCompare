@@ -25,6 +25,7 @@ import {
   getTelemetryAudienceContext
 } from '../shared/telemetryAudienceContext.js';
 import { isPosthogApiConfigured } from '../shared/posthogConfigured.js';
+import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
 
 function posthogDebugLog(...args) {
   if (POSTHOG_DEBUG) console.log('[posthog]', ...args);
@@ -200,6 +201,26 @@ function personPropsWithTelemetryPreference(audience, enabled) {
 }
 
 /**
+ * @param {{ sfUserLabel?: string } | null} ctx
+ * @returns {Record<string, string>}
+ */
+function sfUserPersonProps(ctx) {
+  if (!ctx?.sfUserLabel) return {};
+  return { sf_user_label: String(ctx.sfUserLabel).slice(0, 200) };
+}
+
+/**
+ * @param {{ rightOrgId?: string | null, leftOrgId?: string | null }} [opts]
+ */
+async function resolveSfUserForTelemetry(opts = {}) {
+  try {
+    return await resolveTelemetryUserLabel(opts);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * @param {{ name: string, properties: Record<string, string | number> }} mapped
  * @param {boolean} telemetryEnabled
  */
@@ -207,10 +228,19 @@ async function sendTelemetryPreferenceEvent(mapped, telemetryEnabled) {
   if (!isPosthogConfigured()) return;
   const ctx = await telemetryContext();
   const installId = await getOrCreateTelemetryInstallId();
-  await postCapture(mapped.name, mapped.properties, {
-    installId,
-    personProperties: personPropsWithTelemetryPreference(ctx.audience, telemetryEnabled)
-  });
+  const sfUser = await resolveSfUserForTelemetry();
+  const sfProps = sfUserPersonProps(sfUser);
+  await postCapture(
+    mapped.name,
+    { ...mapped.properties, ...sfProps },
+    {
+      installId,
+      personProperties: {
+        ...personPropsWithTelemetryPreference(ctx.audience, telemetryEnabled),
+        ...sfProps
+      }
+    }
+  );
 }
 
 /**
@@ -222,6 +252,11 @@ export async function sendPosthogUsageEvent(entry) {
   const mapped = usageEntryToPosthogEvent(entry, ctx);
   if (!mapped) return;
   const installId = await getOrCreateTelemetryInstallId();
+  const sfUser = await resolveSfUserForTelemetry({
+    rightOrgId: entry.rightOrgId,
+    leftOrgId: entry.leftOrgId
+  });
+  const sfProps = sfUserPersonProps(sfUser);
   const safeUrl =
     typeof entry.comparisonUrl === 'string' && entry.comparisonUrl.startsWith('chrome-extension://')
       ? telemetrySafeComparisonUrl(entry.comparisonUrl)
@@ -234,9 +269,10 @@ export async function sendPosthogUsageEvent(entry) {
     {
       ...audienceParamsForEvent(ctx.audience),
       ...mapped.properties,
+      ...sfProps,
       ...pageFromUrl
     },
-    { installId, personProperties: ctx.audience }
+    { installId, personProperties: { ...buildPostHogPersonProperties(ctx.audience), ...sfProps } }
   );
 }
 
@@ -272,11 +308,18 @@ export async function sendPosthogLifecycleEvent(eventName, extra = {}, opts = {}
   const ctx = await telemetryContext();
   const mapped = extensionLifecyclePosthogEvent(eventName, ctx, extra);
   const installId = await getOrCreateTelemetryInstallId();
+  const sfUser = await resolveSfUserForTelemetry();
+  const sfProps = sfUserPersonProps(sfUser);
   const personProps = {
     ...buildPostHogPersonProperties(ctx.audience),
-    ...(opts.personSet || {})
+    ...(opts.personSet || {}),
+    ...sfProps
   };
-  await postCapture(mapped.name, mapped.properties, { installId, personProperties: personProps });
+  await postCapture(
+    mapped.name,
+    { ...mapped.properties, ...sfProps },
+    { installId, personProperties: personProps }
+  );
   posthogDebugLog('lifecycle', eventName, extra);
   return true;
 }

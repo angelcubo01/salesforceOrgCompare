@@ -4,7 +4,8 @@ import {
   buildAlignedDiff,
   buildAlignedDiffFromParts,
   buildAlignedDiffWithDiffLines,
-  getTotalDiffLines
+  getTotalDiffLines,
+  advanceDiffIndex
 } from '../shared/alignedDiffCore.js';
 
 describe('getTotalDiffLines', () => {
@@ -24,6 +25,24 @@ describe('getTotalDiffLines', () => {
         }
       ])
     ).toBe(2);
+  });
+});
+
+describe('advanceDiffIndex', () => {
+  it('empieza en 0 si el índice no es válido y se avanza', () => {
+    expect(advanceDiffIndex(-1, 1, 5)).toBe(0);
+  });
+
+  it('va al último si el índice no es válido y se retrocede', () => {
+    expect(advanceDiffIndex(-1, -1, 5)).toBe(4);
+  });
+
+  it('hace bucle al avanzar desde el final', () => {
+    expect(advanceDiffIndex(4, 1, 5)).toBe(0);
+  });
+
+  it('hace bucle al retroceder desde el principio', () => {
+    expect(advanceDiffIndex(0, -1, 5)).toBe(4);
   });
 });
 
