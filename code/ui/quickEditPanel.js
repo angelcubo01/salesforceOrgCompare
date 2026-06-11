@@ -5,6 +5,7 @@ import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { captureUiException } from '../../shared/posthogClient.js';
+import { guardToolAction } from './featureControlsUi.js';
 
 const QUICK_EDIT_SEARCH_MIN_PX = 288;
 
@@ -362,6 +363,7 @@ function updateCurrentFileDisplay() {
 }
 
 async function deployComponent(checkOnly = false) {
+  if (guardToolAction(checkOnly ? 'quick_edit_save' : 'deploy')) return;
   if (!currentEditItem || !quickEditEditor) {
     showToast(t('quickEdit.nothingToDeploy'), 'warn');
     return;

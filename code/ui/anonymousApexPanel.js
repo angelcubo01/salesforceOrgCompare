@@ -9,6 +9,7 @@ import { applyArtifactTypeUi } from './artifactTypeUi.js';
 import { navigateToModeAndTool } from './appModeNav.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { randomStagingId } from '../../shared/randomId.js';
+import { guardToolAction } from './featureControlsUi.js';
 
 const ANON_EDITOR_CACHE_KEY = 'sfoc_anon_apex_editor_text';
 const ANON_SAVED_SCRIPTS_KEY = 'sfoc_anon_apex_saved_scripts';
@@ -429,6 +430,7 @@ async function ensureEditor() {
 }
 
 async function runAnonymousApex() {
+  if (guardToolAction('anonymous_apex_execute')) return;
   const runBtn = document.getElementById('anonymousApexRunBtn');
   const logBtn = document.getElementById('anonymousApexOpenLogBtn');
   if (!state.leftOrgId) {

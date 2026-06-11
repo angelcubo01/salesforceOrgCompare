@@ -9,9 +9,11 @@ import {
   installServiceWorkerExceptionCapture
 } from './background/posthogTelemetry.js';
 import { ensureTelemetryInstallId } from './shared/telemetryInstallId.js';
+import { installFeatureControlsGuard } from './background/featureControlsGuard.js';
 
 try {
   installMessageHandlers();
+  void installFeatureControlsGuard();
   installCookieCacheInvalidation();
   installApexTraceAlarmListener();
   installExtensionLifecycleTelemetry();

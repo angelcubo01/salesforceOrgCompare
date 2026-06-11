@@ -82,6 +82,8 @@ export function updateDocumentTitle() {
     document.title = t('docTitle.generatePkg');
   } else if (state.selectedArtifactType === 'FieldDependency') {
     document.title = t('docTitle.fieldDep');
+  } else if (state.selectedArtifactType === 'DependencyExplorer') {
+    document.title = t('docTitle.depExplorer');
   } else if (state.selectedArtifactType === 'ApexTests') {
     document.title = t('docTitle.apexTests');
   } else if (state.selectedArtifactType === 'AnonymousApex') {

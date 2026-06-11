@@ -39,13 +39,19 @@ import {
   initializeAppNavigation,
   setupAppModeTabHandlers,
   persistAfterOperationChange,
-  navigateToModeAndTool
+  navigateToModeAndTool,
+  revealAppNavigation
 } from './ui/appModeNav.js';
 import { applyArtifactTypeUi, getSelectedArtifactType } from './ui/artifactTypeUi.js';
 import { setupAppHelp, maybeShowToolOnboarding } from './ui/appHelp.js';
 import { setupAppSupport, refreshAppSupportUi } from './ui/appSupport.js';
+import { setupFeatureControlsUi, applyFeatureControlsUi } from './ui/featureControlsUi.js';
 import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
 import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
+import {
+  setupDependencyExplorerPanel,
+  refreshDependencyExplorerPanel
+} from './ui/dependencyExplorerPanel.js';
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
 import { setupAnonymousApexPanel, refreshAnonymousApexPanel } from './ui/anonymousApexPanel.js';
 import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
@@ -83,7 +89,8 @@ import {
 } from './lib/compareDeepLink.js';
 import { applyDeepLinkOrgs, applyDeepLinkItemHint } from './lib/compareDeepLinkUi.js';
 import { buildDiscoverBannerLineHtml } from '../shared/landingDiscoverBanner.js';
-import { ensureExtensionExceptionReporting, initPosthogClient } from '../shared/posthogClient.js';
+import { ensureExtensionExceptionReporting } from '../shared/posthogClient.js';
+import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.js';
 import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
 
 function applyStaticTranslations() {
@@ -120,39 +127,15 @@ function applyLandingDiscoverBanner() {
 }
 
 async function init() {
-  await loadLang();
-  await loadExtensionSettings();
-  await wakeServiceWorker();
-  ensureExtensionExceptionReporting();
-  await initPosthogClient();
+  await Promise.all([loadLang(), loadExtensionSettings()]);
   applyUiThemeToDocument(document);
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes[EXTENSION_CONFIG_KEY]) {
-      void (async () => {
-        await loadExtensionSettings();
-        applyUiThemeToDocument(document);
-        updateApexTestsHubPollingState();
-        if (state.monaco) applyMonacoThemeGlobally(state.monaco);
-        const { refreshAnonymousApexEditorTheme } = await import('./ui/anonymousApexPanel.js');
-        const { refreshQuickEditEditorTheme } = await import('./ui/quickEditPanel.js');
-        refreshAnonymousApexEditorTheme();
-        refreshQuickEditEditorTheme();
-        await refreshAppSupportUi();
-      })();
-    }
-    if (area === 'sync' && changes.savedOrgs) {
-      void loadSavedOrgs();
-    }
-  });
+
+  await bootstrapFeatureControls({ force: true });
+  setupFeatureControlsUi();
+
   applyStaticTranslations();
   applyLandingFooterLinks();
-
   applyLandingDiscoverBanner();
-
-  await loadSavedOrgs();
-  await loadPinnedKeys();
-  await loadItemsFromStorage();
-  prunePinnedKeysToSavedItems();
 
   const typeSelect = document.getElementById('typeSelect');
   let urlDeepLink = parseCompareDeepLink(window.location.search);
@@ -171,6 +154,7 @@ async function init() {
     syncCompareUrlFromState(state);
     void persistAfterOperationChange(isUserChange);
     void maybeShowToolOnboarding(getSelectedArtifactType());
+    applyFeatureControlsUi();
   });
 
   if (urlDeepLink.navMode) {
@@ -183,7 +167,35 @@ async function init() {
     state.selectedArtifactType = typeSelect.value || '';
   }
   applyArtifactTypeUi();
+  applyFeatureControlsUi();
+  revealAppNavigation();
   void maybeShowToolOnboarding(getSelectedArtifactType());
+
+  ensureExtensionExceptionReporting();
+  void wakeServiceWorker();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes[EXTENSION_CONFIG_KEY]) {
+      void (async () => {
+        await loadExtensionSettings();
+        applyUiThemeToDocument(document);
+        updateApexTestsHubPollingState();
+        if (state.monaco) applyMonacoThemeGlobally(state.monaco);
+        const { refreshAnonymousApexEditorTheme } = await import('./ui/anonymousApexPanel.js');
+        const { refreshQuickEditEditorTheme } = await import('./ui/quickEditPanel.js');
+        refreshAnonymousApexEditorTheme();
+        refreshQuickEditEditorTheme();
+        await refreshAppSupportUi();
+      })();
+    }
+    if (area === 'sync' && changes.savedOrgs) {
+      void loadSavedOrgs();
+    }
+  });
+
+  await loadSavedOrgs();
+  await loadPinnedKeys();
+  await loadItemsFromStorage();
+  prunePinnedKeysToSavedItems();
 
   applyDeepLinkOrgs(urlDeepLink);
   if (urlDeepLink.leftOrgId && !urlDeepLink.rightOrgId) {
@@ -217,6 +229,7 @@ async function init() {
   setupFieldHistoryPanel();
   setupQuickEditPanel();
   setupFieldDependencyPanel();
+  setupDependencyExplorerPanel();
   renderEditor();
   refreshGeneratePackageXmlTypes();
   void refreshApexTestsPanel();
@@ -231,6 +244,7 @@ async function init() {
   void refreshSetupAuditTrailPanel();
   void refreshFieldHistoryPanel();
   void refreshQuickEditPanel();
+  refreshDependencyExplorerPanel();
   setupResizable();
   setupCompareListToolbar();
   setupDragAndDrop();

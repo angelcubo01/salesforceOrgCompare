@@ -1,12 +1,16 @@
 import { state } from '../core/state.js';
 import { APP_NAV_DEVELOPMENT_TOOLS } from '../core/constants.js';
-import { t } from '../../shared/i18n.js';
 import { clearComparisonSelection, handleArtifactTypeSelectChange } from './searchSetup.js';
 import { resetMonacoComparisonView } from '../editor/editorRender.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { COMPARE_TOOLS_COVERED_BY_METADATA } from '../lib/metadataSearch.js';
 import { syncCompareContextTitle } from './compareContextTitle.js';
 import { refreshHelpModalIfOpen } from './appHelp.js';
+import { applyArtifactTypeUi } from './artifactTypeUi.js';
+import { isModeVisible, isToolVisible } from '../../shared/featureControls.js';
+import { getCachedFeatureControlsConfig } from '../../shared/posthogFeatureControlsFlag.js';
+import { t } from '../../shared/i18n.js';
+import { showToast } from './toast.js';
 
 export const NAV_PREFS_KEY = 'sfocAppNavPrefs';
 
@@ -29,6 +33,7 @@ export const MODE_TOOLS = {
     'SetupAuditTrail',
     'FieldHistory',
     'FieldDependency',
+    'DependencyExplorer',
     'PermissionDiff',
     'CustomSettingsCompare',
     'CustomMetadataCompare'
@@ -55,12 +60,59 @@ export const TOOL_I18N = {
   SetupAuditTrail: 'code.opSetupAuditTrail',
   FieldHistory: 'code.opFieldHistory',
   FieldDependency: 'code.opFieldDep',
+  DependencyExplorer: 'code.opDepExplorer',
   PermissionDiff: 'code.opPermissionDiff',
   CustomSettingsCompare: 'code.opCustomSettingsCompare',
   CustomMetadataCompare: 'code.opCustomMetadataCompare',
   GeneratePackageXml: 'code.opPkgGenerate',
   PackageXml: 'code.opPkgCompare'
 };
+
+function featureControlsConfig() {
+  return getCachedFeatureControlsConfig();
+}
+
+/** @param {keyof typeof MODE_TOOLS} mode */
+export function getVisibleToolsForMode(mode) {
+  const config = featureControlsConfig();
+  if (!isModeVisible(config, mode)) return [];
+  return MODE_TOOLS[mode].filter((tool) => isToolVisible(config, tool));
+}
+
+/** Oculta pestañas de modo según configuración remota. */
+export function syncFeatureControlsModeTabs() {
+  const config = featureControlsConfig();
+  const comparatorBtn = document.getElementById('appModeTabComparator');
+  if (comparatorBtn) {
+    const hidden = !isModeVisible(config, 'comparator');
+    comparatorBtn.hidden = hidden;
+    comparatorBtn.classList.toggle('hidden', hidden);
+  }
+  document.querySelectorAll('.app-mode-dropdown').forEach((wrap) => {
+    const mode = /** @type {keyof typeof MODE_TOOLS | null} */ (wrap.getAttribute('data-mode'));
+    if (!mode) return;
+    const hidden = !isModeVisible(config, mode);
+    wrap.hidden = hidden;
+    wrap.classList.toggle('hidden', hidden);
+  });
+}
+
+/** Reconstruye menús tras cambio de feature controls. */
+export function applyFeatureControlsNavigation() {
+  populateModeSubmenus();
+  rebuildTypeSelectForMode(state.appNavMode);
+  syncTabSelection();
+  syncFeatureControlsModeTabs();
+}
+
+/**
+ * @param {keyof typeof MODE_TOOLS} mode
+ * @returns {string}
+ */
+function firstVisibleTool(mode) {
+  const tools = getVisibleToolsForMode(mode);
+  return tools[0] || '';
+}
 
 function closeAllSubmenus() {
   document.querySelectorAll('.app-mode-dropdown.is-open').forEach((el) => {
@@ -112,7 +164,7 @@ export function populateModeSubmenus() {
     const inner = wrap.querySelector('.app-mode-submenu-inner');
     if (!inner) return;
     inner.innerHTML = '';
-    for (const tool of MODE_TOOLS[mode]) {
+    for (const tool of getVisibleToolsForMode(mode)) {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'app-mode-submenu-item';
@@ -136,7 +188,9 @@ export function listAllNavTools() {
   /** @type {{ mode: keyof typeof MODE_TOOLS, tool: string, label: string }[]} */
   const out = [];
   for (const [mode, tools] of Object.entries(MODE_TOOLS)) {
+    if (!isModeVisible(featureControlsConfig(), mode)) continue;
     for (const tool of tools) {
+      if (!isToolVisible(featureControlsConfig(), tool)) continue;
       const key = /** @type {keyof typeof TOOL_I18N} */ (tool);
       out.push({ mode, tool, label: t(TOOL_I18N[key] || tool) });
     }
@@ -216,7 +270,7 @@ export async function ensureModeForTool(tool) {
   if (state.appNavMode === mode) {
     rebuildTypeSelectForMode(mode);
     const sel = document.getElementById('typeSelect');
-    if (sel && MODE_TOOLS[mode].includes(effectiveTool)) {
+    if (sel && getVisibleToolsForMode(mode).includes(effectiveTool)) {
       sel.value = effectiveTool;
     }
     syncTabSelection();
@@ -248,11 +302,13 @@ export function rebuildTypeSelectForMode(mode) {
     return;
   }
   if (mode === 'comparator') {
-    const opt = document.createElement('option');
-    opt.value = COMPARATOR_TOOL;
-    opt.textContent = t(TOOL_I18N.Comparator);
-    sel.appendChild(opt);
-    sel.value = COMPARATOR_TOOL;
+    if (isToolVisible(featureControlsConfig(), COMPARATOR_TOOL)) {
+      const opt = document.createElement('option');
+      opt.value = COMPARATOR_TOOL;
+      opt.textContent = t(TOOL_I18N.Comparator);
+      sel.appendChild(opt);
+      sel.value = COMPARATOR_TOOL;
+    }
     sel.disabled = true;
     return;
   }
@@ -260,14 +316,15 @@ export function rebuildTypeSelectForMode(mode) {
   ph.value = '';
   ph.textContent = t('code.chooseToolInMode');
   sel.appendChild(ph);
-  for (const tool of MODE_TOOLS[mode]) {
+  const visibleTools = getVisibleToolsForMode(mode);
+  for (const tool of visibleTools) {
     const opt = document.createElement('option');
     opt.value = tool;
     opt.textContent = t(TOOL_I18N[tool]);
     sel.appendChild(opt);
   }
-  sel.disabled = false;
-  const tools = MODE_TOOLS[mode];
+  sel.disabled = visibleTools.length === 0;
+  const tools = visibleTools;
   if (prev && tools.includes(prev)) {
     sel.value = prev;
   }
@@ -306,8 +363,7 @@ export function syncSidebarToolRow() {
 }
 
 function prefsDefaultTool(mode) {
-  const list = MODE_TOOLS[mode];
-  return list[0] || '';
+  return firstVisibleTool(mode);
 }
 
 /**
@@ -338,14 +394,35 @@ export async function navigateToModeAndTool(mode, tool, opts = {}) {
     return;
   }
 
-  const tools = MODE_TOOLS[mode];
+  const config = featureControlsConfig();
+  if (!isModeVisible(config, mode)) {
+    showToast(t('featureControls.modeHidden'), 'warn', { bypassCooldown: true });
+    await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated });
+    return;
+  }
+
+  const tools = getVisibleToolsForMode(mode);
   let pick = tool && (tools.includes(tool) || (mode === 'comparator' && LEGACY_COMPARE_TOOLS.has(tool)))
     ? migrateLegacyTool(tool)
     : prefsDefaultTool(mode);
-  if (mode === 'comparator') pick = COMPARATOR_TOOL;
+  if (mode === 'comparator') {
+    pick = isToolVisible(config, COMPARATOR_TOOL) ? COMPARATOR_TOOL : '';
+  }
+  if (!pick || !isToolVisible(config, pick)) {
+    if (tool && !isToolVisible(config, migrateLegacyTool(tool))) {
+      showToast(t('featureControls.toolRedirect'), 'warn', { bypassCooldown: true });
+    }
+    pick = prefsDefaultTool(mode);
+    if (!pick) {
+      await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated });
+      return;
+    }
+  }
   sel.value = pick;
   handleArtifactTypeSelectChange({ isUserChange: userInitiated });
   syncCompareUrlFromState(state);
+  const { applyFeatureControlsUi } = await import('./featureControlsUi.js');
+  applyFeatureControlsUi();
 }
 
 /**
@@ -358,28 +435,44 @@ export async function initializeAppNavigation(args = {}) {
   let tool = '';
 
   const migratedNav = urlNav ? migrateLegacyNavMode(urlNav) : null;
+  const config = featureControlsConfig();
   if (migratedNav && migratedNav !== APP_NAV_MODE_HOME && MODE_TOOLS[/** @type {keyof typeof MODE_TOOLS} */ (migratedNav)]) {
     mode = /** @type {keyof typeof MODE_TOOLS} */ (migratedNav);
     tool = urlOp ? migrateLegacyTool(urlOp) : prefsDefaultTool(mode);
-    if (mode === 'comparator') tool = COMPARATOR_TOOL;
+    if (mode === 'comparator' && isToolVisible(config, COMPARATOR_TOOL)) tool = COMPARATOR_TOOL;
   } else if (urlOp && toolToMode(urlOp)) {
     const m = toolToMode(urlOp);
     if (m) {
       mode = m;
-      tool = m === 'comparator' ? COMPARATOR_TOOL : migrateLegacyTool(urlOp);
+      tool =
+        m === 'comparator' && isToolVisible(config, COMPARATOR_TOOL)
+          ? COMPARATOR_TOOL
+          : migrateLegacyTool(urlOp);
     }
   } else if (prefs.lastMode && prefs.lastMode !== APP_NAV_MODE_HOME && MODE_TOOLS[/** @type {keyof typeof MODE_TOOLS} */ (prefs.lastMode)]) {
     mode = /** @type {keyof typeof MODE_TOOLS} */ (prefs.lastMode);
     tool = prefs.lastToolByMode[mode] || prefsDefaultTool(mode);
-    if (mode === 'comparator') tool = COMPARATOR_TOOL;
+    if (mode === 'comparator' && isToolVisible(config, COMPARATOR_TOOL)) tool = COMPARATOR_TOOL;
+  }
+
+  if (!isModeVisible(config, mode)) {
+    mode = APP_NAV_MODE_HOME;
+    tool = '';
+  } else if (tool && !isToolVisible(config, migrateLegacyTool(tool))) {
+    tool = prefsDefaultTool(mode);
+    if (!tool) {
+      mode = APP_NAV_MODE_HOME;
+    }
   }
 
   state.appNavMode = mode;
   rebuildTypeSelectForMode(mode);
   if (mode !== APP_NAV_MODE_HOME) {
     const s = document.getElementById('typeSelect');
-    if (s && tool && (MODE_TOOLS[mode].includes(tool) || (mode === 'comparator' && LEGACY_COMPARE_TOOLS.has(tool)))) {
-      s.value = mode === 'comparator' ? COMPARATOR_TOOL : tool;
+    const visible = getVisibleToolsForMode(mode);
+    if (s && tool && (visible.includes(tool) || (mode === 'comparator' && LEGACY_COMPARE_TOOLS.has(tool)))) {
+      s.value =
+        mode === 'comparator' && isToolVisible(config, COMPARATOR_TOOL) ? COMPARATOR_TOOL : tool;
     } else if (s) {
       s.value = prefsDefaultTool(mode);
     }
@@ -387,11 +480,18 @@ export async function initializeAppNavigation(args = {}) {
   state.selectedArtifactType = document.getElementById('typeSelect')?.value || '';
   syncTabSelection();
   syncSidebarToolRow();
+  applyArtifactTypeUi();
   await persistAfterOperationChange(false);
+}
+
+/** Quita el ocultamiento de arranque una vez resuelta la vista inicial. */
+export function revealAppNavigation() {
+  document.body.classList.remove('app-nav-booting');
 }
 
 export function setupAppModeTabHandlers() {
   populateModeSubmenus();
+  syncFeatureControlsModeTabs();
 
   const homeBtn = document.getElementById('appModeTabHome');
   if (homeBtn) {

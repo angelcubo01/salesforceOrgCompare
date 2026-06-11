@@ -4,11 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Salesforce Org Compare</title>
+    <style>
+      body.app-nav-booting .content {
+        visibility: hidden;
+      }
+    </style>
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
     <link rel="stylesheet" href="./code.css" />
     <link rel="stylesheet" href="./code-theme-light.css" />
   </head>
-  <body>
+  <body class="app-nav-booting">
     <!-- Herramienta actual: mismo id para el código; solo se cambia desde la barra superior (menú modos). -->
     <div class="sfoc-type-select-host" aria-hidden="true">
       <select id="typeSelect" class="type-select sfoc-type-select-hidden" tabindex="-1" aria-hidden="true">
@@ -76,10 +81,10 @@
               <button
                 type="button"
                 role="tab"
-                class="app-mode-tab app-mode-tab-active"
+                class="app-mode-tab"
                 id="appModeTabHome"
                 data-mode="home"
-                aria-selected="true"
+                aria-selected="false"
                 data-i18n="code.appModeHome"
                 data-i18n-title="code.appModeHomeTitle"
               >
@@ -201,6 +206,8 @@
             </button>
           </div>
         </div>
+        <div id="featureControlsGlobalBanner" class="feature-controls-banner hidden" role="alert" hidden></div>
+        <div id="editorBodyWrap" class="editor-body-wrap">
         <p id="compareContextTitle" class="compare-context-title ph-no-capture hidden" aria-live="polite"></p>
         <div id="orgDropdowns" class="org-dropdowns ph-no-capture">
           <div class="org-dropdown-left">
@@ -482,25 +489,35 @@
           <div id="apexTestsHubView" class="apex-tests-hub-view">
             <div class="apex-tests-hub-header">
               <div class="apex-tests-hub-header-text">
-                <h2 class="apex-tests-hub-title" data-i18n="apexTests.title">Apex Tests</h2>
-                <p id="apexTestsHubStatus" class="apex-tests-hub-status" role="status"></p>
+                <h2 id="apexTestsHubTitle" class="apex-tests-hub-title" data-i18n="apexTests.title">
+                  Hub de pruebas Apex
+                </h2>
+                <p id="apexTestsHubStatus" class="apex-tests-hub-status hidden" role="status"></p>
               </div>
-              <button
-                type="button"
-                id="apexTestsOpenRunnerBtn"
-                class="apex-tests-open-runner-btn"
-                data-i18n="apexTests.openRunner"
-              >
-                Ejecutar tests
-              </button>
+              <div class="apex-tests-hub-header-actions">
+                <button
+                  type="button"
+                  id="apexTestsClearRunsBtn"
+                  class="apex-tests-clear-runs-btn"
+                  data-i18n="apexTests.runsClearHistory"
+                  data-i18n-title="apexTests.runsClearHistoryHint"
+                  title="Quitar todas las ejecuciones de la tabla"
+                  disabled
+                >
+                  Borrar historial
+                </button>
+                <button
+                  type="button"
+                  id="apexTestsOpenRunnerBtn"
+                  class="apex-tests-open-runner-btn"
+                  data-i18n="apexTests.openRunner"
+                >
+                  Ejecutar tests
+                </button>
+              </div>
             </div>
 
-            <section class="apex-tests-hub-runs" aria-labelledby="apexTestsRunsHeading">
-              <div class="apex-tests-hub-runs-head">
-                <h3 id="apexTestsRunsHeading" class="apex-tests-hub-runs-title" data-i18n="apexTests.runsTitle">
-                  Ejecuciones
-                </h3>
-              </div>
+            <section class="apex-tests-hub-runs" aria-labelledby="apexTestsHubTitle">
               <p id="apexTestsRunsPollError" class="apex-tests-runs-poll-error hidden" role="status"></p>
               <div id="apexTestsRunsTableWrap" class="apex-tests-runs-table-wrap hidden">
                 <table class="apex-tests-runs-table">
@@ -627,74 +644,48 @@
                 <div id="apexTestsViewLogModalBody" class="apex-tests-coverage-modal-body"></div>
               </div>
             </div>
+
           </div>
 
           <div id="apexTestsRunnerView" class="apex-tests-runner-view hidden" aria-hidden="true">
             <div class="apex-tests-runner-toolbar">
-              <button
-                type="button"
-                id="apexTestsBackToHubBtn"
-                class="apex-tests-toolbar-btn"
-                data-i18n="apexTests.backToHub"
-              >
-                Volver
-              </button>
-              <button
-                type="button"
-                id="apexTestsRunBtn"
-                class="apex-tests-run-btn apex-tests-run-btn-toolbar"
-                disabled
-                data-i18n="apexTests.runButton"
-              >
-                Ejecutar tests
-              </button>
-              <button
-                type="button"
-                id="apexTestsClearSelectionBtn"
-                class="apex-tests-toolbar-btn apex-tests-clear-selection-btn"
-                disabled
-                data-i18n="apexTests.clearSelection"
-              >
-                Borrar selección
-              </button>
-              <div class="apex-tests-profile-bar">
-                <input
-                  id="apexTestsProfileName"
-                  type="text"
-                  class="apex-tests-profile-name sfoc-query-input"
-                  data-i18n-placeholder="apexTests.runProfileNamePh"
-                  placeholder="Nombre del perfil…"
-                  autocomplete="off"
-                />
+              <div class="apex-tests-runner-toolbar-start">
                 <button
                   type="button"
-                  id="apexTestsSaveProfileBtn"
-                  class="apex-tests-toolbar-btn"
-                  data-i18n="apexTests.runProfileSave"
+                  id="apexTestsBackToHubBtn"
+                  class="apex-tests-back-btn"
+                  data-i18n-title="apexTests.backToHub"
+                  data-i18n-aria-label="apexTests.backToHub"
+                  title="Volver"
+                  aria-label="Volver"
                 >
-                  Guardar perfil
+                  ←
                 </button>
-                <select
-                  id="apexTestsProfileSelect"
-                  class="apex-tests-profile-select sfoc-query-select"
-                  aria-label="Perfil"
-                >
-                  <option value="">—</option>
-                </select>
                 <button
                   type="button"
-                  id="apexTestsRunProfileBtn"
+                  id="apexTestsProfilesBtn"
                   class="apex-tests-toolbar-btn"
-                  data-i18n="apexTests.runProfileRun"
+                  data-i18n="apexTests.profilesBtn"
                 >
-                  Ejecutar perfil
+                  Perfiles
+                </button>
+              </div>
+              <div class="apex-tests-runner-toolbar-end">
+                <button
+                  type="button"
+                  id="apexTestsRunBtn"
+                  class="apex-tests-run-btn apex-tests-run-btn-toolbar"
+                  disabled
+                  data-i18n="apexTests.runButton"
+                >
+                  Ejecutar tests
                 </button>
               </div>
             </div>
             <div id="apexTestsScaleViewport" class="apex-tests-scale-viewport">
               <div id="apexTestsScaleSizer" class="apex-tests-scale-sizer">
                 <div id="apexTestsScaleContent" class="apex-tests-scale-content">
-                  <p id="apexTestsOrgStatus" class="apex-tests-org-status" role="status"></p>
+                  <p id="apexTestsOrgStatus" class="apex-tests-org-status apex-tests-org-status-warn hidden" role="status"></p>
 
                   <div id="apexTestsControls" class="apex-tests-controls">
                     <label class="apex-tests-label" for="apexTestsClassFilter" data-i18n="apexTests.filterClasses"></label>
@@ -757,7 +748,18 @@
                     </div>
 
                     <div class="apex-tests-tree-block">
-                      <span class="apex-tests-label" data-i18n="apexTests.selectionTreeTitle">Selección</span>
+                      <div class="apex-tests-tree-block-head">
+                        <span class="apex-tests-label" data-i18n="apexTests.selectionTreeTitle">Selección</span>
+                        <button
+                          type="button"
+                          id="apexTestsClearSelectionBtn"
+                          class="apex-tests-toolbar-btn apex-tests-clear-selection-btn"
+                          disabled
+                          data-i18n="apexTests.clearSelection"
+                        >
+                          Borrar selección
+                        </button>
+                      </div>
                       <div id="apexTestsSelectionTree" class="apex-tests-selection-tree" role="tree"></div>
                     </div>
 
@@ -766,6 +768,146 @@
                 </div>
               </div>
             </div>
+          </div>
+
+          <div
+            id="apexTestsProfilesModal"
+            class="apex-tests-coverage-modal hidden"
+            aria-hidden="true"
+          >
+            <div class="apex-tests-coverage-modal-backdrop" data-apex-profiles-close="1" tabindex="-1"></div>
+            <div
+              class="apex-tests-coverage-modal-panel apex-tests-profiles-modal-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="apexTestsProfilesModalTitle"
+            >
+              <header class="apex-tests-coverage-modal-head">
+                <h3 id="apexTestsProfilesModalTitle" data-i18n="apexTests.profilesModalTitle">
+                  Perfiles de ejecución
+                </h3>
+                <button
+                  type="button"
+                  id="apexTestsProfilesModalClose"
+                  class="apex-tests-coverage-modal-close"
+                  data-i18n="apexTests.coverageModalClose"
+                >
+                  Cerrar
+                </button>
+              </header>
+              <div class="apex-tests-profiles-modal-save-row">
+                <input
+                  id="apexTestsProfileName"
+                  type="text"
+                  class="apex-tests-profile-name sfoc-query-input"
+                  data-i18n-placeholder="apexTests.runProfileNamePh"
+                  placeholder="Nombre del perfil…"
+                  autocomplete="off"
+                />
+                <button
+                  type="button"
+                  id="apexTestsSaveProfileBtn"
+                  class="apex-tests-toolbar-btn"
+                  data-i18n="apexTests.runProfileSave"
+                >
+                  Guardar perfil
+                </button>
+              </div>
+              <div id="apexTestsProfilesModalBody" class="apex-tests-profiles-modal-body"></div>
+            </div>
+          </div>
+        </div>
+        <div id="dependencyExplorerPanel" class="dep-explorer-panel ph-no-capture hidden" aria-label="Dependency Explorer">
+          <div class="dep-explorer-panel-inner">
+            <div class="dep-explorer-head">
+              <h2 class="dep-explorer-title" data-i18n="depExplorer.title">Explorador de dependencias</h2>
+              <label
+                class="dep-explorer-compare-toggle"
+                for="depExplorerCompareToggle"
+                data-i18n-title="depExplorer.compareModeTip"
+                title="Compara las dependencias del mismo componente en la org izquierda y la derecha."
+              >
+                <input type="checkbox" id="depExplorerCompareToggle" />
+                <span class="dep-explorer-compare-switch" aria-hidden="true"></span>
+                <span class="dep-explorer-compare-label" data-i18n="depExplorer.compareMode">Comparar orgs</span>
+              </label>
+            </div>
+            <div class="dep-explorer-toolbar">
+              <select
+                id="depExplorerTypeSelect"
+                class="dep-explorer-type-select sfoc-query-select"
+                aria-label="Metadata type"
+                data-i18n-title="depExplorer.typeSelectTip"
+                title="Tipo de metadata del componente que quieres analizar."
+              ></select>
+              <div class="dep-explorer-search-wrap">
+                <input
+                  id="depExplorerSearchInput"
+                  type="search"
+                  class="dep-explorer-search-input sfoc-query-input"
+                  data-i18n-placeholder="depExplorer.searchPlaceholder"
+                  data-i18n-title="depExplorer.searchTip"
+                  placeholder="Buscar componente (mín. 2 caracteres)…"
+                  title="Escribe al menos 2 caracteres para buscar por nombre."
+                  autocomplete="off"
+                  spellcheck="false"
+                  disabled
+                />
+                <div id="depExplorerSearchResults" class="dep-explorer-search-results sfoc-autocomplete-panel hidden" role="listbox"></div>
+              </div>
+              <button
+                type="button"
+                id="depExplorerAnalyzeBtn"
+                class="dep-explorer-analyze-btn"
+                disabled
+                data-i18n="depExplorer.analyze"
+                data-i18n-title="depExplorer.analyzeTip"
+                title="Analiza de qué metadata depende el componente seleccionado."
+              >
+                Analizar
+              </button>
+              <div class="dep-explorer-more-wrap">
+                <button
+                  type="button"
+                  id="depExplorerMoreBtn"
+                  class="dep-explorer-more-btn"
+                  data-i18n-title="depExplorer.moreActions"
+                  title="Más acciones"
+                  aria-label="Más acciones"
+                  disabled
+                >
+                  ⋯
+                </button>
+                <div id="depExplorerMoreMenu" class="dep-explorer-more-menu hidden" role="menu">
+                  <button type="button" class="dep-explorer-menu-item" data-action="copy" data-i18n="depExplorer.copySummary">Copiar resumen</button>
+                  <button type="button" class="dep-explorer-menu-item" data-action="csv" data-i18n="depExplorer.downloadCsv">Descargar CSV</button>
+                </div>
+              </div>
+            </div>
+            <div class="dep-explorer-options">
+              <label
+                class="dep-explorer-option"
+                data-i18n-title="depExplorer.transitiveTip"
+                title="Incluye dependencias en cadena (segundo nivel y siguientes). Puede tardar más."
+              >
+                <input type="checkbox" id="depExplorerTransitive" />
+                <span data-i18n="depExplorer.transitive">Dependencias transitivas</span>
+              </label>
+              <label
+                class="dep-explorer-option"
+                data-i18n-title="depExplorer.referencedByTip"
+                title="Añade al resultado los componentes que referencian al componente raíz."
+              >
+                <input type="checkbox" id="depExplorerReferencedBy" />
+                <span data-i18n="depExplorer.referencedBy">Referencias inversas (raíz)</span>
+              </label>
+            </div>
+            <p id="depExplorerStatus" class="dep-explorer-status" role="status"></p>
+            <div id="depExplorerResultsHead" class="dep-explorer-results-head hidden">
+              <h3 id="depExplorerResultsTitle" class="dep-explorer-results-title"></h3>
+              <span id="depExplorerResultsBadge" class="dep-explorer-results-badge"></span>
+            </div>
+            <div id="depExplorerCategories" class="dep-explorer-categories" aria-live="polite"></div>
           </div>
         </div>
         <div id="fieldDependencyPanel" class="field-dependency-panel hidden" aria-label="Field Dependency">
@@ -1655,6 +1797,46 @@
               </div>
             </div>
           </div>
+        </div>
+        <div id="featureControlsToolModal" class="feature-controls-tool-modal hidden" aria-hidden="true">
+          <div id="featureControlsToolModalBackdrop" class="feature-controls-tool-modal-backdrop"></div>
+          <div
+            class="feature-controls-tool-modal-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="featureControlsToolModalTitle"
+          >
+            <header class="feature-controls-tool-modal-head">
+              <h2 id="featureControlsToolModalTitle" class="feature-controls-tool-modal-title"></h2>
+              <button
+                type="button"
+                id="featureControlsToolModalCloseBtn"
+                class="feature-controls-tool-modal-close hidden"
+                data-i18n="help.close"
+                data-i18n-aria-label="help.close"
+              >
+                Cerrar
+              </button>
+            </header>
+            <div id="featureControlsToolModalBody" class="feature-controls-tool-modal-body"></div>
+            <footer id="featureControlsToolModalFoot" class="feature-controls-tool-modal-foot hidden">
+              <a
+                id="featureControlsToolModalLink"
+                class="feature-controls-tool-modal-link hidden"
+                href="#"
+                target="_blank"
+                rel="noopener noreferrer"
+                data-i18n="featureControls.moreInfo"
+              ></a>
+              <button
+                type="button"
+                id="featureControlsToolModalDismissBtn"
+                class="feature-controls-tool-modal-primary"
+                data-i18n="featureControls.dismiss"
+              ></button>
+            </footer>
+          </div>
+        </div>
         </div>
       </div>
     </div>

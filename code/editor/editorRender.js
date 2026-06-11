@@ -66,14 +66,16 @@ function diffPreparedCacheKey(itemKey, leftOrgId, rightOrgId, l, r) {
 }
 
 /**
- * Sustituye modelos del diff editor (asignar antes de dispose; evita error Monaco).
+ * Sustituye modelos del diff editor (cancelar diff en curso antes de dispose; evita error Monaco).
  * @param {import('monaco-editor').editor.ITextModel} original
  * @param {import('monaco-editor').editor.ITextModel} modified
  */
 export function replaceDiffEditorModels(original, modified) {
   if (!state.diffEditor) return;
   const prev = state.diffEditor.getModel();
-  state.diffEditor.setModel({ original, modified });
+  try {
+    state.diffEditor.setModel(null);
+  } catch {}
   if (prev) {
     try {
       if (prev.original && prev.original !== original) prev.original.dispose();
@@ -82,6 +84,7 @@ export function replaceDiffEditorModels(original, modified) {
       if (prev.modified && prev.modified !== modified) prev.modified.dispose();
     } catch {}
   }
+  state.diffEditor.setModel({ original, modified });
 }
 
 export function disposeDiffEditorModels() {
@@ -512,6 +515,10 @@ export async function renderEditor(opts = {}) {
   if (orgSwap && state.diffEditor && useNativeDiff) {
     const existing = state.diffEditor.getModel();
     if (existing?.original && existing?.modified) {
+      if (state.diffListenerDisposable) {
+        state.diffListenerDisposable.dispose();
+        state.diffListenerDisposable = null;
+      }
       clearViewerChunkState();
       state.lastLeftContent = leftRaw;
       state.lastRightContent = rightRaw;

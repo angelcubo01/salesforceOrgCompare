@@ -22,6 +22,7 @@ import {
   clearCompareRetrieveSession,
   isCompareRetrieveActive
 } from './retrieveSessionUi.js';
+import { guardToolAction } from '../ui/featureControlsUi.js';
 
 const RETRIEVE_BG_CONFIG = {
   PermissionSet: { messageType: 'metadata:retrievePermissionSet', paramName: 'permSetName' },
@@ -125,6 +126,7 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel, ret
 }
 
 export async function retrieveAndLoadFromZip(item) {
+  if (guardToolAction('compare_run') || guardToolAction('retrieve')) return;
   const leftOrgId = state.leftOrgId;
   const rightOrgId = state.rightOrgId;
   if (!leftOrgId || !rightOrgId) {

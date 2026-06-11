@@ -38,11 +38,25 @@ import {
 } from './posthogSessionReplay.js';
 import { initPosthogSupport, dismissPosthogConversationsWidget, enablePosthogConversationsWidget } from './posthogSupport.js';
 import { hookSupportOnFeatureFlags, isPosthogSupportFlagEnabled } from './posthogSupportFlag.js';
+import {
+  hookFeatureControlsOnFeatureFlags,
+  loadFeatureControlsFromPosthog
+} from './posthogFeatureControlsFlag.js';
+import {
+  ensureFeatureFlagsLoaded,
+  invalidateFeatureFlagsCache
+} from './posthogFeatureFlagLoader.js';
 
 const POSTHOG_UI_HOST = 'https://eu.posthog.com';
 
 /** @type {boolean} */
 let initialized = false;
+
+/** @type {Promise<typeof posthog | null> | null} */
+let clientReadyPromise = null;
+
+/** @type {Promise<typeof posthog | null> | null} */
+let initInFlight = null;
 
 function isPosthogConfigured() {
   return isPosthogApiConfigured();
@@ -155,9 +169,35 @@ export function ensureExtensionExceptionReporting() {
   installEarlyCapture();
 }
 
-export async function initPosthogClient(opts = {}) {
-  if (initialized || !isPosthogConfigured()) return null;
+export function waitForPosthogClientReady() {
+  if (clientReadyPromise) return clientReadyPromise;
+  return Promise.resolve(initialized ? posthog : null);
+}
 
+export async function initPosthogClient(opts = {}) {
+  if (!isPosthogConfigured()) return null;
+
+  if (initialized) {
+    await waitForPosthogClientReady();
+    if (opts.forceFeatureFlags) {
+      await ensureFeatureFlagsLoaded(posthog, { force: true });
+      await loadFeatureControlsFromPosthog(posthog, { force: true });
+    }
+    return posthog;
+  }
+
+  if (initInFlight) {
+    await initInFlight;
+    return posthog;
+  }
+
+  const forceFeatureFlags = opts.forceFeatureFlags === true;
+  let clientReadyResolve;
+  clientReadyPromise = new Promise((resolve) => {
+    clientReadyResolve = resolve;
+  });
+
+  initInFlight = (async () => {
   const installId = await getOrCreateTelemetryInstallId();
   const telemetryEnabled = await getTelemetryEnabled();
   const lang = appLanguageCode();
@@ -189,36 +229,43 @@ export async function initPosthogClient(opts = {}) {
     capture_exceptions: false,
     opt_out_capturing_by_default: !telemetryEnabled,
     loaded: async (ph) => {
-      if (!telemetryEnabled) {
-        ph.opt_out_capturing();
-        stopSessionReplay(ph);
-        return;
+      try {
+        await ensureFeatureFlagsLoaded(ph, { force: forceFeatureFlags });
+        await loadFeatureControlsFromPosthog(ph, { force: forceFeatureFlags });
+        hookFeatureControlsOnFeatureFlags(ph, undefined, { skipInitialRun: true });
+
+        if (!telemetryEnabled) {
+          ph.opt_out_capturing();
+          stopSessionReplay(ph);
+        } else {
+          applyAppLanguageToPosthog(ph);
+          dismissPosthogConversationsWidget(ph);
+          hookCsatSurveyLifecycle(ph);
+          hookSessionReplayOnFeatureFlags(ph);
+          installSessionReplayDebugHook(ph);
+          hookSupportOnFeatureFlags(ph, (enabled) => {
+            if (enabled) void maybeInitPosthogSupport(ph);
+            else dismissPosthogConversationsWidget(ph);
+          });
+          const audience = await getTelemetryAudienceContext();
+          ph.identify(installId, {
+            ...buildPostHogPersonProperties(audience),
+            app_ui_language: lang,
+            language: lang,
+            telemetry_enabled: 'true'
+          });
+          if (typeof ph.reloadSurveys === 'function') {
+            ph.reloadSurveys();
+          }
+          await syncPosthogSfUserContext();
+          void maybeStartSessionReplay(ph);
+          void maybeInitPosthogSupport(ph);
+        }
+      } finally {
+        clientReadyResolve?.(ph);
+        clientReadyResolve = null;
+        clientReadyPromise = null;
       }
-      applyAppLanguageToPosthog(ph);
-      dismissPosthogConversationsWidget(ph);
-      hookCsatSurveyLifecycle(ph);
-      hookSessionReplayOnFeatureFlags(ph);
-      installSessionReplayDebugHook(ph);
-      hookSupportOnFeatureFlags(ph, (enabled) => {
-        if (enabled) void maybeInitPosthogSupport(ph);
-        else dismissPosthogConversationsWidget(ph);
-      });
-      const audience = await getTelemetryAudienceContext();
-      ph.identify(installId, {
-        ...buildPostHogPersonProperties(audience),
-        app_ui_language: lang,
-        language: lang,
-        telemetry_enabled: 'true'
-      });
-      if (typeof ph.reloadFeatureFlags === 'function') {
-        ph.reloadFeatureFlags();
-      }
-      if (typeof ph.reloadSurveys === 'function') {
-        ph.reloadSurveys();
-      }
-      await syncPosthogSfUserContext();
-      void maybeStartSessionReplay(ph);
-      void maybeInitPosthogSupport(ph);
     }
   });
 
@@ -233,7 +280,18 @@ export async function initPosthogClient(opts = {}) {
   ensureExtensionExceptionReporting();
 
   initialized = true;
+
+  if (opts.awaitReady === true) {
+    await waitForPosthogClientReady();
+  }
   return posthog;
+  })();
+
+  try {
+    return await initInFlight;
+  } finally {
+    initInFlight = null;
+  }
 }
 
 /** @returns {typeof posthog | null} */
@@ -257,9 +315,8 @@ export async function syncPosthogOptOut(enabled) {
     installExtensionPageExceptionCapture();
     hookSessionReplayOnFeatureFlags(posthog);
     installSessionReplayDebugHook(posthog);
-    if (typeof posthog.reloadFeatureFlags === 'function') {
-      posthog.reloadFeatureFlags();
-    }
+    hookFeatureControlsOnFeatureFlags(posthog);
+    await ensureFeatureFlagsLoaded(posthog, { force: true });
     await syncPosthogSfUserContext();
     void maybeStartSessionReplay(posthog);
     void maybeInitPosthogSupport(posthog);
@@ -267,6 +324,9 @@ export async function syncPosthogOptOut(enabled) {
     posthog.opt_out_capturing();
     stopSessionReplay(posthog);
     dismissPosthogConversationsWidget(posthog);
+    invalidateFeatureFlagsCache();
+    hookFeatureControlsOnFeatureFlags(posthog);
+    await ensureFeatureFlagsLoaded(posthog, { force: true });
   }
 }
 

@@ -1,4 +1,4 @@
-import { POSTHOG_API_KEY, POSTHOG_DEBUG, POSTHOG_HOST } from './telemetryConfig.js';
+import { POSTHOG_DEBUG } from './telemetryConfig.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
 import { isPosthogApiConfigured } from './posthogConfigured.js';
 
@@ -56,9 +56,6 @@ export async function enablePosthogConversationsWidget(ph) {
     }
   } catch {
     /* ignore */
-  }
-  if (typeof ph.reloadFeatureFlags === 'function') {
-    ph.reloadFeatureFlags();
   }
   if (typeof ph.conversations?.loadIfEnabled === 'function') {
     ph.conversations.loadIfEnabled();
@@ -133,29 +130,6 @@ export function extensionMatchesSupportDomains(domains, hostname = getSupportExt
   });
 }
 
-/**
- * @param {import('../vendor/posthog-js/dist/module.no-external.js').default} ph
- * @returns {Promise<string[] | null>}
- */
-export async function fetchRemoteConversationsDomains(ph) {
-  if (!ph || !POSTHOG_API_KEY) return null;
-  try {
-    const res = await fetch(`${POSTHOG_HOST}/flags?v=2&config=true`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: POSTHOG_API_KEY,
-        distinct_id: typeof ph.get_distinct_id === 'function' ? ph.get_distinct_id() : 'sfoc-support'
-      })
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return Array.isArray(json?.conversations?.domains) ? json.conversations.domains : [];
-  } catch {
-    return null;
-  }
-}
-
 function openSupportChatPanel() {
   const container = document.getElementById('ph-conversations-widget-container');
   if (!container) return false;
@@ -200,10 +174,6 @@ export async function waitForConversationsAvailable(ph, attempt = 0) {
     return true;
   }
 
-  if (typeof ph?.reloadFeatureFlags === 'function' && attempt === 0) {
-    ph.reloadFeatureFlags();
-  }
-
   if (attempt >= MAX_WAIT_ATTEMPTS) return false;
   await sleep(WAIT_MS);
   return waitForConversationsAvailable(ph, attempt + 1);
@@ -246,17 +216,6 @@ export async function showPosthogSupport(ph) {
   const ready = await waitForConversationsAvailable(ph);
   if (!ready) {
     return { ok: false, reason: 'not_ready' };
-  }
-
-  const extensionId = getSupportExtensionHostname();
-  const configuredDomains = await fetchRemoteConversationsDomains(ph);
-  if (configuredDomains && !extensionMatchesSupportDomains(configuredDomains, extensionId)) {
-    return {
-      ok: false,
-      reason: 'domain_not_allowed',
-      extensionId,
-      configuredDomains
-    };
   }
 
   ph.conversations.show();

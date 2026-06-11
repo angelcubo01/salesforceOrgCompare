@@ -1,9 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   SUPPORT_FLAG,
   parseSupportFlagPayload,
-  isPosthogSupportFlagEnabled
+  isPosthogSupportFlagEnabled,
+  resetSupportFlagCacheForTests
 } from '../shared/posthogSupportFlag.js';
+import { resetFeatureFlagLoaderForTests } from '../shared/posthogFeatureFlagLoader.js';
 
 describe('SUPPORT_FLAG', () => {
   it('usa la clave acordada con PostHog', () => {
@@ -31,6 +33,11 @@ describe('parseSupportFlagPayload', () => {
 });
 
 describe('isPosthogSupportFlagEnabled', () => {
+  beforeEach(() => {
+    resetSupportFlagCacheForTests();
+    resetFeatureFlagLoaderForTests();
+  });
+
   it('devuelve false sin cliente PostHog', async () => {
     expect(await isPosthogSupportFlagEnabled(null)).toBe(false);
   });

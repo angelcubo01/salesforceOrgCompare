@@ -16,7 +16,11 @@
     "posthog:user-dashboard:update": "node scripts/createPosthogUserDashboard.mjs --update",
     "posthog:support-domain": "node scripts/createPosthogSupportExtensionDomain.mjs",
     "posthog:support-flag": "node scripts/createPosthogSupportFlag.mjs",
-    "posthog:support-flag:update": "node scripts/createPosthogSupportFlag.mjs --update"
+    "posthog:support-flag:update": "node scripts/createPosthogSupportFlag.mjs --update",
+    "posthog:feature-controls-flag": "node scripts/createPosthogFeatureControlsFlag.mjs",
+    "posthog:feature-controls-flag:update": "node scripts/createPosthogFeatureControlsFlag.mjs --update",
+    "posthog:feature-controls-flag:smoke": "node scripts/createPosthogFeatureControlsFlag.mjs --update --smoke-test",
+    "posthog:feature-controls-flag:reset": "node scripts/createPosthogFeatureControlsFlag.mjs --update --reset"
   },
   "devDependencies": {
     "posthog-js": "^1.379.0",

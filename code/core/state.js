@@ -41,5 +41,6 @@ export const state = {
   permissionDiffCompareMode: false,
   generatePackageXmlCompareMode: false,
   queryExplorerCompareMode: false,
+  dependencyExplorerCompareMode: false,
   orgsList: []
 };

@@ -7,6 +7,7 @@ import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
 import { logApexTestRunUsage } from './apexTestUsageLog.js';
 import { captureUiException } from '../../shared/posthogClient.js';
+import { guardToolAction } from './featureControlsUi.js';
 import {
   rememberApexTestRunJob,
   updateApexTestsHubPollingState,
@@ -14,6 +15,7 @@ import {
   initApexTestsCoverageModal,
   initApexTestsViewTestModal,
   initApexTestsViewLogModal,
+  initApexTestsClearRunsButton,
   closeHubExpandedDetail,
   tickApexTestsHubRuns
 } from './apexTestsHubRuns.js';
@@ -322,9 +324,25 @@ function syncApexTestsHubStatus() {
   if (!hubStatus) return;
   if (!state.leftOrgId) {
     hubStatus.textContent = t('apexTests.hubStatusNoLeftOrg');
+    hubStatus.classList.remove('hidden');
+    hubStatus.classList.add('apex-tests-hub-status--warn');
     return;
   }
-  hubStatus.textContent = t('apexTests.orgReady');
+  hubStatus.textContent = '';
+  hubStatus.classList.add('hidden');
+  hubStatus.classList.remove('apex-tests-hub-status--warn');
+}
+
+function syncRunnerOrgStatus() {
+  const { status } = getEls();
+  if (!status) return;
+  if (!state.leftOrgId) {
+    status.textContent = t('apexTests.selectOrgAbove');
+    status.classList.remove('hidden');
+    return;
+  }
+  status.textContent = '';
+  status.classList.add('hidden');
 }
 
 function getEls() {
@@ -341,32 +359,110 @@ function getEls() {
     runBtn: document.getElementById('apexTestsRunBtn'),
     runStatus: document.getElementById('apexTestsRunStatus'),
     profileName: document.getElementById('apexTestsProfileName'),
-    profileSelect: document.getElementById('apexTestsProfileSelect'),
     saveProfileBtn: document.getElementById('apexTestsSaveProfileBtn'),
-    runProfileBtn: document.getElementById('apexTestsRunProfileBtn'),
+    profilesModalBody: document.getElementById('apexTestsProfilesModalBody'),
     clearSelectionBtn: document.getElementById('apexTestsClearSelectionBtn')
   };
 }
 
-async function refreshProfileSelect() {
-  const { profileSelect } = getEls();
-  if (!profileSelect) return;
+function summarizeProfileRunBody(runBody) {
+  if (!runBody || typeof runBody !== 'object') return t('apexTests.profilesSummaryAllLocal');
+  const tl = String(/** @type {{ testLevel?: unknown }} */ (runBody).testLevel || '');
+  if (tl === 'RunLocalTests') return t('apexTests.profilesSummaryAllLocal');
+  const tests = Array.isArray(/** @type {{ tests?: unknown[] }} */ (runBody).tests)
+    ? /** @type {{ tests: unknown[] }} */ (runBody).tests
+    : [];
+  let methods = 0;
+  for (const row of tests) {
+    const tm = row && typeof row === 'object' ? /** @type {{ testMethods?: unknown[] }} */ (row).testMethods : null;
+    if (Array.isArray(tm)) methods += tm.length;
+  }
+  return t('apexTests.profilesSummary', { classes: String(tests.length), methods: String(methods) });
+}
+
+async function renderProfilesModalList() {
+  const { profilesModalBody } = getEls();
+  if (!profilesModalBody) return;
   const profiles = await loadApexTestRunProfiles();
-  const cur = profileSelect.value;
-  profileSelect.replaceChildren();
-  const empty = document.createElement('option');
-  empty.value = '';
-  empty.textContent = '—';
-  profileSelect.appendChild(empty);
+  profilesModalBody.replaceChildren();
+  if (!profiles.length) {
+    const empty = document.createElement('p');
+    empty.className = 'apex-tests-profiles-empty';
+    empty.textContent = t('apexTests.profilesModalEmpty');
+    profilesModalBody.appendChild(empty);
+    return;
+  }
+  const list = document.createElement('ul');
+  list.className = 'apex-tests-profiles-list';
   for (const p of profiles) {
-    const o = document.createElement('option');
-    o.value = p.id || p.name;
-    o.textContent = p.name || p.id;
-    profileSelect.appendChild(o);
+    const li = document.createElement('li');
+    li.className = 'apex-tests-profiles-item';
+    const meta = document.createElement('div');
+    meta.className = 'apex-tests-profiles-item-meta';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'apex-tests-profiles-item-name';
+    nameEl.textContent = p.name || p.id;
+    const sumEl = document.createElement('span');
+    sumEl.className = 'apex-tests-profiles-item-summary';
+    sumEl.textContent = summarizeProfileRunBody(p.runBody);
+    meta.appendChild(nameEl);
+    meta.appendChild(sumEl);
+    const actions = document.createElement('div');
+    actions.className = 'apex-tests-profiles-item-actions';
+    const btnRun = document.createElement('button');
+    btnRun.type = 'button';
+    btnRun.className = 'apex-tests-toolbar-btn';
+    btnRun.textContent = t('apexTests.runProfileRun');
+    btnRun.addEventListener('click', async () => {
+      closeApexTestsProfilesModal();
+      await runApexTestsWithBody(p.runBody);
+    });
+    const btnDel = document.createElement('button');
+    btnDel.type = 'button';
+    btnDel.className = 'apex-tests-toolbar-btn apex-tests-profiles-delete-btn';
+    btnDel.textContent = t('apexTests.profilesDelete');
+    btnDel.addEventListener('click', async () => {
+      const label = p.name || p.id;
+      if (!window.confirm(t('apexTests.profilesDeleteConfirm', { name: label }))) return;
+      const all = await loadApexTestRunProfiles();
+      const next = all.filter((x) => (x.id || x.name) !== (p.id || p.name));
+      await saveApexTestRunProfiles(next);
+      showToast(t('apexTests.profilesDeleted'), 'info');
+      void renderProfilesModalList();
+    });
+    actions.appendChild(btnRun);
+    actions.appendChild(btnDel);
+    li.appendChild(meta);
+    li.appendChild(actions);
+    list.appendChild(li);
   }
-  if (cur && [...profileSelect.options].some((o) => o.value === cur)) {
-    profileSelect.value = cur;
-  }
+  profilesModalBody.appendChild(list);
+}
+
+function closeApexTestsProfilesModal() {
+  const modal = document.getElementById('apexTestsProfilesModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+function openApexTestsProfilesModal() {
+  const modal = document.getElementById('apexTestsProfilesModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  void renderProfilesModalList();
+}
+
+let profilesModalInitialized = false;
+
+function initApexTestsProfilesModal() {
+  if (profilesModalInitialized) return;
+  profilesModalInitialized = true;
+  const modal = document.getElementById('apexTestsProfilesModal');
+  if (!modal) return;
+  modal.querySelector('[data-apex-profiles-close]')?.addEventListener('click', closeApexTestsProfilesModal);
+  document.getElementById('apexTestsProfilesModalClose')?.addEventListener('click', closeApexTestsProfilesModal);
 }
 
 function renderMethodClassTabs() {
@@ -750,7 +846,7 @@ async function loadApexClasses() {
   } else if (prunedSelection || prevActive !== activeClassForMethods) {
     scheduleReloadMethods();
   }
-  if (status) status.textContent = t('apexTests.orgReady');
+  syncRunnerOrgStatus();
   scheduleApexTestsFitScale();
 }
 
@@ -799,6 +895,7 @@ async function rememberQueuedApexRun(orgId, jobId, runBody, traceFlagId) {
 }
 
 async function runApexTestsWithBody(body) {
+  if (guardToolAction('apex_test_run')) return;
   if (!state.leftOrgId) return;
   const { runBtn, runStatus } = getEls();
   if (runBtn) runBtn.disabled = true;
@@ -849,20 +946,17 @@ export async function refreshApexTestsPanel() {
     return;
   }
   syncApexTestsHubStatus();
+  syncRunnerOrgStatus();
   updateApexTestsHubPollingState();
-  const { status } = getEls();
   if (!state.leftOrgId) {
     apexTestsPanelOrgId = null;
-    if (status) status.textContent = t('apexTests.selectOrgAbove');
     setControlsEnabled(false);
     resetApexTestsUi();
     return;
   }
   if (!isApexTestsRunnerVisible()) {
-    if (status) status.textContent = t('apexTests.orgReady');
     return;
   }
-  if (status) status.textContent = t('apexTests.orgReady');
   setControlsEnabled(true);
   await loadApexClasses();
   scheduleApexTestsFitScale();
@@ -928,8 +1022,10 @@ export function setupApexTestsPanel() {
     clearRunnerSelection();
     showToast(t('apexTests.clearSelectionDone'), 'info');
   });
-  const { saveProfileBtn, runProfileBtn, profileName, profileSelect } = getEls();
-  void refreshProfileSelect();
+  document.getElementById('apexTestsProfilesBtn')?.addEventListener('click', () => {
+    openApexTestsProfilesModal();
+  });
+  const { saveProfileBtn, profileName } = getEls();
   saveProfileBtn?.addEventListener('click', async () => {
     const body = buildRunBody();
     if (body.testLevel === 'RunLocalTests') {
@@ -949,19 +1045,12 @@ export function setupApexTestsPanel() {
     await saveApexTestRunProfiles(next);
     showToast(t('apexTests.runProfileSaved'), 'success');
     if (profileName) profileName.value = '';
-    void refreshProfileSelect();
-  });
-  runProfileBtn?.addEventListener('click', async () => {
-    const id = profileSelect?.value;
-    if (!id) return;
-    const profiles = await loadApexTestRunProfiles();
-    const p = profiles.find((x) => (x.id || x.name) === id);
-    if (!p?.runBody) return;
-    await runApexTestsWithBody(p.runBody);
+    void renderProfilesModalList();
   });
   document.addEventListener('keydown', (e) => {
     if (getSelectedArtifactType() !== 'ApexTests') return;
     if (e.key === 'Escape') {
+      closeApexTestsProfilesModal();
       closeHubExpandedDetail();
       return;
     }
@@ -978,5 +1067,7 @@ export function setupApexTestsPanel() {
   initApexTestsCoverageModal();
   initApexTestsViewTestModal();
   initApexTestsViewLogModal();
+  initApexTestsProfilesModal();
+  initApexTestsClearRunsButton();
   void refreshApexTestsPanel();
 }

@@ -38,5 +38,19 @@ describe('installEarlyExceptionCapture', () => {
         reason: 'Error: workerMain.js failed'
       })
     ).toBe(true);
+    expect(
+      isBenignPageRejectionEvent({
+        reason: 'Error: no diff result available'
+      })
+    ).toBe(true);
+  });
+
+  it('ignora errores benignos de diff Monaco', () => {
+    expect(
+      isBenignPageErrorEvent({
+        message: 'no diff result available',
+        filename: 'chrome-extension://id/vendor/monaco-editor/min/vs/editor/editor.main.js'
+      })
+    ).toBe(true);
   });
 });

@@ -1,5 +1,5 @@
 import { POSTHOG_DEBUG } from './telemetryConfig.js';
-import { waitForFeatureFlags } from './posthogSessionReplay.js';
+import { waitForFeatureFlags } from './posthogFeatureFlagLoader.js';
 
 /** Feature flag remoto (PostHog). Rollout 0 % por defecto; activar gradualmente en el dashboard. */
 export const SUPPORT_FLAG = 'sfoc_support';
@@ -30,12 +30,21 @@ export function parseSupportFlagPayload(raw) {
   return { enabled: o.enabled !== false };
 }
 
+/** @type {boolean | null} */
+let cachedSupportEnabled = null;
+
+/** Para tests. */
+export function resetSupportFlagCacheForTests() {
+  cachedSupportEnabled = null;
+}
+
 /**
  * Support desactivado salvo flag explícitamente true y payload.enabled !== false.
  * @param {import('./posthogClient.js').posthog | null | undefined} ph
  */
 export async function isPosthogSupportFlagEnabled(ph) {
   if (!ph) return false;
+  if (cachedSupportEnabled !== null) return cachedSupportEnabled;
 
   await waitForFeatureFlags(ph, 8000);
 
@@ -44,6 +53,7 @@ export async function isPosthogSupportFlagEnabled(ph) {
     const evaluated = ph.isFeatureEnabled(SUPPORT_FLAG);
     if (evaluated !== true) {
       if (POSTHOG_DEBUG) console.log('[posthog] support flag off', { evaluated });
+      cachedSupportEnabled = false;
       return false;
     }
 
@@ -54,10 +64,13 @@ export async function isPosthogSupportFlagEnabled(ph) {
     const payload = parseSupportFlagPayload(rawPayload);
     if (!payload.enabled) {
       if (POSTHOG_DEBUG) console.log('[posthog] support flag payload disabled');
+      cachedSupportEnabled = false;
       return false;
     }
+    cachedSupportEnabled = true;
     return true;
   } catch {
+    cachedSupportEnabled = false;
     return false;
   }
 }
@@ -71,6 +84,7 @@ export function hookSupportOnFeatureFlags(ph, onChange) {
   ph.__sfocSupportFlagHooked = true;
 
   const run = () => {
+    cachedSupportEnabled = null;
     void isPosthogSupportFlagEnabled(ph).then((enabled) => {
       if (typeof document !== 'undefined') {
         document.dispatchEvent(

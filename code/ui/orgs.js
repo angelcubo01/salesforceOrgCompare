@@ -215,6 +215,14 @@ export function updateOrgDropdownLayout() {
     leftDropdown.classList.remove('single-mode');
     return;
   }
+  if (
+    document.body.classList.contains('artifact-dependency-explorer') &&
+    !document.body.classList.contains('artifact-dependency-explorer-compare')
+  ) {
+    rightDropdown.classList.add('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
   if (document.body.classList.contains('artifact-apex-coverage-compare')) {
     rightDropdown.classList.remove('hidden');
     leftDropdown.classList.remove('single-mode');

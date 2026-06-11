@@ -599,6 +599,7 @@ html[data-ui-theme="light"] .standard-compare-panel {
 html[data-ui-theme="light"] .generate-package-xml-panel,
 html[data-ui-theme="light"] .apex-tests-panel,
 html[data-ui-theme="light"] .field-dependency-panel,
+html[data-ui-theme="light"] .dep-explorer-panel,
 html[data-ui-theme="light"] .org-limits-panel,
 html[data-ui-theme="light"] .permission-diff-panel,
 html[data-ui-theme="light"] .debug-log-browser-panel,
@@ -656,8 +657,84 @@ html[data-ui-theme="light"] .no-org-message .no-org-content h3 {
   color: #0f172a;
 }
 
+html[data-ui-theme="light"] .feature-controls-banner--info {
+  background: rgba(37, 99, 235, 0.1);
+  border-bottom-color: #93c5fd;
+  color: #1e40af;
+}
+
+html[data-ui-theme="light"] .feature-controls-banner--warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom-color: #fcd34d;
+  color: #92400e;
+}
+
+html[data-ui-theme="light"] .feature-controls-banner--error {
+  background: rgba(239, 68, 68, 0.1);
+  border-bottom-color: #fca5a5;
+  color: #991b1b;
+}
+
+html[data-ui-theme="light"] .feature-controls-banner-dismiss {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-backdrop,
 html[data-ui-theme="light"] .app-help-modal-backdrop {
   background: rgba(15, 23, 42, 0.45);
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-panel {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  color: #334155;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal--info .feature-controls-tool-modal-panel {
+  border-color: #93c5fd;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal--warn .feature-controls-tool-modal-panel {
+  border-color: #fcd34d;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal--error .feature-controls-tool-modal-panel {
+  border-color: #fca5a5;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-head {
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-title {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-close,
+html[data-ui-theme="light"] .feature-controls-tool-modal-primary {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-close:hover,
+html[data-ui-theme="light"] .feature-controls-tool-modal-primary:hover {
+  background: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-body p {
+  color: #475569;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-foot {
+  border-top-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .feature-controls-tool-modal-link {
+  color: #2563eb;
 }
 
 html[data-ui-theme="light"] .app-help-modal-panel {
@@ -773,13 +850,55 @@ html[data-ui-theme="light"] .toast-spinner-cancel:hover {
 }
 
 /* ── Paneles: títulos, tablas, formularios (antes quedaban tema oscuro) ── */
-html[data-ui-theme="light"] .apex-tests-hub-title,
-html[data-ui-theme="light"] .apex-tests-hub-runs-title {
+html[data-ui-theme="light"] .apex-tests-hub-title {
   color: #0f172a;
 }
 
 html[data-ui-theme="light"] .apex-tests-hub-status {
   color: #475569;
+}
+
+html[data-ui-theme="light"] .apex-tests-hub-status--warn {
+  color: #b45309;
+}
+
+html[data-ui-theme="light"] .apex-tests-clear-runs-btn {
+  color: #b91c1c;
+  background: #fff;
+  border-color: #fca5a5;
+}
+
+html[data-ui-theme="light"] .apex-tests-clear-runs-btn:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+html[data-ui-theme="light"] .apex-tests-runs-action-group:not(:first-child) {
+  border-left-color: #cbd5e1;
+}
+
+html[data-ui-theme="light"] .apex-tests-runs-action-btn--primary {
+  color: #0f172a;
+  background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
+  border-color: #3b82f6;
+}
+
+html[data-ui-theme="light"] .apex-tests-runs-action-btn--danger {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+html[data-ui-theme="light"] .apex-tests-profiles-item {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+html[data-ui-theme="light"] .apex-tests-profiles-item-name {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .apex-tests-org-status-warn:not(.hidden) {
+  color: #b45309;
 }
 
 html[data-ui-theme="light"] .apex-tests-hub-runs {
@@ -887,7 +1006,8 @@ html[data-ui-theme="light"] .apex-tests-runs-action-btn:hover:not(:disabled) {
 }
 
 html[data-ui-theme="light"] .generate-package-xml-title,
-html[data-ui-theme="light"] .field-dependency-title {
+html[data-ui-theme="light"] .field-dependency-title,
+html[data-ui-theme="light"] .dep-explorer-title {
   color: #0f172a;
 }
 
@@ -895,6 +1015,56 @@ html[data-ui-theme="light"] .generate-package-xml-hint,
 html[data-ui-theme="light"] .field-dependency-hint,
 html[data-ui-theme="light"] .generate-package-xml-placeholder {
   color: #475569;
+}
+
+html[data-ui-theme="light"] .dep-explorer-results-title,
+html[data-ui-theme="light"] .dep-explorer-category summary {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .dep-explorer-category {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .dep-explorer-item-card {
+  background: #fff;
+  border-color: #dadce0;
+}
+
+html[data-ui-theme="light"] .dep-explorer-item-name {
+  color: #202124;
+}
+
+html[data-ui-theme="light"] .dep-explorer-item-type,
+html[data-ui-theme="light"] .dep-explorer-item-refs-label,
+html[data-ui-theme="light"] .dep-explorer-item-refs-more {
+  color: #5f6368;
+}
+
+html[data-ui-theme="light"] .dep-explorer-item-refs {
+  color: #3c4043;
+}
+
+html[data-ui-theme="light"] .dep-explorer-ref-link,
+html[data-ui-theme="light"] .dep-explorer-sf-link,
+html[data-ui-theme="light"] .dep-explorer-src-link {
+  color: #1a73e8;
+}
+
+html[data-ui-theme="light"] .dep-explorer-ref-link:hover,
+html[data-ui-theme="light"] .dep-explorer-sf-link:hover,
+html[data-ui-theme="light"] .dep-explorer-src-link:hover {
+  color: #174ea6;
+}
+
+html[data-ui-theme="light"] .dep-explorer-item-actions {
+  border-top-color: #e8eaed;
+}
+
+html[data-ui-theme="light"] .dep-explorer-item-list li {
+  color: #334155;
+  border-bottom-color: #e2e8f0;
 }
 
 html[data-ui-theme="light"] .field-dependency-placeholder,

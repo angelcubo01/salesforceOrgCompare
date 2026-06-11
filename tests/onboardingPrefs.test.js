@@ -44,12 +44,13 @@ describe('onboardingPrefs', () => {
     expect(prefs.helpOpened).toBe(true);
   });
 
-  it('lista de herramientas alineada con onboarding (13)', () => {
-    expect(ALL_ONBOARDING_TOOLS).toHaveLength(13);
+  it('lista de herramientas alineada con onboarding (14)', () => {
+    expect(ALL_ONBOARDING_TOOLS).toHaveLength(14);
     expect(ALL_ONBOARDING_TOOLS).toContain('Comparator');
     expect(ALL_ONBOARDING_TOOLS).toContain('FieldHistory');
     expect(ALL_ONBOARDING_TOOLS).toContain('PermissionDiff');
     expect(ALL_ONBOARDING_TOOLS).toContain('QueryExplorer');
+    expect(ALL_ONBOARDING_TOOLS).toContain('DependencyExplorer');
   });
 });
 

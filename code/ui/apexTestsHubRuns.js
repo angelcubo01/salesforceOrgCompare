@@ -19,10 +19,14 @@ import { parseApexStackFrameLine } from '../../shared/apexStackTraceParse.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { sanitizeUiError } from '../../shared/sanitizeUiError.js';
 import { randomStagingId } from '../../shared/randomId.js';
+import {
+  APEX_TEST_JOBS_TTL_MS,
+  pruneExpiredStoredJobs
+} from '../../shared/apexTestRunJobPrune.js';
+import { apexTestRunHasFailures } from '../../shared/apexTestRunStatus.js';
+import { sfApexIdKey, apexRunMatchesStoredJobId } from '../../shared/apexTestJobIdMatch.js';
 
 const STORAGE_KEY = 'apexTestRunJobs';
-/** Jobs propios / seguidos visibles tras refrescar (24 h). */
-const APEX_TEST_JOBS_TTL_MS = 86_400_000;
 const MAX_POLLS_ALL_MISSING = 10;
 const HUB_POLL_ACTIVE_MS = 2000;
 const HUB_POLL_IDLE_MS = 15000;
@@ -91,24 +95,128 @@ function ensureApexRunsMoreMenuDismiss() {
   });
 }
 
+function createApexRunActionIconSvg(kind) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = (d) => {
+    const p = document.createElementNS(NS, 'path');
+    p.setAttribute('d', d);
+    svg.appendChild(p);
+  };
+  switch (kind) {
+    case 'coverage':
+      path('M12 20V10');
+      path('M18 20V4');
+      path('M6 20v-4');
+      break;
+    case 'log':
+      path('M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z');
+      path('M14 2v6h6');
+      path('M16 13H8');
+      path('M16 17H8');
+      break;
+    case 'view':
+      path('M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z');
+      path('M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z');
+      break;
+    case 'rerun':
+      path('M21 12a9 9 0 1 1-2.64-6.36');
+      path('M21 3v6h-6');
+      break;
+    case 'rerun-fail':
+      path('M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z');
+      path('M12 9v4');
+      path('M12 17h.01');
+      break;
+    case 'abort':
+      path('M18 6 6 18');
+      path('M6 6l12 12');
+      break;
+    case 'more':
+      path('M12 12h.01');
+      path('M19 12h.01');
+      path('M5 12h.01');
+      break;
+    default:
+      path('M12 12h.01');
+  }
+  return svg;
+}
+
 /**
- * @param {{ disabled?: boolean, onExportCsv: () => void, onExportJson: () => void }} opts
+ * @param {{ icon: string, label: string, variant?: string, disabled?: boolean, title?: string, onClick?: (e: Event) => void }} opts
+ */
+function createApexRunActionButton(opts) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'apex-tests-runs-action-btn';
+  if (opts.variant) btn.classList.add(`apex-tests-runs-action-btn--${opts.variant}`);
+  btn.disabled = !!opts.disabled;
+  btn.title = opts.title || opts.label;
+  btn.setAttribute('aria-label', opts.label);
+  const icon = document.createElement('span');
+  icon.className = 'apex-tests-runs-action-icon';
+  icon.appendChild(createApexRunActionIconSvg(opts.icon));
+  const txt = document.createElement('span');
+  txt.className = 'apex-tests-runs-action-label';
+  txt.textContent = opts.label;
+  btn.appendChild(icon);
+  btn.appendChild(txt);
+  if (opts.onClick) btn.addEventListener('click', opts.onClick);
+  return btn;
+}
+
+function createApexRunsActionGroup(children) {
+  const g = document.createElement('div');
+  g.className = 'apex-tests-runs-action-group';
+  for (const c of children) {
+    if (c) g.appendChild(c);
+  }
+  return g;
+}
+
+/**
+ * @param {{ disabled?: boolean, onExportCsv: () => void, onExportJson: () => void, extraItems?: { label: string, onClick: () => void, disabled?: boolean }[] }} opts
  */
 function createApexRunsMoreOptionsMenu(opts) {
   const wrap = document.createElement('div');
   wrap.className = 'apex-tests-runs-more-wrap';
 
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'apex-tests-runs-action-btn apex-tests-runs-more-btn';
-  btn.textContent = t('apexTests.runsMoreOptions');
-  btn.disabled = !!opts.disabled;
+  const btn = createApexRunActionButton({
+    icon: 'more',
+    label: t('apexTests.runsMoreOptions'),
+    disabled: !!opts.disabled
+  });
+  btn.classList.add('apex-tests-runs-more-btn');
   btn.setAttribute('aria-haspopup', 'menu');
   btn.setAttribute('aria-expanded', 'false');
 
   const menu = document.createElement('div');
   menu.className = 'apex-tests-runs-more-menu';
   menu.setAttribute('role', 'menu');
+
+  for (const item of opts.extraItems || []) {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'apex-tests-runs-more-item';
+    el.setAttribute('role', 'menuitem');
+    el.textContent = item.label;
+    el.disabled = !!item.disabled;
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllApexRunsMoreMenus();
+      if (el.disabled) return;
+      item.onClick();
+    });
+    menu.appendChild(el);
+  }
 
   const itemCsv = document.createElement('button');
   itemCsv.type = 'button';
@@ -156,6 +264,61 @@ function createApexRunsMoreOptionsMenu(opts) {
   });
 
   return wrap;
+}
+
+export async function clearAllApexTestRunHistory() {
+  if (!window.confirm(t('apexTests.runsClearHistoryConfirm'))) return;
+  try {
+    await chrome.storage.local.set({ [STORAGE_KEY]: [] });
+  } catch {
+    /* ignore */
+  }
+  failuresCache.clear();
+  methodsCache.clear();
+  lastPollResult = null;
+  expandedRunKey = null;
+  consecutiveAllMissingPolls = 0;
+  closeAllApexRunsMoreMenus();
+  closeHubExpandedDetail();
+  showToast(t('apexTests.runsClearHistoryDone'), 'success');
+  void tickApexTestsHubRuns();
+}
+
+let clearRunsBtnBound = false;
+
+export function initApexTestsClearRunsButton() {
+  if (clearRunsBtnBound) return;
+  const btn = document.getElementById('apexTestsClearRunsBtn');
+  if (!btn) return;
+  clearRunsBtnBound = true;
+  btn.addEventListener('click', () => void clearAllApexTestRunHistory());
+}
+
+function syncClearRunsButtonState(listLength) {
+  const btn = document.getElementById('apexTestsClearRunsBtn');
+  if (btn) btn.disabled = !(listLength > 0);
+}
+
+function parseOtherRunJobStartedMs(raw) {
+  const s = String(raw ?? '').trim();
+  if (!s) return null;
+  const n = Number(s);
+  if (Number.isFinite(n) && /^\d+$/.test(s)) {
+    if (n >= 1e12) return n;
+    if (n >= 1e9) return n * 1000;
+    return n;
+  }
+  const parsed = Date.parse(s);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function filterOtherRunsJobsByRetention(jobs) {
+  const cutoff = Date.now() - APEX_TEST_JOBS_TTL_MS;
+  return (jobs || []).filter((j) => {
+    const ms = parseOtherRunJobStartedMs(j?.date);
+    if (ms == null) return true;
+    return ms >= cutoff;
+  });
 }
 
 export function initApexTestsCoverageModal() {
@@ -592,24 +755,59 @@ export function closeHubExpandedDetail() {
   syncAllExpandButtonStates();
 }
 
+function classIdFromRunBodyForName(runBody, className) {
+  if (!runBody || typeof runBody !== 'object' || !Array.isArray(runBody.tests)) return '';
+  const want = String(className || '').trim();
+  if (!want) return '';
+  for (const te of runBody.tests) {
+    if (!te || typeof te !== 'object') continue;
+    const cn = te.className != null ? String(te.className).trim() : '';
+    const cid = te.classId != null ? String(te.classId).trim() : '';
+    if (cid && cn === want) return cid;
+  }
+  return '';
+}
+
+function apexClassIdFromResult(row) {
+  const ac = row && row.ApexClass;
+  if (ac && typeof ac === 'object' && ac.Id != null) return String(ac.Id).trim();
+  return '';
+}
+
 async function rerunFailedMethodsFromJob(rowOrgId, jobId, storedJob) {
   const fails = await loadFailures(rowOrgId, jobId, { useCache: true });
   if (!fails.rows?.length) {
     showToast(t('apexTests.rerunFailuresEmpty'), 'warn');
     return;
   }
-  /** @type {Map<string, Set<string>>} */
+  /** @type {Map<string, { classId: string, methods: Set<string> }>} */
   const byClass = new Map();
   for (const r of fails.rows) {
     const cn = apexClassNameFromResult(r);
     const mn = r?.MethodName != null ? String(r.MethodName).trim() : '';
     if (!cn || cn === '—' || !mn) continue;
-    if (!byClass.has(cn)) byClass.set(cn, new Set());
-    byClass.get(cn).add(mn);
+    if (!byClass.has(cn)) {
+      byClass.set(cn, { classId: apexClassIdFromResult(r), methods: new Set() });
+    } else {
+      const entry = byClass.get(cn);
+      if (!entry.classId) entry.classId = apexClassIdFromResult(r);
+    }
+    byClass.get(cn).methods.add(mn);
   }
   const tests = [];
-  for (const [cn, set] of byClass) {
-    tests.push({ className: cn, testMethods: [...set].sort((a, b) => a.localeCompare(b)) });
+  for (const [cn, { classId, methods }] of byClass) {
+    const resolvedId =
+      classId || classIdFromRunBodyForName(storedJob?.runBody, cn) || '';
+    const entry = {
+      testMethods: [...methods].sort((a, b) => a.localeCompare(b))
+    };
+    if (resolvedId) {
+      entry.classId = resolvedId;
+      entry.className = cn;
+    } else {
+      entry.className = cn;
+    }
+    tests.push(entry);
   }
   if (!tests.length) {
     showToast(t('apexTests.rerunFailuresEmpty'), 'warn');
@@ -825,12 +1023,13 @@ function isRunnerVisible() {
   return !!(r && !r.classList.contains('hidden'));
 }
 
-function pruneExpiredStoredJobs(list) {
-  const cutoff = Date.now() - APEX_TEST_JOBS_TTL_MS;
-  return (list || []).filter((j) => {
-    const t = j?.startedAt != null ? Number(j.startedAt) : 0;
-    return Number.isFinite(t) && t >= cutoff;
-  });
+async function persistPrunedJobsIfNeeded(raw, pruned) {
+  if (pruned.length === raw.length) return;
+  try {
+    await chrome.storage.local.set({ [STORAGE_KEY]: pruned });
+  } catch {
+    /* ignore */
+  }
 }
 
 async function loadAllStoredJobs() {
@@ -930,11 +1129,10 @@ function scheduleHubPollLoop() {
       scheduleHubPollLoop();
       return;
     }
+    void tickApexTestsHubRuns();
     if (expandedRunKey) {
       void refreshExpandedJobStatusInPlace();
       void refreshExpandedMethodsInPlace();
-    } else {
-      void tickApexTestsHubRuns();
     }
     scheduleHubPollLoop();
   }, computeHubPollDelayMs());
@@ -995,7 +1193,7 @@ export async function tickApexTestsHubRuns() {
   }
   pollInFlight = true;
   try {
-    await renderHubRunsTable({ reusePoll: !!expandedRunKey });
+    await renderHubRunsTable();
   } finally {
     pollInFlight = false;
     if (pendingHubTick) {
@@ -1028,11 +1226,6 @@ function formatTestRunStartedAt(startedAt) {
   } catch {
     return '—';
   }
-}
-
-function sfApexIdKey(id) {
-  const s = String(id || '').replace(/[^a-zA-Z0-9]/g, '');
-  return s.length >= 15 ? s.slice(0, 15).toLowerCase() : s.toLowerCase();
 }
 
 function classNameFromRunBodyForClassId(runBody, classId) {
@@ -1152,19 +1345,6 @@ function formatApexJobStatus(status) {
   const key = `apexTests.jobStatus.${raw}`;
   const translated = t(key);
   return translated === key ? raw : translated;
-}
-
-/** AsyncApexJob `Completed` no implica que todos los métodos hayan pasado. */
-function apexTestRunHasFailures(outcomeCounts, job) {
-  if (outcomeCounts && typeof outcomeCounts === 'object') {
-    const failN =
-      Number(outcomeCounts.Fail || 0) +
-      Number(outcomeCounts.CompileFail || 0);
-    if (failN > 0) return true;
-  }
-  const errs = job?.NumberOfErrors;
-  if (errs != null && Number(errs) > 0) return true;
-  return false;
 }
 
 function formatEffectiveApexJobStatus(status, outcomeCounts, job) {
@@ -1665,7 +1845,12 @@ function buildRunJobIdMap(poll) {
   const m = new Map();
   if (!poll?.ok || !Array.isArray(poll.runs)) return m;
   for (const r of poll.runs) {
-    if (r?.jobId != null) m.set(String(r.jobId), r);
+    if (r?.jobId != null) {
+      m.set(String(r.jobId), r);
+      m.set(sfApexIdKey(r.jobId), r);
+    }
+    if (r?.canonicalJobId != null) m.set(sfApexIdKey(r.canonicalJobId), r);
+    if (r?.job?.Id) m.set(sfApexIdKey(r.job.Id), r);
   }
   return m;
 }
@@ -1755,10 +1940,10 @@ function hasOtherInFlightSameRunBody(orgId, thisJobId, thisRunBody, enrichedList
   if (!thisKey) return false;
   for (const other of enrichedList) {
     if (String(other.orgId) !== String(orgId)) continue;
-    if (String(other.jobId) === String(thisJobId)) continue;
+    if (sfApexIdKey(other.jobId) === sfApexIdKey(thisJobId)) continue;
     if (!other.runBody || typeof other.runBody !== 'object') continue;
     if (canonicalRunBodyJson(other.runBody) !== thisKey) continue;
-    const orun = runMap.get(String(other.jobId));
+    const orun = runMap.get(String(other.jobId)) || runMap.get(sfApexIdKey(other.jobId));
     if (!orun || orun.missing || orun.pollFailure) continue;
     const st = orun.job?.Status;
     if (st && isApexAsyncJobInFlightStatus(st)) return true;
@@ -1777,7 +1962,7 @@ function pickRunForStoredJob(poll, jobId) {
         : { reason: 'UNKNOWN', error: t('apexTests.runsPollError') }
     };
   }
-  const found = (poll.runs || []).find((r) => String(r.jobId) === String(jobId));
+  const found = (poll.runs || []).find((r) => apexRunMatchesStoredJobId(r, jobId));
   if (found) return found;
   return { jobId, missing: true, queueRows: [] };
 }
@@ -1984,7 +2169,10 @@ export async function rememberWatchedApexTestJob(orgId, jobId, envLabel, meta = 
       ? Number(meta.startedAt)
       : Date.now();
   const list = pruneExpiredStoredJobs(await loadAllStoredJobs());
-  const filtered = list.filter((j) => !(String(j.jobId) === jid && String(j.orgId) === oid));
+  const want = sfApexIdKey(jid);
+  const filtered = list.filter(
+    (j) => !(String(j.orgId) === oid && sfApexIdKey(j.jobId) === want)
+  );
   const row = {
     orgId: oid,
     jobId: jid,
@@ -2001,8 +2189,9 @@ export async function rememberWatchedApexTestJob(orgId, jobId, envLabel, meta = 
     /* ignore */
   }
   lastPollResult = null;
+  consecutiveAllMissingPolls = 0;
   showToast(t('apexTests.otherRunsWatchOk'), 'success');
-  void tickApexTestsHubRuns();
+  updateApexTestsHubPollingState();
 }
 
 export async function unwatchApexTestJob(orgId, jobId) {
@@ -2137,9 +2326,18 @@ function formatOtherRunsJobDate(raw) {
   }
 }
 
+function otherRunsJobClassNameList(j) {
+  const qrows = Array.isArray(j?.queueRows) ? j.queueRows : [];
+  const names = [...new Set(qrows.map((r) => String(r.classname || '').trim()).filter(Boolean))];
+  if (names.length) return names;
+  const single = j?.classname != null ? String(j.classname).trim() : '';
+  return single ? [single] : [];
+}
+
 function formatOtherRunsJobDetail(j) {
   const dateFmt = formatOtherRunsJobDate(j.date);
-  return [j.extstatus, dateFmt, j.classname].filter(Boolean).join(' · ') || '—';
+  const classNames = otherRunsJobClassNameList(j).join(', ');
+  return [j.extstatus, dateFmt, classNames].filter(Boolean).join(' · ') || '—';
 }
 
 function renderRunStatusCell(tdStatus, run, runBody) {
@@ -2235,7 +2433,24 @@ function syncOtherRunsTbody(tbody, jobs, orgId, storedJobs = []) {
     }
     tr.cells[1].textContent = String(j.launchedBy || '').trim() || '—';
     tr.cells[1].title = String(j.launchedBy || '').trim() || '';
-    tr.cells[2].replaceChildren(buildApexJobStatusNode(j.status));
+    tr.cells[2].textContent = '';
+    const jobMeta = {
+      NumberOfErrors: j.numberOfErrors,
+      ExtendedStatus: j.extstatus
+    };
+    const classNames = otherRunsJobClassNameList(j);
+    if (classNames.length) {
+      const s1 = document.createElement('span');
+      s1.className = 'apex-tests-runs-status-main';
+      s1.appendChild(buildApexJobStatusNode(j.status, j.outcomeCounts, jobMeta));
+      tr.cells[2].appendChild(s1);
+      const sub = document.createElement('div');
+      sub.className = 'apex-tests-runs-class-sub';
+      sub.textContent = classNames.join(', ');
+      tr.cells[2].appendChild(sub);
+    } else {
+      tr.cells[2].replaceChildren(buildApexJobStatusNode(j.status, j.outcomeCounts, jobMeta));
+    }
     tr.cells[3].textContent = formatOtherRunsJobDetail(j);
     const watchBtn = tr.querySelector('.apex-tests-other-watch-btn, .apex-tests-other-unwatch-btn');
     if (watchBtn) applyOtherRunsWatchButton(watchBtn, orgId, parentId, j, storedJobs);
@@ -2356,7 +2571,7 @@ function applyOtherOrgSectionState(section, label, res, orgId, storedJobs = []) 
   }
 
   if (errP) errP.hidden = true;
-  const jobs = res.jobs || [];
+  const jobs = filterOtherRunsJobsByRetention(res.jobs || []);
   if (!jobs.length) {
     if (emptyP) emptyP.hidden = false;
     if (tableWrap) tableWrap.hidden = true;
@@ -2415,10 +2630,7 @@ async function refreshOtherOrgQueuePanel(list, enriched) {
   for (const j of list) {
     const oid = String(j.orgId);
     if (!trackedByOrg.has(oid)) trackedByOrg.set(oid, []);
-    /** Los seguidos (`watched`) pueden seguir en la cola ajena: en «Otras ejecuciones» muestran Dejar de seguir. */
-    if (j.source !== 'watched') {
-      trackedByOrg.get(oid).push(j.jobId);
-    }
+    trackedByOrg.get(oid).push(j.jobId);
   }
   const labelByOrg = new Map();
   for (const j of enriched || []) {
@@ -2479,7 +2691,11 @@ async function renderHubRunsTable(opts = {}) {
   ensureApexRunsMoreMenuDismiss();
   closeAllApexRunsMoreMenus();
 
-  let list = await loadAllStoredJobs();
+  initApexTestsClearRunsButton();
+  const rawJobs = await loadAllStoredJobs();
+  let list = pruneExpiredStoredJobs(rawJobs);
+  await persistPrunedJobsIfNeeded(rawJobs, list);
+  syncClearRunsButtonState(list.length);
   const pollKey = list.map((j) => `${j.orgId}:${j.jobId}`).join('|');
 
   if (errEl) {
@@ -2614,37 +2830,8 @@ async function renderHubRunsTable(opts = {}) {
     const tdActions = document.createElement('td');
     tdActions.className = 'apex-tests-runs-td-actions';
 
-    const btnCoverage = document.createElement('button');
-    btnCoverage.type = 'button';
-    btnCoverage.className = 'apex-tests-runs-action-btn';
-    btnCoverage.dataset.i18n = 'apexTests.runsCoverage';
-    btnCoverage.textContent = t('apexTests.runsCoverage');
-    btnCoverage.disabled = !!(run.missing || run.pollFailure || !run.job || !terminal || !poll?.ok);
-
-    const btnLog = document.createElement('button');
-    btnLog.type = 'button';
-    btnLog.className = 'apex-tests-runs-action-btn';
-    btnLog.dataset.i18n = 'apexTests.runsLog';
-    btnLog.textContent = t('apexTests.runsLog');
-    btnLog.disabled = !!(run.missing || run.pollFailure || !run.job || !terminal || !poll?.ok);
-
     const viewTestOpts = testClassOptionsFromRunBody(j.runBody);
-    const btnViewTest = document.createElement('button');
-    btnViewTest.type = 'button';
-    btnViewTest.className = 'apex-tests-runs-action-btn';
-    btnViewTest.dataset.i18n = 'apexTests.runsViewTest';
-    btnViewTest.textContent = t('apexTests.runsViewTest');
-    btnViewTest.disabled = viewTestOpts.length === 0;
-    btnViewTest.title =
-      viewTestOpts.length === 0 ? t('apexTests.viewTestNoClassesHint') : '';
-
     const pollHealthy = !!(poll?.ok && !run.pollFailure && !run.missing && run.job);
-
-    const btnRerun = document.createElement('button');
-    btnRerun.type = 'button';
-    btnRerun.className = 'apex-tests-runs-action-btn';
-    btnRerun.dataset.i18n = 'apexTests.runsRerun';
-    btnRerun.textContent = t('apexTests.runsRerun');
     const hasRunSnapshot = !!(j.runBody && typeof j.runBody === 'object');
     const runMap = runMapsByOrg.get(rowOrgId) || new Map();
     let selfInFlight = false;
@@ -2660,42 +2847,64 @@ async function renderHubRunsTable(opts = {}) {
       );
     }
     const rerunBlockedInFlight = selfInFlight || duplicateInFlight;
-    btnRerun.disabled = !!(!hasRunSnapshot || rerunBlockedInFlight);
-    if (!hasRunSnapshot) btnRerun.title = t('apexTests.rerunNoSnapshotHint');
-    else if (rerunBlockedInFlight) {
-      btnRerun.title = selfInFlight
-        ? t('apexTests.rerunBlockedSelf')
-        : t('apexTests.rerunBlockedDuplicate');
-    } else btnRerun.title = '';
-
-    const btnRerunFailures = document.createElement('button');
-    btnRerunFailures.type = 'button';
-    btnRerunFailures.className = 'apex-tests-runs-action-btn';
-    btnRerunFailures.dataset.i18n = 'apexTests.runsRerunFailures';
-    btnRerunFailures.textContent = t('apexTests.runsRerunFailures');
     const failCount =
       run.outcomeCounts && (Number(run.outcomeCounts.Fail || 0) + Number(run.outcomeCounts.CompileFail || 0));
-    btnRerunFailures.disabled = !(
-      terminal &&
-      hasRunSnapshot &&
-      pollHealthy &&
-      failCount > 0 &&
-      !rerunBlockedInFlight
-    );
-
     const stLc = String(run.job?.Status || '')
       .trim()
       .toLowerCase();
     const canAbortJob =
       pollHealthy && !!run.job && ['queued', 'processing', 'preparing', 'holding'].includes(stLc);
+    const inspectDisabled = !!(run.missing || run.pollFailure || !run.job || !terminal || !poll?.ok);
 
-    const btnAbort = document.createElement('button');
-    btnAbort.type = 'button';
-    btnAbort.className = 'apex-tests-runs-action-btn';
-    btnAbort.dataset.i18n = 'apexTests.runsAbort';
-    btnAbort.textContent = t('apexTests.runsAbort');
-    btnAbort.disabled = !canAbortJob;
-    btnAbort.title = canAbortJob ? t('apexTests.runsAbortHint') : '';
+    const btnCoverage = createApexRunActionButton({
+      icon: 'coverage',
+      label: t('apexTests.runsCoverage'),
+      disabled: inspectDisabled
+    });
+    const btnLog = createApexRunActionButton({
+      icon: 'log',
+      label: t('apexTests.runsLog'),
+      disabled: inspectDisabled
+    });
+    const btnViewTest = createApexRunActionButton({
+      icon: 'view',
+      label: t('apexTests.runsViewTest'),
+      disabled: viewTestOpts.length === 0,
+      title: viewTestOpts.length === 0 ? t('apexTests.viewTestNoClassesHint') : t('apexTests.runsViewTest')
+    });
+
+    let rerunTitle = t('apexTests.runsRerun');
+    if (!hasRunSnapshot) rerunTitle = t('apexTests.rerunNoSnapshotHint');
+    else if (rerunBlockedInFlight) {
+      rerunTitle = selfInFlight ? t('apexTests.rerunBlockedSelf') : t('apexTests.rerunBlockedDuplicate');
+    }
+    const btnRerun = createApexRunActionButton({
+      icon: 'rerun',
+      label: t('apexTests.runsRerun'),
+      variant: 'primary',
+      disabled: !!(!hasRunSnapshot || rerunBlockedInFlight),
+      title: rerunTitle
+    });
+    const btnRerunFailures = createApexRunActionButton({
+      icon: 'rerun-fail',
+      label: t('apexTests.runsRerunFailures'),
+      variant: 'primary',
+      disabled: !(
+        terminal &&
+        hasRunSnapshot &&
+        pollHealthy &&
+        failCount > 0 &&
+        !rerunBlockedInFlight
+      ),
+      title: t('apexTests.runsRerunFailures')
+    });
+    const btnAbort = createApexRunActionButton({
+      icon: 'abort',
+      label: t('apexTests.runsAbort'),
+      variant: 'danger',
+      disabled: !canAbortJob,
+      title: canAbortJob ? t('apexTests.runsAbortHint') : t('apexTests.runsAbort')
+    });
 
     const actionsInner = document.createElement('div');
     actionsInner.className = 'apex-tests-runs-actions-inner';
@@ -2708,32 +2917,30 @@ async function renderHubRunsTable(opts = {}) {
     };
     const canonicalForExport = run.job?.Id || run.canonicalJobId || jobId;
 
+    const moreExtra = [];
+    if (isWatchedStoredJob(j)) {
+      moreExtra.push({
+        label: t('apexTests.runsUnwatch'),
+        onClick: () => void unwatchApexTestJob(rowOrgId, jobId)
+      });
+    }
+
     const moreMenu = createApexRunsMoreOptionsMenu({
-      disabled: exportDisabled,
+      disabled: exportDisabled && !moreExtra.length,
+      extraItems: moreExtra,
       onExportCsv: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'csv', exportMeta),
       onExportJson: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'json', exportMeta)
     });
 
-    actionsInner.appendChild(btnCoverage);
-    actionsInner.appendChild(btnLog);
-    actionsInner.appendChild(btnViewTest);
-    actionsInner.appendChild(btnAbort);
-    if (isWatchedStoredJob(j)) {
-      const btnUnwatch = document.createElement('button');
-      btnUnwatch.type = 'button';
-      btnUnwatch.className = 'apex-tests-runs-action-btn apex-tests-runs-unwatch-btn';
-      btnUnwatch.dataset.i18n = 'apexTests.runsUnwatch';
-      btnUnwatch.textContent = t('apexTests.runsUnwatch');
-      btnUnwatch.title = t('apexTests.otherRunsUnwatchHint');
-      btnUnwatch.addEventListener('click', (e) => {
-        e.stopPropagation();
-        void unwatchApexTestJob(rowOrgId, jobId);
-      });
-      actionsInner.appendChild(btnUnwatch);
-    }
-    actionsInner.appendChild(btnRerun);
-    actionsInner.appendChild(btnRerunFailures);
-    actionsInner.appendChild(moreMenu);
+    const groupInspect = createApexRunsActionGroup([btnCoverage, btnLog, btnViewTest]);
+    const groupRun = createApexRunsActionGroup([
+      btnRerun,
+      failCount > 0 ? btnRerunFailures : null
+    ]);
+    const groupTail = createApexRunsActionGroup([canAbortJob ? btnAbort : null, moreMenu]);
+    actionsInner.appendChild(groupInspect);
+    actionsInner.appendChild(groupRun);
+    actionsInner.appendChild(groupTail);
     tdActions.appendChild(actionsInner);
     tr.appendChild(tdExpand);
     tr.appendChild(tdEnv);
@@ -2840,7 +3047,7 @@ async function renderHubRunsTable(opts = {}) {
   await refreshOtherOrgQueuePanel(list, enriched);
 
   if (pollValues.length && !allFailed) {
-    if (shouldStopPollingAfterRuns(runsForStop)) {
+    if (shouldStopPollingAfterRuns(runsForStop, list)) {
       stopApexTestsHubPolling();
     }
   }
@@ -2848,8 +3055,17 @@ async function renderHubRunsTable(opts = {}) {
 
 const TERMINAL_JOB = new Set(['Completed', 'Failed', 'Aborted', 'Error']);
 
-function shouldStopPollingAfterRuns(runs) {
+function shouldStopPollingAfterRuns(runs, storedJobs = []) {
   if (!runs.length) return false;
+  const hasWatchedInFlight = storedJobs.some((j, idx) => {
+    if (j?.source !== 'watched') return false;
+    const run = runs[idx];
+    if (!run || run.pollFailure) return true;
+    if (run.missing) return true;
+    return !!(run.job && isApexAsyncJobInFlightStatus(run.job.Status));
+  });
+  if (hasWatchedInFlight) return false;
+
   const relevant = runs.filter((r) => !r.pollFailure);
   if (!relevant.length) {
     consecutiveAllMissingPolls += 1;

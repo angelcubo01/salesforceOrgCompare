@@ -15,6 +15,7 @@ import { resolveRetrieveTargetItem } from '../ui/viewerChrome.js';
 import { getSelectedArtifactType } from '../ui/artifactTypeUi.js';
 import { refreshGeneratePackageXmlTypes } from '../ui/generatePackageXmlPanel.js';
 import { resetFieldDependencyToInitial } from '../ui/fieldDependencyPanel.js';
+import { resetDependencyExplorerPanel } from '../ui/dependencyExplorerPanel.js';
 import { refreshApexTestsPanel } from '../ui/apexTestsPanel.js';
 import { refreshAnonymousApexPanel } from '../ui/anonymousApexPanel.js';
 import { refreshQueryExplorerPanel } from '../ui/queryExplorerPanel.js';
@@ -56,6 +57,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'FieldDependency') {
       resetFieldDependencyToInitial();
+    }
+    if (getSelectedArtifactType() === 'DependencyExplorer') {
+      resetDependencyExplorerPanel();
     }
     if (getSelectedArtifactType() === 'AnonymousApex') {
       void refreshAnonymousApexPanel();
@@ -104,6 +108,9 @@ export function wireSelectors() {
     renderEditor({ leftChanged: false, rightChanged: true, prevRightOrgId: prevRight });
     if (getSelectedArtifactType() === 'FieldDependency') {
       resetFieldDependencyToInitial();
+    }
+    if (getSelectedArtifactType() === 'DependencyExplorer') {
+      resetDependencyExplorerPanel();
     }
     if (getSelectedArtifactType() === 'AnonymousApex') {
       void refreshAnonymousApexPanel();
@@ -156,6 +163,9 @@ export function wireSelectors() {
         }
         if (getSelectedArtifactType() === 'FieldDependency') {
           resetFieldDependencyToInitial();
+        }
+        if (getSelectedArtifactType() === 'DependencyExplorer') {
+          resetDependencyExplorerPanel();
         }
         if (getSelectedArtifactType() === 'AnonymousApex') {
           void refreshAnonymousApexPanel();

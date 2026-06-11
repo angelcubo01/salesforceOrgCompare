@@ -98,6 +98,35 @@ describe('usageEntryToPosthogEvent', () => {
     expect(ev?.properties.extension_version).toBe('2.6');
   });
 
+  it('mapea DependencyExplorer analyze como comparison_run', () => {
+    const ev = usageEntryToPosthogEvent({
+      kind: 'codeComparison',
+      action: 'dependencyExplorerAnalyze',
+      artifactType: 'DependencyExplorer',
+      phase: 'analyze',
+      leftOrgId: '00Dleft',
+      rowCount: 42,
+      typesCount: 5,
+      success: true,
+      descriptor: {
+        name: 'ApexClass',
+        resourceType: 'apexClass',
+        section: 'single',
+        queryDirection: 'transitive',
+        source: 'standard'
+      },
+      comparisonUrl: 'chrome-extension://abc/code/code.html?nav=monitoring&op=DependencyExplorer'
+    });
+    expect(ev?.name).toBe('comparison_run');
+    expect(ev?.properties.artifact_type).toBe('DependencyExplorer');
+    expect(ev?.properties.action).toBe('dependencyExplorerAnalyze');
+    expect(ev?.properties.row_count).toBe(42);
+    expect(ev?.properties.types_count).toBe(5);
+    expect(ev?.properties.desc_resourceType).toBe('apexClass');
+    expect(ev?.properties.desc_queryDirection).toBe('transitive');
+    expect(ev?.properties.app_mode).toBe('monitoring/DependencyExplorer');
+  });
+
   it('incluye solo sf_user_label cuando el entry lo trae', () => {
     const ev = usageEntryToPosthogEvent({
       kind: 'codeComparison',

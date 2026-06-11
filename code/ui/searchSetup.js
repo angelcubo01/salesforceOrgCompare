@@ -9,6 +9,7 @@ import { updateDocumentTitle } from './documentMeta.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { refreshGeneratePackageXmlTypes } from './generatePackageXmlPanel.js';
 import { refreshFieldDependencyPanel } from './fieldDependencyPanel.js';
+import { refreshDependencyExplorerPanel } from './dependencyExplorerPanel.js';
 import { refreshApexTestsPanel, resetApexTestsShellToHub } from './apexTestsPanel.js';
 import { refreshAnonymousApexPanel } from './anonymousApexPanel.js';
 import { refreshQueryExplorerPanel } from './queryExplorerPanel.js';
@@ -101,6 +102,7 @@ export function handleArtifactTypeSelectChange(options = {}) {
   void refreshCustomSettingsComparePanel();
   void refreshCustomMetadataComparePanel();
   refreshFieldDependencyPanel();
+  refreshDependencyExplorerPanel();
   onAfterArtifactTypeChange(isUserChange);
 }
 
@@ -326,7 +328,8 @@ function isSearchDisabledForTool(selectedType) {
     selectedType === 'SetupAuditTrail' ||
     selectedType === 'FieldHistory' ||
     selectedType === 'PermissionDiff' ||
-    selectedType === 'FieldDependency'
+    selectedType === 'FieldDependency' ||
+    selectedType === 'DependencyExplorer'
   );
 }
 

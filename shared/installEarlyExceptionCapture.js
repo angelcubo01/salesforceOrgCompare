@@ -11,6 +11,7 @@ import { isPosthogApiConfigured } from './posthogConfigured.js';
 export function isBenignPageErrorEvent(event) {
   const message = String(event.message || '');
   if (message.includes('ResizeObserver loop')) return true;
+  if (message.includes('no diff result available')) return true;
 
   const filename = String(event.filename || '');
   if (
@@ -31,6 +32,7 @@ export function isBenignPageErrorEvent(event) {
 export function isBenignPageRejectionEvent(event) {
   const reason = event.reason?.toString?.() || String(event.reason || '');
   if (reason.includes('ResizeObserver loop')) return true;
+  if (reason.includes('no diff result available')) return true;
   if (
     reason.includes('workerMain.js') ||
     reason.includes('vs/base/worker') ||

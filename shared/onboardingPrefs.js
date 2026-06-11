@@ -14,6 +14,7 @@ export const ALL_ONBOARDING_TOOLS = Object.freeze([
   'SetupAuditTrail',
   'FieldHistory',
   'FieldDependency',
+  'DependencyExplorer',
   'PermissionDiff',
   'GeneratePackageXml'
 ]);

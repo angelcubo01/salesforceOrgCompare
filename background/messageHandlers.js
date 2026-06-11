@@ -31,6 +31,10 @@ import {
   restDescribeSobject
 } from '../shared/salesforceApi.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
+import {
+  sanitizeRunTestsBodyForApi,
+  validateRunTestsBodyForApi
+} from '../shared/apexTestRunBodyApi.js';
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
@@ -73,7 +77,33 @@ import {
   listCustomMetadataTypes,
   fetchSetupRecordsForType
 } from '../shared/setupRecordsCompareApi.js';
-import { indexCache, sourceCache, versionCache, authStatusCache } from './caches.js';
+import {
+  analyzeDependencies,
+  buildCustomObjectNameSoql,
+  buildFieldObjectSoql,
+  buildSearchSoql,
+  collectCustomFieldIds,
+  collectCustomObjectIdsFromFieldMap,
+  enrichCategoriesWithReferencedBy,
+  fetchReferencedByMap,
+  filterListMetadataForSearch,
+  getListMetadataType,
+  groupNodesIntoCategories,
+  mapFieldObjectRows,
+  mapListMetadataRows,
+  mapObjectNameRows,
+  mapSearchRows,
+  resolveSearchItemIds,
+  getSeedTypeById,
+  usesToolingSearch
+} from '../shared/dependencyExplorer.js';
+import {
+  authStatusCache,
+  depExplorerListCache,
+  indexCache,
+  sourceCache,
+  versionCache
+} from './caches.js';
 import { DEBUG_LOGS } from './config.js';
 import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
 import { sendPosthogException } from './posthogTelemetry.js';
@@ -86,6 +116,7 @@ import {
 } from '../shared/extensionSettings.js';
 import { stageApexViewerPayload, takeApexViewerPayload } from './apexViewerStaging.js';
 import { isTestSetupApexTestResult } from '../shared/apexTestMakeDataMethod.js';
+import { pickPrimaryApexTestServletRow } from '../shared/apexTestServletPick.js';
 import { isOrgAlreadySaved } from '../shared/orgPrefs.js';
 import { RetrieveCancelledError } from '../shared/metadataRetrieve.js';
 import { sanitizeUiError } from '../shared/sanitizeUiError.js';
@@ -97,6 +128,7 @@ import {
   isRetrieveGenerationCurrent,
   retrieveCancelOpts
 } from './retrieveSession.js';
+import { featureControlBlockedResponse } from './featureControlsGuard.js';
 
 function retrieveCancelledResponse() {
   return { ok: false, cancelled: true };
@@ -212,47 +244,12 @@ async function batchOutcomeCountsForTerminalJobs(instanceUrl, sid, apiVersion, j
   }
 }
 
-/**
- * Varias filas del servlet pueden compartir el mismo `parentid` (una por clase de test).
- * Elige la que mejor representa el estado global: si hay alguna en Processing, prevalece sobre Queued.
- */
-function pickPrimaryApexTestServletRow(rows) {
-  if (!Array.isArray(rows) || !rows.length) return null;
-  const priority = (st) => {
-    const s = String(st || '')
-      .trim()
-      .toLowerCase();
-    const order = ['processing', 'preparing', 'holding', 'abortingjob', 'queued'];
-    const i = order.indexOf(s);
-    return i >= 0 ? i : 100;
-  };
-  let best = rows[0];
-  let bestP = priority(best.status);
-  for (let i = 1; i < rows.length; i++) {
-    const row = rows[i];
-    const p = priority(row.status);
-    if (p < bestP) {
-      best = row;
-      bestP = p;
-    }
-  }
-  return best;
+const APEX_TEST_TERMINAL_JOB_STATUSES = new Set(['Completed', 'Failed', 'Aborted', 'Error']);
+
+function isApexTestTerminalJobStatus(st) {
+  return APEX_TEST_TERMINAL_JOB_STATUSES.has(String(st || '').trim());
 }
 
-/** Campos extra del panel (p. ej. `className` junto a `classId`) no forman parte del contrato de `runTestsAsynchronous`. */
-function sanitizeRunTestsBodyForApi(body) {
-  if (!body || typeof body !== 'object') return body;
-  const tests = body.tests;
-  if (!Array.isArray(tests)) return body;
-  return {
-    ...body,
-    tests: tests.map((te) => {
-      if (!te || typeof te !== 'object') return te;
-      const { className: _omit, ...rest } = te;
-      return rest;
-    })
-  };
-}
 
 function mergeApexCoverageJsonField(raw, coveredSet, uncoveredSet) {
   let c = raw;
@@ -362,6 +359,13 @@ export function installMessageHandlers() {
             break;
           }
           case 'retrieve:begin': {
+            {
+              const blocked = featureControlBlockedResponse('retrieve');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             reply({ ok: true, generation: beginRetrieveSession() });
             break;
           }
@@ -728,6 +732,13 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:retrievePermissionSet': {
+            {
+              const blocked = featureControlBlockedResponse('retrieve');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             const { orgId, permSetName, retrieveGeneration: gen } = message;
             if (!isRetrieveGenerationCurrent(gen)) {
               return reply(retrieveCancelledResponse());
@@ -779,6 +790,13 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:retrieveProfile': {
+            {
+              const blocked = featureControlBlockedResponse('retrieve');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             const { orgId, profileName, retrieveGeneration: gen } = message;
             if (!isRetrieveGenerationCurrent(gen)) {
               return reply(retrieveCancelledResponse());
@@ -814,6 +832,13 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:retrieveFlexiPage': {
+            {
+              const blocked = featureControlBlockedResponse('retrieve');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             const { orgId, flexiPageName, retrieveGeneration: gen } = message;
             if (!isRetrieveGenerationCurrent(gen)) {
               return reply(retrieveCancelledResponse());
@@ -849,6 +874,13 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:retrievePackageXml': {
+            {
+              const blocked = featureControlBlockedResponse('retrieve');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             const { orgId, packageXml, retrieveGeneration: gen } = message;
             if (!isRetrieveGenerationCurrent(gen)) {
               return reply(retrieveCancelledResponse());
@@ -927,6 +959,14 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:deploy': {
+            {
+              const actionId = message.checkOnly ? 'quick_edit_save' : 'deploy';
+              const blocked = featureControlBlockedResponse(actionId);
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             const { orgId, metadataType, memberName, content, fileName, checkOnly } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
@@ -1095,6 +1135,13 @@ export function installMessageHandlers() {
             break;
           }
           case 'apexTests:run': {
+            {
+              const blocked = featureControlBlockedResponse('apex_test_run');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             const { orgId, runBody } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
@@ -1104,6 +1151,11 @@ export function installMessageHandlers() {
             const body = sanitizeRunTestsBodyForApi(
               runBody && typeof runBody === 'object' ? runBody : {}
             );
+            const bodyError = validateRunTestsBodyForApi(body);
+            if (bodyError) {
+              reply({ ok: false, error: bodyError });
+              break;
+            }
             await loadExtensionSettings();
             const traceDebugLevel = getApexTestsTraceDebugLevel();
             let traceFlagId = null;
@@ -1141,6 +1193,13 @@ export function installMessageHandlers() {
             break;
           }
           case 'anonymousApex:execute': {
+            {
+              const blocked = featureControlBlockedResponse('anonymous_apex_execute');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
             const { orgId, anonymousBody } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
@@ -2288,6 +2347,8 @@ export function installMessageHandlers() {
                 return '';
               };
               const launcherByParent15 = new Map();
+              /** @type {Map<string, { Id: string, Status?: string, NumberOfErrors?: number, ExtendedStatus?: string, CreatedBy?: object }>} */
+              const asyncJobByParent15 = new Map();
               try {
                 const parentIds = [...byParentLists.values()]
                   .map((list) => list?.[0]?.parentid)
@@ -2297,7 +2358,7 @@ export function installMessageHandlers() {
                   const inList = parentIds
                     .map((id) => `'${escapeSoqlLiteral(id)}'`)
                     .join(',');
-                  const soql = `SELECT Id, CreatedBy.Username, CreatedBy.Name FROM AsyncApexJob WHERE Id IN (${inList})`;
+                  const soql = `SELECT Id, Status, NumberOfErrors, ExtendedStatus, CreatedBy.Username, CreatedBy.Name FROM AsyncApexJob WHERE Id IN (${inList})`;
                   let rows = [];
                   try {
                     rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
@@ -2308,6 +2369,7 @@ export function installMessageHandlers() {
                     const id = row?.Id != null ? String(row.Id) : '';
                     if (!id) continue;
                     const k15 = sfId15(id);
+                    asyncJobByParent15.set(k15, row);
                     const name =
                       row?.CreatedBy &&
                       typeof row.CreatedBy === 'object' &&
@@ -2322,10 +2384,31 @@ export function installMessageHandlers() {
               } catch {
                 /* sin nombre de lanzador: mantener cola con datos del servlet */
               }
+              const terminalJobIdsForBatch = [];
+              for (const list of byParentLists.values()) {
+                const primary = pickPrimaryApexTestServletRow(list);
+                if (!primary?.parentid) continue;
+                const apiJob = asyncJobByParent15.get(sfId15(primary.parentid));
+                const st = apiJob?.Status != null ? String(apiJob.Status) : String(primary.status || '');
+                if (isApexTestTerminalJobStatus(st)) {
+                  terminalJobIdsForBatch.push(String(primary.parentid));
+                }
+              }
+              let batchOutcomes = null;
+              if (terminalJobIdsForBatch.length) {
+                batchOutcomes = await batchOutcomeCountsForTerminalJobs(
+                  org.instanceUrl,
+                  sid,
+                  org.apiVersion,
+                  [...new Set(terminalJobIdsForBatch)]
+                );
+              }
               for (const list of byParentLists.values()) {
                 const primary = pickPrimaryApexTestServletRow(list);
                 if (!primary) continue;
                 const parent = String(primary.parentid);
+                const k15 = sfId15(parent);
+                const apiJob = asyncJobByParent15.get(k15);
                 let fromParentInfo = launcherFromServletRow(primary);
                 if (!fromParentInfo && Array.isArray(list)) {
                   for (const row of list) {
@@ -2333,13 +2416,36 @@ export function installMessageHandlers() {
                     if (fromParentInfo) break;
                   }
                 }
+                const status =
+                  apiJob?.Status != null ? String(apiJob.Status) : primary.status != null ? String(primary.status) : '';
+                const extstatus =
+                  primary.extstatus != null
+                    ? String(primary.extstatus)
+                    : apiJob?.ExtendedStatus != null
+                      ? String(apiJob.ExtendedStatus)
+                      : '';
+                let outcomeCounts = null;
+                if (isApexTestTerminalJobStatus(status) && batchOutcomes) {
+                  outcomeCounts =
+                    batchOutcomes.get(parent) || batchOutcomes.get(k15) || null;
+                }
+                const numberOfErrors =
+                  apiJob?.NumberOfErrors != null ? Number(apiJob.NumberOfErrors) : undefined;
+                const queueRows = list.map((row) => ({
+                  classname: row.classname != null ? String(row.classname) : '',
+                  extstatus: row.extstatus != null ? String(row.extstatus) : '',
+                  status: row.status != null ? String(row.status) : ''
+                }));
                 jobs.push({
                   parentid: parent,
-                  launchedBy: launcherByParent15.get(sfId15(parent)) || fromParentInfo || '',
-                  status: primary.status != null ? String(primary.status) : '',
-                  extstatus: primary.extstatus != null ? String(primary.extstatus) : '',
+                  launchedBy: launcherByParent15.get(k15) || fromParentInfo || '',
+                  status,
+                  extstatus,
                   date: primary.date != null ? String(primary.date) : '',
-                  classname: primary.classname != null ? String(primary.classname) : ''
+                  classname: primary.classname != null ? String(primary.classname) : '',
+                  outcomeCounts,
+                  numberOfErrors,
+                  queueRows
                 });
               }
               reply({ ok: true, jobs });
@@ -2369,14 +2475,14 @@ export function installMessageHandlers() {
               const esc = escapeSoqlLiteral(jobId);
               let rows;
               try {
-                const soql = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') ORDER BY ApexClass.Name, MethodName LIMIT 200`;
+                const soql = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Id, ApexClass.Name, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') ORDER BY ApexClass.Name, MethodName LIMIT 200`;
                 rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
               } catch {
                 try {
-                  const soql2 = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') ORDER BY ApexClass.Name, MethodName LIMIT 200`;
+                  const soql2 = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Id, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') ORDER BY ApexClass.Name, MethodName LIMIT 200`;
                   rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql2);
                 } catch {
-                  const soql3 = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') LIMIT 200`;
+                  const soql3 = `SELECT MethodName, Message, StackTrace, Outcome, ApexClass.Id, ApexClass.Name FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' AND (Outcome = 'Fail' OR Outcome = 'CompileFail') LIMIT 200`;
                   rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql3);
                 }
               }
@@ -2958,6 +3064,135 @@ export function installMessageHandlers() {
                     'No queue items in a state that can be aborted (already finished or not updatable).'
                 });
               }
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'dependencyExplorer:search': {
+            const { orgId, seedType, query } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const typeDef = getSeedTypeById(seedType);
+            if (!typeDef) {
+              reply({ ok: false, error: 'Unknown seed type' });
+              break;
+            }
+            try {
+              if (usesToolingSearch(typeDef)) {
+                const soql = buildSearchSoql(seedType, query);
+                if (!soql) {
+                  reply({ ok: true, items: [] });
+                  break;
+                }
+                const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+                const items = mapSearchRows(rows, typeDef);
+                reply({ ok: true, items });
+                break;
+              }
+
+              const metadataType = getListMetadataType(typeDef);
+              if (!metadataType) {
+                reply({ ok: false, error: 'Unknown list metadata type' });
+                break;
+              }
+
+              const cacheKey = `${orgId}:${seedType}`;
+              let records = depExplorerListCache.get(cacheKey);
+              if (!records) {
+                let describeObjects = [];
+                try {
+                  describeObjects = await describeMetadata(org.instanceUrl, sid, org.apiVersion);
+                } catch {
+                  describeObjects = [];
+                }
+                const metaObj = describeObjects.find((o) => o.xmlName === metadataType);
+                const folderHint = metaObj?.directoryName?.trim() || undefined;
+                records = await listMetadataWithFolderFallback(
+                  org.instanceUrl,
+                  sid,
+                  org.apiVersion,
+                  metadataType,
+                  folderHint
+                );
+                depExplorerListCache.set(cacheKey, records);
+              }
+
+              const filtered = filterListMetadataForSearch(records, typeDef, query);
+              let items = mapListMetadataRows(filtered, typeDef);
+              items = await resolveSearchItemIds(typeDef, items, (soql) =>
+                toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)
+              );
+              reply({ ok: true, items });
+            } catch (e) {
+              reply({ ok: false, error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'dependencyExplorer:analyze': {
+            const { orgId, seedId, transitive, includeReferencedBy } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const analysis = await analyzeDependencies({
+                seedId,
+                transitive: !!transitive,
+                includeReferencedBy: !!includeReferencedBy,
+                queryFn: (soql) => toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)
+              });
+              const fieldIds = collectCustomFieldIds(analysis.nodes);
+              /** @type {Record<string, string>} */
+              let fieldObjectById = {};
+              for (const soql of buildFieldObjectSoql(fieldIds)) {
+                const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+                Object.assign(fieldObjectById, mapFieldObjectRows(rows));
+              }
+              /** @type {Record<string, string>} */
+              let objectNameById = {};
+              const objectIds = collectCustomObjectIdsFromFieldMap(fieldObjectById, objectNameById);
+              for (const soql of buildCustomObjectNameSoql(objectIds)) {
+                const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+                Object.assign(objectNameById, mapObjectNameRows(rows));
+              }
+              let categories = groupNodesIntoCategories(
+                analysis.nodes,
+                fieldObjectById,
+                objectNameById
+              );
+              const nodeIds = analysis.nodes.map((n) => n.id).filter(Boolean);
+              const referencedByMap = await fetchReferencedByMap(nodeIds, (soql) =>
+                toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)
+              );
+              categories = enrichCategoriesWithReferencedBy(categories, referencedByMap);
+              reply({
+                ok: true,
+                nodes: analysis.nodes,
+                edges: analysis.edges,
+                categories,
+                fieldObjectById,
+                objectNameById,
+                truncated: analysis.truncated,
+                queryCount: analysis.queryCount,
+                totalCount: analysis.nodes.length
+              });
             } catch (e) {
               reply({ ok: false, error: String(e?.message || e) });
             }

@@ -1,5 +1,8 @@
 import { POSTHOG_DEBUG } from './telemetryConfig.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
+import { waitForFeatureFlags } from './posthogFeatureFlagLoader.js';
+
+export { waitForFeatureFlags } from './posthogFeatureFlagLoader.js';
 
 /** Feature flag remoto (PostHog Remote Config). */
 export const SESSION_REPLAY_FLAG = 'sfoc_session_replay';
@@ -24,40 +27,6 @@ let lastSkipReason = '';
 function setSkipReason(reason) {
   lastSkipReason = reason;
   if (POSTHOG_DEBUG) console.log('[posthog] session replay skipped:', reason);
-}
-
-/**
- * Espera a que posthog-js cargue feature flags (identify + reloadFeatureFlags).
- * @param {import('./posthogClient.js').posthog} ph
- * @param {number} [timeoutMs]
- */
-export function waitForFeatureFlags(ph, timeoutMs = 10000) {
-  return new Promise((resolve) => {
-    if (!ph) {
-      resolve(false);
-      return;
-    }
-    let settled = false;
-    const done = (ok = true) => {
-      if (settled) return;
-      settled = true;
-      resolve(ok);
-    };
-
-    if (typeof ph.onFeatureFlags === 'function') {
-      ph.onFeatureFlags(() => done(true));
-    }
-
-    try {
-      if (typeof ph.reloadFeatureFlags === 'function') {
-        ph.reloadFeatureFlags();
-      }
-    } catch {
-      /* ignore */
-    }
-
-    setTimeout(() => done(false), timeoutMs);
-  });
 }
 
 /**

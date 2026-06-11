@@ -1,4 +1,6 @@
 import { bg } from '../core/bridge.js';
+import { isMetadataTypeVisible } from '../../shared/featureControls.js';
+import { getCachedFeatureControlsConfig } from '../../shared/posthogFeatureControlsFlag.js';
 
 export const MIN_METADATA_CHARS = 1;
 
@@ -221,9 +223,14 @@ export function isNameIndexLoading(orgId) {
   return !!orgId && nameIndex.orgId === orgId && nameIndex.loading;
 }
 
+function filterMetadataEntries(entries) {
+  const config = getCachedFeatureControlsConfig();
+  return entries.filter((e) => isMetadataTypeVisible(config, e.artType));
+}
+
 function filterMetadataFromIndex(query) {
   if (!query || !nameIndex.ready) return [];
-  return nameIndex.entries.filter((e) => e.searchHay.includes(query));
+  return filterMetadataEntries(nameIndex.entries.filter((e) => e.searchHay.includes(query)));
 }
 
 /**
@@ -231,8 +238,10 @@ function filterMetadataFromIndex(query) {
  * @param {string} apiPrefix
  */
 async function searchMetadataByPrefix(orgId, apiPrefix) {
+  const config = getCachedFeatureControlsConfig();
+  const specs = METADATA_SEARCH_SPECS.filter((spec) => isMetadataTypeVisible(config, spec.artType));
   const batches = await Promise.all(
-    METADATA_SEARCH_SPECS.map(async (spec) => {
+    specs.map(async (spec) => {
       const r = await bg({ type: 'searchIndex', orgId, artifactType: spec.artType, prefix: apiPrefix });
       if (!r.ok) return [];
       return mapApiIndexToEntries(
