@@ -106,6 +106,8 @@ export function updateDocumentTitle() {
     document.title = t('docTitle.customSettingsCompare');
   } else if (state.selectedArtifactType === 'CustomMetadataCompare') {
     document.title = t('docTitle.customMetadataCompare');
+  } else if (state.selectedArtifactType === 'RecordCompare') {
+    document.title = t('docTitle.recordCompare');
   } else {
     const sel = state.selectedItem;
     document.title = getDisplayFileName(sel);

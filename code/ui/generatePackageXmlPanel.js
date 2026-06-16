@@ -10,6 +10,7 @@ import { ensureRightOrgDistinctFromLeft } from './orgs.js';
 import { handleArtifactTypeSelectChange } from './searchSetup.js';
 import { syncListActiveHighlight } from './listUi.js';
 import { t } from '../../shared/i18n.js';
+import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 /** @type {Array<{ xmlName: string, label: string, directoryName: string, inFolder: boolean }>} */
 let describeCache = [];
 /** Últimos registros listMetadata del tipo actual (para depurar / futuro). */
@@ -144,6 +145,7 @@ async function loadMetadataTypesIntoPicklist() {
   try {
     const res = await bg({ type: 'metadata:describeMetadata', orgId });
     if (!res.ok) {
+      void handleToolResponseFailure(res, { artifact_type: 'PackageXml', phase: 'describe' });
       if (res.reason === 'NO_SID') {
         showToast(t('toast.noSessionRetry'), 'warn');
       } else {
@@ -167,6 +169,7 @@ async function loadMetadataTypesIntoPicklist() {
     clearMembersUi();
     updateXmlOutput();
   } catch (e) {
+    void handleToolError(e, { artifact_type: 'PackageXml', phase: 'describe' });
     showToast(String(e?.message || e), 'error');
     select.innerHTML = `<option value="">${t('genPkg.error')}</option>`;
     select.disabled = false;
@@ -217,6 +220,7 @@ async function loadMembersForType(typeName) {
     const res = await bg(payload);
 
     if (!res.ok) {
+      void handleToolResponseFailure(res, { artifact_type: 'PackageXml', phase: 'list_members' });
       if (res.reason === 'NO_SID') {
         showToast(t('toast.noSession'), 'warn');
       } else {
@@ -274,6 +278,7 @@ async function loadMembersForType(typeName) {
     if (memberSearch) memberSearch.disabled = false;
     applyMemberFilter();
   } catch (e) {
+    void handleToolError(e, { artifact_type: 'PackageXml', phase: 'list_members' });
     showToast(String(e?.message || e), 'error');
     if (loading) loading.textContent = '';
   }
@@ -547,6 +552,7 @@ export function setupGeneratePackageXmlPanel() {
           }
         });
       } catch (e) {
+        void handleToolError(e, { artifact_type: 'PackageXml', phase: 'retrieve' });
         dismissSpinnerToast();
         showToast(t('toast.retrieveError'), 'error');
       } finally {

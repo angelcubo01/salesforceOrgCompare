@@ -3,7 +3,7 @@
 
   "manifest_version": 3,
   "name": "Salesforce Org Compare",
-  "version": "2.10",
+  "version": "2.11",
   "description": "Compare Salesforce orgs using your browser session.",
   "homepage_url": "https://salesforceorgcompare.web.app/",
   "icons": {
@@ -41,7 +41,8 @@
   "https://*.salesforce-setup.com/*",
   "https://salesforceorgcompare.web.app/*",
   "https://eu.i.posthog.com/*",
-  "https://eu.posthog.com/*"
+  "https://eu.posthog.com/*",
+  "https://api.status.salesforce.com/*"
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline';"

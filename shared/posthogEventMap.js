@@ -237,7 +237,12 @@ export function usageEntryToPosthogEvent(entry, ctx = {}) {
   const artifactType = String(entry.artifactType || '').trim();
   if (!kind && !artifactType) return null;
 
-  const name = kind === 'codeComparison' || artifactType ? 'comparison_run' : 'extension_usage';
+  const name =
+    kind === 'extension_failure'
+      ? 'extension_failure'
+      : kind === 'codeComparison' || artifactType
+        ? 'comparison_run'
+        : 'extension_usage';
 
   /** @type {Record<string, string | number>} */
   const properties = {

@@ -34,6 +34,7 @@
 export const FEATURE_CONTROL_MODES = Object.freeze([
   'comparator',
   'development',
+  'analysis',
   'monitoring',
   'manifests'
 ]);

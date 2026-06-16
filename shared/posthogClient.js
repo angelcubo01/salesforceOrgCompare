@@ -27,6 +27,7 @@ import {
   markCsatSurveyCompletedLocally
 } from './posthogSurveyPrefs.js';
 import { reportExtensionException } from './extensionExceptionReport.js';
+import { bugExceptionContext, shouldReportAsBug, toError } from './errorTelemetryPolicy.js';
 import { installExtensionPageExceptionCapture as installEarlyCapture } from './installEarlyExceptionCapture.js';
 import { isPosthogApiConfigured, isPosthogCsatConfigured } from './posthogConfigured.js';
 import { canShowCsatSurvey } from './posthogCsatSurvey.js';
@@ -352,17 +353,58 @@ export function installPosthogErrorHandlers() {
 }
 
 /**
- * Captura una excepción con contexto opcional.
+ * Reporta un bug real a PostHog Error Tracking ($exception).
+ * @param {unknown} error
+ * @param {Record<string, string | number | boolean>} [context]
+ */
+export function reportBug(error, context = {}) {
+  const err = toError(error);
+  if (!shouldReportAsBug(err, context)) return;
+  void reportExtensionException(err, {
+    sfoc_source: 'extension',
+    error_handled: 1,
+    ...bugExceptionContext(context),
+    ...context
+  });
+}
+
+/**
+ * Fallo operacional esperado (analytics, respeta telemetría de uso).
+ * @param {Record<string, unknown>} entry
+ */
+export async function reportOperationalFailure(entry) {
+  /** @type {Record<string, unknown>} */
+  const raw = {
+    kind: 'extension_failure',
+    ok: false,
+    comparisonUrl: typeof window !== 'undefined' ? window.location.href : '',
+    artifactType: entry.artifactType || entry.artifact_type || '',
+    phase: entry.phase || '',
+    reason: entry.reason || '',
+    error: entry.error || entry.errorMessage || '',
+    leftOrgId: entry.leftOrgId || '',
+    rightOrgId: entry.rightOrgId || '',
+    descriptor: entry.descriptor
+  };
+  const picked = pickUsageLogEntry(raw);
+  if (!picked) return;
+
+  void captureUsageLogOnClient(picked);
+  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
+  try {
+    await chrome.runtime.sendMessage({ type: 'usage:log', entry: picked });
+  } catch {
+    /* SW dormido o extensión recargándose */
+  }
+}
+
+/**
+ * @deprecated Usar reportBug o handleToolError.
  * @param {unknown} error
  * @param {Record<string, string | number | boolean>} [context]
  */
 export function captureUiException(error, context = {}) {
-  const err = error instanceof Error ? error : new Error(String(error || 'unknown'));
-  void reportExtensionException(err, {
-    sfoc_source: 'extension',
-    error_handled: 1,
-    ...context
-  });
+  reportBug(error, context);
 }
 
 async function maybeShowCsatSurvey() {

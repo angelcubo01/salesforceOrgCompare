@@ -9,7 +9,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "posthog:survey": "node scripts/createPosthogCsatSurvey.mjs",
-    "posthog:survey:update": "node scripts/createPosthogCsatSurvey.mjs --update",
+    "posthog:survey:update": "node scripts/createPosthogCsatSurvey.mjs",
     "posthog:replay-flag": "node scripts/createPosthogSessionReplayFlag.mjs",
     "posthog:replay-flag:update": "node scripts/createPosthogSessionReplayFlag.mjs --update",
     "posthog:user-dashboard": "node scripts/createPosthogUserDashboard.mjs",
@@ -20,7 +20,11 @@
     "posthog:feature-controls-flag": "node scripts/createPosthogFeatureControlsFlag.mjs",
     "posthog:feature-controls-flag:update": "node scripts/createPosthogFeatureControlsFlag.mjs --update",
     "posthog:feature-controls-flag:smoke": "node scripts/createPosthogFeatureControlsFlag.mjs --update --smoke-test",
-    "posthog:feature-controls-flag:reset": "node scripts/createPosthogFeatureControlsFlag.mjs --update --reset"
+    "posthog:feature-controls-flag:reset": "node scripts/createPosthogFeatureControlsFlag.mjs --update --reset",
+    "posthog:feature-controls-flag:production": "node scripts/createPosthogFeatureControlsFlag.mjs --update --production",
+    "posthog:error-tracking": "node scripts/createPosthogErrorTrackingSetup.mjs",
+    "posthog:error-tracking:update": "node scripts/createPosthogErrorTrackingSetup.mjs --update",
+    "pack:chrome": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-chrome-store.ps1"
   },
   "devDependencies": {
     "posthog-js": "^1.379.0",

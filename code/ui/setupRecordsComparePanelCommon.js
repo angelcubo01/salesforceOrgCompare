@@ -7,6 +7,7 @@ import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
+import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import {
   mergeRecordRows,
   filterMergedRows,
@@ -138,6 +139,7 @@ async function loadTypesForLeftOrg(config) {
     if (!res?.ok) {
       populateTypeSelect(config, []);
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t(i18nKey(config, 'typesError'));
+      void handleToolResponseFailure(res, { artifact_type: config.artifactType, phase: 'load_types' });
       if (status) status.textContent = msg;
       return;
     }
@@ -146,6 +148,7 @@ async function loadTypesForLeftOrg(config) {
     populateTypeSelect(config, types);
     if (status) status.textContent = t(i18nKey(config, 'pickTypeAndLoad'));
   } catch (e) {
+    void handleToolError(e, { artifact_type: config.artifactType, phase: 'load_types' });
     populateTypeSelect(config, []);
     if (status) status.textContent = String(e?.message || e);
   }
@@ -371,6 +374,7 @@ async function runLoad(config) {
     if (!leftRes?.ok) {
       const msg =
         leftRes?.reason === 'NO_SID' ? t('toast.noSession') : leftRes?.error || t(i18nKey(config, 'loadError'));
+      void handleToolResponseFailure(leftRes, { artifact_type: config.artifactType, phase: 'fetch_records' });
       if (status) status.textContent = msg;
       showToast(msg, 'error');
       return;
@@ -378,6 +382,7 @@ async function runLoad(config) {
     if (!rightRes?.ok) {
       const msg =
         rightRes?.reason === 'NO_SID' ? t('toast.noSession') : rightRes?.error || t(i18nKey(config, 'loadError'));
+      void handleToolResponseFailure(rightRes, { artifact_type: config.artifactType, phase: 'fetch_records' });
       if (status) status.textContent = msg;
       showToast(msg, 'error');
       return;
@@ -419,6 +424,10 @@ async function runLoad(config) {
         diff: String(diffCount)
       });
     }
+  } catch (e) {
+    void handleToolError(e, { artifact_type: config.artifactType, phase: 'fetch_records' });
+    if (status) status.textContent = String(e?.message || e);
+    showToast(String(e?.message || e), 'error');
   } finally {
     dismissSpinnerToast();
   }

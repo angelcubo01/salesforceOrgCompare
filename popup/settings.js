@@ -19,6 +19,7 @@ import {
   applyUiThemeToDocument
 } from '../shared/extensionSettings.js';
 import { initPosthogClient, syncPosthogAppLanguage, syncPosthogOptOut } from '../shared/posthogClient.js';
+import { handleToolError } from '../shared/reportToolError.js';
 import {
   getOrCreateTelemetryInstallId,
   applyTelemetryInstallIdFromBackup
@@ -376,7 +377,8 @@ function wireOrgsBackup() {
     let data;
     try {
       data = JSON.parse(await f.text());
-    } catch {
+    } catch (e) {
+      void handleToolError(e, { artifact_type: 'Settings', phase: 'backup_import_parse' });
       setStatus(t('settings.backupImportError'), true);
       return;
     }

@@ -10,7 +10,7 @@ import {
 
 const APP_NAV_MODE_HOME = 'home';
 
-const HELP_MODES = ['home', 'comparator', 'development', 'monitoring', 'manifests'];
+const HELP_MODES = ['home', 'comparator', 'development', 'analysis', 'monitoring', 'manifests'];
 
 /** @type {Record<string, string[]>} */
 const HELP_MODE_BODY_KEYS = {
@@ -33,14 +33,18 @@ const HELP_MODE_BODY_KEYS = {
     'help.mode.development.body3',
     'help.mode.development.body4'
   ],
+  analysis: [
+    'help.mode.analysis.body1',
+    'help.mode.analysis.body2',
+    'help.mode.analysis.body3',
+    'help.mode.analysis.body4',
+    'help.mode.analysis.body5'
+  ],
   monitoring: [
     'help.mode.monitoring.body1',
     'help.mode.monitoring.body2',
     'help.mode.monitoring.body3',
-    'help.mode.monitoring.body4',
-    'help.mode.monitoring.body5',
-    'help.mode.monitoring.body6',
-    'help.mode.monitoring.body7'
+    'help.mode.monitoring.body4'
   ],
   manifests: ['help.mode.manifests.body1', 'help.mode.manifests.body2', 'help.mode.manifests.body3']
 };

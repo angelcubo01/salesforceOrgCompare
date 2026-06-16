@@ -121,6 +121,23 @@
                 </div>
               </div>
 
+              <div class="app-mode-dropdown" data-mode="analysis">
+                <button
+                  type="button"
+                  role="tab"
+                  class="app-mode-tab app-mode-tab-trigger"
+                  id="appModeTabAnalysis"
+                  aria-haspopup="true"
+                  aria-expanded="false"
+                  aria-selected="false"
+                  data-i18n="code.appModeAnalysis"
+                  data-i18n-title="code.appModeAnalysisTitle"
+                ></button>
+                <div class="app-mode-submenu" role="menu" data-i18n-aria-label="code.appModeSubmenuAnalysis">
+                  <div class="app-mode-submenu-inner"></div>
+                </div>
+              </div>
+
               <div class="app-mode-dropdown" data-mode="monitoring">
                 <button
                   type="button"
@@ -1366,6 +1383,100 @@
             <div id="customMetadataCompareTableMount" class="setup-records-compare-table-mount"></div>
           </div>
         </div>
+        <div
+          id="recordComparePanel"
+          class="setup-records-compare-panel org-limits-panel hidden"
+          aria-label="Record compare"
+        >
+          <div class="setup-records-compare-panel-inner org-limits-panel-inner">
+            <div class="setup-records-compare-sticky-head">
+              <div class="org-limits-head record-compare-head">
+                <h2 class="org-limits-title" data-i18n="recordCompare.title">Comparar registros</h2>
+              </div>
+              <div class="record-compare-form">
+                <div class="record-compare-form-row record-compare-form-ids">
+                  <label class="record-compare-id-wrap" for="recordCompareLeftId">
+                    <span
+                      id="recordCompareLeftIdLabel"
+                      class="setup-records-compare-type-filter-label"
+                      >Id</span
+                    >
+                    <input
+                      type="text"
+                      id="recordCompareLeftId"
+                      class="record-compare-id-input"
+                      data-i18n-placeholder="recordCompare.idPh"
+                      placeholder="001... o 500..."
+                      autocomplete="off"
+                      spellcheck="false"
+                    />
+                  </label>
+                  <label class="record-compare-id-wrap" for="recordCompareRightId">
+                    <span
+                      id="recordCompareRightIdLabel"
+                      class="setup-records-compare-type-filter-label"
+                      >Id</span
+                    >
+                    <input
+                      type="text"
+                      id="recordCompareRightId"
+                      class="record-compare-id-input"
+                      data-i18n-placeholder="recordCompare.idPh"
+                      placeholder="001... o 500..."
+                      autocomplete="off"
+                      spellcheck="false"
+                    />
+                  </label>
+                </div>
+                <div class="record-compare-form-row record-compare-form-actions">
+                  <label class="setup-records-compare-diff-only-head" for="recordCompareDiffOnly">
+                    <input type="checkbox" id="recordCompareDiffOnly" checked />
+                    <span data-i18n="recordCompare.diffOnly">Solo diferencias</span>
+                  </label>
+                  <button
+                    type="button"
+                    id="recordCompareBtn"
+                    class="org-limits-refresh-btn"
+                    data-i18n="recordCompare.compare"
+                  >
+                    Comparar
+                  </button>
+                  <label
+                    class="org-limits-compare-toggle"
+                    for="recordCompareCompareToggle"
+                    data-i18n-title="recordCompare.compareTooltip"
+                  >
+                    <input type="checkbox" id="recordCompareCompareToggle" />
+                    <span class="org-limits-compare-switch" aria-hidden="true"></span>
+                    <span class="org-limits-compare-label" data-i18n="recordCompare.compareMode">Modo comparación</span>
+                  </label>
+                </div>
+                <div
+                  id="recordCompareFieldSearchWrap"
+                  class="record-compare-form-row record-compare-field-search-wrap hidden"
+                >
+                  <label class="record-compare-field-search-label" for="recordCompareFieldSearch">
+                    <span class="record-compare-field-search-title" data-i18n="recordCompare.searchDiffFieldsLabel"
+                      >Buscar en diferencias</span
+                    >
+                    <input
+                      type="search"
+                      id="recordCompareFieldSearch"
+                      class="record-compare-field-search"
+                      data-i18n-placeholder="recordCompare.searchDiffFieldsPh"
+                      placeholder="Label o API name..."
+                      autocomplete="off"
+                      spellcheck="false"
+                    />
+                  </label>
+                </div>
+              </div>
+              <nav id="recordCompareBreadcrumb" class="record-compare-breadcrumb hidden" aria-label="Breadcrumb"></nav>
+              <p id="recordCompareStatus" class="org-limits-status record-compare-status" role="status"></p>
+            </div>
+            <div id="recordCompareTableMount" class="setup-records-compare-table-mount"></div>
+          </div>
+        </div>
         <div id="permissionDiffPanel" class="permission-diff-panel ph-no-capture hidden" aria-label="Analizador de permisos">
           <div class="permission-diff-panel-inner">
             <div class="permission-diff-head">
@@ -1464,6 +1575,46 @@
                 <tbody id="permissionDiffTbody"></tbody>
               </table>
               <p id="permissionDiffEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
+            </div>
+          </div>
+        </div>
+        <div id="environmentStatusPanel" class="env-status-panel ph-no-capture hidden" aria-label="Salesforce Environment Status">
+          <div class="env-status-panel-inner">
+            <div class="env-status-head">
+              <h2 class="env-status-title" data-i18n="envStatus.title">Estado entornos Salesforce</h2>
+              <div class="env-status-head-controls">
+                <div class="env-status-filters" role="group" aria-label="Filtros">
+                  <button type="button" class="env-status-filter-btn" data-env-status-filter="all" data-i18n="envStatus.filterAll">Todas</button>
+                  <button type="button" class="env-status-filter-btn" data-env-status-filter="prod" data-i18n="envStatus.filterProd">Solo prod</button>
+                  <button type="button" class="env-status-filter-btn" data-env-status-filter="sandbox" data-i18n="envStatus.filterSandbox">Solo sandbox</button>
+                  <button type="button" class="env-status-filter-btn" data-env-status-filter="alerts" data-i18n="envStatus.filterAlerts">Solo alertas</button>
+                </div>
+                <button type="button" id="environmentStatusRefreshBtn" class="env-status-refresh-btn" data-i18n="envStatus.refresh">
+                  Actualizar
+                </button>
+              </div>
+            </div>
+            <p id="environmentStatusUpdated" class="env-status-updated" role="status"></p>
+            <p id="environmentStatusStatus" class="env-status-status" role="status"></p>
+            <div class="env-status-table-wrap">
+              <table class="env-status-table">
+                <thead>
+                  <tr>
+                    <th scope="col" data-i18n="envStatus.colEnv">Entorno</th>
+                    <th scope="col" data-i18n="envStatus.colType">Tipo</th>
+                    <th scope="col" data-i18n="envStatus.colOrgId">Org Id</th>
+                    <th scope="col" data-i18n="envStatus.colInstance">Instancia</th>
+                    <th scope="col" data-i18n="envStatus.colRelease">Versión release</th>
+                    <th scope="col" data-i18n="envStatus.colApi">API version</th>
+                    <th scope="col" data-i18n="envStatus.colTrust">Estado Trust</th>
+                    <th scope="col" data-i18n="envStatus.colMaintenance">Próximo mantenimiento</th>
+                    <th scope="col" data-i18n="envStatus.colSession">Sesión</th>
+                    <th scope="col" data-i18n="envStatus.colActions">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="environmentStatusTbody"></tbody>
+              </table>
+              <p id="environmentStatusEmpty" class="env-status-empty hidden" data-i18n="envStatus.emptyNoOrgs">No hay entornos guardados.</p>
             </div>
           </div>
         </div>

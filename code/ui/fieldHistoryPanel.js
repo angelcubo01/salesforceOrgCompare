@@ -4,6 +4,7 @@ import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { isValidSalesforceRecordId } from '../../shared/fieldHistoryApi.js';
+import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 
 const MIN_SUGGEST_LEN = 2;
 
@@ -338,6 +339,7 @@ async function loadObjectContext() {
     });
     if (!res?.ok) {
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('fieldHistory.contextError');
+      void handleToolResponseFailure(res, { artifact_type: 'FieldHistory', phase: 'context' });
       if (status) status.textContent = msg;
       showToast(msg, 'error');
       historyContext = null;
@@ -413,6 +415,7 @@ async function loadFieldHistory() {
     });
     if (!res?.ok) {
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('fieldHistory.loadError');
+      void handleToolResponseFailure(res, { artifact_type: 'FieldHistory', phase: 'list' });
       if (status) status.textContent = msg;
       showToast(msg, 'error');
       return;

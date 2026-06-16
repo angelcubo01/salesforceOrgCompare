@@ -5,6 +5,7 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { applyArtifactTypeUi } from './artifactTypeUi.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { renderDonutChart, renderMultiSeriesPieChart } from '../lib/orgLimitsCharts.js';
+import { handleToolError } from '../../shared/reportToolError.js';
 
 const LEFT_COLOR = '#22d3ee';
 const RIGHT_COLOR = '#22c55e';
@@ -189,6 +190,7 @@ async function runLoad() {
     renderCards(state.leftOrgId, leftRes.limits || {}, state.rightOrgId, rightRes?.limits || null);
     if (status) status.textContent = '';
   } catch (e) {
+    void handleToolError(e, { artifact_type: 'OrgLimits', phase: 'fetch' });
     if (status) status.textContent = t('orgLimits.fetchError');
     showToast(String(e?.message || e), 'error');
   } finally {

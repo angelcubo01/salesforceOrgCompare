@@ -42,5 +42,6 @@ export const state = {
   generatePackageXmlCompareMode: false,
   queryExplorerCompareMode: false,
   dependencyExplorerCompareMode: false,
+  recordCompareCompareMode: false,
   orgsList: []
 };

@@ -98,6 +98,20 @@ describe('usageEntryToPosthogEvent', () => {
     expect(ev?.properties.extension_version).toBe('2.6');
   });
 
+  it('mapea extension_failure operacional', () => {
+    const ev = usageEntryToPosthogEvent({
+      kind: 'extension_failure',
+      artifactType: 'ApexTests',
+      phase: 'run',
+      ok: false,
+      reason: 'NO_SID',
+      error: 'No session'
+    });
+    expect(ev?.name).toBe('extension_failure');
+    expect(ev?.properties.ok).toBe(0);
+    expect(ev?.properties.result_reason).toBe('NO_SID');
+  });
+
   it('mapea DependencyExplorer analyze como comparison_run', () => {
     const ev = usageEntryToPosthogEvent({
       kind: 'codeComparison',

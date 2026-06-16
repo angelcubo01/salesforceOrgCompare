@@ -1,48 +1,14 @@
 /**
- * Captura window.error / unhandledrejection lo antes posible (primer import de cada página).
- * Los errores de carga/evaluación de módulos ES ocurren antes de init() y no llegaban a PostHog.
+ * Captura temprana window.error / unhandledrejection (primer import de cada página).
  */
 import { reportExtensionException } from './extensionExceptionReport.js';
 import { isPosthogApiConfigured } from './posthogConfigured.js';
+import {
+  isBenignPageErrorEvent,
+  isBenignPageRejectionEvent
+} from './errorTelemetryPolicy.js';
 
-/**
- * @param {ErrorEvent} event
- */
-export function isBenignPageErrorEvent(event) {
-  const message = String(event.message || '');
-  if (message.includes('ResizeObserver loop')) return true;
-  if (message.includes('no diff result available')) return true;
-
-  const filename = String(event.filename || '');
-  if (
-    filename.includes('workerMain.js') ||
-    filename.includes('vs/base/worker') ||
-    filename.includes('vs/editor/editor.main') ||
-    (filename.includes('monaco') && filename.includes('worker'))
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * @param {PromiseRejectionEvent} event
- */
-export function isBenignPageRejectionEvent(event) {
-  const reason = event.reason?.toString?.() || String(event.reason || '');
-  if (reason.includes('ResizeObserver loop')) return true;
-  if (reason.includes('no diff result available')) return true;
-  if (
-    reason.includes('workerMain.js') ||
-    reason.includes('vs/base/worker') ||
-    reason.includes('vs/editor') ||
-    (reason.includes('Monaco') && reason.includes('worker'))
-  ) {
-    return true;
-  }
-  return false;
-}
+export { isBenignPageErrorEvent, isBenignPageRejectionEvent } from './errorTelemetryPolicy.js';
 
 /**
  * @param {ErrorEvent} event

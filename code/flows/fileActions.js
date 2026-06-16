@@ -5,6 +5,7 @@ import { getDisplayFileName } from '../lib/itemLabels.js';
 import { descriptorForFetchSource } from '../lib/sourceDescriptor.js';
 import { t } from '../../shared/i18n.js';
 import { buildComparePageUrl } from '../lib/compareDeepLink.js';
+import { handleToolError } from '../../shared/reportToolError.js';
 
 export async function openFileInNewTab(item) {
   try {
@@ -14,6 +15,7 @@ export async function openFileInNewTab(item) {
     state.selectedItem = prevItem;
     await chrome.tabs.create({ url });
   } catch (err) {
+    void handleToolError(err, { artifact_type: 'FileActions', phase: 'open_in_tab' });
     showToast(t('toast.fileNotInTab'), 'error');
   }
 }
@@ -260,6 +262,7 @@ export async function downloadFile(item) {
     
     showToast(t('toast.downloadedFile', { name: prefixedFileName }), 'info');
   } catch (err) {
+    void handleToolError(err, { artifact_type: 'FileActions', phase: 'download' });
     showToast(t('toast.downloadFailed'), 'error');
   }
 }
@@ -390,6 +393,7 @@ export async function downloadAllFiles() {
       showToast(t('toast.downloadAllFailed'), 'error');
     }
   } catch (err) {
+    void handleToolError(err, { artifact_type: 'FileActions', phase: 'download' });
     showToast(t('toast.downloadFailed'), 'error');
   }
 }

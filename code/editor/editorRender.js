@@ -89,16 +89,16 @@ export function replaceDiffEditorModels(original, modified) {
 
 export function disposeDiffEditorModels() {
   if (!state.diffEditor) return;
+  const prev = state.diffEditor.getModel();
+  if (!prev) return;
   try {
-    const prev = state.diffEditor.getModel();
-    if (!prev) return;
     state.diffEditor.setModel(null);
-    try {
-      prev.original?.dispose();
-    } catch {}
-    try {
-      prev.modified?.dispose();
-    } catch {}
+  } catch {}
+  try {
+    if (prev.original) prev.original.dispose();
+  } catch {}
+  try {
+    if (prev.modified) prev.modified.dispose();
   } catch {}
 }
 

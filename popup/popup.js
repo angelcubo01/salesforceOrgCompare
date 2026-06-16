@@ -2,6 +2,12 @@ import '../shared/installEarlyExceptionCapture.js';
 import { t, loadLang } from '../shared/i18n.js';
 import { sameGroupKey, isOrgAlreadySaved } from '../shared/orgPrefs.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
+import {
+  ONBOARDING_PREFS_KEY,
+  normalizeOnboardingPrefs,
+  hasSeenTelemetryNotice,
+  markTelemetryNoticeDismissedInPrefs
+} from '../shared/onboardingPrefs.js';
 import { setupPopupHelp } from './popupHelp.js';
 
 async function bg(message) {
@@ -356,6 +362,46 @@ async function refresh() {
   await refreshDetected(savedOrgs);
 }
 
+async function loadOnboardingPrefs() {
+  try {
+    const r = await chrome.storage.local.get(ONBOARDING_PREFS_KEY);
+    return normalizeOnboardingPrefs(r[ONBOARDING_PREFS_KEY]);
+  } catch {
+    return normalizeOnboardingPrefs(null);
+  }
+}
+
+async function saveOnboardingPrefs(prefs) {
+  try {
+    await chrome.storage.local.set({ [ONBOARDING_PREFS_KEY]: prefs });
+  } catch {
+    /* ignore */
+  }
+}
+
+function setupPopupTelemetryNotice() {
+  const banner = document.getElementById('popupTelemetryNotice');
+  const dismissBtn = document.getElementById('popupTelemetryNoticeDismissBtn');
+  const textEl = document.getElementById('popupTelemetryNoticeText');
+  if (!banner || !dismissBtn || !textEl) return;
+
+  void (async () => {
+    const prefs = await loadOnboardingPrefs();
+    if (hasSeenTelemetryNotice(prefs)) return;
+
+    textEl.textContent = t('popup.telemetryNotice.text');
+    dismissBtn.textContent = t('popup.telemetryNotice.dismiss');
+    dismissBtn.setAttribute('aria-label', t('popup.telemetryNotice.dismiss'));
+    banner.classList.remove('hidden');
+
+    dismissBtn.addEventListener('click', async () => {
+      banner.classList.add('hidden');
+      const updated = markTelemetryNoticeDismissedInPrefs(await loadOnboardingPrefs());
+      await saveOnboardingPrefs(updated);
+    });
+  })();
+}
+
 document.getElementById('openCodeBtn').addEventListener('click', async () => {
   const url = chrome.runtime.getURL('code/code.html');
   await chrome.tabs.create({ url });
@@ -373,6 +419,7 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   await loadLang();
   applyStaticTranslations();
   setupPopupHelp();
+  setupPopupTelemetryNotice();
 
   refresh();
 })();

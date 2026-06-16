@@ -4,16 +4,26 @@ import {
   normalizeOnboardingPrefs,
   hasSeenTool,
   markToolSeenInPrefs,
-  markHelpOpenedInPrefs
+  markHelpOpenedInPrefs,
+  hasSeenTelemetryNotice,
+  markTelemetryNoticeDismissedInPrefs
 } from '../shared/onboardingPrefs.js';
 import { t, setLang } from '../shared/i18n.js';
 
-const HELP_MODES = ['home', 'comparator', 'development', 'monitoring', 'manifests'];
+const HELP_MODES = ['home', 'comparator', 'development', 'analysis', 'monitoring', 'manifests'];
 
 describe('onboardingPrefs', () => {
   it('normaliza prefs vacías', () => {
-    expect(normalizeOnboardingPrefs(null)).toEqual({ tools: {}, helpOpened: false });
-    expect(normalizeOnboardingPrefs(undefined)).toEqual({ tools: {}, helpOpened: false });
+    expect(normalizeOnboardingPrefs(null)).toEqual({
+      tools: {},
+      helpOpened: false,
+      telemetryNoticeDismissed: false
+    });
+    expect(normalizeOnboardingPrefs(undefined)).toEqual({
+      tools: {},
+      helpOpened: false,
+      telemetryNoticeDismissed: false
+    });
   });
 
   it('conserva herramientas vistas y helpOpened', () => {
@@ -44,8 +54,17 @@ describe('onboardingPrefs', () => {
     expect(prefs.helpOpened).toBe(true);
   });
 
-  it('lista de herramientas alineada con onboarding (14)', () => {
-    expect(ALL_ONBOARDING_TOOLS).toHaveLength(14);
+  it('aviso de telemetría del popup solo la primera vez', () => {
+    let prefs = normalizeOnboardingPrefs(null);
+    expect(hasSeenTelemetryNotice(prefs)).toBe(false);
+    prefs = markTelemetryNoticeDismissedInPrefs(prefs);
+    prefs = markTelemetryNoticeDismissedInPrefs(prefs);
+    expect(hasSeenTelemetryNotice(prefs)).toBe(true);
+    expect(prefs.telemetryNoticeDismissed).toBe(true);
+  });
+
+  it('lista de herramientas alineada con onboarding (15)', () => {
+    expect(ALL_ONBOARDING_TOOLS).toHaveLength(15);
     expect(ALL_ONBOARDING_TOOLS).toContain('Comparator');
     expect(ALL_ONBOARDING_TOOLS).toContain('FieldHistory');
     expect(ALL_ONBOARDING_TOOLS).toContain('PermissionDiff');
@@ -61,6 +80,12 @@ describe('popup help i18n keys', () => {
       expect(t('popup.help.title')).not.toBe('popup.help.title');
       expect(t('popup.help.body1')).not.toBe('popup.help.body1');
       expect(t('popup.help.body6')).not.toBe('popup.help.body6');
+    });
+
+    it(`claves popup.telemetryNotice.* en ${lang}`, () => {
+      setLang(lang);
+      expect(t('popup.telemetryNotice.text')).not.toBe('popup.telemetryNotice.text');
+      expect(t('popup.telemetryNotice.dismiss')).not.toBe('popup.telemetryNotice.dismiss');
     });
   }
 });

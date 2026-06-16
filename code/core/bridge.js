@@ -1,4 +1,5 @@
 import { t } from '../../shared/i18n.js';
+import { classifyError, toError } from '../../shared/errorTelemetryPolicy.js';
 import { captureUsageLogOnClient } from '../../shared/posthogClient.js';
 
 /**
@@ -19,7 +20,26 @@ export async function bg(message) {
     }
     return res;
   } catch (e) {
-    const msg = String(e?.message || e);
+    const err = toError(e);
+    const msg = String(err.message || e);
+    const category = classifyError(err, {});
+    const phase = String(message?.type || 'sendMessage').slice(0, 64);
+    try {
+      if (category === 'bug') {
+        const { reportBug } = await import('../../shared/posthogClient.js');
+        reportBug(err, { artifact_type: 'Bridge', phase, error_handled: 1 });
+      } else if (category === 'operational') {
+        const { reportOperationalFailure } = await import('../../shared/posthogClient.js');
+        void reportOperationalFailure({
+          artifactType: 'Bridge',
+          phase,
+          reason: msg,
+          error: msg
+        });
+      }
+    } catch {
+      /* telemetría no debe romper el bridge */
+    }
     return { ok: false, error: msg || t('bridge.noBackgroundResponse') };
   }
 }

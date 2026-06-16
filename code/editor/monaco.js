@@ -138,6 +138,9 @@ export async function loadMonaco() {
         resolve(monaco);
       }, reject);
     } catch (e) {
+      void import('../../shared/posthogClient.js').then(({ reportBug }) => {
+        reportBug(e, { artifact_type: 'Monaco', phase: 'load', error_handled: 1 });
+      });
       reject(e);
     }
   });

@@ -55,6 +55,11 @@ import {
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
 import { setupAnonymousApexPanel, refreshAnonymousApexPanel } from './ui/anonymousApexPanel.js';
 import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
+import {
+  setupEnvironmentStatusPanel,
+  refreshEnvironmentStatusPanel,
+  reloadEnvironmentStatusIfActive
+} from './ui/environmentStatusPanel.js';
 import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryExplorerPanel.js';
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
 import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
@@ -66,6 +71,10 @@ import {
   setupCustomMetadataComparePanel,
   refreshCustomMetadataComparePanel
 } from './ui/customMetadataComparePanel.js';
+import {
+  setupRecordComparePanel,
+  refreshRecordComparePanel
+} from './ui/recordComparePanel.js';
 import { setupSetupAuditTrailPanel, refreshSetupAuditTrailPanel } from './ui/setupAuditTrailPanel.js';
 import { setupFieldHistoryPanel, refreshFieldHistoryPanel } from './ui/fieldHistoryPanel.js';
 import { setupPermissionDiffPanel, refreshPermissionDiffPanel } from './ui/permissionDiffPanel.js';
@@ -219,12 +228,14 @@ async function init() {
   setupApexTestsPanel();
   setupAnonymousApexPanel();
   setupOrgLimitsPanel();
+  setupEnvironmentStatusPanel();
   setupPermissionDiffPanel();
   setupQueryExplorerPanel();
   setupDebugLogBrowserPanel();
   setupApexCoverageComparePanel();
   setupCustomSettingsComparePanel();
   setupCustomMetadataComparePanel();
+  setupRecordComparePanel();
   setupSetupAuditTrailPanel();
   setupFieldHistoryPanel();
   setupQuickEditPanel();
@@ -235,12 +246,14 @@ async function init() {
   void refreshApexTestsPanel();
   void refreshAnonymousApexPanel();
   void refreshOrgLimitsPanel();
+  void refreshEnvironmentStatusPanel();
   void refreshPermissionDiffPanel();
   void refreshQueryExplorerPanel();
   void refreshDebugLogBrowserPanel();
   void refreshApexCoverageComparePanel();
   void refreshCustomSettingsComparePanel();
   void refreshCustomMetadataComparePanel();
+  void refreshRecordComparePanel();
   void refreshSetupAuditTrailPanel();
   void refreshFieldHistoryPanel();
   void refreshQuickEditPanel();

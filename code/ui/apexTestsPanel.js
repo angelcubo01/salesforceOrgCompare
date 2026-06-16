@@ -5,8 +5,7 @@ import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
-import { logApexTestRunUsage } from './apexTestUsageLog.js';
-import { captureUiException } from '../../shared/posthogClient.js';
+import { logApexTestFailureUsage, logApexTestRunUsage } from './apexTestUsageLog.js';
 import { guardToolAction } from './featureControlsUi.js';
 import {
   rememberApexTestRunJob,
@@ -731,7 +730,10 @@ async function reloadMethodsForSelection() {
   if (!res.ok) {
     const msg =
       res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.loadMethodsError');
-    captureUiException(new Error(msg), { artifact_type: 'ApexTests', phase: 'load_methods' });
+    void logApexTestFailureUsage(state.leftOrgId, 'load_methods', {
+      reason: res.reason || '',
+      error: msg
+    });
     if (runStatus) runStatus.textContent = msg;
     showToast(msg, 'warn');
     refreshSelectionTree();
@@ -808,7 +810,10 @@ async function loadApexClasses() {
       res.reason === 'NO_SID'
         ? t('toast.noSession')
         : detail || t('apexTests.loadClassesError');
-    captureUiException(new Error(msg), { artifact_type: 'ApexTests', phase: 'load_classes' });
+    void logApexTestFailureUsage(state.leftOrgId, 'load_classes', {
+      reason: res.reason || '',
+      error: msg
+    });
     if (status) {
       status.textContent =
         res.reason === 'NO_SID' ? msg : `${msg} ${t('apexTests.swNetworkHint')}`;
@@ -905,7 +910,10 @@ async function runApexTestsWithBody(body) {
   if (!res.ok) {
     const msg =
       res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.runError');
-    captureUiException(new Error(msg), { artifact_type: 'ApexTests', phase: 'run' });
+    void logApexTestFailureUsage(state.leftOrgId, 'run', {
+      reason: res.reason || '',
+      error: msg
+    });
     if (runStatus) runStatus.textContent = msg;
     showToast(msg, 'error');
     scheduleApexTestsFitScale();

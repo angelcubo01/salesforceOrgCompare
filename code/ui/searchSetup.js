@@ -14,6 +14,7 @@ import { refreshApexTestsPanel, resetApexTestsShellToHub } from './apexTestsPane
 import { refreshAnonymousApexPanel } from './anonymousApexPanel.js';
 import { refreshQueryExplorerPanel } from './queryExplorerPanel.js';
 import { refreshOrgLimitsPanel } from './orgLimitsPanel.js';
+import { refreshEnvironmentStatusPanel } from './environmentStatusPanel.js';
 import { refreshDebugLogBrowserPanel } from './debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from './setupAuditTrailPanel.js';
 import { refreshFieldHistoryPanel } from './fieldHistoryPanel.js';
@@ -22,6 +23,7 @@ import { refreshQuickEditPanel } from './quickEditPanel.js';
 import { refreshApexCoverageComparePanel } from './apexCoverageComparePanel.js';
 import { refreshCustomSettingsComparePanel } from './customSettingsComparePanel.js';
 import { refreshCustomMetadataComparePanel } from './customMetadataComparePanel.js';
+import { refreshRecordComparePanel } from './recordComparePanel.js';
 import { t } from '../../shared/i18n.js';
 import {
   capMetadataResults,
@@ -93,6 +95,7 @@ export function handleArtifactTypeSelectChange(options = {}) {
   void refreshAnonymousApexPanel();
   void refreshQueryExplorerPanel();
   void refreshOrgLimitsPanel();
+  void refreshEnvironmentStatusPanel();
   void refreshPermissionDiffPanel();
   void refreshDebugLogBrowserPanel();
   void refreshSetupAuditTrailPanel();
@@ -101,6 +104,7 @@ export function handleArtifactTypeSelectChange(options = {}) {
   void refreshApexCoverageComparePanel();
   void refreshCustomSettingsComparePanel();
   void refreshCustomMetadataComparePanel();
+  void refreshRecordComparePanel();
   refreshFieldDependencyPanel();
   refreshDependencyExplorerPanel();
   onAfterArtifactTypeChange(isUserChange);

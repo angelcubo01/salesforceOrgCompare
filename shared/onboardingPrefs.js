@@ -10,6 +10,7 @@ export const ALL_ONBOARDING_TOOLS = Object.freeze([
   'QueryExplorer',
   'DebugLogBrowser',
   'ApexCoverageCompare',
+  'EnvironmentStatus',
   'OrgLimits',
   'SetupAuditTrail',
   'FieldHistory',
@@ -21,7 +22,7 @@ export const ALL_ONBOARDING_TOOLS = Object.freeze([
 
 /**
  * @param {unknown} raw
- * @returns {{ tools: Record<string, boolean>, helpOpened: boolean }}
+ * @returns {{ tools: Record<string, boolean>, helpOpened: boolean, telemetryNoticeDismissed: boolean }}
  */
 export function normalizeOnboardingPrefs(raw) {
   const p = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
@@ -33,7 +34,8 @@ export function normalizeOnboardingPrefs(raw) {
   }
   return {
     tools,
-    helpOpened: !!p.helpOpened
+    helpOpened: !!p.helpOpened,
+    telemetryNoticeDismissed: !!p.telemetryNoticeDismissed
   };
 }
 
@@ -63,4 +65,18 @@ export function markToolSeenInPrefs(prefs, tool) {
  */
 export function markHelpOpenedInPrefs(prefs) {
   return { ...prefs, helpOpened: true };
+}
+
+/**
+ * @param {{ telemetryNoticeDismissed?: boolean }} prefs
+ */
+export function hasSeenTelemetryNotice(prefs) {
+  return !!prefs.telemetryNoticeDismissed;
+}
+
+/**
+ * @param {{ tools: Record<string, boolean>, helpOpened?: boolean, telemetryNoticeDismissed?: boolean }} prefs
+ */
+export function markTelemetryNoticeDismissedInPrefs(prefs) {
+  return { ...prefs, telemetryNoticeDismissed: true };
 }

@@ -10,6 +10,7 @@ Desktop.ini
 *.crx
 *.pem
 *.zip
+dist/
 
 # Editor / IDE
 .vscode/
@@ -24,4 +25,5 @@ Desktop.ini
 # Node / tests
 node_modules/
 coverage/
+.env
 shared/telemetryConfig.js

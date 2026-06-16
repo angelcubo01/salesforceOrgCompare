@@ -3,6 +3,7 @@ import { bg } from '../core/bridge.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
+import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 
 let lastRows = [];
 let currentPage = 1;
@@ -251,6 +252,7 @@ async function loadAuditTrail() {
     });
     if (!res?.ok) {
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('setupAudit.loadError');
+      void handleToolResponseFailure(res, { artifact_type: 'SetupAuditTrail', phase: 'list' });
       if (status) status.textContent = msg;
       showToast(msg, 'error');
       return;

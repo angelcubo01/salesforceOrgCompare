@@ -375,6 +375,9 @@ html[data-ui-theme="light"] .app-mode-submenu-inner {
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
+html[data-ui-theme="light"] .app-mode-submenu-heading {
+  color: #64748b;
+}
 html[data-ui-theme="light"] .app-mode-submenu-item {
   color: #1e293b;
   background: #f8fafc;
@@ -620,6 +623,12 @@ html[data-ui-theme="light"] .setup-records-compare-sticky-head {
 
 html[data-ui-theme="light"] .setup-records-compare-secondary-btn {
   background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .record-compare-field-search {
+  background: #ffffff;
   border-color: #cbd5e1;
   color: #0f172a;
 }

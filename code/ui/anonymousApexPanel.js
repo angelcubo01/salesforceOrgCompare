@@ -10,6 +10,7 @@ import { navigateToModeAndTool } from './appModeNav.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { randomStagingId } from '../../shared/randomId.js';
 import { guardToolAction } from './featureControlsUi.js';
+import { handleToolError } from '../../shared/reportToolError.js';
 
 const ANON_EDITOR_CACHE_KEY = 'sfoc_anon_apex_editor_text';
 const ANON_SAVED_SCRIPTS_KEY = 'sfoc_anon_apex_saved_scripts';
@@ -509,6 +510,7 @@ async function runAnonymousApex() {
     renderResult(resultsByOrg);
     void logAnonymousApexUsage(usageBase);
   } catch (e) {
+    void handleToolError(e, { artifact_type: 'AnonymousApex', phase: 'execute' });
     setExecStatus(`${t('anonymousApex.runError')}\n${String(e?.message || e)}`, 'error');
     if (logBtn) {
       logBtn.classList.remove('hidden');

@@ -36,6 +36,7 @@ import {
   validateRunTestsBodyForApi
 } from '../shared/apexTestRunBodyApi.js';
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
+import { fetchAllEnvironmentStatusRows } from './environmentStatus.js';
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
 function queryExplorerCatchErrorPayload(e) {
@@ -78,6 +79,10 @@ import {
   fetchSetupRecordsForType
 } from '../shared/setupRecordsCompareApi.js';
 import {
+  resolveObjectFromRecordId,
+  fetchRecordForCompare
+} from '../shared/recordCompareApi.js';
+import {
   analyzeDependencies,
   buildCustomObjectNameSoql,
   buildFieldObjectSoql,
@@ -106,7 +111,8 @@ import {
 } from './caches.js';
 import { DEBUG_LOGS } from './config.js';
 import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
-import { sendPosthogException } from './posthogTelemetry.js';
+import { sendPosthogException, sendPosthogOperationalFailure } from './posthogTelemetry.js';
+import { classifyError, toError } from '../shared/errorTelemetryPolicy.js';
 import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
 import {
   loadExtensionSettings,
@@ -130,6 +136,35 @@ import {
 } from './retrieveSession.js';
 import { featureControlBlockedResponse } from './featureControlsGuard.js';
 
+/**
+ * @param {(response: object) => void} reply
+ * @param {unknown} e
+ * @param {{ handler?: string, artifact_type?: string, phase?: string }} [ctx]
+ */
+function replyHandlerError(reply, e, ctx = {}) {
+  const err = toError(e);
+  const telemetryCtx = {
+    error_handled: 1,
+    error_source: 'service_worker.handler',
+    handler: String(ctx.handler || '').slice(0, 64),
+    artifact_type: String(ctx.artifact_type || 'ServiceWorker').slice(0, 64),
+    phase: String(ctx.phase || ctx.handler || 'handler').slice(0, 64),
+    reason: String(ctx.reason || err.code || '').slice(0, 64)
+  };
+  const category = classifyError(err, telemetryCtx);
+  if (category === 'bug') {
+    void sendPosthogException(err, telemetryCtx);
+  } else if (category === 'operational') {
+    void sendPosthogOperationalFailure({
+      artifactType: telemetryCtx.artifact_type,
+      phase: telemetryCtx.phase,
+      reason: telemetryCtx.reason || err.message,
+      error: String(err.message || '').slice(0, 200)
+    });
+  }
+  reply({ ok: false, error: sanitizeUiError(e) });
+}
+
 function retrieveCancelledResponse() {
   return { ok: false, cancelled: true };
 }
@@ -139,7 +174,7 @@ function sendRetrieveErrorResponse(e, deliver) {
   if (e instanceof RetrieveCancelledError || (e && typeof e === 'object' && e.code === 'RETRIEVE_CANCELLED')) {
     deliver(retrieveCancelledResponse());
   } else {
-    deliver({ ok: false, error: sanitizeUiError(e) });
+    replyHandlerError(deliver, e, { artifact_type: 'Retrieve', phase: 'retrieve' });
   }
 }
 
@@ -445,7 +480,7 @@ export function installMessageHandlers() {
               authStatusCache.del(`auth:${org.id}`);
               reply({ ok: true });
             } catch (e) {
-              reply({ ok: false, error: String(e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -560,7 +595,7 @@ export function installMessageHandlers() {
                 indexCache.clear();
                 sourceCache.clear();
               }
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -699,7 +734,7 @@ export function installMessageHandlers() {
               const sent = await sendPosthogException(err, ctx);
               reply({ ok: sent });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -712,7 +747,7 @@ export function installMessageHandlers() {
               });
               reply({ ok: true, id });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -932,7 +967,7 @@ export function installMessageHandlers() {
               const metadataObjects = await describeMetadata(org.instanceUrl, sid, ver);
               reply({ ok: true, metadataObjects, apiVersionUsed: String(ver) });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -954,7 +989,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, records, apiVersionUsed: String(ver) });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1004,7 +1039,7 @@ export function installMessageHandlers() {
                 componentFailures: result.componentFailures
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1045,7 +1080,7 @@ export function installMessageHandlers() {
               classes.sort((a, b) => String(a.name).localeCompare(String(b.name)));
               reply({ ok: true, classes });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1130,7 +1165,7 @@ export function installMessageHandlers() {
               }
               reply({ ok: true, byClass });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1188,7 +1223,7 @@ export function installMessageHandlers() {
                   /* ignore */
                 }
               }
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1286,7 +1321,7 @@ export function installMessageHandlers() {
                 ...(logId ? { logId } : {})
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             } finally {
               if (traceFlagId) {
                 try {
@@ -1319,7 +1354,7 @@ export function installMessageHandlers() {
               const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
               reply({ ok: true, body });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1340,7 +1375,16 @@ export function installMessageHandlers() {
               const limits = await fetchOrgLimits(org.instanceUrl, sid, org.apiVersion);
               reply({ ok: true, limits });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'environmentStatus:getAll': {
+            try {
+              const result = await fetchAllEnvironmentStatusRows();
+              reply(result);
+            } catch (e) {
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1361,7 +1405,7 @@ export function installMessageHandlers() {
               const types = await listCustomSettingTypes(org.instanceUrl, sid, org.apiVersion);
               reply({ ok: true, types });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1387,7 +1431,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, ...payload });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1408,7 +1452,7 @@ export function installMessageHandlers() {
               const types = await listCustomMetadataTypes(org.instanceUrl, sid, org.apiVersion);
               reply({ ok: true, types });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1434,7 +1478,83 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, ...payload });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'recordCompare:fetchPair': {
+            const { leftOrgId, rightOrgId, leftRecordId, rightRecordId } = message;
+            if (!leftOrgId || !rightOrgId) {
+              reply({ ok: false, reason: 'MISSING_ORGS' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const orgL = saved[leftOrgId];
+            const orgR = saved[rightOrgId];
+            if (!orgL || !orgR) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sidL = await resolveSidForOrg(orgL);
+            const sidR = await resolveSidForOrg(orgR);
+            if (!sidL || !sidR) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const [leftObject, rightObject] = await Promise.all([
+                resolveObjectFromRecordId(orgL.instanceUrl, sidL, orgL.apiVersion, leftRecordId),
+                resolveObjectFromRecordId(orgR.instanceUrl, sidR, orgR.apiVersion, rightRecordId)
+              ]);
+              if (leftObject !== rightObject) {
+                reply({
+                  ok: false,
+                  reason: 'OBJECT_MISMATCH',
+                  leftObject,
+                  rightObject
+                });
+                break;
+              }
+              const [leftPayload, rightPayload] = await Promise.all([
+                fetchRecordForCompare(
+                  orgL.instanceUrl,
+                  sidL,
+                  orgL.apiVersion,
+                  leftObject,
+                  leftRecordId
+                ),
+                fetchRecordForCompare(
+                  orgR.instanceUrl,
+                  sidR,
+                  orgR.apiVersion,
+                  rightObject,
+                  rightRecordId
+                )
+              ]);
+              reply({
+                ok: true,
+                objectApiName: leftObject,
+                left: leftPayload,
+                right: rightPayload
+              });
+            } catch (e) {
+              const code = e && typeof e === 'object' && e.code ? String(e.code) : '';
+              const errorCode =
+                e && typeof e === 'object' && e.salesforceErrorCode
+                  ? String(e.salesforceErrorCode)
+                  : '';
+              if (code === 'INVALID_ID') {
+                reply({ ok: false, reason: 'INVALID_ID', error: String(e?.message || e) });
+              } else if (code === 'NOT_FOUND') {
+                reply({ ok: false, reason: 'NOT_FOUND', error: String(e?.message || e) });
+              } else {
+                reply({
+                  ok: false,
+                  reason: 'QUERY_ERROR',
+                  error: String(e?.message || e),
+                  errorCode: errorCode || undefined
+                });
+              }
             }
             break;
           }
@@ -1462,7 +1582,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, items });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1491,7 +1611,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, items });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1524,7 +1644,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, ...data });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1550,7 +1670,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, items });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1581,7 +1701,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, ...data });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1615,7 +1735,7 @@ export function installMessageHandlers() {
                 setupEntityAccess: data.setupEntityAccess
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1743,7 +1863,7 @@ export function installMessageHandlers() {
                 rightRows: Array.isArray(rightRows) ? rightRows : []
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1808,7 +1928,7 @@ export function installMessageHandlers() {
                 uncoveredLines: [...uncovered].sort((a, b) => a - b)
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1837,7 +1957,7 @@ export function installMessageHandlers() {
               });
               reply({ ok: true, logs: Array.isArray(logs) ? logs : [] });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1858,7 +1978,7 @@ export function installMessageHandlers() {
               const result = await deleteAllApexLogs(org.instanceUrl, sid, org.apiVersion);
               reply({ ok: true, ...result });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1905,7 +2025,7 @@ export function installMessageHandlers() {
               }
               reply({ ok: true, namesById });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1930,7 +2050,7 @@ export function installMessageHandlers() {
               const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
               reply({ ok: true, body });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -1968,7 +2088,7 @@ export function installMessageHandlers() {
               const rows = await restQueryAll(org.instanceUrl, sid, org.apiVersion, soql);
               reply({ ok: true, rows: Array.isArray(rows) ? rows : [] });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2007,7 +2127,7 @@ export function installMessageHandlers() {
                 historyEnabled: ctx.historyEnabled
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2060,7 +2180,7 @@ export function installMessageHandlers() {
               });
               reply({ ok: true, rows });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2279,7 +2399,7 @@ export function installMessageHandlers() {
               await scheduleTerminalJobsTraceCleanup(orgId, runs);
               reply({ ok: true, runs });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2450,7 +2570,7 @@ export function installMessageHandlers() {
               }
               reply({ ok: true, jobs });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2490,7 +2610,7 @@ export function installMessageHandlers() {
               const failures = raw.filter((r) => !isTestSetupApexTestResult(r));
               reply({ ok: true, failures });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2530,7 +2650,7 @@ export function installMessageHandlers() {
               const methods = raw.filter((r) => !isTestSetupApexTestResult(r));
               reply({ ok: true, methods });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2659,7 +2779,7 @@ export function installMessageHandlers() {
               }));
               reply({ ok: true, classes });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2819,7 +2939,7 @@ export function installMessageHandlers() {
               const slimLogs = logs.map((l) => ({ Id: l.Id }));
               reply({ ok: true, pick: true, logs: slimLogs });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2911,7 +3031,7 @@ export function installMessageHandlers() {
                 uncoveredLines: [...uncovered].sort((a, b) => a - b)
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2964,7 +3084,7 @@ export function installMessageHandlers() {
                 body: bodyText
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -2991,7 +3111,7 @@ export function installMessageHandlers() {
               });
               reply({ ok: true });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -3065,7 +3185,7 @@ export function installMessageHandlers() {
                 });
               }
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -3134,7 +3254,7 @@ export function installMessageHandlers() {
               );
               reply({ ok: true, items });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -3194,7 +3314,7 @@ export function installMessageHandlers() {
                 totalCount: analysis.nodes.length
               });
             } catch (e) {
-              reply({ ok: false, error: String(e?.message || e) });
+              replyHandlerError(reply, e);
             }
             break;
           }
@@ -3207,7 +3327,7 @@ export function installMessageHandlers() {
             });
         }
       } catch (e) {
-        reply({ ok: false, error: String(e) });
+        replyHandlerError(reply, e);
       }
     })();
     return true;

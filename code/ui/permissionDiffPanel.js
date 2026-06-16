@@ -12,7 +12,7 @@ import {
   compareAccessByResourceBundles,
   formatSetupEntityLabel,
 } from '../../shared/permissionsDiffCore.js';
-import { captureUiException } from '../../shared/posthogClient.js';
+import { handleToolError } from '../../shared/reportToolError.js';
 import {
   customPermCommitActive,
   invalidateCustomPermCommit,
@@ -713,7 +713,7 @@ async function runLoad() {
       repaint();
     } catch (e) {
       invalidateCustomPermCommit();
-      captureUiException(e, { artifact_type: 'PermissionDiff', phase: 'query' });
+      void handleToolError(e, { artifact_type: 'PermissionDiff', phase: 'query' });
       setResultsVisible(false);
       setStatus(String(e?.message || e), 'error');
       showToast(String(e?.message || e), 'error');
@@ -764,7 +764,7 @@ async function runLoad() {
       repaint();
     } catch (e) {
       committedResource = null;
-      captureUiException(e, { artifact_type: 'PermissionDiff', phase: 'resource_query' });
+      void handleToolError(e, { artifact_type: 'PermissionDiff', phase: 'resource_query' });
       setResultsVisible(false);
       setStatus(String(e?.message || e), 'error');
       showToast(String(e?.message || e), 'error');
@@ -814,7 +814,7 @@ async function runLoad() {
     repaint();
   } catch (e) {
     committedContainer = null;
-    captureUiException(e, { artifact_type: 'PermissionDiff', phase: 'container_query' });
+    void handleToolError(e, { artifact_type: 'PermissionDiff', phase: 'container_query' });
     setResultsVisible(false);
     setStatus(String(e?.message || e), 'error');
     showToast(String(e?.message || e), 'error');

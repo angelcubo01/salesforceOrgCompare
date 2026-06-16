@@ -1,3 +1,5 @@
+import './loadProjectEnv.mjs';
+
 /**
  * Crea o actualiza el feature flag remoto `sfoc_feature_controls` en PostHog EU.
  *
@@ -16,12 +18,17 @@
  *   node scripts/createPosthogFeatureControlsFlag.mjs --update
  *   node scripts/createPosthogFeatureControlsFlag.mjs --update --smoke-test
  *   node scripts/createPosthogFeatureControlsFlag.mjs --update --reset
+ *   node scripts/createPosthogFeatureControlsFlag.mjs --update --production
  */
+import { buildProductionFeatureControlsPayload } from '../shared/featureControlsProductionPayload.js';
+import { parseFeatureControlsPayload } from '../shared/featureControls.js';
+
 const API_HOST = 'https://eu.posthog.com';
 const FLAG_KEY = 'sfoc_feature_controls';
 const UPDATE = process.argv.includes('--update');
 const SMOKE_TEST = process.argv.includes('--smoke-test');
 const RESET = process.argv.includes('--reset');
+const PRODUCTION = process.argv.includes('--production');
 const PERSONAL_KEY =
   process.env.POSTHOG_PERSONAL_API_KEY || process.env.POSTHOG_WIZARD_API_KEY || '';
 
@@ -110,7 +117,25 @@ const SMOKE_TEST_PAYLOAD = {
   }
 };
 
-const DEFAULT_PAYLOAD = RESET ? EMPTY_PAYLOAD : SMOKE_TEST ? SMOKE_TEST_PAYLOAD : EMPTY_PAYLOAD;
+function parseExistingPayload(raw) {
+  if (!raw) return null;
+  try {
+    const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return parseFeatureControlsPayload(value);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {import('../shared/featureControls.js').FeatureControlsConfig | null | undefined} existing
+ */
+function resolveDefaultPayload(existing) {
+  if (RESET) return EMPTY_PAYLOAD;
+  if (SMOKE_TEST) return SMOKE_TEST_PAYLOAD;
+  if (PRODUCTION) return buildProductionFeatureControlsPayload(existing);
+  return EMPTY_PAYLOAD;
+}
 
 if (!PERSONAL_KEY.startsWith('phx_')) {
   console.error(
@@ -156,14 +181,17 @@ async function resolveProjectId() {
   throw new Error('No se encontró ningún proyecto PostHog');
 }
 
-function flagBody() {
+/**
+ * @param {import('../shared/featureControls.js').FeatureControlsConfig} payload
+ */
+function flagBody(payload) {
   return {
     key: FLAG_KEY,
     name: 'SFOC — control remoto de herramientas (kill switch)',
     filters: {
       groups: [{ properties: [], rollout_percentage: DEFAULT_ROLLOUT_PERCENTAGE }],
       payloads: {
-        true: JSON.stringify(DEFAULT_PAYLOAD)
+        true: JSON.stringify(payload)
       }
     },
     active: true,
@@ -182,12 +210,16 @@ async function main() {
   const projectId = await resolveProjectId();
   console.log('Proyecto:', projectId);
 
-  if (SMOKE_TEST && RESET) {
-    console.error('Usa solo uno: --smoke-test o --reset');
+  const modeCount = [SMOKE_TEST, RESET, PRODUCTION].filter(Boolean).length;
+  if (modeCount > 1) {
+    console.error('Usa solo uno: --smoke-test, --reset o --production');
     process.exit(1);
   }
 
   const existing = await findExistingFlag(projectId);
+  const existingPayload = parseExistingPayload(existing?.filters?.payloads?.true || existing?.payload);
+  const payload = resolveDefaultPayload(existingPayload);
+
   if (existing && !UPDATE) {
     console.log(`Flag "${FLAG_KEY}" ya existe (id ${existing.id}). Usa --update para actualizar.`);
     const rollout = existing.filters?.groups?.[0]?.rollout_percentage;
@@ -197,7 +229,7 @@ async function main() {
     return;
   }
 
-  const body = flagBody();
+  const body = flagBody(payload);
   if (existing && UPDATE) {
     const updated = await api(`/api/projects/${projectId}/feature_flags/${existing.id}/`, {
       method: 'PATCH',
@@ -215,7 +247,8 @@ async function main() {
   console.log('\nRollout inicial:', DEFAULT_ROLLOUT_PERCENTAGE, '%');
   if (SMOKE_TEST) console.log('Modo: smoke test (prueba rápida)');
   if (RESET) console.log('Modo: reset (sin restricciones)');
-  console.log('Payload cuando true:', JSON.stringify(DEFAULT_PAYLOAD, null, 2));
+  if (PRODUCTION) console.log('Modo: producción (avisos beta en herramientas configuradas)');
+  console.log('Payload cuando true:', JSON.stringify(payload, null, 2));
   console.log(`\nEditar payload: https://eu.posthog.com/project/${projectId}/feature_flags?search=${FLAG_KEY}`);
 }
 

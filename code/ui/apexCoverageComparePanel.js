@@ -5,6 +5,7 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { randomStagingId } from '../../shared/randomId.js';
+import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 
 /**
  * @type {Array<{
@@ -228,6 +229,7 @@ async function openLineCoverageViewer(orgId, apexClassOrTriggerId, classLabel) {
       className: classLabel || ''
     });
     if (!res?.ok) {
+      void handleToolResponseFailure(res, { artifact_type: 'ApexCoverageCompare', phase: 'line_view' });
       showToast(
         res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('coverageCompare.lineViewError'),
         'error'
@@ -405,6 +407,7 @@ async function runLoad() {
     if (!res?.ok) {
       const msg =
         res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('coverageCompare.loadError');
+      void handleToolResponseFailure(res, { artifact_type: 'ApexCoverageCompare', phase: 'fetch' });
       if (status) status.textContent = msg;
       showToast(msg, 'error');
       return;

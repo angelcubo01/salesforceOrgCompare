@@ -40,6 +40,10 @@ export function isOrgLimitsMode() {
   return getSelectedArtifactType() === 'OrgLimits';
 }
 
+export function isEnvironmentStatusMode() {
+  return getSelectedArtifactType() === 'EnvironmentStatus';
+}
+
 export function isDebugLogBrowserMode() {
   return getSelectedArtifactType() === 'DebugLogBrowser';
 }
@@ -72,6 +76,10 @@ export function isCustomMetadataCompareMode() {
   return getSelectedArtifactType() === 'CustomMetadataCompare';
 }
 
+export function isRecordCompareMode() {
+  return getSelectedArtifactType() === 'RecordCompare';
+}
+
 export function isOperationPlaceholder() {
   return !getSelectedArtifactType();
 }
@@ -90,6 +98,7 @@ export function isFullScreenToolMode() {
     isAnonymousApexMode() ||
     isQueryExplorerMode() ||
     isOrgLimitsMode() ||
+    isEnvironmentStatusMode() ||
     isDebugLogBrowserMode() ||
     isSetupAuditTrailMode() ||
     isFieldHistoryMode() ||
@@ -97,7 +106,8 @@ export function isFullScreenToolMode() {
     isQuickEditMode() ||
     isApexCoverageCompareMode() ||
     isCustomSettingsCompareMode() ||
-    isCustomMetadataCompareMode()
+    isCustomMetadataCompareMode() ||
+    isRecordCompareMode()
   );
 }
 
@@ -108,7 +118,7 @@ function syncHomeLayoutChrome() {
   const tool = getSelectedArtifactType();
   const hideForDevTools = APP_NAV_DEVELOPMENT_TOOLS.includes(tool);
   const hideSidebar =
-    home || mode === 'monitoring' || mode === 'manifests' || hideForDevTools;
+    home || mode === 'analysis' || mode === 'monitoring' || mode === 'manifests' || hideForDevTools;
   document.body.classList.toggle('app-mode-home', home);
   document.querySelector('.content .sidebar')?.classList.toggle('hidden', hideSidebar);
 }
@@ -158,6 +168,7 @@ export function applyArtifactTypeUi() {
   const isAnonymousApex = op === 'AnonymousApex';
   const isQueryExplorer = op === 'QueryExplorer';
   const isOrgLimits = op === 'OrgLimits';
+  const isEnvironmentStatus = op === 'EnvironmentStatus';
   const isDebugLogs = op === 'DebugLogBrowser';
   const isSetupAudit = op === 'SetupAuditTrail';
   const isFieldHistory = op === 'FieldHistory';
@@ -168,6 +179,7 @@ export function applyArtifactTypeUi() {
   const isApexCoverageCompare = op === 'ApexCoverageCompare';
   const isCustomSettingsCompare = op === 'CustomSettingsCompare';
   const isCustomMetadataCompare = op === 'CustomMetadataCompare';
+  const isRecordCompare = op === 'RecordCompare';
   document.body.classList.toggle('artifact-generate-package-xml', isGen);
   document.body.classList.toggle(
     'artifact-generate-package-xml-compare',
@@ -191,6 +203,7 @@ export function applyArtifactTypeUi() {
     isDepExplorer && !!state.dependencyExplorerCompareMode
   );
   document.body.classList.toggle('artifact-org-limits', isOrgLimits);
+  document.body.classList.toggle('artifact-environment-status', isEnvironmentStatus);
   document.body.classList.toggle('artifact-debug-log-browser', isDebugLogs);
   document.body.classList.toggle('artifact-setup-audit-trail', isSetupAudit);
   document.body.classList.toggle('artifact-field-history', isFieldHistory);
@@ -203,6 +216,11 @@ export function applyArtifactTypeUi() {
   document.body.classList.toggle('artifact-apex-coverage-compare', isApexCoverageCompare);
   document.body.classList.toggle('artifact-custom-settings-compare', isCustomSettingsCompare);
   document.body.classList.toggle('artifact-custom-metadata-compare', isCustomMetadataCompare);
+  document.body.classList.toggle('artifact-record-compare', isRecordCompare);
+  document.body.classList.toggle(
+    'artifact-record-compare-compare',
+    isRecordCompare && !!state.recordCompareCompareMode
+  );
   document.body.classList.toggle(
     'artifact-org-limits-compare',
     isOrgLimits && !!state.orgLimitsCompareMode
@@ -221,6 +239,7 @@ export function applyArtifactTypeUi() {
   const anonymousApexPanel = document.getElementById('anonymousApexPanel');
   const queryExplorerPanel = document.getElementById('queryExplorerPanel');
   const orgLimitsPanel = document.getElementById('orgLimitsPanel');
+  const environmentStatusPanel = document.getElementById('environmentStatusPanel');
   const debugLogsPanel = document.getElementById('debugLogBrowserPanel');
   const setupAuditPanel = document.getElementById('setupAuditTrailPanel');
   const fieldHistoryPanel = document.getElementById('fieldHistoryPanel');
@@ -229,6 +248,7 @@ export function applyArtifactTypeUi() {
   const apexCoverageComparePanel = document.getElementById('apexCoverageComparePanel');
   const customSettingsComparePanel = document.getElementById('customSettingsComparePanel');
   const customMetadataComparePanel = document.getElementById('customMetadataComparePanel');
+  const recordComparePanel = document.getElementById('recordComparePanel');
   const orgDropdowns = document.getElementById('orgDropdowns');
   const landingPanel = document.getElementById('appLandingPanel');
 
@@ -252,6 +272,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -261,6 +282,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     hideSidebarSearchResults();
     syncSearchInputState();
     updateOrgDropdownLayout();
@@ -288,6 +310,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -297,6 +320,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
 
     state.rightOrgId = null;
     const right = document.getElementById('rightOrg');
@@ -325,6 +349,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -333,6 +358,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.generatePackageXmlCompareMode) {
@@ -371,6 +397,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.remove('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -379,6 +406,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.anonymousApexCompareMode) {
@@ -412,6 +440,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.remove('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -420,6 +449,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     const rightQx = document.getElementById('rightOrg');
     const rightReauthQx = document.getElementById('rightReauthBtn');
     if (state.queryExplorerCompareMode) {
@@ -453,6 +483,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -461,6 +492,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     const rightPd = document.getElementById('rightOrg');
     const rightReauthPd = document.getElementById('rightReauthBtn');
     if (state.permissionDiffCompareMode) {
@@ -480,6 +512,10 @@ export function applyArtifactTypeUi() {
         rightReauthPd.disabled = true;
       }
     }
+  } else if (isEnvironmentStatus) {
+    applySingleLeftOrgToolUi();
+    environmentStatusPanel?.classList.remove('hidden');
+    orgDropdowns?.classList.add('hidden');
   } else if (isOrgLimits) {
     searchPanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
@@ -502,6 +538,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.orgLimitsCompareMode) {
@@ -551,6 +588,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -559,6 +597,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.remove('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     if (right) right.disabled = false;
     const rightReauth = document.getElementById('rightReauthBtn');
@@ -580,6 +619,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -587,6 +627,7 @@ export function applyArtifactTypeUi() {
     quickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.remove('hidden');
     const rightCs = document.getElementById('rightOrg');
     if (rightCs) rightCs.disabled = false;
@@ -609,6 +650,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -617,12 +659,56 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.remove('hidden');
+    recordComparePanel?.classList.add('hidden');
     const rightCm = document.getElementById('rightOrg');
     if (rightCm) rightCm.disabled = false;
     const rightReauthCm = document.getElementById('rightReauthBtn');
     if (rightReauthCm) {
       rightReauthCm.disabled = false;
       rightReauthCm.classList.remove('hidden');
+    }
+  } else if (isRecordCompare) {
+    searchPanel?.classList.add('hidden');
+    clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
+    standardPanel?.classList.add('hidden');
+    genPanel?.classList.add('hidden');
+    apexTestsPanel?.classList.add('hidden');
+    fieldDepPanel?.classList.add('hidden');
+    depExplorerPanel?.classList.add('hidden');
+    anonymousApexPanel?.classList.add('hidden');
+    queryExplorerPanel?.classList.add('hidden');
+    orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
+    debugLogsPanel?.classList.add('hidden');
+    setupAuditPanel?.classList.add('hidden');
+    fieldHistoryPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
+    apexCoverageComparePanel?.classList.add('hidden');
+    customSettingsComparePanel?.classList.add('hidden');
+    customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.remove('hidden');
+    const rightRc = document.getElementById('rightOrg');
+    const rightReauthRc = document.getElementById('rightReauthBtn');
+    if (state.recordCompareCompareMode) {
+      if (rightRc) rightRc.disabled = false;
+      if (rightReauthRc) {
+        rightReauthRc.disabled = false;
+        rightReauthRc.classList.remove('hidden');
+      }
+    } else {
+      state.rightOrgId = null;
+      if (rightRc) {
+        rightRc.value = '';
+        rightRc.disabled = true;
+      }
+      if (rightReauthRc) {
+        rightReauthRc.disabled = true;
+        rightReauthRc.classList.add('hidden');
+      }
     }
   } else if (isDepExplorer) {
     searchPanel?.classList.add('hidden');
@@ -638,6 +724,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -646,6 +733,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
     const rightDep = document.getElementById('rightOrg');
     const rightReauthDep = document.getElementById('rightReauthBtn');
     if (state.dependencyExplorerCompareMode) {
@@ -679,6 +767,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -687,6 +776,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
 
     const right = document.getElementById('rightOrg');
     if (right) {
@@ -710,6 +800,7 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
@@ -718,6 +809,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
 
     const right = document.getElementById('rightOrg');
     if (right) {
@@ -736,6 +828,7 @@ export function applyArtifactTypeUi() {
     isAnonymousApex ||
     isQueryExplorer ||
     isOrgLimits ||
+    isEnvironmentStatus ||
     isPermissionDiff ||
     isDebugLogs ||
     isSetupAudit ||
@@ -746,6 +839,7 @@ export function applyArtifactTypeUi() {
     isApexCoverageCompare ||
     isCustomSettingsCompare ||
     isCustomMetadataCompare ||
+    isRecordCompare ||
     isNone
   ) {
     hideSidebarSearchResults();
@@ -753,6 +847,10 @@ export function applyArtifactTypeUi() {
 
   syncComparatorActionButtons();
   syncSearchInputState();
+
+  if (isEnvironmentStatus) {
+    orgDropdowns?.classList.add('hidden');
+  }
 
   updateOrgDropdownLayout();
   updateAuthIndicators();

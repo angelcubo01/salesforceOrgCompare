@@ -12,6 +12,7 @@ import {
   compareCategories
 } from '../../shared/dependencyExplorer.js';
 import { randomStagingId } from '../../shared/randomId.js';
+import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
 
 /** @type {{ id: string, name: string, displayName: string, type: string, seedTypeId: string } | null} */
@@ -173,6 +174,7 @@ async function openMetadataSourceInViewer(orgId, ref) {
         className: ref.name || undefined
       });
       if (!res?.ok) {
+        void handleToolResponseFailure(res, { artifact_type: 'DependencyExplorer', phase: 'open_apex_class' });
         showToast(
           res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('depExplorer.openSourceError'),
           'error'
@@ -190,6 +192,7 @@ async function openMetadataSourceInViewer(orgId, ref) {
         descriptor: { name: ref.name, bundleId: ref.id }
       });
       if (!res?.ok) {
+        void handleToolResponseFailure(res, { artifact_type: 'DependencyExplorer', phase: 'open_apex_trigger' });
         showToast(
           res?.reason === 'NO_SID' ? t('toast.noSession') : t('depExplorer.openSourceError'),
           'error'
@@ -608,6 +611,7 @@ async function runAnalyze() {
       try {
         right = await analyzeOrg(state.rightOrgId);
       } catch (e) {
+        void handleToolError(e, { artifact_type: 'DependencyExplorer', phase: 'analyze_right' });
         showToast(String(e?.message || e), 'warn');
       }
     }
@@ -662,6 +666,7 @@ async function runAnalyze() {
       });
     }
   } catch (e) {
+    void handleToolError(e, { artifact_type: 'DependencyExplorer', phase: 'analyze' });
     if (gen === analyzeGeneration) {
       if (status) status.textContent = '';
       showToast(String(e?.message || e), 'error');

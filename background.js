@@ -10,6 +10,7 @@ import {
 } from './background/posthogTelemetry.js';
 import { ensureTelemetryInstallId } from './shared/telemetryInstallId.js';
 import { installFeatureControlsGuard } from './background/featureControlsGuard.js';
+import { sendPosthogException } from './background/posthogTelemetry.js';
 
 try {
   installMessageHandlers();
@@ -22,4 +23,9 @@ try {
   void maybeReportInitialTelemetryPreference();
 } catch (e) {
   console.error('[SFOC] service worker no pudo arrancar', e);
+  void sendPosthogException(e, {
+    error_source: 'service_worker.startup',
+    error_handled: 0,
+    force_bug: true
+  });
 }

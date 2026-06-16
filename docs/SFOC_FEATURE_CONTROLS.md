@@ -13,7 +13,7 @@ Guía operativa para activar, desactivar o degradar funcionalidades de **Salesfo
 | **Flag ID** | `204164` |
 | **Enlace directo** | [Editar flag en PostHog](https://eu.posthog.com/project/191202/feature_flags/204164) |
 | **Rollout** | 100 % — el comportamiento se cambia editando el **payload JSON**, no el porcentaje |
-| **Estado inicial** | Todo habilitado (payload vacío de restricciones) |
+| **Estado en producción** | Herramientas en **beta** con aviso informativo no bloqueante (`DependencyExplorer`, `RecordCompare`); el resto sin restricciones |
 | **Depende de telemetría de uso** | **No** — funciona aunque el usuario tenga desactivada la telemetría en Ajustes |
 
 ---
@@ -296,7 +296,61 @@ Si el JSON está mal formado o PostHog no responde, **no se aplica ninguna restr
 | `PermissionDiff` | Diff de permisos |
 | `CustomSettingsCompare` | Comparar Custom Settings |
 | `CustomMetadataCompare` | Comparar Custom Metadata |
+| `RecordCompare` | Comparar registros |
 | `GeneratePackageXml` | Generar package.xml |
+
+### Herramientas en beta (`tools.message`)
+
+Algunas herramientas nuevas se publican **visibles** pero con un **modal informativo azul** (severity `info`, `blocking: false`) la primera vez que el usuario entra. La herramienta sigue siendo usable; el aviso se puede cerrar en la sesión.
+
+| ID | Estado |
+|----|--------|
+| `DependencyExplorer` | Beta |
+| `RecordCompare` | Beta |
+
+Fuente de verdad del texto y la lista: [`shared/featureControlsProductionPayload.js`](../shared/featureControlsProductionPayload.js).
+
+Para **añadir o actualizar** los avisos beta sin tocar otras restricciones del payload:
+
+```powershell
+$env:POSTHOG_PERSONAL_API_KEY="phx_..."
+$env:POSTHOG_PROJECT_ID="191202"
+npm run posthog:feature-controls-flag:production
+```
+
+El script **fusiona** el aviso beta en las herramientas listadas y conserva el resto del payload (modos, acciones, ocultaciones, etc.).
+
+**Payload de producción (avisos beta):**
+
+```json
+{
+  "version": 1,
+  "global": null,
+  "modes": {},
+  "tools": {
+    "DependencyExplorer": {
+      "message": {
+        "es": "Esta funcionalidad está en fase beta. Puede haber cambios o limitaciones.",
+        "en": "This feature is in beta. Behavior may change and some limitations may apply.",
+        "severity": "info",
+        "blocking": false
+      }
+    },
+    "RecordCompare": {
+      "message": {
+        "es": "Esta funcionalidad está en fase beta. Puede haber cambios o limitaciones.",
+        "en": "This feature is in beta. Behavior may change and some limitations may apply.",
+        "severity": "info",
+        "blocking": false
+      }
+    }
+  },
+  "metadataTypes": {},
+  "actions": {}
+}
+```
+
+Para **quitar** el aviso beta de una herramienta al salir de beta: elimina su entrada en `tools` (o ejecuta `posthog:feature-controls-flag:reset` si no hay otras restricciones activas).
 
 ### Tipos de metadata (`metadataTypes`) — comparador
 
@@ -327,9 +381,39 @@ Si el JSON está mal formado o PostHog no responde, **no se aplica ninguna restr
 
 ## Ejemplos por escenario
 
-### 1. Payload por defecto (sin restricciones)
+### 1. Payload por defecto (producción)
 
-Estado actual del flag en producción:
+Estado habitual del flag en producción: sin kill switch global; **avisos beta** en herramientas nuevas. Si no hay incidente ni otras restricciones, el payload equivale a:
+
+```json
+{
+  "version": 1,
+  "global": null,
+  "modes": {},
+  "tools": {
+    "DependencyExplorer": {
+      "message": {
+        "es": "Esta funcionalidad está en fase beta. Puede haber cambios o limitaciones.",
+        "en": "This feature is in beta. Behavior may change and some limitations may apply.",
+        "severity": "info",
+        "blocking": false
+      }
+    },
+    "RecordCompare": {
+      "message": {
+        "es": "Esta funcionalidad está en fase beta. Puede haber cambios o limitaciones.",
+        "en": "This feature is in beta. Behavior may change and some limitations may apply.",
+        "severity": "info",
+        "blocking": false
+      }
+    }
+  },
+  "metadataTypes": {},
+  "actions": {}
+}
+```
+
+**Sin restricciones** (tras incidente o prueba smoke test):
 
 ```json
 {
@@ -340,6 +424,12 @@ Estado actual del flag en producción:
   "metadataTypes": {},
   "actions": {}
 }
+```
+
+Publicar avisos beta desde el repo:
+
+```powershell
+npm run posthog:feature-controls-flag:production
 ```
 
 ---
@@ -579,6 +669,12 @@ Volver al payload sin restricciones:
 npm run posthog:feature-controls-flag:reset
 ```
 
+Publicar avisos beta de producción (fusiona con restricciones existentes):
+
+```powershell
+npm run posthog:feature-controls-flag:production
+```
+
 Script: [`scripts/createPosthogFeatureControlsFlag.mjs`](../scripts/createPosthogFeatureControlsFlag.mjs)
 
 ---
@@ -619,6 +715,8 @@ Si el usuario tiene **telemetría de uso activada**, al bloquear una acción des
 ---
 
 ## Ideas futuras (no implementadas aún)
+
+Detalle ampliado, priorización y roadmap en **[`SFOC_DEV_ADMIN_TOOLS.md`](SFOC_DEV_ADMIN_TOOLS.md)**.
 
 - Rollout por cohorte (org Salesforce, versión de extensión)
 - Ventanas de mantenimiento con **Scheduled changes** de PostHog

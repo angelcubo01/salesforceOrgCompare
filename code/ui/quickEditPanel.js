@@ -4,7 +4,7 @@ import { loadMonaco, resolveMonacoThemeId, createStandaloneEditorSafe } from '..
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
-import { captureUiException } from '../../shared/posthogClient.js';
+import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { guardToolAction } from './featureControlsUi.js';
 
 const QUICK_EDIT_SEARCH_MIN_PX = 288;
@@ -243,6 +243,7 @@ async function searchComponents() {
     });
 
     if (!res?.ok) {
+      void handleToolResponseFailure(res, { artifact_type: 'ApexClassQuickEdit', phase: 'search' });
       if (res?.reason === 'NO_SID') {
         resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('toast.noSession')}</div>`;
       } else {
@@ -270,7 +271,7 @@ async function searchComponents() {
     }
     bumpListWidth();
   } catch (e) {
-    captureUiException(e, { artifact_type: 'ApexClassQuickEdit', phase: 'search' });
+    void handleToolError(e, { artifact_type: 'ApexClassQuickEdit', phase: 'search' });
     resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
     bumpListWidth();
   }
@@ -300,6 +301,7 @@ async function loadComponent(type, item) {
     });
 
     if (!res?.ok) {
+      void handleToolResponseFailure(res, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
       if (res?.reason === 'NO_SID') {
         setStatus(t('toast.noSession'), 'error');
       } else {
@@ -347,7 +349,7 @@ async function loadComponent(type, item) {
       searchInput.value = '';
     }
   } catch (e) {
-    captureUiException(e, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
+    void handleToolError(e, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
     setStatus(`${t('quickEdit.loadError')}: ${e.message}`, 'error');
   }
 }
@@ -436,7 +438,7 @@ async function deployComponent(checkOnly = false) {
       void logQuickEditUsage(actionType, false, errorMsg);
     }
   } catch (e) {
-    captureUiException(e, { artifact_type: 'ApexClassQuickEdit', phase: checkOnly ? 'validate' : 'deploy' });
+    void handleToolError(e, { artifact_type: 'ApexClassQuickEdit', phase: checkOnly ? 'validate' : 'deploy' });
     const errorMsg = `${t('quickEdit.deployError')}: ${e.message}`;
     setDeployStatus(errorMsg, 'error');
     showToast(errorMsg, 'error');

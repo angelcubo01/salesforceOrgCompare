@@ -1,5 +1,10 @@
 import { state } from '../core/state.js';
-import { APP_NAV_DEVELOPMENT_TOOLS } from '../core/constants.js';
+import {
+  APP_NAV_ANALYSIS_TOOLS,
+  APP_NAV_DEVELOPMENT_TOOLS,
+  APP_NAV_MONITORING_TOOLS
+} from '../core/constants.js';
+import { getGroupedToolsForMode } from '../core/toolNavGroups.js';
 import { clearComparisonSelection, handleArtifactTypeSelectChange } from './searchSetup.js';
 import { resetMonacoComparisonView } from '../editor/editorRender.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
@@ -25,19 +30,14 @@ export const LEGACY_COMPARE_TOOLS = new Set([
   COMPARATOR_TOOL
 ]);
 
+/** Tools que antes vivían en `monitoring` y ahora están en `analysis`. */
+export const ANALYSIS_TOOL_SET = new Set(APP_NAV_ANALYSIS_TOOLS);
+
 export const MODE_TOOLS = {
   comparator: [COMPARATOR_TOOL],
   development: [...APP_NAV_DEVELOPMENT_TOOLS],
-  monitoring: [
-    'OrgLimits',
-    'SetupAuditTrail',
-    'FieldHistory',
-    'FieldDependency',
-    'DependencyExplorer',
-    'PermissionDiff',
-    'CustomSettingsCompare',
-    'CustomMetadataCompare'
-  ],
+  analysis: [...APP_NAV_ANALYSIS_TOOLS],
+  monitoring: [...APP_NAV_MONITORING_TOOLS],
   manifests: ['GeneratePackageXml']
 };
 
@@ -56,6 +56,7 @@ export const TOOL_I18N = {
   AnonymousApex: 'code.opAnonymousApex',
   QueryExplorer: 'code.opQueryExplorer',
   DebugLogBrowser: 'code.opDebugLogs',
+  EnvironmentStatus: 'code.opEnvironmentStatus',
   OrgLimits: 'code.opOrgLimits',
   SetupAuditTrail: 'code.opSetupAuditTrail',
   FieldHistory: 'code.opFieldHistory',
@@ -64,6 +65,7 @@ export const TOOL_I18N = {
   PermissionDiff: 'code.opPermissionDiff',
   CustomSettingsCompare: 'code.opCustomSettingsCompare',
   CustomMetadataCompare: 'code.opCustomMetadataCompare',
+  RecordCompare: 'code.opRecordCompare',
   GeneratePackageXml: 'code.opPkgGenerate',
   PackageXml: 'code.opPkgCompare'
 };
@@ -150,10 +152,87 @@ export function migrateLegacyNavMode(mode) {
   return mode;
 }
 
+/**
+ * Si el modo no incluye la herramienta, usa el modo que sí la contiene (p. ej. deep links antiguos).
+ * @param {string} mode
+ * @param {string} tool
+ */
+export function resolveModeForTool(mode, tool) {
+  const effectiveTool = migrateLegacyTool(tool);
+  if (!effectiveTool) return mode;
+  const toolMode = toolToMode(effectiveTool);
+  if (!toolMode) return mode;
+  if (MODE_TOOLS[/** @type {keyof typeof MODE_TOOLS} */ (mode)]?.includes(effectiveTool)) return mode;
+  return toolMode;
+}
+
 /** @param {string} tool */
 export function migrateLegacyTool(tool) {
   if (LEGACY_COMPARE_TOOLS.has(tool) && tool !== COMPARATOR_TOOL) return COMPARATOR_TOOL;
   return tool;
+}
+
+
+function appendSubmenuTool(inner, mode, tool) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'app-mode-submenu-item';
+  b.setAttribute('role', 'menuitem');
+  b.setAttribute('data-tool', tool);
+  b.textContent = t(TOOL_I18N[tool]);
+  b.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    closeAllSubmenus();
+    void navigateToModeAndTool(mode, tool, { userInitiated: true });
+  });
+  inner.appendChild(b);
+}
+
+function appendSubmenuHeading(inner, i18nKey) {
+  const h = document.createElement('div');
+  h.className = 'app-mode-submenu-heading';
+  h.setAttribute('role', 'presentation');
+  h.textContent = t(i18nKey);
+  inner.appendChild(h);
+}
+
+function appendTypeSelectOption(sel, tool) {
+  const opt = document.createElement('option');
+  opt.value = tool;
+  opt.textContent = t(TOOL_I18N[tool]);
+  sel.appendChild(opt);
+}
+
+function populateSubmenuTools(inner, mode, visibleTools) {
+  const groups = getGroupedToolsForMode(mode, visibleTools);
+  if (!groups) {
+    for (const tool of visibleTools) appendSubmenuTool(inner, mode, tool);
+    return;
+  }
+  for (const group of groups) {
+    appendSubmenuHeading(inner, group.i18nKey);
+    for (const tool of group.tools) appendSubmenuTool(inner, mode, tool);
+  }
+}
+
+function populateTypeSelectTools(sel, mode, visibleTools) {
+  const groups = getGroupedToolsForMode(mode, visibleTools);
+  if (!groups) {
+    for (const tool of visibleTools) appendTypeSelectOption(sel, tool);
+    return;
+  }
+  for (const group of groups) {
+    const og = document.createElement('optgroup');
+    og.label = t(group.i18nKey);
+    sel.appendChild(og);
+    for (const tool of group.tools) {
+      const opt = document.createElement('option');
+      opt.value = tool;
+      opt.textContent = t(TOOL_I18N[tool]);
+      og.appendChild(opt);
+    }
+  }
 }
 
 /** Rellena las subcategorías (tras `loadLang` / traducciones estáticas). */
@@ -164,21 +243,7 @@ export function populateModeSubmenus() {
     const inner = wrap.querySelector('.app-mode-submenu-inner');
     if (!inner) return;
     inner.innerHTML = '';
-    for (const tool of getVisibleToolsForMode(mode)) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'app-mode-submenu-item';
-      b.setAttribute('role', 'menuitem');
-      b.setAttribute('data-tool', tool);
-      b.textContent = t(TOOL_I18N[tool]);
-      b.addEventListener('click', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        closeAllSubmenus();
-        void navigateToModeAndTool(mode, tool, { userInitiated: true });
-      });
-      inner.appendChild(b);
-    }
+    populateSubmenuTools(inner, mode, getVisibleToolsForMode(mode));
   });
   syncTabSelection();
 }
@@ -220,6 +285,18 @@ function normalizePrefs(raw) {
   }
   if (lastMode === 'comparator' && lastToolByMode.comparator) {
     lastToolByMode.comparator = migrateLegacyTool(lastToolByMode.comparator);
+  }
+  for (const [modeKey, toolId] of Object.entries(lastToolByMode)) {
+    if (modeKey === 'monitoring' && toolId && ANALYSIS_TOOL_SET.has(String(toolId))) {
+      lastToolByMode.analysis = String(toolId);
+      delete lastToolByMode.monitoring;
+    }
+  }
+  if (lastMode === 'monitoring') {
+    const monTool = lastToolByMode.monitoring;
+    if (monTool && ANALYSIS_TOOL_SET.has(monTool)) {
+      lastMode = 'analysis';
+    }
   }
   return { lastMode, lastToolByMode };
 }
@@ -317,12 +394,7 @@ export function rebuildTypeSelectForMode(mode) {
   ph.textContent = t('code.chooseToolInMode');
   sel.appendChild(ph);
   const visibleTools = getVisibleToolsForMode(mode);
-  for (const tool of visibleTools) {
-    const opt = document.createElement('option');
-    opt.value = tool;
-    opt.textContent = t(TOOL_I18N[tool]);
-    sel.appendChild(opt);
-  }
+  populateTypeSelectTools(sel, mode, visibleTools);
   sel.disabled = visibleTools.length === 0;
   const tools = visibleTools;
   if (prev && tools.includes(prev)) {
@@ -439,6 +511,9 @@ export async function initializeAppNavigation(args = {}) {
   if (migratedNav && migratedNav !== APP_NAV_MODE_HOME && MODE_TOOLS[/** @type {keyof typeof MODE_TOOLS} */ (migratedNav)]) {
     mode = /** @type {keyof typeof MODE_TOOLS} */ (migratedNav);
     tool = urlOp ? migrateLegacyTool(urlOp) : prefsDefaultTool(mode);
+    if (urlOp) {
+      mode = /** @type {keyof typeof MODE_TOOLS} */ (resolveModeForTool(mode, tool));
+    }
     if (mode === 'comparator' && isToolVisible(config, COMPARATOR_TOOL)) tool = COMPARATOR_TOOL;
   } else if (urlOp && toolToMode(urlOp)) {
     const m = toolToMode(urlOp);

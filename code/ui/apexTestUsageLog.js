@@ -46,3 +46,30 @@ export async function logApexTestRunUsage(orgId, runBody, classNamesHint) {
     /* ignorar errores de logging */
   }
 }
+
+/**
+ * Fallo operacional de Apex Tests (analytics, no Error Tracking).
+ * @param {string} orgId
+ * @param {string} phase
+ * @param {{ reason?: string, error?: string }} [opts]
+ */
+export async function logApexTestFailureUsage(orgId, phase, opts = {}) {
+  try {
+    await bg({
+      type: 'usage:log',
+      entry: {
+        kind: 'extension_failure',
+        artifactType: 'ApexTests',
+        phase,
+        ok: false,
+        reason: opts.reason || '',
+        error: opts.error || '',
+        leftOrgId: orgId != null ? String(orgId) : '',
+        rightOrgId: orgId != null ? String(orgId) : '',
+        comparisonUrl: typeof window !== 'undefined' ? window.location.href : ''
+      }
+    });
+  } catch {
+    /* ignorar errores de logging */
+  }
+}

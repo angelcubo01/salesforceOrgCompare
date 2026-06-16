@@ -25,6 +25,14 @@ import {
   getTelemetryAudienceContext
 } from '../shared/telemetryAudienceContext.js';
 import { isPosthogApiConfigured } from '../shared/posthogConfigured.js';
+import {
+  bugExceptionContext,
+  classifyError,
+  isBenignPageErrorEvent,
+  isBenignPageRejectionEvent,
+  shouldReportAsBug,
+  toError
+} from '../shared/errorTelemetryPolicy.js';
 import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
 
 function posthogDebugLog(...args) {
@@ -356,7 +364,12 @@ export async function maybeReportInitialTelemetryPreference() {
 export async function sendPosthogException(error, context = {}) {
   if (!isPosthogConfigured()) return false;
 
-  const err = error instanceof Error ? error : new Error(String(error ?? 'unknown'));
+  const err = toError(error);
+  if (!shouldReportAsBug(err, context)) {
+    posthogDebugLog('exception skipped', classifyError(err, context), err.message);
+    return false;
+  }
+
   const ctx = await telemetryContext();
   const installId = await getOrCreateTelemetryInstallId();
   const handled = context.error_handled === 1 || context.error_handled === true;
@@ -369,8 +382,38 @@ export async function sendPosthogException(error, context = {}) {
     $exception_level: 'error',
     $exception_fingerprint: buildPosthogExceptionFingerprint(err),
     $exception_list: buildPosthogExceptionList(err, { handled }),
+    ...bugExceptionContext(context),
     ...context
   });
+}
+
+/**
+ * Fallo operacional (analytics, respeta telemetryEnabled).
+ * @param {Record<string, unknown>} entry
+ */
+export async function sendPosthogOperationalFailure(entry) {
+  try {
+    const cfg = await loadExtensionSettings();
+    if (cfg.telemetryEnabled === false) return false;
+  } catch {
+    return false;
+  }
+
+  const ctx = await telemetryContext();
+  const mapped = usageEntryToPosthogEvent(
+    { kind: 'extension_failure', ok: false, ...entry },
+    ctx
+  );
+  if (!mapped) return false;
+
+  const installId = await getOrCreateTelemetryInstallId();
+  const sfUser = await resolveSfUserForTelemetry();
+  const sfProps = sfUserPersonProps(sfUser);
+  return postCapture(
+    mapped.name,
+    { ...mapped.properties, ...sfProps },
+    { installId, personProperties: { ...buildPostHogPersonProperties(ctx.audience), ...sfProps } }
+  );
 }
 
 /** Errores no capturados en el service worker → PostHog `$exception`. */
@@ -379,6 +422,7 @@ export function installServiceWorkerExceptionCapture() {
   globalThis.__sfocSwExceptionHooked = true;
 
   self.addEventListener('error', (event) => {
+    if (isBenignPageErrorEvent(event)) return;
     const err =
       event.error instanceof Error ? event.error : new Error(String(event.message || 'unknown'));
     void sendPosthogException(err, {
@@ -391,6 +435,7 @@ export function installServiceWorkerExceptionCapture() {
   });
 
   self.addEventListener('unhandledrejection', (event) => {
+    if (isBenignPageRejectionEvent(event)) return;
     const reason = event.reason;
     const err = reason instanceof Error ? reason : new Error(String(reason || 'unhandled rejection'));
     void sendPosthogException(err, {

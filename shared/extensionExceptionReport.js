@@ -1,6 +1,7 @@
 /**
  * Informe de excepciones vía service worker (independiente del opt-out de telemetría de uso).
  */
+import { shouldDropError, toError } from './errorTelemetryPolicy.js';
 
 /**
  * @param {unknown} error
@@ -8,7 +9,9 @@
  * @returns {Promise<boolean>}
  */
 export async function reportExtensionException(error, context = {}) {
-  const err = error instanceof Error ? error : new Error(String(error ?? 'unknown'));
+  const err = toError(error);
+  if (shouldDropError(err, context)) return false;
+
   if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
     return false;
   }

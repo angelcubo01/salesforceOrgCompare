@@ -6,6 +6,7 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
 import { logApexTestRunUsage } from './apexTestUsageLog.js';
+import { handleToolError } from '../../shared/reportToolError.js';
 import { exportApexTestRun } from './apexTestsExport.js';
 import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
 import {
@@ -3017,6 +3018,7 @@ async function renderHubRunsTable(opts = {}) {
       void rerunFailedMethodsFromJob(rowOrgId, canonicalJobId, j);
     });
     } catch (e) {
+      void handleToolError(e, { artifact_type: 'ApexTests', phase: 'hub_render_row' });
       console.error('[apexTestsHubRuns] render row failed', e);
       if (errEl) {
         errEl.textContent = `Error renderizando fila de ejecución: ${String(e?.message || e)}`;

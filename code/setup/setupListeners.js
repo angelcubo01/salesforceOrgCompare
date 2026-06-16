@@ -20,6 +20,7 @@ import { refreshApexTestsPanel } from '../ui/apexTestsPanel.js';
 import { refreshAnonymousApexPanel } from '../ui/anonymousApexPanel.js';
 import { refreshQueryExplorerPanel } from '../ui/queryExplorerPanel.js';
 import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
+import { reloadEnvironmentStatusIfActive } from '../ui/environmentStatusPanel.js';
 import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
 import { refreshSetupAuditTrailPanel } from '../ui/setupAuditTrailPanel.js';
 import { refreshFieldHistoryPanel } from '../ui/fieldHistoryPanel.js';
@@ -28,6 +29,7 @@ import { refreshQuickEditPanel } from '../ui/quickEditPanel.js';
 import { refreshApexCoverageComparePanel } from '../ui/apexCoverageComparePanel.js';
 import { refreshCustomSettingsComparePanel } from '../ui/customSettingsComparePanel.js';
 import { refreshCustomMetadataComparePanel } from '../ui/customMetadataComparePanel.js';
+import { refreshRecordComparePanel } from '../ui/recordComparePanel.js';
 import { t } from '../../shared/i18n.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { hideSidebarSearchResults } from '../ui/searchSetup.js';
@@ -70,6 +72,9 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'OrgLimits') {
       void refreshOrgLimitsPanel();
     }
+    if (getSelectedArtifactType() === 'EnvironmentStatus') {
+      void reloadEnvironmentStatusIfActive();
+    }
     if (getSelectedArtifactType() === 'PermissionDiff') {
       void refreshPermissionDiffPanel();
     }
@@ -93,6 +98,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'CustomMetadataCompare') {
       void refreshCustomMetadataComparePanel();
+    }
+    if (getSelectedArtifactType() === 'RecordCompare') {
+      void refreshRecordComparePanel();
     }
   });
   right.addEventListener('change', () => {
@@ -121,6 +129,9 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'OrgLimits') {
       void refreshOrgLimitsPanel();
     }
+    if (getSelectedArtifactType() === 'EnvironmentStatus') {
+      void reloadEnvironmentStatusIfActive();
+    }
     if (getSelectedArtifactType() === 'PermissionDiff') {
       void refreshPermissionDiffPanel();
     }
@@ -138,6 +149,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'CustomMetadataCompare') {
       void refreshCustomMetadataComparePanel();
+    }
+    if (getSelectedArtifactType() === 'RecordCompare') {
+      void refreshRecordComparePanel();
     }
   });
 
@@ -176,6 +190,9 @@ export function wireSelectors() {
         if (getSelectedArtifactType() === 'OrgLimits') {
           void refreshOrgLimitsPanel();
         }
+        if (getSelectedArtifactType() === 'EnvironmentStatus') {
+          void reloadEnvironmentStatusIfActive();
+        }
         if (getSelectedArtifactType() === 'PermissionDiff') {
           void refreshPermissionDiffPanel();
         }
@@ -199,6 +216,9 @@ export function wireSelectors() {
         }
         if (getSelectedArtifactType() === 'CustomMetadataCompare') {
           void refreshCustomMetadataComparePanel();
+        }
+        if (getSelectedArtifactType() === 'RecordCompare') {
+          void refreshRecordComparePanel();
         }
       })();
     });

@@ -8,6 +8,7 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { readZipAllTextFiles, normalizeRetrieveZipPath } from '../lib/zipBinary.js';
 import { t } from '../../shared/i18n.js';
+import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 const METADATA_NS = 'http://soap.sforce.com/2006/04/metadata';
 
 /** @type {Array<{ fullName: string }>} */
@@ -681,6 +682,7 @@ export async function loadCustomObjectPicklist() {
       metadataType: 'CustomObject'
     });
     if (!res.ok) {
+      void handleToolResponseFailure(res, { artifact_type: 'FieldDependency', phase: 'list_custom_objects' });
       if (res.reason === 'NO_SID') {
         showToast(t('toast.noSessionLeft'), 'warn');
       } else {
@@ -709,6 +711,7 @@ export async function loadCustomObjectPicklist() {
       showToast(t('toast.emptyCustomObjectList'), 'warn');
     }
   } catch (e) {
+    void handleToolError(e, { artifact_type: 'FieldDependency', phase: 'load_objects' });
     showToast(String(e?.message || e), 'error');
     if (select) {
       select.innerHTML = `<option value="">${t('genPkg.error')}</option>`;
@@ -802,6 +805,7 @@ async function runRetrieveBoth() {
     renderFieldDepTable(parsed);
     showToast(t('toast.dependenciesUpdated'), 'info');
   } catch (e) {
+    void handleToolError(e, { artifact_type: 'FieldDependency', phase: 'retrieve_compare' });
     dismissSpinnerToast();
     showToast(String(e?.message || e), 'error');
   }

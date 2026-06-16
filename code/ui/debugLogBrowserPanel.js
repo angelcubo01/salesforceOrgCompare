@@ -6,6 +6,7 @@ import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { randomStagingId } from '../../shared/randomId.js';
+import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 
 let lastRows = [];
 let currentPage = 1;
@@ -268,6 +269,7 @@ function renderRows() {
             bodyRes?.reason === 'NO_SID'
               ? t('toast.noSession')
               : bodyRes?.error || t('debugLogs.loadLogError');
+          void handleToolResponseFailure(bodyRes, { artifact_type: 'DebugLogs', phase: 'get_body' });
           showToast(msg, 'error');
           return;
         }
@@ -313,6 +315,7 @@ async function loadLogs() {
     });
     if (!res?.ok) {
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('debugLogs.loadError');
+      void handleToolResponseFailure(res, { artifact_type: 'DebugLogs', phase: 'list' });
       if (status) status.textContent = msg;
       showToast(msg, 'error');
       return;
@@ -414,6 +417,7 @@ export function setupDebugLogBrowserPanel() {
         if (!res?.ok) {
           const msg =
             res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('debugLogs.deleteAllError');
+          void handleToolResponseFailure(res, { artifact_type: 'DebugLogs', phase: 'delete_all' });
           showToast(msg, 'error');
           return;
         }

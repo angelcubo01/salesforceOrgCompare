@@ -33,6 +33,9 @@ describe('installEarlyExceptionCapture', () => {
   });
 
   it('ignora rechazos benignos de Monaco', () => {
+    const canceled = new Error('Canceled');
+    canceled.name = 'Canceled';
+    expect(isBenignPageRejectionEvent({ reason: canceled })).toBe(true);
     expect(
       isBenignPageRejectionEvent({
         reason: 'Error: workerMain.js failed'

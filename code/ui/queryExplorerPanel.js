@@ -4,10 +4,16 @@ import { t } from '../../shared/i18n.js';
 import { applyArtifactTypeUi, getSelectedArtifactType } from './artifactTypeUi.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
+import { handleToolError } from '../../shared/reportToolError.js';
 
 function showQueryExplorerErrorToast(e) {
   const msg = String(e?.message || e);
   const code = e && typeof e === 'object' && e.salesforceErrorCode ? String(e.salesforceErrorCode).trim() : '';
+  void handleToolError(e, {
+    artifact_type: 'QueryExplorer',
+    phase: 'query',
+    reason: code || undefined
+  });
   showToast(msg, 'error', code ? { title: code } : {});
 }
 import {

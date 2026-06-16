@@ -76,8 +76,14 @@ export async function buildAlignedDiff(leftText, rightText) {
   try {
     worker.postMessage({ id, leftText: leftRaw, rightText: rightRaw });
     return await p;
-  } catch {
+  } catch (e) {
     jsDiffPending.delete(id);
+    try {
+      const { reportBug } = await import('../../shared/posthogClient.js');
+      reportBug(e, { artifact_type: 'Diff', phase: 'jsdiff_worker' });
+    } catch {
+      /* ignore telemetry errors */
+    }
     return buildAlignedDiffSync(leftRaw, rightRaw);
   }
 }

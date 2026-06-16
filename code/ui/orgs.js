@@ -166,6 +166,12 @@ export function updateOrgDropdownLayout() {
   const rightDropdown = document.querySelector('.org-dropdown-right');
   if (!leftDropdown || !rightDropdown) return;
 
+  if (document.body.classList.contains('artifact-environment-status')) {
+    leftDropdown.classList.add('hidden');
+    rightDropdown.classList.add('hidden');
+    return;
+  }
+
   if (
     (document.body.classList.contains('artifact-generate-package-xml') &&
       !document.body.classList.contains('artifact-generate-package-xml-compare')) ||
@@ -225,6 +231,22 @@ export function updateOrgDropdownLayout() {
   }
   if (document.body.classList.contains('artifact-apex-coverage-compare')) {
     rightDropdown.classList.remove('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
+  if (
+    document.body.classList.contains('artifact-record-compare') &&
+    document.body.classList.contains('artifact-record-compare-compare')
+  ) {
+    rightDropdown.classList.remove('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
+  if (
+    document.body.classList.contains('artifact-record-compare') &&
+    !document.body.classList.contains('artifact-record-compare-compare')
+  ) {
+    rightDropdown.classList.add('hidden');
     leftDropdown.classList.remove('single-mode');
     return;
   }

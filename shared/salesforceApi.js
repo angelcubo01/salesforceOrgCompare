@@ -213,6 +213,38 @@ export async function restDescribeSobject(instanceUrl, sid, apiVersion, objectAp
   return res.json();
 }
 
+/**
+ * Obtiene un registro por Id vía REST sin listar campos en SOQL (devuelve todos los legibles).
+ * @returns {Promise<Record<string, unknown>>}
+ */
+export async function restGetSobject(instanceUrl, sid, apiVersion, sobjectApiName, recordId) {
+  const obj = String(sobjectApiName || '').trim();
+  const id = String(recordId || '').trim();
+  if (!obj || !id) {
+    const err = new Error('Missing object or record Id');
+    err.status = 400;
+    throw err;
+  }
+  const path = `/services/data/v${apiVersion}/sobjects/${encodeURIComponent(obj)}/${encodeURIComponent(id)}`;
+  const res = await restFetchWithSid(instanceUrl, sid, path);
+  if (res.status === 404) {
+    const err = new Error(`Record not found: ${id}`);
+    err.code = 'NOT_FOUND';
+    err.status = 404;
+    throw err;
+  }
+  if (!res.ok) {
+    await throwWithSalesforceRestError(`GET ${obj}`, res);
+  }
+  const body = await res.json();
+  if (!body || typeof body !== 'object') {
+    const err = new Error('Empty record response');
+    err.code = 'FETCH_ERROR';
+    throw err;
+  }
+  return body;
+}
+
 // Simple REST query helper (used for PermissionSet search)
 export async function restQuery(instanceUrl, sid, apiVersion, soql) {
   const { records } = await restSoqlQueryPage(instanceUrl, sid, apiVersion, soql);
@@ -456,6 +488,61 @@ export async function getOrganizationInfo(instanceUrl, sid, apiVersion) {
   if (!rows.length) throw new Error('Organization not found');
   const org = rows[0];
   return { id: org.Id, name: org.Name, isSandbox: !!org.IsSandbox };
+}
+
+const ORG_STATUS_SOQL_FULL =
+  'SELECT Id, Name, IsSandbox, OrganizationType, InstanceName, NamespacePrefix, LanguageLocaleKey, TimeZoneSidKey, TrialExpirationDate FROM Organization LIMIT 1';
+const ORG_STATUS_SOQL_MIN = 'SELECT Id, Name, IsSandbox, OrganizationType, InstanceName FROM Organization LIMIT 1';
+
+async function queryOrganizationRow(instanceUrl, sid, apiVersion, soql) {
+  const res = await restFetchWithSid(
+    instanceUrl,
+    sid,
+    `/services/data/v${apiVersion}/query?q=${encodeURIComponent(soql)}`
+  );
+  if (!res.ok) {
+    const err = new Error(`Org query failed: ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  const body = await res.json();
+  const rows = body.records || [];
+  if (!rows.length) throw new Error('Organization not found');
+  return rows[0];
+}
+
+/**
+ * Metadatos ampliados de Organization para el panel de estado de entornos.
+ * @returns {Promise<{
+ *   id: string,
+ *   name: string,
+ *   isSandbox: boolean,
+ *   organizationType: string,
+ *   instanceName: string,
+ *   namespacePrefix: string,
+ *   languageLocaleKey: string,
+ *   timeZoneSidKey: string,
+ *   trialExpirationDate: string | null
+ * }>}
+ */
+export async function fetchOrganizationStatus(instanceUrl, sid, apiVersion) {
+  let org;
+  try {
+    org = await queryOrganizationRow(instanceUrl, sid, apiVersion, ORG_STATUS_SOQL_FULL);
+  } catch {
+    org = await queryOrganizationRow(instanceUrl, sid, apiVersion, ORG_STATUS_SOQL_MIN);
+  }
+  return {
+    id: String(org.Id || ''),
+    name: String(org.Name || ''),
+    isSandbox: !!org.IsSandbox,
+    organizationType: String(org.OrganizationType || ''),
+    instanceName: String(org.InstanceName || ''),
+    namespacePrefix: String(org.NamespacePrefix || ''),
+    languageLocaleKey: String(org.LanguageLocaleKey || ''),
+    timeZoneSidKey: String(org.TimeZoneSidKey || ''),
+    trialExpirationDate: org.TrialExpirationDate || null
+  };
 }
 
 /** Límites de la org (`/limits`). */

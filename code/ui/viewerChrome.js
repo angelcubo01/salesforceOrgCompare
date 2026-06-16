@@ -127,6 +127,20 @@ export function updateOrgSelectorsLockedState() {
     if (editor) editor.classList.remove('org-selectors-locked');
     return;
   }
+  if (document.body.classList.contains('artifact-record-compare')) {
+    const isDual = document.body.classList.contains('artifact-record-compare-compare');
+    if (left) {
+      left.disabled = false;
+      left.title = '';
+    }
+    if (right) {
+      right.disabled = !isDual;
+      right.title = isDual ? '' : t('orgs.recordCompareSingleOrgRight');
+    }
+    const editor = document.getElementById('editorContainer');
+    if (editor) editor.classList.remove('org-selectors-locked');
+    return;
+  }
   const locked = isRetrieveZipTreeItem(state.selectedItem);
   const tip = locked
     ? t('orgs.lockedHint')
