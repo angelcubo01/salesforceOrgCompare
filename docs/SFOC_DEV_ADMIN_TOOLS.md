@@ -15,7 +15,7 @@ Salesforce Org Compare (SFOC) ya dispone de una base sólida de telemetría anó
 | Telemetría de uso | PostHog EU, opt-out, eventos por herramienta | Sin visor local ni runbook general de eventos |
 | Kill switch | `sfoc_feature_controls` + guards en service worker | Sin rollout por cohorte ni `minExtensionVersion` |
 | Errores | `$exception` independiente del consentimiento de uso | Sin alertas ni runbook de triage documentado |
-| Replay / soporte | Flags `sfoc_session_replay`, `sfoc_support` | Scripts npm de PostHog incompletos en el repo |
+| Replay / soporte | Flags `sfoc_session_replay`, `sfoc_support`, `sfoc_popup_controls` | Ver [SFOC_POPUP_CONTROLS.md](./SFOC_POPUP_CONTROLS.md) |
 | Admin in-app | Ajustes, backup JSON, sección avanzada técnica | Sin panel de diagnóstico ni changelog post-actualización |
 
 ### Arquitectura actual
@@ -190,7 +190,7 @@ Visible con flag interno o build de desarrollo.
 | Versión manifest | `chrome.runtime.getManifest().version` |
 | Install ID (truncado) | [`telemetryInstallId.js`](../shared/telemetryInstallId.js) |
 | Telemetría on/off | [`extensionSettings.js`](../shared/extensionSettings.js) |
-| Estado flags | `sfoc_feature_controls`, `sfoc_session_replay`, `sfoc_support` |
+| Estado flags | `sfoc_feature_controls`, `sfoc_session_replay`, `sfoc_support`, `sfoc_popup_controls` |
 | Última recarga de flags | Timestamp en [`posthogFeatureFlagLoader.js`](../shared/posthogFeatureFlagLoader.js) |
 | Tema UI / Monaco | Settings snapshot |
 | **Copiar informe de soporte** | JSON sin SIDs, sin código, sin tokens |
@@ -481,6 +481,7 @@ Regla de nombre en PostHog ([`posthogEventMap.js`](../shared/posthogEventMap.js)
 | *(dinámico: tipo metadata)* | [`code/flows/retrieveFlow.js`](../code/flows/retrieveFlow.js) | Pulsación «Ejecutar retrieve» (`viaRetrieveZip: true`) | `comparison_run` |
 | `ApexTests` | [`code/ui/apexTestUsageLog.js`](../code/ui/apexTestUsageLog.js) | Ejecución asíncrona de tests (`phase: runTestsAsynchronous`) | `comparison_run` |
 | `ApexClassQuickEdit` | [`code/ui/quickEditPanel.js`](../code/ui/quickEditPanel.js) | Acciones deploy/validate/search (`action` en entry) | `comparison_run` |
+| `LightningQuickEdit` | [`code/ui/lightningQuickEditPanel.js`](../code/ui/lightningQuickEditPanel.js) | Acciones deploy/validate/search de bundles LWC/Aura | `comparison_run` |
 | `AnonymousApex` | [`code/ui/anonymousApexPanel.js`](../code/ui/anonymousApexPanel.js) | Ejecución de script anónimo | `comparison_run` |
 | `DependencyExplorer` | [`code/ui/dependencyExplorerPanel.js`](../code/ui/dependencyExplorerPanel.js) | Análisis, compare, copy, csv (`phase`: analyze, compare, copy, csv) | `comparison_run` |
 | `ApexTrigger` | [`code/ui/dependencyExplorerPanel.js`](../code/ui/dependencyExplorerPanel.js) | Análisis desde contexto trigger | `comparison_run` |

@@ -44,6 +44,10 @@ export function isEnvironmentStatusMode() {
   return getSelectedArtifactType() === 'EnvironmentStatus';
 }
 
+export function isDeployStatusMode() {
+  return getSelectedArtifactType() === 'DeployStatus';
+}
+
 export function isDebugLogBrowserMode() {
   return getSelectedArtifactType() === 'DebugLogBrowser';
 }
@@ -62,6 +66,10 @@ export function isPermissionDiffMode() {
 
 export function isQuickEditMode() {
   return getSelectedArtifactType() === 'QuickEdit';
+}
+
+export function isLightningQuickEditMode() {
+  return getSelectedArtifactType() === 'LightningQuickEdit';
 }
 
 export function isApexCoverageCompareMode() {
@@ -99,11 +107,13 @@ export function isFullScreenToolMode() {
     isQueryExplorerMode() ||
     isOrgLimitsMode() ||
     isEnvironmentStatusMode() ||
+    isDeployStatusMode() ||
     isDebugLogBrowserMode() ||
     isSetupAuditTrailMode() ||
     isFieldHistoryMode() ||
     isPermissionDiffMode() ||
     isQuickEditMode() ||
+    isLightningQuickEditMode() ||
     isApexCoverageCompareMode() ||
     isCustomSettingsCompareMode() ||
     isCustomMetadataCompareMode() ||
@@ -169,6 +179,7 @@ export function applyArtifactTypeUi() {
   const isQueryExplorer = op === 'QueryExplorer';
   const isOrgLimits = op === 'OrgLimits';
   const isEnvironmentStatus = op === 'EnvironmentStatus';
+  const isDeployStatus = op === 'DeployStatus';
   const isDebugLogs = op === 'DebugLogBrowser';
   const isSetupAudit = op === 'SetupAuditTrail';
   const isFieldHistory = op === 'FieldHistory';
@@ -176,6 +187,7 @@ export function applyArtifactTypeUi() {
   const isFieldDep = op === 'FieldDependency';
   const isDepExplorer = op === 'DependencyExplorer';
   const isQuickEdit = op === 'QuickEdit';
+  const isLightningQuickEdit = op === 'LightningQuickEdit';
   const isApexCoverageCompare = op === 'ApexCoverageCompare';
   const isCustomSettingsCompare = op === 'CustomSettingsCompare';
   const isCustomMetadataCompare = op === 'CustomMetadataCompare';
@@ -204,6 +216,7 @@ export function applyArtifactTypeUi() {
   );
   document.body.classList.toggle('artifact-org-limits', isOrgLimits);
   document.body.classList.toggle('artifact-environment-status', isEnvironmentStatus);
+  document.body.classList.toggle('artifact-deploy-status', isDeployStatus);
   document.body.classList.toggle('artifact-debug-log-browser', isDebugLogs);
   document.body.classList.toggle('artifact-setup-audit-trail', isSetupAudit);
   document.body.classList.toggle('artifact-field-history', isFieldHistory);
@@ -213,6 +226,7 @@ export function applyArtifactTypeUi() {
     isPermissionDiff && !!state.permissionDiffCompareMode
   );
   document.body.classList.toggle('artifact-quick-edit', isQuickEdit);
+  document.body.classList.toggle('artifact-lightning-quick-edit', isLightningQuickEdit);
   document.body.classList.toggle('artifact-apex-coverage-compare', isApexCoverageCompare);
   document.body.classList.toggle('artifact-custom-settings-compare', isCustomSettingsCompare);
   document.body.classList.toggle('artifact-custom-metadata-compare', isCustomMetadataCompare);
@@ -240,11 +254,13 @@ export function applyArtifactTypeUi() {
   const queryExplorerPanel = document.getElementById('queryExplorerPanel');
   const orgLimitsPanel = document.getElementById('orgLimitsPanel');
   const environmentStatusPanel = document.getElementById('environmentStatusPanel');
+  const deployStatusPanel = document.getElementById('deployStatusPanel');
   const debugLogsPanel = document.getElementById('debugLogBrowserPanel');
   const setupAuditPanel = document.getElementById('setupAuditTrailPanel');
   const fieldHistoryPanel = document.getElementById('fieldHistoryPanel');
   const permissionDiffPanel = document.getElementById('permissionDiffPanel');
   const quickEditPanel = document.getElementById('quickEditPanel');
+  const lightningQuickEditPanel = document.getElementById('lightningQuickEditPanel');
   const apexCoverageComparePanel = document.getElementById('apexCoverageComparePanel');
   const customSettingsComparePanel = document.getElementById('customSettingsComparePanel');
   const customMetadataComparePanel = document.getElementById('customMetadataComparePanel');
@@ -273,12 +289,14 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -311,12 +329,14 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -350,11 +370,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -398,11 +420,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -441,11 +465,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.remove('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -484,11 +510,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.remove('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -516,6 +544,9 @@ export function applyArtifactTypeUi() {
     applySingleLeftOrgToolUi();
     environmentStatusPanel?.classList.remove('hidden');
     orgDropdowns?.classList.add('hidden');
+  } else if (isDeployStatus) {
+    applySingleLeftOrgToolUi();
+    deployStatusPanel?.classList.remove('hidden');
   } else if (isOrgLimits) {
     searchPanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
@@ -530,11 +561,14 @@ export function applyArtifactTypeUi() {
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.remove('hidden');
+    environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -574,6 +608,9 @@ export function applyArtifactTypeUi() {
   } else if (isQuickEdit) {
     applySingleLeftOrgToolUi();
     quickEditPanel?.classList.remove('hidden');
+  } else if (isLightningQuickEdit) {
+    applySingleLeftOrgToolUi();
+    lightningQuickEditPanel?.classList.remove('hidden');
   } else if (isApexCoverageCompare) {
     searchPanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
@@ -589,11 +626,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.remove('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -620,11 +659,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
@@ -651,11 +692,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.remove('hidden');
@@ -682,11 +725,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -725,11 +770,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -768,11 +815,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -801,11 +850,13 @@ export function applyArtifactTypeUi() {
     queryExplorerPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
     apexCoverageComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
@@ -829,6 +880,7 @@ export function applyArtifactTypeUi() {
     isQueryExplorer ||
     isOrgLimits ||
     isEnvironmentStatus ||
+    isDeployStatus ||
     isPermissionDiff ||
     isDebugLogs ||
     isSetupAudit ||
@@ -836,6 +888,7 @@ export function applyArtifactTypeUi() {
     isFieldDep ||
     isDepExplorer ||
     isQuickEdit ||
+    isLightningQuickEdit ||
     isApexCoverageCompare ||
     isCustomSettingsCompare ||
     isCustomMetadataCompare ||

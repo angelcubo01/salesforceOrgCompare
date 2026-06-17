@@ -14,7 +14,7 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     Object.freeze({
       id: 'apexCode',
       i18nKey: 'code.toolGroup.devApexCode',
-      tools: Object.freeze(['QuickEdit', 'AnonymousApex'])
+      tools: Object.freeze(['QuickEdit', 'LightningQuickEdit', 'AnonymousApex'])
     }),
     Object.freeze({
       id: 'inspect',
@@ -47,7 +47,7 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     Object.freeze({
       id: 'orgHealth',
       i18nKey: 'code.toolGroup.monOrgHealth',
-      tools: Object.freeze(['EnvironmentStatus', 'OrgLimits'])
+      tools: Object.freeze(['EnvironmentStatus', 'OrgLimits', 'DeployStatus'])
     }),
     Object.freeze({
       id: 'audit',

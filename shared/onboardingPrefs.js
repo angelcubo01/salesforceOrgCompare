@@ -6,12 +6,14 @@ export const ALL_ONBOARDING_TOOLS = Object.freeze([
   'Comparator',
   'ApexTests',
   'QuickEdit',
+  'LightningQuickEdit',
   'AnonymousApex',
   'QueryExplorer',
   'DebugLogBrowser',
   'ApexCoverageCompare',
   'EnvironmentStatus',
   'OrgLimits',
+  'DeployStatus',
   'SetupAuditTrail',
   'FieldHistory',
   'FieldDependency',
@@ -22,7 +24,7 @@ export const ALL_ONBOARDING_TOOLS = Object.freeze([
 
 /**
  * @param {unknown} raw
- * @returns {{ tools: Record<string, boolean>, helpOpened: boolean, telemetryNoticeDismissed: boolean }}
+ * @returns {{ tools: Record<string, boolean>, helpOpened: boolean, telemetryNoticeDismissed: boolean, popupNoticeDismissedFingerprint: string | null }}
  */
 export function normalizeOnboardingPrefs(raw) {
   const p = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
@@ -32,10 +34,14 @@ export function normalizeOnboardingPrefs(raw) {
   for (const [k, v] of Object.entries(toolsRaw)) {
     if (v) tools[k] = true;
   }
+  const fpRaw = p.popupNoticeDismissedFingerprint;
+  const popupNoticeDismissedFingerprint =
+    typeof fpRaw === 'string' && fpRaw.trim() ? fpRaw.trim() : null;
   return {
     tools,
     helpOpened: !!p.helpOpened,
-    telemetryNoticeDismissed: !!p.telemetryNoticeDismissed
+    telemetryNoticeDismissed: !!p.telemetryNoticeDismissed,
+    popupNoticeDismissedFingerprint
   };
 }
 
@@ -75,8 +81,26 @@ export function hasSeenTelemetryNotice(prefs) {
 }
 
 /**
- * @param {{ tools: Record<string, boolean>, helpOpened?: boolean, telemetryNoticeDismissed?: boolean }} prefs
+ * @param {{ tools: Record<string, boolean>, helpOpened?: boolean, telemetryNoticeDismissed?: boolean, popupNoticeDismissedFingerprint?: string | null }} prefs
  */
 export function markTelemetryNoticeDismissedInPrefs(prefs) {
   return { ...prefs, telemetryNoticeDismissed: true };
+}
+
+/**
+ * @param {{ popupNoticeDismissedFingerprint?: string | null }} prefs
+ * @param {string} fingerprint
+ */
+export function hasDismissedPopupNotice(prefs, fingerprint) {
+  if (!fingerprint) return false;
+  return prefs.popupNoticeDismissedFingerprint === fingerprint;
+}
+
+/**
+ * @param {{ tools: Record<string, boolean>, helpOpened?: boolean, telemetryNoticeDismissed?: boolean, popupNoticeDismissedFingerprint?: string | null }} prefs
+ * @param {string} fingerprint
+ */
+export function markPopupNoticeDismissedInPrefs(prefs, fingerprint) {
+  if (!fingerprint) return prefs;
+  return { ...prefs, popupNoticeDismissedFingerprint: fingerprint };
 }

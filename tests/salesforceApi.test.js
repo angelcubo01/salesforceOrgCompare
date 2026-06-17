@@ -3,6 +3,13 @@ import {
   parseApexTestMethodNames,
   stripLeadingWhileOneJson,
   sourceSignatureFromFiles,
+  normalizeApexLogBodyText,
+  parseApexLogExecutionContext,
+  inferApexLogExecutionFromMetadata,
+  mergeApexLogExecutionContext,
+  resolveApexLogExecutionContext,
+  filterApexTestRunCandidateLogs,
+  filterApexTestRunLogsByExecutionType,
   apexLogLocationMatchesTestClass,
   apexLogBodyLooksLikeTestClass,
   pickBestApexLogForTestRun,
@@ -74,6 +81,116 @@ describe('apexLogBodyLooksLikeTestClass', () => {
   it('devuelve false sin className o cuerpo', () => {
     expect(apexLogBodyLooksLikeTestClass('log', '')).toBe(false);
     expect(apexLogBodyLooksLikeTestClass(null, 'X')).toBe(false);
+  });
+});
+
+describe('parseApexLogExecutionContext', () => {
+  it('detecta apex://Class/ACTION$Method', () => {
+    const parsed = parseApexLogExecutionContext(
+      '66.0 APEX_CODE,DEBUG\napex://CC_MyClass/ACTION$runProcess\n...'
+    );
+    expect(parsed).toEqual({
+      logType: 'Apex',
+      logName: 'CC_MyClass',
+      logMethod: 'runProcess'
+    });
+  });
+
+  it('detecta Trigger y evento', () => {
+    const parsed = parseApexLogExecutionContext(
+      'CODE_UNIT_STARTED|[EXTERNAL]|01qxx|CC_MyTrigger on Case trigger event BeforeUpdate'
+    );
+    expect(parsed).toEqual({
+      logType: 'Trigger',
+      logName: 'CC_MyTrigger',
+      logMethod: 'BeforeUpdate'
+    });
+  });
+
+  it('normaliza body JSON con campo Body', () => {
+    const parsed = parseApexLogExecutionContext(
+      JSON.stringify({
+        Body: 'CODE_UNIT_STARTED|[EXTERNAL]|01qxx|CC_MyTrigger on Case trigger event BeforeUpdate'
+      })
+    );
+    expect(parsed.logType).toBe('Trigger');
+    expect(parsed.logName).toBe('CC_MyTrigger');
+  });
+
+  it('devuelve N/A si no hay coincidencia', () => {
+    const parsed = parseApexLogExecutionContext('UNRELATED_LINE|foo');
+    expect(parsed).toEqual({
+      logType: 'N/A',
+      logName: 'N/A',
+      logMethod: 'N/A'
+    });
+  });
+});
+
+describe('inferApexLogExecutionFromMetadata', () => {
+  it('usa Location clase.metodo', () => {
+    expect(
+      inferApexLogExecutionFromMetadata({
+        Location: 'CC_MyClass.testMethod',
+        Operation: 'ApexTestHandler'
+      })
+    ).toEqual({
+      logType: 'Apex',
+      logName: 'CC_MyClass',
+      logMethod: 'testMethod'
+    });
+  });
+
+  it('usa Operation si no hay Location', () => {
+    expect(inferApexLogExecutionFromMetadata({ Operation: 'Api' })).toEqual({
+      logType: 'Api',
+      logName: 'N/A',
+      logMethod: 'N/A'
+    });
+  });
+});
+
+describe('resolveApexLogExecutionContext', () => {
+  it('prioriza body y rellena huecos con metadata', () => {
+    const resolved = resolveApexLogExecutionContext('', {
+      Location: 'CC_Fallback.test',
+      Operation: 'ApexTestHandler'
+    });
+    expect(resolved.logName).toBe('CC_Fallback');
+    expect(resolved.logMethod).toBe('test');
+  });
+});
+
+describe('normalizeApexLogBodyText', () => {
+  it('extrae Body de JSON', () => {
+    expect(normalizeApexLogBodyText('{"Body":"line1\\nline2"}')).toBe('line1\nline2');
+  });
+});
+
+describe('filterApexTestRunCandidateLogs', () => {
+  const jobStart = Date.parse('2024-06-17T10:00:00Z');
+
+  it('excluye logs con StartTime anterior al job', () => {
+    const rows = filterApexTestRunCandidateLogs(
+      [
+        { Id: '1', StartTime: '2024-06-17T09:59:00Z' },
+        { Id: '2', StartTime: '2024-06-17T10:00:00Z' },
+        { Id: '3', StartTime: '2024-06-17T10:01:00Z' }
+      ],
+      jobStart
+    );
+    expect(rows.map((r) => r.Id)).toEqual(['2', '3']);
+  });
+});
+
+describe('filterApexTestRunLogsByExecutionType', () => {
+  it('conserva solo Type Apex', () => {
+    const rows = filterApexTestRunLogsByExecutionType([
+      { Id: '1', Type: 'Apex', Name: 'MyClass', Method: 'test' },
+      { Id: '2', Type: 'Trigger', Name: 'MyTrigger', Method: 'BeforeInsert' }
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].Id).toBe('1');
   });
 });
 

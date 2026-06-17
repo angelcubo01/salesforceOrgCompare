@@ -13,6 +13,11 @@
         Volver
       </button>
       <span id="apexLogViewerTitle" class="apex-log-viewer-title"></span>
+      <span id="apexLogViewerMeta" class="apex-log-viewer-meta" hidden></span>
+      <span id="apexLogViewerContext" class="apex-log-viewer-context" hidden></span>
+      <span id="apexLogViewerParsing" class="apex-log-viewer-parsing" hidden data-i18n="apexLogViewer.parsing"
+        >Analizando…</span
+      >
       <button
         type="button"
         id="apexLogViewerDownload"
@@ -23,7 +28,27 @@
         Descargar
       </button>
     </header>
-    <div id="apexLogViewerMount" class="apex-log-viewer-editor"></div>
+    <nav id="apexLogTabs" class="apex-log-tabs" role="tablist" aria-label="Vistas del log"></nav>
+    <main class="apex-log-panels">
+      <div class="apex-log-panel is-active" data-panel="text">
+        <div id="apexLogViewerMount" class="apex-log-viewer-editor"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="tree" hidden>
+        <div id="apexLogTreeMount" class="apex-log-viewer-editor"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="debug" hidden>
+        <div id="apexLogDebugMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="timeline" hidden>
+        <div id="apexLogTimelineMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="soql" hidden>
+        <div id="apexLogSoqlMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="dml" hidden>
+        <div id="apexLogDmlMount" class="apex-log-panel-scroll"></div>
+      </div>
+    </main>
     <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
     <script src="./editor/monaco-amd-config.js"></script>
     <script type="module" src="./apex-log-viewer.js"></script>

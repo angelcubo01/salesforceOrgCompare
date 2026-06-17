@@ -2,6 +2,11 @@ const TRACK_COLOR = '#334155';
 const DEFAULT_SIZE = 92;
 const START_ANGLE = -Math.PI / 2;
 
+function getDonutMetrics(size = DEFAULT_SIZE) {
+  const scale = size / DEFAULT_SIZE;
+  return { radius: 30 * scale, lineWidth: 12 * scale };
+}
+
 function clamp01(n) {
   const x = Number(n);
   if (!Number.isFinite(x)) return 0;
@@ -100,17 +105,18 @@ function hideTooltip(container) {
   if (tip) tip.classList.add('hidden');
 }
 
-function drawDonut(canvas, percent, color) {
+function drawDonut(canvas, percent, color, chartSize = DEFAULT_SIZE) {
   if (!canvas) return;
-  const prepared = prepareCanvas(canvas);
+  const prepared = prepareCanvas(canvas, chartSize);
   if (!prepared) return;
   const { ctx, size } = prepared;
   const cx = size / 2;
   const cy = size / 2;
-  drawRing(ctx, cx, cy, 30, 12, percent, color);
+  const { radius, lineWidth } = getDonutMetrics(chartSize);
+  drawRing(ctx, cx, cy, radius, lineWidth, percent, color);
 }
 
-export function renderDonutChart(container, percent, color) {
+export function renderDonutChart(container, percent, color, chartSize = DEFAULT_SIZE) {
   if (!container) return;
   const canvas = document.createElement('canvas');
   canvas.className = 'org-limits-chart-canvas';
@@ -119,13 +125,14 @@ export function renderDonutChart(container, percent, color) {
   const p = clamp01(percent);
   const pctTxt = `${(p * 100).toFixed(1)}%`;
   canvas.title = pctTxt;
+  const { radius, lineWidth } = getDonutMetrics(chartSize);
   const draw = (hovered) => {
-    const prepared = prepareCanvas(canvas);
+    const prepared = prepareCanvas(canvas, chartSize);
     if (!prepared) return;
     const { ctx, size } = prepared;
     const cx = size / 2;
     const cy = size / 2;
-    drawRingInteractive(ctx, cx, cy, 30, 12, p, color, hovered);
+    drawRingInteractive(ctx, cx, cy, radius, lineWidth, p, color, hovered);
   };
   draw(false);
   canvas.addEventListener('mouseenter', (ev) => {

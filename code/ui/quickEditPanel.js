@@ -3,9 +3,15 @@ import { bg } from '../core/bridge.js';
 import { loadMonaco, resolveMonacoThemeId, createStandaloneEditorSafe } from '../editor/monaco.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
-import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
+import { showToast } from './toast.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { guardToolAction } from './featureControlsUi.js';
+import {
+  saveApexDraft,
+  clearReturnContext,
+  getReturnContext,
+  navigateToDeployStatus
+} from '../lib/quickEditDeployContext.js';
 
 const QUICK_EDIT_SEARCH_MIN_PX = 288;
 
@@ -283,6 +289,7 @@ async function loadComponent(type, item) {
     if (!confirm) return;
   }
 
+  clearReturnContext();
   setStatus(t('quickEdit.loading'), 'warning');
   setDeployStatus('');
 
@@ -387,10 +394,18 @@ async function deployComponent(checkOnly = false) {
     return;
   }
 
-  const action = checkOnly ? t('quickEdit.validating') : t('quickEdit.deploying');
-  showToastWithSpinner(action);
+  saveApexDraft({
+    orgId: state.leftOrgId,
+    checkOnly,
+    item: currentEditItem,
+    content,
+    originalContent
+  });
+
   isDeploying = true;
   updateDeployButtonState();
+
+  const actionType = checkOnly ? 'validate' : 'deploy';
 
   try {
     const res = await bg({
@@ -400,39 +415,21 @@ async function deployComponent(checkOnly = false) {
       memberName: currentEditItem.name,
       content,
       fileName: currentEditItem.fileName,
-      checkOnly
+      checkOnly,
+      async: true
     });
 
-    const actionType = checkOnly ? 'validate' : 'deploy';
-    
-    if (res?.ok) {
-      const successMsg = checkOnly ? t('quickEdit.validationSuccess') : t('quickEdit.deploySuccess');
-      setDeployStatus(successMsg, 'success');
-      showToast(successMsg, 'info');
-      
-      if (!checkOnly) {
-        originalContent = content;
-        updateModifiedIndicator();
-      }
-      
+    if (res?.ok && res.asyncId) {
+      const startedMsg = t('quickEdit.deployStarted');
+      setDeployStatus(startedMsg, 'success');
+      showToast(startedMsg, 'info');
       void logQuickEditUsage(actionType, true);
+      await navigateToDeployStatus(res.asyncId);
     } else {
       let errorMsg = res?.errorMessage || t('quickEdit.deployError');
-      
-      if (res?.componentFailures && res.componentFailures.length > 0) {
-        const failure = res.componentFailures[0];
-        const line = failure.lineNumber ? ` (${t('quickEdit.line')} ${failure.lineNumber})` : '';
-        errorMsg = `${failure.problem}${line}`;
-        
-        if (failure.lineNumber && quickEditEditor) {
-          const lineNum = parseInt(failure.lineNumber, 10);
-          if (lineNum > 0) {
-            quickEditEditor.revealLineInCenter(lineNum);
-            quickEditEditor.setPosition({ lineNumber: lineNum, column: 1 });
-          }
-        }
+      if (res?.reason === 'NO_SID') {
+        errorMsg = t('toast.noSession');
       }
-      
       setDeployStatus(errorMsg, 'error');
       showToast(errorMsg, 'error');
       void logQuickEditUsage(actionType, false, errorMsg);
@@ -444,10 +441,34 @@ async function deployComponent(checkOnly = false) {
     showToast(errorMsg, 'error');
     void logQuickEditUsage(checkOnly ? 'validate' : 'deploy', false, errorMsg);
   } finally {
-    dismissSpinnerToast();
     isDeploying = false;
     updateDeployButtonState();
   }
+}
+
+/**
+ * @param {{ type: string, name: string, fileName: string, content: string, originalContent: string }} draft
+ */
+export async function restoreQuickEditDraft(draft) {
+  if (!draft) return;
+
+  await ensureEditor();
+  const monaco = state.monaco;
+  currentEditItem = {
+    type: draft.type,
+    name: draft.name,
+    fileName: draft.fileName
+  };
+  originalContent = draft.originalContent;
+  if (monaco && quickEditEditor) {
+    monaco.editor.setModelLanguage(quickEditEditor.getModel(), 'apex');
+    quickEditEditor.setValue(draft.content);
+  }
+  updateDeployButtonState();
+  updateModifiedIndicator();
+  updateCurrentFileDisplay();
+  setStatus(t('quickEdit.loaded', { name: draft.name }), 'success');
+  setDeployStatus('');
 }
 
 export async function refreshQuickEditPanel() {
@@ -457,6 +478,10 @@ export async function refreshQuickEditPanel() {
 
   if (getSelectedArtifactType() === 'QuickEdit') {
     await ensureEditor();
+    const ctx = getReturnContext();
+    if (ctx?.tool === 'QuickEdit' && !currentEditItem && ctx.draft) {
+      await restoreQuickEditDraft(ctx.draft);
+    }
   }
   updateCurrentFileDisplay();
   updateDeployButtonState();
@@ -529,6 +554,7 @@ export function setupQuickEditPanel() {
       }
       currentEditItem = null;
       originalContent = '';
+      clearReturnContext();
       setStatus('');
       setDeployStatus('');
       updateCurrentFileDisplay();

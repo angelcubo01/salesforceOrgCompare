@@ -284,6 +284,7 @@ Si el JSON está mal formado o PostHog no responde, **no se aplica ninguna restr
 | `Comparator` | Comparador |
 | `ApexTests` | Ejecutar Tests Apex |
 | `QuickEdit` | Editor rápido Apex |
+| `LightningQuickEdit` | Editor rápido LWC / Aura |
 | `AnonymousApex` | Ejecutar Apex anónimo |
 | `QueryExplorer` | Explorador SOQL / SOSL |
 | `DebugLogBrowser` | Explorar Debug Logs |

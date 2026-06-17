@@ -4,6 +4,15 @@ import { loadLang, t } from '../shared/i18n.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 import { bg } from './core/bridge.js';
 import { apexViewerIdbTake } from './lib/apexViewerIdb.js';
+import { parseApexDebugLog, formatLogSize, formatMs } from '../shared/apexLogParser.js';
+import { parseApexLogExecutionContext } from '../shared/salesforceApi.js';
+import { mountApexLogTabs, setActiveApexLogTab, APEX_LOG_TABS } from './lib/apexLogViewer/tabs.js';
+import { renderTreeView, layoutTreeEditor, revealTreeLogLine } from './lib/apexLogViewer/rawTreeView.js';
+import { renderDebugView } from './lib/apexLogViewer/apexDebugView.js';
+import { renderSoqlView } from './lib/apexLogViewer/soqlAnalysisView.js';
+import { renderDmlView } from './lib/apexLogViewer/dmlAnalysisView.js';
+import { renderTimelineView, revealTimelineLogLine } from './lib/apexLogViewer/timelineView.js';
+import { highlightPanelRow } from './lib/apexLogViewer/analysisTableUtils.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -39,6 +48,58 @@ function getQueryKeys() {
   };
 }
 
+function isLightTheme() {
+  return document.documentElement.getAttribute('data-ui-theme') === 'light';
+}
+
+function tabLabel(tabId) {
+  const found = APEX_LOG_TABS.find((x) => x.id === tabId);
+  return found ? t(found.i18n) : tabId;
+}
+
+function getFirstErrorIssue(issues) {
+  return (issues || [])
+    .filter((issue) => issue.type === 'error' && issue.line > 0)
+    .sort((a, b) => a.line - b.line)[0] || null;
+}
+
+function renderMetaChips(metaEl, parsed) {
+  if (!metaEl || !parsed) return null;
+  const chips = [
+    `<span class="apex-log-chip">${t('apexLogViewer.meta.size')}: ${formatLogSize(parsed.meta.sizeBytes)}</span>`,
+    `<span class="apex-log-chip">${t('apexLogViewer.meta.duration')}: ${formatMs(parsed.meta.durationMs)}</span>`
+  ];
+  const warningCount = (parsed.issues || []).filter((issue) => issue.type !== 'error').length;
+  if (warningCount > 0) {
+    chips.push(
+      `<span class="apex-log-chip apex-log-chip--warning">${t('apexLogViewer.meta.warnings')}: ${warningCount}</span>`
+    );
+  }
+  const firstError = getFirstErrorIssue(parsed.issues);
+  if (firstError) {
+    chips.push(
+      `<button type="button" class="apex-log-chip apex-log-chip--error" id="apexLogErrorChip" data-line="${firstError.line}">${t('apexLogViewer.meta.logWithErrors')}</button>`
+    );
+  }
+  metaEl.innerHTML = chips.join('');
+  metaEl.hidden = false;
+  return firstError;
+}
+
+function renderContextChip(ctxEl, content) {
+  if (!ctxEl) return;
+  const ctx = parseApexLogExecutionContext(content);
+  if (ctx.logType === 'N/A' && ctx.logName === 'N/A') {
+    ctxEl.hidden = true;
+    return;
+  }
+  const parts = [ctx.logType, ctx.logName, ctx.logMethod !== 'N/A' ? ctx.logMethod : '']
+    .filter(Boolean)
+    .join(' · ');
+  ctxEl.innerHTML = `<span class="apex-log-chip">${parts}</span>`;
+  ctxEl.hidden = false;
+}
+
 async function main() {
   await loadLang();
   await loadExtensionSettings();
@@ -47,7 +108,16 @@ async function main() {
   const backBtn = document.getElementById('apexLogViewerBack');
   const downloadBtn = document.getElementById('apexLogViewerDownload');
   const titleEl = document.getElementById('apexLogViewerTitle');
+  const metaEl = document.getElementById('apexLogViewerMeta');
+  const ctxEl = document.getElementById('apexLogViewerContext');
+  const parsingEl = document.getElementById('apexLogViewerParsing');
+  const tabsNav = document.getElementById('apexLogTabs');
   const mount = document.getElementById('apexLogViewerMount');
+
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    const key = el.getAttribute('data-i18n');
+    if (key) el.textContent = t(key);
+  });
   if (backBtn) backBtn.textContent = t('apexLogViewer.back');
   if (downloadBtn) downloadBtn.textContent = t('apexLogViewer.download');
 
@@ -105,24 +175,167 @@ async function main() {
 
   if (!mount) return;
 
-  let editor = null;
+  /** @type {import('monaco-editor').editor.IStandaloneCodeEditor | null} */
+  let textEditor = null;
+  /** @type {import('monaco-editor') | null} */
+  let monaco = null;
+  /** @type {ReturnType<typeof parseApexDebugLog> | null} */
+  let parsed = null;
+  /** @type {Set<string>} */
+  const renderedTabs = new Set(['text']);
+  /** @type {import('./lib/apexLogViewer/tabs.js').ApexLogTabId} */
+  let activeTabId = 'text';
+  let highlightDecoIds = [];
+
+  function getActiveTabId() {
+    const active = document.querySelector('.apex-log-tab.is-active');
+    return active?.dataset?.tab || activeTabId;
+  }
+
+  function highlightTextLine(line) {
+    if (!textEditor || !line || !monaco) return false;
+    const model = textEditor.getModel();
+    const ln = Math.min(line, Math.max(1, model.getLineCount()));
+    textEditor.revealLineInCenter(ln);
+    textEditor.setPosition({ lineNumber: ln, column: 1 });
+    textEditor.focus();
+    highlightDecoIds = textEditor.deltaDecorations(highlightDecoIds, [
+      {
+        range: new monaco.Range(ln, 1, ln, 1),
+        options: {
+          isWholeLine: true,
+          className: 'apex-log-line-highlight',
+          overviewRuler: { color: '#f472b6', position: monaco.editor.OverviewRulerLane.Full }
+        }
+      }
+    ]);
+    setTimeout(() => {
+      try {
+        highlightDecoIds = textEditor.deltaDecorations(highlightDecoIds, []);
+      } catch {
+        /* ignore */
+      }
+    }, 2500);
+    requestAnimationFrame(() => textEditor?.layout());
+    return true;
+  }
+
+  function navigateToLineInActiveTab(line) {
+    if (!line) return;
+    const tabId = getActiveTabId();
+    renderTab(tabId);
+    let ok = false;
+    switch (tabId) {
+      case 'text':
+        ok = highlightTextLine(line);
+        break;
+      case 'tree':
+        ok = revealTreeLogLine(line);
+        break;
+      case 'timeline':
+        ok = revealTimelineLogLine(line);
+        break;
+      case 'debug':
+        ok = highlightPanelRow(document.getElementById('apexLogDebugMount'), line);
+        break;
+      case 'soql':
+        ok = highlightPanelRow(document.getElementById('apexLogSoqlMount'), line);
+        break;
+      case 'dml':
+        ok = highlightPanelRow(document.getElementById('apexLogDmlMount'), line);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function jumpToLogLine(line) {
+    if (!textEditor || !line) return;
+    setActiveApexLogTab('text');
+    activeTabId = 'text';
+    renderedTabs.add('text');
+    highlightTextLine(line);
+  }
+
+  function renderTab(tabId) {
+    if (!parsed) return;
+    if (renderedTabs.has(tabId)) {
+      if (tabId === 'text') textEditor?.layout();
+      if (tabId === 'tree') layoutTreeEditor();
+      return;
+    }
+    renderedTabs.add(tabId);
+    switch (tabId) {
+      case 'tree':
+        renderTreeView(monaco, document.getElementById('apexLogTreeMount'), parsed, isLightTheme(), t);
+        break;
+      case 'debug':
+        renderDebugView(document.getElementById('apexLogDebugMount'), parsed, jumpToLogLine, t);
+        break;
+      case 'timeline':
+        renderTimelineView(document.getElementById('apexLogTimelineMount'), parsed, jumpToLogLine, t);
+        break;
+      case 'soql':
+        renderSoqlView(document.getElementById('apexLogSoqlMount'), parsed, jumpToLogLine, t);
+        break;
+      case 'dml':
+        renderDmlView(document.getElementById('apexLogDmlMount'), parsed, jumpToLogLine, t);
+        break;
+      default:
+        break;
+    }
+  }
+
+  function onTabSelect(tabId) {
+    activeTabId = tabId;
+    setActiveApexLogTab(tabId);
+    renderTab(tabId);
+    requestAnimationFrame(() => {
+      if (tabId === 'text') textEditor?.layout();
+      if (tabId === 'tree') layoutTreeEditor();
+    });
+  }
+
+  mountApexLogTabs(tabsNav, tabLabel, onTabSelect);
+
   try {
-    const monaco = await loadMonaco();
-    editor = createSingleEditor(monaco, mount);
-    editor.setValue(content || '—');
-    monaco.editor.setModelLanguage(editor.getModel(), 'apex');
+    monaco = await loadMonaco();
+    textEditor = createSingleEditor(monaco, mount);
+    textEditor.setValue(content || '—');
+    monaco.editor.setModelLanguage(textEditor.getModel(), 'apex');
     if (initialLine > 0) {
-      const lineCount = editor.getModel().getLineCount();
-      const ln = Math.min(initialLine, Math.max(1, lineCount));
-      editor.revealLineInCenter(ln);
-      editor.setPosition({ lineNumber: ln, column: 1 });
+      jumpToLogLine(initialLine);
     }
   } catch {
     if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
+    return;
   }
 
+  if (parsingEl) parsingEl.hidden = false;
+  await new Promise((resolve) => {
+    const run = () => {
+      try {
+        parsed = parseApexDebugLog(content);
+        const firstError = renderMetaChips(metaEl, parsed);
+        renderContextChip(ctxEl, content);
+        document.getElementById('apexLogErrorChip')?.addEventListener('click', () => {
+          if (firstError?.line) navigateToLineInActiveTab(firstError.line);
+        });
+      } catch {
+        parsed = null;
+      }
+      if (parsingEl) parsingEl.hidden = true;
+      resolve();
+    };
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(run, { timeout: 120 });
+    } else {
+      setTimeout(run, 0);
+    }
+  });
+
   downloadBtn?.addEventListener('click', () => {
-    const body = editor ? editor.getValue() : content;
+    const body = textEditor ? textEditor.getValue() : content;
     const explicit =
       payload && payload.downloadFileName != null && String(payload.downloadFileName).trim();
     const name = explicit

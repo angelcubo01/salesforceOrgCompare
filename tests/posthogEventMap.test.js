@@ -224,6 +224,18 @@ describe('extensionLifecyclePosthogEvent', () => {
     expect(ev.name).toBe('extension_active');
     expect(ev.properties.active_source).toBe('alarm');
   });
+
+  it('first_org_connected', () => {
+    const ev = extensionLifecyclePosthogEvent('first_org_connected', { extensionVersion: '2.7' }, {
+      org_connection_source: 'popup',
+      org_company_name: 'Acme',
+      sf_user_label: 'Jane Doe (Acme)'
+    });
+    expect(ev.name).toBe('first_org_connected');
+    expect(ev.properties.org_connection_source).toBe('popup');
+    expect(ev.properties.org_company_name).toBe('Acme');
+    expect(ev.properties.sf_user_label).toBe('Jane Doe (Acme)');
+  });
 });
 
 describe('telemetryOptOutPosthogEvent', () => {

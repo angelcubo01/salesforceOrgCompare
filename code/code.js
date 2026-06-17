@@ -60,6 +60,12 @@ import {
   refreshEnvironmentStatusPanel,
   reloadEnvironmentStatusIfActive
 } from './ui/environmentStatusPanel.js';
+import {
+  setupDeployStatusPanel,
+  refreshDeployStatusPanel,
+  updateDeployStatusPollingState,
+  stopDeployStatusPolling
+} from './ui/deployStatusPanel.js';
 import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryExplorerPanel.js';
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
 import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
@@ -79,6 +85,10 @@ import { setupSetupAuditTrailPanel, refreshSetupAuditTrailPanel } from './ui/set
 import { setupFieldHistoryPanel, refreshFieldHistoryPanel } from './ui/fieldHistoryPanel.js';
 import { setupPermissionDiffPanel, refreshPermissionDiffPanel } from './ui/permissionDiffPanel.js';
 import { setupQuickEditPanel, refreshQuickEditPanel } from './ui/quickEditPanel.js';
+import {
+  setupLightningQuickEditPanel,
+  refreshLightningQuickEditPanel
+} from './ui/lightningQuickEditPanel.js';
 import {
   setupClearApexTestJobsOnPageClose,
   updateApexTestsHubPollingState
@@ -188,11 +198,14 @@ async function init() {
         await loadExtensionSettings();
         applyUiThemeToDocument(document);
         updateApexTestsHubPollingState();
+        updateDeployStatusPollingState();
         if (state.monaco) applyMonacoThemeGlobally(state.monaco);
         const { refreshAnonymousApexEditorTheme } = await import('./ui/anonymousApexPanel.js');
         const { refreshQuickEditEditorTheme } = await import('./ui/quickEditPanel.js');
+        const { refreshLightningQuickEditEditorTheme } = await import('./ui/lightningQuickEditPanel.js');
         refreshAnonymousApexEditorTheme();
         refreshQuickEditEditorTheme();
+        refreshLightningQuickEditEditorTheme();
         await refreshAppSupportUi();
       })();
     }
@@ -229,6 +242,7 @@ async function init() {
   setupAnonymousApexPanel();
   setupOrgLimitsPanel();
   setupEnvironmentStatusPanel();
+  setupDeployStatusPanel();
   setupPermissionDiffPanel();
   setupQueryExplorerPanel();
   setupDebugLogBrowserPanel();
@@ -239,6 +253,7 @@ async function init() {
   setupSetupAuditTrailPanel();
   setupFieldHistoryPanel();
   setupQuickEditPanel();
+  setupLightningQuickEditPanel();
   setupFieldDependencyPanel();
   setupDependencyExplorerPanel();
   renderEditor();
@@ -247,6 +262,7 @@ async function init() {
   void refreshAnonymousApexPanel();
   void refreshOrgLimitsPanel();
   void refreshEnvironmentStatusPanel();
+  void refreshDeployStatusPanel();
   void refreshPermissionDiffPanel();
   void refreshQueryExplorerPanel();
   void refreshDebugLogBrowserPanel();
@@ -257,6 +273,7 @@ async function init() {
   void refreshSetupAuditTrailPanel();
   void refreshFieldHistoryPanel();
   void refreshQuickEditPanel();
+  void refreshLightningQuickEditPanel();
   refreshDependencyExplorerPanel();
   setupResizable();
   setupCompareListToolbar();

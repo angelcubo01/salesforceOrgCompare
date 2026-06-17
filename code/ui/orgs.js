@@ -192,6 +192,11 @@ export function updateOrgDropdownLayout() {
     leftDropdown.classList.remove('single-mode');
     return;
   }
+  if (document.body.classList.contains('artifact-deploy-status')) {
+    rightDropdown.classList.add('hidden');
+    leftDropdown.classList.remove('single-mode');
+    return;
+  }
   if (
     document.body.classList.contains('artifact-permission-diff') &&
     !document.body.classList.contains('artifact-permission-diff-compare')

@@ -6,7 +6,9 @@ import {
   markToolSeenInPrefs,
   markHelpOpenedInPrefs,
   hasSeenTelemetryNotice,
-  markTelemetryNoticeDismissedInPrefs
+  markTelemetryNoticeDismissedInPrefs,
+  hasDismissedPopupNotice,
+  markPopupNoticeDismissedInPrefs
 } from '../shared/onboardingPrefs.js';
 import { t, setLang } from '../shared/i18n.js';
 
@@ -17,12 +19,14 @@ describe('onboardingPrefs', () => {
     expect(normalizeOnboardingPrefs(null)).toEqual({
       tools: {},
       helpOpened: false,
-      telemetryNoticeDismissed: false
+      telemetryNoticeDismissed: false,
+      popupNoticeDismissedFingerprint: null
     });
     expect(normalizeOnboardingPrefs(undefined)).toEqual({
       tools: {},
       helpOpened: false,
-      telemetryNoticeDismissed: false
+      telemetryNoticeDismissed: false,
+      popupNoticeDismissedFingerprint: null
     });
   });
 
@@ -63,11 +67,20 @@ describe('onboardingPrefs', () => {
     expect(prefs.telemetryNoticeDismissed).toBe(true);
   });
 
-  it('lista de herramientas alineada con onboarding (15)', () => {
-    expect(ALL_ONBOARDING_TOOLS).toHaveLength(15);
+  it('dismiss de aviso remoto por fingerprint', () => {
+    let prefs = normalizeOnboardingPrefs(null);
+    expect(hasDismissedPopupNotice(prefs, 'pn_abc')).toBe(false);
+    prefs = markPopupNoticeDismissedInPrefs(prefs, 'pn_abc');
+    expect(hasDismissedPopupNotice(prefs, 'pn_abc')).toBe(true);
+    expect(hasDismissedPopupNotice(prefs, 'pn_other')).toBe(false);
+  });
+
+  it('lista de herramientas alineada con onboarding (17)', () => {
+    expect(ALL_ONBOARDING_TOOLS).toHaveLength(17);
     expect(ALL_ONBOARDING_TOOLS).toContain('Comparator');
     expect(ALL_ONBOARDING_TOOLS).toContain('FieldHistory');
-    expect(ALL_ONBOARDING_TOOLS).toContain('PermissionDiff');
+    expect(ALL_ONBOARDING_TOOLS).toContain('LightningQuickEdit');
+    expect(ALL_ONBOARDING_TOOLS).toContain('DeployStatus');
     expect(ALL_ONBOARDING_TOOLS).toContain('QueryExplorer');
     expect(ALL_ONBOARDING_TOOLS).toContain('DependencyExplorer');
   });

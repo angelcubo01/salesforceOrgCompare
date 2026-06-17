@@ -5,6 +5,7 @@
   "description": "Chrome extension to compare Salesforce org metadata",
   "type": "module",
   "scripts": {
+    "pretest": "node scripts/ensureTelemetryConfig.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -22,6 +23,9 @@
     "posthog:feature-controls-flag:smoke": "node scripts/createPosthogFeatureControlsFlag.mjs --update --smoke-test",
     "posthog:feature-controls-flag:reset": "node scripts/createPosthogFeatureControlsFlag.mjs --update --reset",
     "posthog:feature-controls-flag:production": "node scripts/createPosthogFeatureControlsFlag.mjs --update --production",
+    "posthog:popup-controls-flag": "node scripts/createPosthogPopupControlsFlag.mjs",
+    "posthog:popup-controls-flag:update": "node scripts/createPosthogPopupControlsFlag.mjs --update",
+    "posthog:popup-controls-flag:reset": "node scripts/createPosthogPopupControlsFlag.mjs --update --reset",
     "posthog:error-tracking": "node scripts/createPosthogErrorTrackingSetup.mjs",
     "posthog:error-tracking:update": "node scripts/createPosthogErrorTrackingSetup.mjs --update",
     "pack:chrome": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-chrome-store.ps1"

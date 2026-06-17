@@ -1,0 +1,209 @@
+import {
+  parseFeatureControlMessage,
+  resolveFeatureControlMessageText
+} from './featureControls.js';
+
+/** @typedef {'once' | 'always'} PopupNoticeFrequency */
+
+/**
+ * @typedef {object} PopupNoticeConfig
+ * @property {boolean} enabled
+ * @property {string} es
+ * @property {string} en
+ * @property {FeatureControlSeverity} severity
+ * @property {PopupNoticeFrequency} frequency
+ * @property {boolean} dismissible
+ * @property {{ es?: string, en?: string } | null} dismissLabel
+ * @property {string} [url]
+ */
+
+/**
+ * @typedef {object} PopupOpenAppConfig
+ * @property {boolean} disabled
+ * @property {FeatureControlMessage | null} message
+ */
+
+/**
+ * @typedef {object} PopupControlsConfig
+ * @property {number} version
+ * @property {boolean} flagActive
+ * @property {PopupNoticeConfig | null} notice
+ * @property {PopupOpenAppConfig} openApp
+ */
+
+/** @type {PopupControlsConfig} */
+export const DEFAULT_POPUP_CONTROLS = Object.freeze({
+  version: 1,
+  flagActive: false,
+  notice: null,
+  openApp: { disabled: false, message: null }
+});
+
+const VALID_SEVERITIES = new Set(['info', 'warn', 'error']);
+const VALID_FREQUENCIES = new Set(['once', 'always']);
+
+/**
+ * @param {unknown} raw
+ * @returns {{ es?: string, en?: string } | null}
+ */
+function parseDismissLabel(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  const es = typeof o.es === 'string' ? o.es.trim() : '';
+  const en = typeof o.en === 'string' ? o.en.trim() : '';
+  if (!es && !en) return null;
+  return { es: es || en, en: en || es };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {PopupNoticeConfig | null}
+ */
+function parseNoticeConfig(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  if (o.enabled !== true) return null;
+
+  const message = parseFeatureControlMessage(raw);
+  if (!message) return null;
+
+  const frequencyRaw = typeof o.frequency === 'string' ? o.frequency : 'once';
+  const frequency = VALID_FREQUENCIES.has(frequencyRaw)
+    ? /** @type {PopupNoticeFrequency} */ (frequencyRaw)
+    : 'once';
+
+  return {
+    enabled: true,
+    es: message.es,
+    en: message.en,
+    severity: message.severity || 'info',
+    frequency,
+    dismissible: o.dismissible !== false,
+    dismissLabel: parseDismissLabel(o.dismissLabel),
+    ...(message.url ? { url: message.url } : {})
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {PopupOpenAppConfig}
+ */
+function parseOpenAppConfig(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { disabled: false, message: null };
+  }
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  const message = parseFeatureControlMessage(o.message);
+  return {
+    disabled: o.disabled === true,
+    ...(message ? { message } : { message: null })
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @param {{ flagActive?: boolean }} [opts]
+ * @returns {PopupControlsConfig}
+ */
+export function parsePopupControlsPayload(raw, opts = {}) {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return { ...DEFAULT_POPUP_CONTROLS, flagActive: opts.flagActive === true };
+    }
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { ...DEFAULT_POPUP_CONTROLS, flagActive: opts.flagActive === true };
+  }
+  const o = /** @type {Record<string, unknown>} */ (value);
+  const notice = parseNoticeConfig(o.notice);
+  const openApp = parseOpenAppConfig(o.openApp);
+  return {
+    version: typeof o.version === 'number' ? o.version : 1,
+    flagActive: opts.flagActive === true,
+    notice,
+    openApp
+  };
+}
+
+/**
+ * @param {PopupNoticeConfig} notice
+ * @param {string} [lang]
+ */
+export function resolveNoticeText(notice, lang) {
+  if (!notice) return '';
+  const code = String(lang || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+  return (code === 'en' ? notice.en : notice.es) || notice.en || notice.es || '';
+}
+
+/**
+ * @param {PopupNoticeConfig} notice
+ * @param {string} [lang]
+ */
+export function resolveDismissLabelText(notice, lang) {
+  if (!notice?.dismissLabel) return '';
+  const code = String(lang || 'es').toLowerCase().startsWith('en') ? 'en' : 'es';
+  const label = notice.dismissLabel;
+  return (code === 'en' ? label.en : label.es) || label.en || label.es || '';
+}
+
+/**
+ * @param {PopupOpenAppConfig} openApp
+ * @param {string} [lang]
+ */
+export function resolveOpenAppTooltip(openApp, lang) {
+  if (!openApp?.message) return '';
+  return resolveFeatureControlMessageText(openApp.message, lang);
+}
+
+/**
+ * @param {PopupNoticeConfig} notice
+ */
+export function buildNoticeFingerprint(notice) {
+  if (!notice) return '';
+  const parts = [notice.es, notice.en, notice.severity, notice.frequency, String(notice.dismissible)];
+  let hash = 0;
+  const str = parts.join('\u001f');
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) | 0;
+  }
+  return `pn_${(hash >>> 0).toString(36)}`;
+}
+
+/**
+ * @param {PopupControlsConfig} config
+ */
+export function isRemoteNoticeActive(config) {
+  return config.flagActive === true && !!config.notice?.enabled;
+}
+
+/**
+ * @param {PopupControlsConfig} config
+ */
+export function isOpenAppDisabled(config) {
+  return config.flagActive === true && config.openApp.disabled === true;
+}
+
+/**
+ * @param {PopupControlsConfig} config
+ * @param {{ dismissedFingerprint?: string | null, legacyTelemetryDismissed?: boolean }} prefsState
+ */
+export function shouldShowRemoteNotice(config, prefsState) {
+  const notice = config.notice;
+  if (!isRemoteNoticeActive(config) || !notice) return false;
+  if (notice.frequency === 'always') return true;
+  const fp = buildNoticeFingerprint(notice);
+  if (prefsState.dismissedFingerprint === fp) return false;
+  return true;
+}
+
+/**
+ * @param {PopupControlsConfig} config
+ * @param {{ dismissedFingerprint?: string | null, legacyTelemetryDismissed?: boolean }} prefsState
+ */
+export function shouldShowLegacyTelemetryNotice(config, prefsState) {
+  if (config.flagActive) return false;
+  return !prefsState.legacyTelemetryDismissed;
+}

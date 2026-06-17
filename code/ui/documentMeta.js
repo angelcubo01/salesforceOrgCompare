@@ -90,6 +90,8 @@ export function updateDocumentTitle() {
     document.title = t('docTitle.anonymousApex');
   } else if (state.selectedArtifactType === 'OrgLimits') {
     document.title = t('docTitle.orgLimits');
+  } else if (state.selectedArtifactType === 'DeployStatus') {
+    document.title = t('docTitle.deployStatus');
   } else if (state.selectedArtifactType === 'PermissionDiff') {
     document.title = t('docTitle.permissionDiff');
   } else if (state.selectedArtifactType === 'QueryExplorer') {
@@ -100,6 +102,8 @@ export function updateDocumentTitle() {
     document.title = t('docTitle.fieldHistory');
   } else if (state.selectedArtifactType === 'QuickEdit') {
     document.title = t('docTitle.quickEdit');
+  } else if (state.selectedArtifactType === 'LightningQuickEdit') {
+    document.title = t('docTitle.lightningQuickEdit');
   } else if (state.selectedArtifactType === 'ApexCoverageCompare') {
     document.title = t('docTitle.coverageCompare');
   } else if (state.selectedArtifactType === 'CustomSettingsCompare') {

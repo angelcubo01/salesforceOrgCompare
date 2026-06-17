@@ -921,6 +921,9 @@ function openViewLogRecordsModal(orgId, job, displayJobId, logs) {
   const thead = document.createElement('thead');
   thead.innerHTML = `<tr>
     <th>${t('apexTests.viewLogTableColId')}</th>
+    <th>${t('apexTests.viewLogTableColType')}</th>
+    <th>${t('apexTests.viewLogTableColName')}</th>
+    <th>${t('apexTests.viewLogTableColMethod')}</th>
     <th scope="col" class="apex-tests-coverage-th-editor">${t('apexTests.viewLogTableColAction')}</th>
   </tr>`;
   tbl.appendChild(thead);
@@ -941,7 +944,13 @@ function openViewLogRecordsModal(orgId, job, displayJobId, logs) {
     c1.className = 'apex-tests-view-log-table-id-cell';
     c1.textContent = rid || '—';
     const c2 = document.createElement('td');
-    c2.className = 'apex-tests-coverage-td-editor';
+    c2.textContent = row?.Type ? String(row.Type) : 'N/A';
+    const c3 = document.createElement('td');
+    c3.textContent = row?.Name ? String(row.Name) : 'N/A';
+    const c4 = document.createElement('td');
+    c4.textContent = row?.Method ? String(row.Method) : 'N/A';
+    const c5 = document.createElement('td');
+    c5.className = 'apex-tests-coverage-td-editor';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'apex-tests-coverage-view-btn';
@@ -952,9 +961,12 @@ function openViewLogRecordsModal(orgId, job, displayJobId, logs) {
       closeModal();
       void openTestRunLogTab(oid, job, dj, { logId: rid });
     });
-    c2.appendChild(btn);
+    c5.appendChild(btn);
     rtr.appendChild(c1);
     rtr.appendChild(c2);
+    rtr.appendChild(c3);
+    rtr.appendChild(c4);
+    rtr.appendChild(c5);
     tb.appendChild(rtr);
   }
   tbl.appendChild(tb);

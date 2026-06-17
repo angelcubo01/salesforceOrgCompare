@@ -1,13 +1,26 @@
 import '../shared/installEarlyExceptionCapture.js';
-import { t, loadLang } from '../shared/i18n.js';
+import { t, loadLang, getCurrentLang } from '../shared/i18n.js';
 import { sameGroupKey, isOrgAlreadySaved } from '../shared/orgPrefs.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 import {
   ONBOARDING_PREFS_KEY,
   normalizeOnboardingPrefs,
   hasSeenTelemetryNotice,
-  markTelemetryNoticeDismissedInPrefs
+  markTelemetryNoticeDismissedInPrefs,
+  markPopupNoticeDismissedInPrefs
 } from '../shared/onboardingPrefs.js';
+import { initPosthogClient, getPosthogClient } from '../shared/posthogClient.js';
+import { loadPopupControlsFromPosthog } from '../shared/posthogPopupControlsFlag.js';
+import {
+  buildNoticeFingerprint,
+  isOpenAppDisabled,
+  isRemoteNoticeActive,
+  resolveDismissLabelText,
+  resolveNoticeText,
+  resolveOpenAppTooltip,
+  shouldShowLegacyTelemetryNotice,
+  shouldShowRemoteNotice
+} from '../shared/popupControls.js';
 import { setupPopupHelp } from './popupHelp.js';
 
 async function bg(message) {
@@ -379,30 +392,122 @@ async function saveOnboardingPrefs(prefs) {
   }
 }
 
-function setupPopupTelemetryNotice() {
+function applyNoticeSeverity(banner, severity) {
+  banner.classList.remove(
+    'popup-telemetry-notice--info',
+    'popup-telemetry-notice--warn',
+    'popup-telemetry-notice--error'
+  );
+  const sev = severity === 'error' || severity === 'warn' ? severity : 'info';
+  banner.classList.add(`popup-telemetry-notice--${sev}`);
+}
+
+/**
+ * @param {HTMLElement} textEl
+ * @param {string} text
+ * @param {string} [url]
+ */
+function renderNoticeText(textEl, text, url) {
+  textEl.textContent = text;
+  const existingLink = textEl.parentElement?.querySelector('.popup-telemetry-notice-link');
+  existingLink?.remove();
+  if (!url || !textEl.parentElement) return;
+  const link = document.createElement('a');
+  link.className = 'popup-telemetry-notice-link';
+  link.href = url;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.textContent = url;
+  textEl.parentElement.appendChild(link);
+}
+
+async function setupPopupControls() {
   const banner = document.getElementById('popupTelemetryNotice');
   const dismissBtn = document.getElementById('popupTelemetryNoticeDismissBtn');
   const textEl = document.getElementById('popupTelemetryNoticeText');
+  const openCodeBtn = document.getElementById('openCodeBtn');
   if (!banner || !dismissBtn || !textEl) return;
 
-  void (async () => {
-    const prefs = await loadOnboardingPrefs();
-    if (hasSeenTelemetryNotice(prefs)) return;
+  const lang = getCurrentLang();
+  const prefs = await loadOnboardingPrefs();
+  const config = await loadPopupControlsFromPosthog(getPosthogClient());
 
-    textEl.textContent = t('popup.telemetryNotice.text');
-    dismissBtn.textContent = t('popup.telemetryNotice.dismiss');
-    dismissBtn.setAttribute('aria-label', t('popup.telemetryNotice.dismiss'));
-    banner.classList.remove('hidden');
+  if (openCodeBtn) {
+    const disabled = isOpenAppDisabled(config);
+    openCodeBtn.disabled = disabled;
+    if (disabled) {
+      const tip = resolveOpenAppTooltip(config.openApp, lang);
+      openCodeBtn.title = tip || t('popup.openAppDisabled');
+    } else {
+      openCodeBtn.title = t('popup.openCode');
+    }
+  }
 
-    dismissBtn.addEventListener('click', async () => {
+  const prefsState = {
+    dismissedFingerprint: prefs.popupNoticeDismissedFingerprint,
+    legacyTelemetryDismissed: hasSeenTelemetryNotice(prefs)
+  };
+
+  /** @type {{ text: string, dismissLabel: string, severity: string, dismissible: boolean, url?: string, onDismiss: () => Promise<void> } | null} */
+  let noticeSpec = null;
+
+  if (isRemoteNoticeActive(config) && shouldShowRemoteNotice(config, prefsState)) {
+    const notice = config.notice;
+    if (notice) {
+      const fingerprint = buildNoticeFingerprint(notice);
+      noticeSpec = {
+        text: resolveNoticeText(notice, lang),
+        dismissLabel: resolveDismissLabelText(notice, lang) || t('popup.telemetryNotice.dismiss'),
+        severity: notice.severity,
+        dismissible: notice.dismissible,
+        ...(notice.url ? { url: notice.url } : {}),
+        onDismiss: async () => {
+          if (notice.frequency === 'once') {
+            const updated = markPopupNoticeDismissedInPrefs(await loadOnboardingPrefs(), fingerprint);
+            await saveOnboardingPrefs(updated);
+          }
+        }
+      };
+    }
+  } else if (shouldShowLegacyTelemetryNotice(config, prefsState)) {
+    noticeSpec = {
+      text: t('popup.telemetryNotice.text'),
+      dismissLabel: t('popup.telemetryNotice.dismiss'),
+      severity: 'info',
+      dismissible: true,
+      onDismiss: async () => {
+        const updated = markTelemetryNoticeDismissedInPrefs(await loadOnboardingPrefs());
+        await saveOnboardingPrefs(updated);
+      }
+    };
+  }
+
+  if (!noticeSpec?.text) return;
+
+  renderNoticeText(textEl, noticeSpec.text, noticeSpec.url);
+  applyNoticeSeverity(banner, noticeSpec.severity);
+  banner.classList.remove('hidden');
+
+  if (noticeSpec.dismissible) {
+    dismissBtn.textContent = noticeSpec.dismissLabel;
+    dismissBtn.setAttribute('aria-label', noticeSpec.dismissLabel);
+    dismissBtn.classList.remove('hidden');
+    dismissBtn.onclick = async () => {
       banner.classList.add('hidden');
-      const updated = markTelemetryNoticeDismissedInPrefs(await loadOnboardingPrefs());
-      await saveOnboardingPrefs(updated);
-    });
-  })();
+      await noticeSpec.onDismiss();
+    };
+  } else {
+    dismissBtn.classList.add('hidden');
+    dismissBtn.onclick = null;
+  }
 }
 
-document.getElementById('openCodeBtn').addEventListener('click', async () => {
+document.getElementById('openCodeBtn').addEventListener('click', async (e) => {
+  const btn = /** @type {HTMLButtonElement | null} */ (e.currentTarget);
+  if (btn?.disabled) {
+    e.preventDefault();
+    return;
+  }
   const url = chrome.runtime.getURL('code/code.html');
   await chrome.tabs.create({ url });
 });
@@ -419,7 +524,8 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   await loadLang();
   applyStaticTranslations();
   setupPopupHelp();
-  setupPopupTelemetryNotice();
+  await initPosthogClient();
+  await setupPopupControls();
 
   refresh();
 })();

@@ -43,5 +43,7 @@ export const state = {
   queryExplorerCompareMode: false,
   dependencyExplorerCompareMode: false,
   recordCompareCompareMode: false,
-  orgsList: []
+  orgsList: [],
+  /** Contexto de retorno desde Deploy Status a Quick Edit / Lightning Quick Edit. */
+  quickEditDeployReturn: null
 };

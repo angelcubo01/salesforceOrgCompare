@@ -1342,6 +1342,16 @@ html[data-ui-theme="light"] .setup-audit-empty {
   color: #64748b;
 }
 
+html[data-ui-theme="light"] .debug-log-browser-loading {
+  background: rgba(248, 250, 252, 0.82);
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .debug-log-browser-skeleton-bar {
+  background: linear-gradient(90deg, rgba(226, 232, 240, 0.9) 0%, rgba(203, 213, 225, 0.95) 50%, rgba(226, 232, 240, 0.9) 100%);
+  background-size: 200% 100%;
+}
+
 html[data-ui-theme="light"] .anonymous-apex-title,
 html[data-ui-theme="light"] .anonymous-apex-pane-title,
 html[data-ui-theme="light"] .anonymous-apex-compare-label {
@@ -1674,6 +1684,183 @@ html[data-ui-theme="light"] .org-limits-value-line {
 
 html[data-ui-theme="light"] .org-limits-delta {
   color: #1d4ed8;
+}
+
+/* Estado de despliegue: tarjetas y tablas (base en code.css es oscura) */
+html[data-ui-theme="light"] .deploy-status-title,
+html[data-ui-theme="light"] .deploy-status-detail-title,
+html[data-ui-theme="light"] .deploy-status-history-title {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-updated,
+html[data-ui-theme="light"] .deploy-status-status,
+html[data-ui-theme="light"] .deploy-status-meta-label,
+html[data-ui-theme="light"] .deploy-status-chart-header,
+html[data-ui-theme="light"] .deploy-status-page-info {
+  color: #475569;
+}
+
+html[data-ui-theme="light"] .deploy-status-refresh-btn,
+html[data-ui-theme="light"] .deploy-status-page-btn {
+  background: #ffffff;
+  border: 1px solid #94a3b8;
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-refresh-btn:hover,
+html[data-ui-theme="light"] .deploy-status-page-btn:hover:not(:disabled) {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+html[data-ui-theme="light"] .deploy-status-detail-card,
+html[data-ui-theme="light"] .deploy-status-chart-block {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+html[data-ui-theme="light"] .deploy-status-detail-empty {
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+}
+
+html[data-ui-theme="light"] .deploy-status-table th {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .deploy-status-table td {
+  border-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .deploy-status-row-selected {
+  background: #eff6ff;
+}
+
+html[data-ui-theme="light"] .deploy-status-link-btn {
+  color: #2563eb;
+}
+
+html[data-ui-theme="light"] .deploy-status-primary-btn {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
+
+html[data-ui-theme="light"] .deploy-status-primary-btn:hover {
+  background: #dbeafe;
+}
+
+html[data-ui-theme="light"] .deploy-status-back-btn {
+  background: #ffffff;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-back-btn:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+html[data-ui-theme="light"] .deploy-status-components-search {
+  background: #ffffff;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-detail-view-meta,
+html[data-ui-theme="light"] .deploy-status-search-info,
+html[data-ui-theme="light"] .deploy-status-detail-view-id {
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .deploy-status-active-card {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+html[data-ui-theme="light"] .deploy-status-active-card.is-in-progress {
+  border-color: #93c5fd;
+  box-shadow:
+    0 0 0 1px rgba(59, 130, 246, 0.08),
+    0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+html[data-ui-theme="light"] .deploy-status-active-meta-grid,
+html[data-ui-theme="light"] .deploy-status-active-actions {
+  background: #f8fafc;
+  border-top-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .deploy-status-active-meta-item dt {
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .deploy-status-active-meta-item dd {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-active-live-chip {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #b45309;
+}
+
+html[data-ui-theme="light"] .deploy-status-chart-label.is-muted {
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .deploy-status-chart-pct {
+  color: #d97706;
+}
+
+html[data-ui-theme="light"] .deploy-status-detail-hero {
+  background: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+html[data-ui-theme="light"] .deploy-status-detail-id {
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .deploy-status-active-empty {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .deploy-status-cancel-btn {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #b91c1c;
+}
+
+html[data-ui-theme="light"] .deploy-status-cancel-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+html[data-ui-theme="light"] .deploy-status-global-error {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #991b1b;
+}
+
+html[data-ui-theme="light"] .deploy-status-stack-pre {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-loading {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: #cbd5e1;
+  color: #334155;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
 }
 
 html[data-ui-theme="light"] .query-explorer-field-label,

@@ -1637,6 +1637,204 @@
             <div id="orgLimitsCards" class="org-limits-cards ph-no-capture"></div>
           </div>
         </div>
+        <div id="deployStatusPanel" class="deploy-status-panel ph-no-capture hidden" aria-label="Deployment Status">
+          <div class="deploy-status-panel-inner">
+            <div class="deploy-status-head">
+              <h2 class="deploy-status-title" data-i18n="deployStatus.title">Estado de despliegue</h2>
+              <div class="deploy-status-head-controls">
+                <span id="deployStatusLiveBadge" class="deploy-status-live-badge hidden" data-i18n="deployStatus.live">En vivo</span>
+                <button type="button" id="deployStatusRefreshBtn" class="deploy-status-refresh-btn" data-i18n="deployStatus.refresh">Actualizar</button>
+              </div>
+            </div>
+            <p id="deployStatusPanelError" class="deploy-status-panel-error hidden" role="alert"></p>
+
+            <div id="deployStatusSummaryView" class="deploy-status-summary-view">
+              <section id="deployStatusActiveSection" class="deploy-status-active-section hidden">
+                <h3 class="deploy-status-section-title" data-i18n="deployStatus.activeSection">En curso</h3>
+                <article id="deployStatusActiveCard" class="deploy-status-active-card"></article>
+              </section>
+
+              <section class="deploy-status-history-section">
+              <h3 class="deploy-status-history-title" data-i18n="deployStatus.historyFailed">Fallidos</h3>
+              <div class="deploy-status-table-wrap">
+                <table class="deploy-status-table deploy-status-history-table">
+                  <thead>
+                    <tr>
+                      <th data-i18n="deployStatus.colAction">Acción</th>
+                      <th data-i18n="deployStatus.colName">Nombre</th>
+                      <th data-i18n="deployStatus.colStatus">Estado</th>
+                      <th data-i18n="deployStatus.colErrors">Errores</th>
+                      <th data-i18n="deployStatus.colDate">Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody id="deployStatusFailedTbody"></tbody>
+                </table>
+              </div>
+              <div id="deployStatusFailedNav" class="deploy-status-page-nav"></div>
+            </section>
+
+            <section class="deploy-status-history-section">
+              <h3 class="deploy-status-history-title" data-i18n="deployStatus.historySucceeded">Exitosos</h3>
+              <div class="deploy-status-table-wrap">
+                <table class="deploy-status-table deploy-status-history-table">
+                  <thead>
+                    <tr>
+                      <th data-i18n="deployStatus.colAction">Acción</th>
+                      <th data-i18n="deployStatus.colName">Nombre</th>
+                      <th data-i18n="deployStatus.colStatus">Estado</th>
+                      <th data-i18n="deployStatus.colDate">Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody id="deployStatusSucceededTbody"></tbody>
+                </table>
+              </div>
+              <div id="deployStatusSucceededNav" class="deploy-status-page-nav"></div>
+              </section>
+            </div>
+
+            <div id="deployStatusDetailView" class="deploy-status-detail-view hidden">
+              <div class="deploy-status-detail-toolbar">
+                <button type="button" id="deployStatusBackBtn" class="deploy-status-back-btn" data-i18n="deployStatus.backToSummary">← Volver al resumen</button>
+                <button type="button" id="deployStatusBackToEditorBtn" class="deploy-status-back-to-editor-btn hidden" data-i18n="deployStatus.backToApexEditor">Volver al editor</button>
+                <button type="button" id="deployStatusCancelBtn" class="deploy-status-cancel-btn hidden" data-i18n="deployStatus.cancelDeploy">Cancelar despliegue</button>
+              </div>
+
+              <div class="deploy-status-detail-hero">
+                <div class="deploy-status-detail-hero-main">
+                  <h3 id="deployStatusDetailViewTitle" class="deploy-status-detail-title"></h3>
+                  <p id="deployStatusDetailViewId" class="deploy-status-detail-id deploy-status-mono"></p>
+                  <div id="deployStatusDetailViewMeta" class="deploy-status-detail-meta"></div>
+                </div>
+                <div class="deploy-status-charts deploy-status-detail-charts">
+                  <div class="deploy-status-chart-block">
+                    <div class="deploy-status-chart-header">
+                      <span class="deploy-status-chart-num">1</span>
+                      <span data-i18n="deployStatus.chartComponents">Desplegar componentes</span>
+                    </div>
+                    <div class="deploy-status-chart-wrap">
+                      <div id="deployStatusComponentChart" class="deploy-status-chart-slot"></div>
+                      <div id="deployStatusComponentLabel" class="deploy-status-chart-label"></div>
+                    </div>
+                  </div>
+                  <div class="deploy-status-chart-block">
+                    <div class="deploy-status-chart-header">
+                      <span class="deploy-status-chart-num">2</span>
+                      <span data-i18n="deployStatus.chartTests">Ejecutar tests Apex</span>
+                    </div>
+                    <div class="deploy-status-chart-wrap">
+                      <div id="deployStatusTestsChart" class="deploy-status-chart-slot"></div>
+                      <div id="deployStatusTestsLabel" class="deploy-status-chart-label"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p id="deployStatusDetailViewSetup" class="deploy-status-detail-setup"></p>
+
+              <div id="deployStatusGlobalError" class="deploy-status-global-error hidden" role="alert"></div>
+
+              <div id="deployStatusFailuresSection" class="deploy-status-detail-errors-block hidden">
+                <h4 class="deploy-status-detail-section-title" data-i18n="deployStatus.sectionFailures">Errores de componentes</h4>
+                <div class="deploy-status-table-wrap">
+                  <table class="deploy-status-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="deployStatus.colType">Tipo</th>
+                        <th data-i18n="deployStatus.colName">Nombre</th>
+                        <th data-i18n="deployStatus.colProblem">Problema</th>
+                        <th data-i18n="deployStatus.colProblemType">Tipo error</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deployStatusFailuresTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div id="deployStatusTestFailuresSection" class="deploy-status-detail-errors-block hidden">
+                <h4 class="deploy-status-detail-section-title" data-i18n="deployStatus.sectionTestFailures">Fallos de tests Apex</h4>
+                <div class="deploy-status-table-wrap">
+                  <table class="deploy-status-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="deployStatus.colClass">Clase</th>
+                        <th data-i18n="deployStatus.colMethod">Método</th>
+                        <th data-i18n="deployStatus.colMessage">Mensaje</th>
+                        <th data-i18n="deployStatus.colStackTrace">Stack trace</th>
+                        <th data-i18n="deployStatus.colTime">Tiempo</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deployStatusTestFailuresTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div id="deployStatusCoverageWarningsSection" class="deploy-status-detail-errors-block hidden">
+                <h4 class="deploy-status-detail-section-title" data-i18n="deployStatus.sectionCoverageWarnings">Fallos de cobertura</h4>
+                <div class="deploy-status-table-wrap">
+                  <table class="deploy-status-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="deployStatus.colClass">Clase</th>
+                        <th data-i18n="deployStatus.colMessage">Mensaje</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deployStatusCoverageWarningsTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div id="deployStatusSlowTestsSection" class="deploy-status-detail-errors-block hidden">
+                <h4 class="deploy-status-detail-section-title" data-i18n="deployStatus.sectionSlowTests">Tests lentos</h4>
+                <p id="deployStatusSlowTestsHint" class="deploy-status-section-hint hidden"></p>
+                <div class="deploy-status-table-wrap">
+                  <table class="deploy-status-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="deployStatus.colClass">Clase</th>
+                        <th data-i18n="deployStatus.colMethod">Método</th>
+                        <th data-i18n="deployStatus.colTime">Tiempo</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deployStatusSlowTestsTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div id="deployStatusComponentsSection" class="deploy-status-components-block hidden">
+                <div class="deploy-status-components-head">
+                  <h4 class="deploy-status-detail-section-title" data-i18n="deployStatus.sectionComponents">Componentes desplegados</h4>
+                  <input
+                    type="search"
+                    id="deployStatusComponentsSearch"
+                    class="deploy-status-components-search"
+                    data-i18n-placeholder="deployStatus.searchComponents"
+                    placeholder="Buscar componentes…"
+                    autocomplete="off"
+                  />
+                </div>
+                <p id="deployStatusComponentsSearchInfo" class="deploy-status-search-info hidden" role="status"></p>
+                <div class="deploy-status-table-wrap">
+                  <table class="deploy-status-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="deployStatus.colType">Tipo</th>
+                        <th data-i18n="deployStatus.colName">Nombre</th>
+                        <th data-i18n="deployStatus.colAction">Acción</th>
+                        <th data-i18n="deployStatus.colState">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deployStatusComponentsTbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div id="deployStatusLoading" class="deploy-status-loading hidden" role="status" aria-live="polite">
+              <span class="deploy-status-loading-spinner" aria-hidden="true"></span>
+              <span class="deploy-status-loading-text" data-i18n="deployStatus.loading">Cargando…</span>
+            </div>
+          </div>
+        </div>
         <div id="debugLogBrowserPanel" class="debug-log-browser-panel ph-no-capture hidden" aria-label="Debug Log Browser">
           <div class="debug-log-browser-panel-inner">
             <div class="debug-log-browser-head">
@@ -1651,7 +1849,7 @@
               </button>
             </div>
             <p id="debugLogBrowserStatus" class="debug-log-browser-status" role="status"></p>
-            <div class="debug-log-browser-filters">
+            <div class="debug-log-browser-filters" id="debugLogBrowserFilters">
               <div class="debug-log-browser-field">
                 <label for="debugLogBrowserUserFilter" class="debug-log-browser-field-label" data-i18n="debugLogs.filterUser">Usuario</label>
                 <select id="debugLogBrowserUserFilter" class="debug-log-browser-input debug-log-browser-select">
@@ -1678,7 +1876,7 @@
               <span id="debugLogBrowserPageLabel" class="debug-log-browser-page-label">1/1</span>
               <button type="button" id="debugLogBrowserNextPage" class="debug-log-browser-open-btn">→</button>
             </div>
-            <div class="debug-log-browser-table-wrap">
+            <div class="debug-log-browser-table-wrap" id="debugLogBrowserTableWrap">
               <table class="debug-log-browser-table">
                 <thead>
                   <tr>
@@ -1688,12 +1886,19 @@
                     <th scope="col" data-i18n="debugLogs.colOperation">Operación</th>
                     <th scope="col" data-i18n="debugLogs.colDuration">Duración (ms)</th>
                     <th scope="col" data-i18n="debugLogs.colLength">Tamaño</th>
+                    <th scope="col" data-i18n="debugLogs.colType">Type</th>
+                    <th scope="col" data-i18n="debugLogs.colName">Name</th>
+                    <th scope="col" data-i18n="debugLogs.colMethod">Method</th>
                     <th scope="col" data-i18n="debugLogs.colActions">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="debugLogBrowserTbody"></tbody>
               </table>
-              <p id="debugLogBrowserEmpty" class="debug-log-browser-empty" data-i18n="debugLogs.empty">No hay logs para los filtros actuales.</p>
+              <div id="debugLogBrowserLoading" class="debug-log-browser-loading hidden" role="status" aria-live="polite">
+                <span class="debug-log-browser-loading-spinner" aria-hidden="true"></span>
+                <span class="debug-log-browser-loading-text" data-i18n="debugLogs.loading">Cargando logs de depuración…</span>
+              </div>
+              <p id="debugLogBrowserEmpty" class="debug-log-browser-empty hidden" data-i18n="debugLogs.empty">No hay logs para los filtros actuales.</p>
             </div>
             <div class="debug-log-browser-pagination debug-log-browser-pagination-bottom">
               <div class="debug-log-browser-field debug-log-browser-page-size-wrap">
@@ -1736,6 +1941,43 @@
               <div id="quickEditEditorMount" class="quick-edit-editor-mount ph-no-capture"></div>
               <p id="quickEditStatus" class="quick-edit-status" role="status"></p>
               <p id="quickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
+            </div>
+          </div>
+        </div>
+        <div id="lightningQuickEditPanel" class="quick-edit-panel lightning-quick-edit-panel hidden" aria-label="Lightning Quick Editor">
+          <div class="quick-edit-panel-inner">
+            <div class="lightning-quick-edit-type-row" role="group" aria-label="Component type">
+              <button type="button" id="lightningQuickEditTypeLwc" class="lightning-quick-edit-type-btn is-active" data-type="LWC">LWC</button>
+              <button type="button" id="lightningQuickEditTypeAura" class="lightning-quick-edit-type-btn" data-type="Aura">Aura</button>
+            </div>
+            <div class="quick-edit-search-zone">
+              <div class="quick-edit-search-bar">
+                <input
+                  id="lightningQuickEditSearchInput"
+                  type="search"
+                  class="quick-edit-search-input sfoc-query-input"
+                  data-i18n-placeholder="lightningQuickEdit.searchPlaceholderLwc"
+                  placeholder="Buscar componente LWC..."
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <div id="lightningQuickEditResultsList" class="quick-edit-results-dropdown sfoc-autocomplete-panel"></div>
+              </div>
+            </div>
+            <div class="quick-edit-panel-body">
+              <div id="lightningQuickEditFileTabs" class="lightning-quick-edit-file-tabs" role="tablist" hidden></div>
+              <div class="quick-edit-editor-toolbar">
+                <span id="lightningQuickEditCurrentFile" class="quick-edit-current-file" data-i18n="lightningQuickEdit.noBundleLoaded">Ningún componente cargado</span>
+                <div class="quick-edit-editor-actions">
+                  <span id="lightningQuickEditModifiedIndicator" class="quick-edit-modified-indicator hidden" data-i18n="quickEdit.modified">Modificado</span>
+                  <button type="button" id="lightningQuickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="quickEdit.clear">Limpiar</button>
+                  <button type="button" id="lightningQuickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n="quickEdit.validate">Validar</button>
+                  <button type="button" id="lightningQuickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
+                </div>
+              </div>
+              <div id="lightningQuickEditEditorMount" class="quick-edit-editor-mount ph-no-capture"></div>
+              <p id="lightningQuickEditStatus" class="quick-edit-status" role="status"></p>
+              <p id="lightningQuickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
             </div>
           </div>
         </div>

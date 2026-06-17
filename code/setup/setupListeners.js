@@ -26,10 +26,12 @@ import { refreshSetupAuditTrailPanel } from '../ui/setupAuditTrailPanel.js';
 import { refreshFieldHistoryPanel } from '../ui/fieldHistoryPanel.js';
 import { refreshPermissionDiffPanel } from '../ui/permissionDiffPanel.js';
 import { refreshQuickEditPanel } from '../ui/quickEditPanel.js';
+import { refreshLightningQuickEditPanel } from '../ui/lightningQuickEditPanel.js';
 import { refreshApexCoverageComparePanel } from '../ui/apexCoverageComparePanel.js';
 import { refreshCustomSettingsComparePanel } from '../ui/customSettingsComparePanel.js';
 import { refreshCustomMetadataComparePanel } from '../ui/customMetadataComparePanel.js';
 import { refreshRecordComparePanel } from '../ui/recordComparePanel.js';
+import { onDeployStatusOrgChange } from '../ui/deployStatusPanel.js';
 import { t } from '../../shared/i18n.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { hideSidebarSearchResults } from '../ui/searchSetup.js';
@@ -90,6 +92,9 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'QuickEdit') {
       void refreshQuickEditPanel();
     }
+    if (getSelectedArtifactType() === 'LightningQuickEdit') {
+      void refreshLightningQuickEditPanel();
+    }
     if (getSelectedArtifactType() === 'ApexCoverageCompare') {
       void refreshApexCoverageComparePanel();
     }
@@ -101,6 +106,9 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'RecordCompare') {
       void refreshRecordComparePanel();
+    }
+    if (getSelectedArtifactType() === 'DeployStatus') {
+      onDeployStatusOrgChange();
     }
   });
   right.addEventListener('change', () => {
@@ -208,6 +216,9 @@ export function wireSelectors() {
         if (getSelectedArtifactType() === 'QuickEdit') {
           void refreshQuickEditPanel();
         }
+        if (getSelectedArtifactType() === 'LightningQuickEdit') {
+          void refreshLightningQuickEditPanel();
+        }
         if (getSelectedArtifactType() === 'ApexCoverageCompare') {
           void refreshApexCoverageComparePanel();
         }
@@ -219,6 +230,9 @@ export function wireSelectors() {
         }
         if (getSelectedArtifactType() === 'RecordCompare') {
           void refreshRecordComparePanel();
+        }
+        if (getSelectedArtifactType() === 'DeployStatus') {
+          onDeployStatusOrgChange();
         }
       })();
     });

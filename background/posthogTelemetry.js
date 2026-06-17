@@ -300,7 +300,7 @@ export async function sendPosthogTelemetryOptIn() {
  * Eventos de ciclo de vida (install, active, update). Respeta telemetryEnabled salvo force.
  * @param {string} eventName
  * @param {Record<string, string | number | boolean>} [extra]
- * @param {{ force?: boolean, personSet?: Record<string, string> }} [opts]
+ * @param {{ force?: boolean, personSet?: Record<string, string>, resolveUserOrgIds?: { leftOrgId?: string | null, rightOrgId?: string | null } }} [opts]
  */
 export async function sendPosthogLifecycleEvent(eventName, extra = {}, opts = {}) {
   if (!isPosthogConfigured()) return false;
@@ -316,7 +316,7 @@ export async function sendPosthogLifecycleEvent(eventName, extra = {}, opts = {}
   const ctx = await telemetryContext();
   const mapped = extensionLifecyclePosthogEvent(eventName, ctx, extra);
   const installId = await getOrCreateTelemetryInstallId();
-  const sfUser = await resolveSfUserForTelemetry();
+  const sfUser = await resolveSfUserForTelemetry(opts.resolveUserOrgIds || {});
   const sfProps = sfUserPersonProps(sfUser);
   const personProps = {
     ...buildPostHogPersonProperties(ctx.audience),
@@ -333,6 +333,58 @@ export async function sendPosthogLifecycleEvent(eventName, extra = {}, opts = {}
 }
 
 const INITIAL_PREFERENCE_REPORT_KEY = 'sfoc_telemetry_initial_preference_reported';
+export const FIRST_ORG_CONNECTED_KEY = 'sfoc_first_org_connected_sent';
+
+/**
+ * Una vez por instalación: primera org añadida desde el popup con sesión y SF_User_Label.
+ * @param {Record<string, unknown>} org Org recién guardada desde el popup.
+ */
+export async function maybeSendFirstOrgConnectedTelemetry(org) {
+  if (!isPosthogConfigured()) return false;
+  if (!org?.id) return false;
+  try {
+    const r = await chrome.storage.local.get(FIRST_ORG_CONNECTED_KEY);
+    if (r[FIRST_ORG_CONNECTED_KEY]) return false;
+    const cfg = await loadExtensionSettings();
+    if (cfg.telemetryEnabled === false) return false;
+  } catch {
+    return false;
+  }
+
+  const { resolveSfUserContextForOrg } = await import('./telemetryUserResolver.js');
+  const { orgFieldsForTelemetry } = await import('../shared/telemetryOrgContext.js');
+
+  const sfUser = await resolveSfUserContextForOrg(org);
+  if (!sfUser?.sfUserLabel) return false;
+
+  const orgId = String(org.id || '').trim();
+  /** @type {Record<string, string | number | boolean>} */
+  const extra = {
+    org_connection_source: 'popup'
+  };
+  if (orgId) extra.org_id = orgId.slice(0, 18);
+  const fields = orgFieldsForTelemetry(org);
+  if (fields) {
+    if (fields.companyName) extra.org_company_name = fields.companyName;
+    if (fields.instanceUrl) extra.instance_url = fields.instanceUrl;
+    if (fields.isSandbox) extra.is_sandbox = 1;
+    if (fields.envLabel) extra.env_label = fields.envLabel;
+  }
+
+  const sent = await sendPosthogLifecycleEvent('first_org_connected', extra, {
+    personSet: { sf_user_label: sfUser.sfUserLabel },
+    resolveUserOrgIds: { leftOrgId: orgId }
+  });
+
+  if (sent) {
+    try {
+      await chrome.storage.local.set({ [FIRST_ORG_CONNECTED_KEY]: true });
+    } catch {
+      /* ignore */
+    }
+  }
+  return sent;
+}
 
 /**
  * Registra una vez por instalación si el usuario tiene telemetría activa (opt-in por defecto).

@@ -656,6 +656,47 @@ export function createDeployZipBase64(metadataType, memberName, content, apiVers
   return zipFilesToBase64(files);
 }
 
+/**
+ * Mapea artifactType interno (LWC, Aura) al tipo Metadata API para deploy.
+ * @param {string} artifactType
+ * @returns {string}
+ */
+export function artifactTypeToMetadataType(artifactType) {
+  const spec = QUICK_OPEN_INDEX_SPECS.find((s) => s.artifactType === artifactType);
+  return spec?.metadataType || artifactType;
+}
+
+/**
+ * Crea un ZIP en base64 con package.xml y todos los archivos de un bundle LWC/Aura.
+ * @param {string} metadataType - LightningComponentBundle | AuraDefinitionBundle
+ * @param {string} memberName - Developer name del bundle
+ * @param {{ fileName: string, content: string }[]} fileEntries
+ * @param {string} apiVersion
+ * @returns {string}
+ */
+export function createBundleDeployZipBase64(metadataType, memberName, fileEntries, apiVersion) {
+  const apiVer = String(apiVersion || '60.0');
+  const files = {};
+
+  const packageXml = buildPackageXml(metadataType, memberName, apiVer);
+  files['package.xml'] = new TextEncoder().encode(packageXml);
+
+  for (const entry of fileEntries || []) {
+    const fileName = String(entry.fileName || '').trim();
+    if (!fileName) continue;
+    const content = entry.content ?? '';
+    const { filePath, metaXml } = buildMetadataFilePaths(metadataType, memberName, content, apiVer, {
+      fileName
+    });
+    files[filePath] = new TextEncoder().encode(content);
+    if (metaXml) {
+      files[metaXml.path] = new TextEncoder().encode(metaXml.content);
+    }
+  }
+
+  return zipFilesToBase64(files);
+}
+
 function buildPackageXml(metadataType, memberName, apiVersion) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Package xmlns="http://soap.sforce.com/2006/04/metadata">
@@ -957,14 +998,103 @@ export async function checkDeployStatus(instanceUrl, sid, apiVersion, asyncId) {
   const errorStatusCode = extractTagValue(statusResponseXml, 'errorStatusCode') || '';
 
   const componentFailures = parseComponentFailures(statusResponseXml);
+  const componentSuccesses = parseComponentSuccesses(statusResponseXml);
+  const runTestResult = parseRunTestResult(statusResponseXml);
+
+  const num = (tag) => {
+    const v = extractTagValue(statusResponseXml, tag);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
 
   return {
     done,
     success,
     status,
     errorMessage: errorMessage || errorStatusCode,
+    numberComponentsDeployed: num('numberComponentsDeployed'),
+    numberComponentsTotal: num('numberComponentsTotal'),
+    numberComponentErrors: num('numberComponentErrors'),
+    numberTestsCompleted: num('numberTestsCompleted'),
+    numberTestsTotal: num('numberTestsTotal'),
+    numberTestErrors: num('numberTestErrors'),
     componentFailures,
+    componentSuccesses,
+    runTestResult,
     rawXml: DEBUG_LOGS ? statusResponseXml : undefined
+  };
+}
+
+function parseComponentSuccesses(xml) {
+  const successes = [];
+  const re = /<componentSuccesses[^>]*>([\s\S]*?)<\/componentSuccesses>/gi;
+  let m;
+  while ((m = re.exec(xml))) {
+    const block = m[1];
+    successes.push({
+      componentType: extractTagValue(block, 'componentType'),
+      fullName: extractTagValue(block, 'fullName'),
+      created: extractTagValue(block, 'created') === 'true',
+      changed: extractTagValue(block, 'changed') === 'true',
+      deleted: extractTagValue(block, 'deleted') === 'true',
+      fileName: extractTagValue(block, 'fileName')
+    });
+  }
+  return successes;
+}
+
+function parseRunTestResult(xml) {
+  const blockMatch = /<runTestResult[^>]*>([\s\S]*?)<\/runTestResult>/i.exec(xml);
+  if (!blockMatch) return null;
+  const block = blockMatch[1];
+  const failures = [];
+  const failRe = /<failures[^>]*>([\s\S]*?)<\/failures>/gi;
+  let m;
+  while ((m = failRe.exec(block))) {
+    const f = m[1];
+    failures.push({
+      className: extractTagValue(f, 'name') || extractTagValue(f, 'namespace') || '',
+      methodName: extractTagValue(f, 'methodName'),
+      message: extractTagValue(f, 'message'),
+      stackTrace: extractTagValue(f, 'stackTrace'),
+      time: extractTagValue(f, 'time')
+    });
+  }
+
+  const successes = [];
+  const successRe = /<successes[^>]*>([\s\S]*?)<\/successes>/gi;
+  while ((m = successRe.exec(block))) {
+    const s = m[1];
+    successes.push({
+      className: extractTagValue(s, 'name') || extractTagValue(s, 'namespace') || '',
+      methodName: extractTagValue(s, 'methodName'),
+      time: extractTagValue(s, 'time'),
+      id: extractTagValue(s, 'id')
+    });
+  }
+
+  const codeCoverageWarnings = [];
+  const warnRe = /<codeCoverageWarnings[^>]*>([\s\S]*?)<\/codeCoverageWarnings>/gi;
+  while ((m = warnRe.exec(block))) {
+    const w = m[1];
+    codeCoverageWarnings.push({
+      id: extractTagValue(w, 'id'),
+      name: extractTagValue(w, 'name'),
+      namespace: extractTagValue(w, 'namespace'),
+      message: extractTagValue(w, 'message')
+    });
+  }
+
+  const numFailures = Number(extractTagValue(block, 'numFailures'));
+  const numTestsRun = Number(extractTagValue(block, 'numTestsRun'));
+  const totalTime = extractTagValue(block, 'totalTime');
+  return {
+    numFailures: Number.isFinite(numFailures) ? numFailures : failures.length,
+    numTestsRun: Number.isFinite(numTestsRun) ? numTestsRun : 0,
+    totalTime: totalTime || '',
+    failures,
+    successes,
+    codeCoverageWarnings
   };
 }
 
@@ -985,6 +1115,38 @@ function parseComponentFailures(xml) {
     });
   }
   return failures;
+}
+
+/**
+ * Cancela un deploy o validación en curso (Metadata API cancelDeploy).
+ * @returns {Promise<{ success: boolean }>}
+ */
+export async function cancelDeploy(instanceUrl, sid, apiVersion, asyncId) {
+  const apiVerNum = Number(apiVersion) || 60.0;
+  const apiVer = apiVerNum.toFixed(1);
+  const id = String(asyncId || '').trim();
+  if (!id) throw new Error('Missing async deploy id');
+
+  const body =
+    `<cancelDeploy xmlns="http://soap.sforce.com/2006/04/metadata">` +
+    `<asyncProcessId>${escapeXmlText(id)}</asyncProcessId>` +
+    `</cancelDeploy>`;
+
+  const responseXml = await metadataSoapCall(instanceUrl, sid, apiVer, body);
+
+  if (/<faultcode/i.test(responseXml) || /<soapenv:Fault/i.test(responseXml) || /<Fault[\s>]/i.test(responseXml)) {
+    const msg = extractTagValue(responseXml, 'faultstring') || 'cancelDeploy SOAP fault';
+    const err = new Error(msg);
+    err.responseXml = responseXml;
+    throw err;
+  }
+
+  const successStr =
+    extractTagValue(responseXml, 'success') ||
+    extractTagValue(responseXml, 'result') ||
+    extractTagValue(responseXml, 'done');
+  if (successStr === 'false') return { success: false };
+  return { success: true };
 }
 
 /**

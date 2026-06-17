@@ -3,6 +3,10 @@
   --alb-border: #334155;
   --alb-text: #e2e8f0;
   --alb-accent: #38bdf8;
+  --alb-muted: #94a3b8;
+  --alb-chip-bg: rgba(56, 189, 248, 0.1);
+  --alb-warning: #fb7185;
+  --alb-gantt-grid: rgba(148, 163, 184, 0.22);
 }
 
 html,
@@ -13,20 +17,23 @@ body {
   background: var(--alb-bg);
   color: var(--alb-text);
   font-family: system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
 }
 
 .apex-log-viewer-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--alb-border);
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .apex-log-viewer-toolbar .apex-log-viewer-title {
   flex: 1;
-  min-width: 0;
+  min-width: 120px;
 }
 
 .apex-log-viewer-back {
@@ -52,6 +59,55 @@ body {
   white-space: nowrap;
 }
 
+.apex-log-viewer-meta,
+.apex-log-viewer-context {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.apex-log-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--alb-border);
+  background: var(--alb-chip-bg);
+  color: var(--alb-muted);
+  white-space: nowrap;
+}
+
+.apex-log-chip--warning {
+  border-color: rgba(251, 113, 133, 0.5);
+  color: var(--alb-warning);
+  background: rgba(251, 113, 133, 0.12);
+}
+
+.apex-log-chip--error {
+  cursor: pointer;
+  border-color: rgba(244, 114, 182, 0.65);
+  color: #fda4af;
+  background: rgba(244, 114, 182, 0.14);
+  font: inherit;
+}
+
+.apex-log-chip--error:hover {
+  border-color: #f472b6;
+  color: #fecdd3;
+  background: rgba(244, 114, 182, 0.24);
+}
+
+.apex-log-row-highlight {
+  background: rgba(244, 114, 182, 0.18) !important;
+  outline: 1px solid rgba(244, 114, 182, 0.55);
+}
+
+.apex-log-viewer-parsing {
+  font-size: 12px;
+  color: var(--alb-accent);
+  font-style: italic;
+}
+
 .apex-log-viewer-download {
   flex-shrink: 0;
   cursor: pointer;
@@ -61,6 +117,7 @@ body {
   background: rgba(56, 189, 248, 0.12);
   color: var(--alb-accent);
   font-size: 13px;
+  margin-left: auto;
 }
 
 .apex-log-viewer-download:hover {
@@ -73,9 +130,626 @@ body {
   cursor: not-allowed;
 }
 
+.apex-log-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--alb-border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  align-items: stretch;
+}
+
+.apex-log-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--alb-border);
+  background: #1e293b;
+  color: var(--alb-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.apex-log-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.85;
+}
+
+.apex-log-tab.is-active .apex-log-tab-icon {
+  opacity: 1;
+}
+
+.apex-log-tab-label {
+  white-space: nowrap;
+}
+
+.apex-log-tab:hover:not(.is-active) {
+  border-color: var(--alb-accent);
+  color: var(--alb-text);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.apex-log-tab.is-active {
+  border-color: rgba(34, 211, 238, 0.65);
+  background: rgba(34, 211, 238, 0.15);
+  color: #67e8f9;
+  box-shadow: inset 0 -2px 0 #38bdf8;
+}
+
+.apex-log-panels {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.apex-log-panel {
+  display: none;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.apex-log-panel.is-active {
+  display: flex;
+}
+
+.apex-log-panel:has(.apex-log-panel-heading) {
+  padding: 8px 12px 12px;
+}
+
 .apex-log-viewer-editor {
-  height: calc(100% - 49px);
+  flex: 1;
+  min-height: 0;
   width: 100%;
+}
+
+.apex-log-panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 12px 12px;
+}
+
+.apex-log-panel-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--alb-border);
+}
+
+.apex-log-panel-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--alb-accent);
+  opacity: 0.95;
+}
+
+.apex-log-panel-heading-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--alb-text);
+  letter-spacing: 0.01em;
+}
+
+.apex-log-panel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.apex-log-panel-toolbar--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.apex-log-panel-toolbar-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.apex-log-panel-toolbar-row .apex-log-filter {
+  flex: 1;
+  min-width: 180px;
+}
+
+.apex-log-summary-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.apex-log-segment-host {
+  flex-shrink: 0;
+}
+
+.apex-log-segment {
+  display: inline-flex;
+  border: 1px solid var(--alb-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.apex-log-segment-btn {
+  border: none;
+  background: transparent;
+  color: var(--alb-muted);
+  font-size: 11px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.apex-log-segment-btn:hover:not(.is-active) {
+  color: var(--alb-text);
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.apex-log-segment-btn.is-active {
+  background: rgba(34, 211, 238, 0.15);
+  color: #67e8f9;
+}
+
+.apex-log-group-row td {
+  background: rgba(51, 65, 85, 0.35);
+  font-size: 12px;
+}
+
+.apex-log-detail-row--grouped td:first-child {
+  padding-left: 22px;
+}
+
+.apex-log-gantt {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 100%;
+  position: relative;
+}
+
+.apex-log-gantt-top {
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--alb-border);
+}
+
+.apex-log-gantt-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.apex-log-gantt-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.apex-log-gantt-action {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--alb-border);
+  background: #1e293b;
+  color: var(--alb-muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.apex-log-gantt-action:hover {
+  border-color: var(--alb-accent);
+  color: var(--alb-text);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.apex-log-gantt-total {
+  display: block;
+  font-size: 11px;
+  color: var(--alb-muted);
+  margin-bottom: 4px;
+}
+
+.apex-log-gantt-overview-wrap {
+  position: relative;
+  margin-left: 34%;
+  min-height: 48px;
+  cursor: crosshair;
+}
+
+.apex-log-gantt-overview-wrap.is-dragging {
+  cursor: ew-resize;
+}
+
+.apex-log-gantt-brush {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.apex-log-gantt-brush-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: auto;
+  cursor: grab;
+  border: 1px solid rgba(56, 189, 248, 0.95);
+  background: rgba(56, 189, 248, 0.08);
+  box-sizing: border-box;
+}
+
+.apex-log-gantt-overview-wrap.is-dragging .apex-log-gantt-brush-window {
+  cursor: grabbing;
+}
+
+.apex-log-gantt-brush-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  padding: 0;
+  border: none;
+  background: rgba(56, 189, 248, 0.35);
+  cursor: ew-resize;
+}
+
+.apex-log-gantt-brush-handle--left {
+  left: -4px;
+}
+
+.apex-log-gantt-brush-handle--right {
+  right: -4px;
+}
+
+.apex-log-gantt-brush-handle:hover {
+  background: rgba(56, 189, 248, 0.65);
+}
+
+.apex-log-gantt-overview {
+  display: block;
+  width: 100%;
+  height: 48px;
+  border-radius: 4px;
+}
+
+.apex-log-gantt-ruler {
+  position: relative;
+  height: 20px;
+  margin-left: 34%;
+  border-bottom: 1px solid var(--alb-border);
+}
+
+.apex-log-gantt-ruler--overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin-left: 0;
+  border: none;
+  pointer-events: none;
+}
+
+.apex-log-gantt-ruler--main {
+  margin-top: 2px;
+}
+
+.apex-log-gantt-tick {
+  position: absolute;
+  bottom: 2px;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--alb-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.apex-log-gantt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0;
+  max-height: calc(100vh - 280px);
+  overflow: auto;
+}
+
+.apex-log-gantt-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 34%) 1fr 72px;
+  gap: 0;
+  align-items: stretch;
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--alb-text);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.apex-log-gantt-row:hover {
+  background: rgba(56, 189, 248, 0.06);
+}
+
+.apex-log-gantt-fold,
+.apex-log-gantt-fold-spacer {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.apex-log-gantt-fold {
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--alb-muted);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.apex-log-gantt-fold:hover {
+  color: var(--alb-accent);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.apex-log-gantt-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  padding: 2px 8px 2px 4px;
+  font-family: ui-monospace, monospace;
+  border-right: 1px solid var(--alb-border);
+}
+
+.apex-log-gantt-type {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--alb-accent);
+  min-width: 48px;
+}
+
+.apex-log-gantt-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.apex-log-gantt-name:hover {
+  color: var(--alb-accent);
+}
+
+.apex-log-gantt-track {
+  position: relative;
+  margin: 3px 4px;
+  min-height: 14px;
+  border-radius: 2px;
+  background-color: rgba(15, 23, 42, 0.35);
+  background-image: linear-gradient(90deg, var(--alb-gantt-grid) 1px, transparent 1px);
+  background-size: 8.333% 100%;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  display: block;
+  width: auto;
+}
+
+.apex-log-gantt-bar {
+  position: absolute;
+  top: 2px;
+  height: 10px;
+  border-radius: 2px;
+  min-width: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.apex-log-gantt-dur {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
+  color: var(--alb-muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  border-left: 1px solid var(--alb-border);
+}
+
+.apex-log-gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 8px;
+  border-top: 1px solid var(--alb-border);
+  font-size: 11px;
+  color: var(--alb-muted);
+  margin-top: auto;
+}
+
+.apex-log-gantt-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.apex-log-gantt-legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.apex-log-gantt-tooltip {
+  position: absolute;
+  z-index: 20;
+  pointer-events: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--alb-border);
+  background: #1e293b;
+  color: var(--alb-text);
+  font-size: 11px;
+  line-height: 1.4;
+  max-width: 280px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.apex-log-gantt-bar--soql,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--soql {
+  background: #2563eb;
+}
+
+.apex-log-gantt-bar--dml,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--dml {
+  background: #ea580c;
+}
+
+.apex-log-gantt-bar--method,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--method {
+  background: #86efac;
+}
+
+.apex-log-gantt-bar--unit,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--unit {
+  background: #7dd3fc;
+}
+
+.apex-log-gantt-bar--system,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--system {
+  background: #a8a29e;
+}
+
+.apex-log-gantt-bar--execution,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--execution {
+  background: #4ade80;
+}
+
+.apex-log-gantt-bar--flow,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--flow {
+  background: #a78bfa;
+}
+
+.apex-log-gantt-bar--error,
+.apex-log-gantt-legend-swatch.apex-log-gantt-bar--error {
+  background: transparent;
+  border: 2px dashed #f472b6;
+  box-sizing: border-box;
+}
+
+.apex-log-gantt-bar.apex-log-gantt-bar--error {
+  background: rgba(244, 114, 182, 0.2);
+}
+
+.apex-log-gantt-bar--default {
+  background: #64748b;
+}
+
+.apex-log-line-highlight {
+  background: rgba(56, 189, 248, 0.18);
+}
+
+.apex-log-filter {
+  flex: 1;
+  min-width: 160px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--alb-border);
+  background: #1e293b;
+  color: var(--alb-text);
+  font-size: 13px;
+}
+
+.apex-log-panel-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--alb-border);
+  background: var(--alb-chip-bg);
+  color: var(--alb-accent);
+}
+
+.apex-log-table-wrap {
+  overflow: auto;
+  max-height: 100%;
+}
+
+.apex-log-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.apex-log-data-table th,
+.apex-log-data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.55);
+  text-align: left;
+  vertical-align: top;
+}
+
+.apex-log-data-table th {
+  position: sticky;
+  top: 0;
+  background: #1e293b;
+  color: var(--alb-muted);
+  font-weight: 600;
+  z-index: 1;
+}
+
+.apex-log-data-table tbody tr[data-line] {
+  cursor: pointer;
+}
+
+.apex-log-data-table tbody tr[data-line]:hover td {
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.apex-log-cell-message,
+.apex-log-cell-query {
+  max-width: 480px;
+  word-break: break-word;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.apex-log-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--alb-muted);
+  font-size: 13px;
+}
+
+html[data-ui-theme='light'] .apex-log-line-highlight {
+  background: rgba(2, 132, 199, 0.15);
 }
 
 html[data-ui-theme='light'] {
@@ -83,9 +757,14 @@ html[data-ui-theme='light'] {
   --alb-border: #cbd5e1;
   --alb-text: #0f172a;
   --alb-accent: #0284c7;
+  --alb-muted: #64748b;
+  --alb-chip-bg: rgba(2, 132, 199, 0.08);
+  --alb-warning: #e11d48;
+  --alb-gantt-grid: rgba(100, 116, 139, 0.25);
 }
 
-html[data-ui-theme='light'] .apex-log-viewer-back {
+html[data-ui-theme='light'] .apex-log-viewer-back,
+html[data-ui-theme='light'] .apex-log-filter {
   background: #ffffff;
 }
 
@@ -93,4 +772,40 @@ html[data-ui-theme='light'] .apex-log-viewer-download {
   background: rgba(2, 132, 199, 0.12);
   color: #0369a1;
   border-color: #0ea5e9;
+}
+
+html[data-ui-theme='light'] .apex-log-tab {
+  background: #ffffff;
+}
+
+html[data-ui-theme='light'] .apex-log-tab.is-active {
+  border-color: rgba(2, 132, 199, 0.5);
+  background: rgba(2, 132, 199, 0.12);
+  color: #0369a1;
+  box-shadow: inset 0 -2px 0 #0284c7;
+}
+
+html[data-ui-theme='light'] .apex-log-data-table th {
+  background: #f1f5f9;
+}
+
+html[data-ui-theme='light'] .apex-log-gantt-track {
+  background-color: rgba(241, 245, 249, 0.9);
+}
+
+html[data-ui-theme='light'] .apex-log-gantt-action {
+  background: #f8fafc;
+}
+
+html[data-ui-theme='light'] .apex-log-gantt-tooltip {
+  background: #ffffff;
+}
+
+html[data-ui-theme='light'] .apex-log-group-row td {
+  background: #f1f5f9;
+}
+
+html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
+  background: rgba(2, 132, 199, 0.12);
+  color: #0369a1;
 }

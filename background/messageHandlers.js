@@ -20,6 +20,10 @@ import {
   runTestsAsynchronous,
   fetchApexTestQueueServletStatus,
   fetchApexLogBody,
+  resolveApexLogExecutionContext,
+  mergeApexLogExecutionContext,
+  filterApexTestRunCandidateLogs,
+  filterApexTestRunLogsByExecutionType,
   queryApexLogsInWindow,
   deleteAllApexLogs,
   enableUserDebugTraceForSessionUser,
@@ -37,6 +41,7 @@ import {
 } from '../shared/apexTestRunBodyApi.js';
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
 import { fetchAllEnvironmentStatusRows } from './environmentStatus.js';
+import { pollDeployStatus, fetchDeployDetail, cancelDeployRequest } from '../shared/deployStatusApi.js';
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
 function queryExplorerCatchErrorPayload(e) {
@@ -58,6 +63,9 @@ import {
   listMetadataWithFolderFallback,
   buildQuickOpenMetadataIndex,
   createDeployZipBase64,
+  createBundleDeployZipBase64,
+  artifactTypeToMetadataType,
+  deployZipBase64,
   deployAndWait
 } from '../shared/metadataRetrieve.js';
 import {
@@ -111,9 +119,60 @@ import {
 } from './caches.js';
 import { DEBUG_LOGS } from './config.js';
 import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
-import { sendPosthogException, sendPosthogOperationalFailure } from './posthogTelemetry.js';
+import { sendPosthogException, sendPosthogOperationalFailure, maybeSendFirstOrgConnectedTelemetry } from './posthogTelemetry.js';
 import { classifyError, toError } from '../shared/errorTelemetryPolicy.js';
 import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
+
+const apexLogContextCache = new Map();
+
+async function enrichApexLogRowsWithExecutionContext(instanceUrl, sid, apiVersion, rows, opts = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) return [];
+  const bodyFetchLimit = Math.max(0, Number(opts.maxBodyFetches) ?? Number(opts.maxRows) ?? 80);
+  const concurrency = Math.max(1, Math.min(6, Number(opts.concurrency) || 4));
+  const queue = list.map((row, index) => ({ row, index }));
+  const out = new Array(list.length);
+
+  const runOne = async () => {
+    while (queue.length) {
+      const item = queue.shift();
+      if (!item) continue;
+      const row = item.row && typeof item.row === 'object' ? item.row : {};
+      const logId = row.Id != null ? String(row.Id).replace(/[^a-zA-Z0-9]/g, '') : '';
+      let meta = resolveApexLogExecutionContext('', row);
+      const shouldFetchBody = item.index < bodyFetchLimit && !!logId;
+      if (shouldFetchBody) {
+        const cacheKey = `${String(instanceUrl)}|${logId}`;
+        const cached = apexLogContextCache.get(cacheKey);
+        if (cached) {
+          meta = mergeApexLogExecutionContext(cached, meta);
+        } else {
+          try {
+            const body = await fetchApexLogBody(instanceUrl, sid, apiVersion, logId, {
+              maxBytes: 196_608
+            });
+            const parsed = resolveApexLogExecutionContext(body, row);
+            apexLogContextCache.set(cacheKey, parsed);
+            meta = parsed;
+          } catch {
+            /* metadata fallback ya en meta */
+          }
+        }
+      }
+      out[item.index] = {
+        ...row,
+        Type: meta.logType || 'N/A',
+        Name: meta.logName || 'N/A',
+        Method: meta.logMethod || 'N/A'
+      };
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, () => runOne()));
+  return out.map(
+    (r, i) => r || { ...(list[i] || {}), Type: 'N/A', Name: 'N/A', Method: 'N/A' }
+  );
+}
 import {
   loadExtensionSettings,
   getApexTestsClassNameLikePatterns,
@@ -441,6 +500,7 @@ export function installMessageHandlers() {
             saved[org.id] = org;
             await saveSavedOrgs(saved);
             await syncOrgOrderAfterAdd(org.id);
+            void maybeSendFirstOrgConnectedTelemetry(org);
             reply({ ok: true });
             break;
           }
@@ -1002,7 +1062,7 @@ export function installMessageHandlers() {
                 break;
               }
             }
-            const { orgId, metadataType, memberName, content, fileName, checkOnly } = message;
+            const { orgId, metadataType, memberName, content, fileName, checkOnly, async: deployAsync } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
@@ -1017,19 +1077,90 @@ export function installMessageHandlers() {
                 ver,
                 { fileName }
               );
+              const deployOpts = {
+                deployOptions: {
+                  checkOnly: !!checkOnly,
+                  testLevel: 'NoTestRun'
+                },
+                maxAttempts: 90,
+                pollIntervalMs: 1500
+              };
+              if (deployAsync === true) {
+                const { asyncId } = await deployZipBase64(
+                  org.instanceUrl,
+                  sid,
+                  ver,
+                  zipBase64,
+                  deployOpts
+                );
+                reply({ ok: true, asyncId });
+                break;
+              }
               const result = await deployAndWait(
                 org.instanceUrl,
                 sid,
                 ver,
                 zipBase64,
-                {
-                  deployOptions: {
-                    checkOnly: !!checkOnly,
-                    testLevel: 'NoTestRun'
-                  },
-                  maxAttempts: 90,
-                  pollIntervalMs: 1500
-                }
+                deployOpts
+              );
+              reply({
+                ok: result.success,
+                asyncId: result.asyncId,
+                status: result.status,
+                errorMessage: result.errorMessage,
+                componentFailures: result.componentFailures
+              });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'metadata:deployBundle': {
+            {
+              const actionId = message.checkOnly ? 'quick_edit_save' : 'deploy';
+              const blocked = featureControlBlockedResponse(actionId);
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
+            const { orgId, metadataType, memberName, files, checkOnly, async: deployAsync } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) throw new Error('Org not saved');
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
+            if (!Array.isArray(files) || files.length === 0) {
+              return reply({ ok: false, errorMessage: 'No files to deploy' });
+            }
+            const ver = org.apiVersion;
+            try {
+              const zipBase64 = createBundleDeployZipBase64(metadataType, memberName, files, ver);
+              const deployOpts = {
+                deployOptions: {
+                  checkOnly: !!checkOnly,
+                  testLevel: 'NoTestRun'
+                },
+                maxAttempts: 90,
+                pollIntervalMs: 1500
+              };
+              if (deployAsync === true) {
+                const { asyncId } = await deployZipBase64(
+                  org.instanceUrl,
+                  sid,
+                  ver,
+                  zipBase64,
+                  deployOpts
+                );
+                reply({ ok: true, asyncId });
+                break;
+              }
+              const result = await deployAndWait(
+                org.instanceUrl,
+                sid,
+                ver,
+                zipBase64,
+                deployOpts
               );
               reply({
                 ok: result.success,
@@ -1383,6 +1514,79 @@ export function installMessageHandlers() {
             try {
               const result = await fetchAllEnvironmentStatusRows();
               reply(result);
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'deployStatus:poll': {
+            const { orgId, selectedAsyncId, failedPage, succeededPage, pageSize, fetchDetail } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const data = await pollDeployStatus(org.instanceUrl, sid, org.apiVersion, {
+                selectedAsyncId,
+                failedPage,
+                succeededPage,
+                pageSize,
+                fetchDetail: !!fetchDetail
+              });
+              reply({ ok: true, ...data });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'deployStatus:cancel': {
+            const { orgId, asyncId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const result = await cancelDeployRequest(org.instanceUrl, sid, org.apiVersion, asyncId);
+              reply({ ok: true, ...result });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'deployStatus:detail': {
+            const { orgId, asyncId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const detail = await fetchDeployDetail(org.instanceUrl, sid, org.apiVersion, asyncId);
+              if (!detail) {
+                reply({ ok: false, error: 'Deploy not found' });
+                break;
+              }
+              reply({ ok: true, detail });
             } catch (e) {
               replyHandlerError(reply, e);
             }
@@ -1955,7 +2159,39 @@ export function installMessageHandlers() {
               const logs = await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
                 limit: 15000
               });
-              reply({ ok: true, logs: Array.isArray(logs) ? logs : [] });
+              const safeLogs = Array.isArray(logs) ? [...logs].reverse() : [];
+              reply({ ok: true, logs: safeLogs });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:enrichRows': {
+            const { orgId, rows } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const inputRows = Array.isArray(rows) ? rows : [];
+              const enriched = await enrichApexLogRowsWithExecutionContext(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                inputRows,
+                { maxBodyFetches: inputRows.length, concurrency: 3 }
+              );
+              reply({
+                ok: true,
+                rows: enriched.map((row) => ({ ...row, contextFromBody: true }))
+              });
             } catch (e) {
               replyHandlerError(reply, e);
             }
@@ -2850,8 +3086,7 @@ export function installMessageHandlers() {
               const jobCompletedMs =
                 completedParsed ?? jobCreatedMs + 6 * 60 * 60 * 1000;
 
-              // Acotar ventana usando ejecuciones vecinas del mismo usuario (evita mezclar logs entre jobs).
-              let prevJobMs = null;
+              // Acotar ventana superior con la siguiente ejecución del mismo usuario.
               let nextJobMs = null;
               try {
                 const neighSoql = `SELECT Id, CreatedDate, CompletedDate FROM AsyncApexJob WHERE CreatedById = '${escapeSoqlLiteral(
@@ -2891,13 +3126,6 @@ export function installMessageHandlers() {
                   }
                   idx = best;
                 }
-                if (idx > 0) {
-                  const prev = withMs[idx - 1];
-                  prevJobMs =
-                    Number.isFinite(prev.completedMs) && prev.completedMs > 0
-                      ? prev.completedMs
-                      : prev.createdMs;
-                }
                 if (idx >= 0 && idx < withMs.length - 1) {
                   const next = withMs[idx + 1];
                   nextJobMs = next.createdMs;
@@ -2911,8 +3139,7 @@ export function installMessageHandlers() {
                 jobCompletedMs + 45 * 60 * 1000,
                 jobCreatedMs + 6 * 60 * 60 * 1000
               );
-              let sinceMs = jobCreatedMs - 60_000;
-              if (Number.isFinite(prevJobMs)) sinceMs = Math.max(sinceMs, prevJobMs + 1000);
+              const sinceMs = jobCreatedMs;
               if (Number.isFinite(nextJobMs)) untilMs = Math.min(untilMs, nextJobMs - 1000);
               if (untilMs <= sinceMs) untilMs = sinceMs + 60_000;
               const sinceIso = new Date(sinceMs).toISOString();
@@ -2931,13 +3158,31 @@ export function installMessageHandlers() {
                 }
               );
 
-              if (!logs.length) {
+              const timeFiltered = filterApexTestRunCandidateLogs(logs, jobCreatedMs);
+              if (!timeFiltered.length) {
                 reply({ ok: false, error: 'NO_APEX_LOGS_TRACES' });
                 break;
               }
 
-              const slimLogs = logs.map((l) => ({ Id: l.Id }));
-              reply({ ok: true, pick: true, logs: slimLogs });
+              const slimLogs = timeFiltered.map((l) => ({
+                Id: l.Id,
+                StartTime: l.StartTime,
+                Location: l.Location,
+                Operation: l.Operation
+              }));
+              const enrichedLogs = await enrichApexLogRowsWithExecutionContext(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                slimLogs,
+                { maxBodyFetches: slimLogs.length, concurrency: 3 }
+              );
+              const apexLogs = filterApexTestRunLogsByExecutionType(enrichedLogs, 'Apex');
+              if (!apexLogs.length) {
+                reply({ ok: false, error: 'NO_APEX_LOGS_TRACES' });
+                break;
+              }
+              reply({ ok: true, pick: true, logs: apexLogs });
             } catch (e) {
               replyHandlerError(reply, e);
             }

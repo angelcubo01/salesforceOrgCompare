@@ -745,33 +745,47 @@ export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
 }
 
 async function resolveLwcBundleId(instanceUrl, sid, apiVersion, descriptor) {
-  let bundleId = String(descriptor.bundleId || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 18);
-  if ((!bundleId || bundleId.length === 0) && descriptor.bundleDeveloperName) {
-    const name = escapeSoqlLiteral(descriptor.bundleDeveloperName);
+  const devName = String(descriptor.bundleDeveloperName || '').trim();
+  if (devName) {
+    const name = escapeSoqlLiteral(devName);
     const rows = await toolingQuery(
       instanceUrl,
       sid,
       apiVersion,
       `SELECT Id FROM LightningComponentBundle WHERE DeveloperName = '${name}' LIMIT 1`
     );
-    bundleId = String(rows[0]?.Id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 18);
+    const resolved = String(rows[0]?.Id || '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 18);
+    if (resolved) return resolved;
   }
-  return bundleId || '';
+  return (
+    String(descriptor.bundleId || '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 18) || ''
+  );
 }
 
 async function resolveAuraBundleId(instanceUrl, sid, apiVersion, descriptor) {
-  let bundleId = String(descriptor.bundleId || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 18);
-  if ((!bundleId || bundleId.length === 0) && descriptor.bundleDeveloperName) {
-    const name = escapeSoqlLiteral(descriptor.bundleDeveloperName);
+  const devName = String(descriptor.bundleDeveloperName || '').trim();
+  if (devName) {
+    const name = escapeSoqlLiteral(devName);
     const rows = await toolingQuery(
       instanceUrl,
       sid,
       apiVersion,
       `SELECT Id FROM AuraDefinitionBundle WHERE DeveloperName = '${name}' LIMIT 1`
     );
-    bundleId = String(rows[0]?.Id || '').replace(/[^a-zA-Z0-9]/g, '').slice(0, 18);
+    const resolved = String(rows[0]?.Id || '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 18);
+    if (resolved) return resolved;
   }
-  return bundleId || '';
+  return (
+    String(descriptor.bundleId || '')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 18) || ''
+  );
 }
 
 function auraFileNameToDefType(fileName, bundleDeveloperName) {
@@ -1141,27 +1155,90 @@ export async function fetchApexTestQueueServletStatus(instanceUrl, sid) {
   return json;
 }
 
-/** Cuerpo de un ApexLog (texto plano) vía Tooling API. */
-export async function fetchApexLogBody(instanceUrl, sid, apiVersion, logId) {
-  await restGate.acquire();
+const APEX_LOG_BODY_PREFIX_BYTES = 196_608;
+
+/** Normaliza texto devuelto por ApexLog/Body (plain, JSON o anti-hijacking). */
+export function normalizeApexLogBodyText(raw) {
+  let text = stripLeadingWhileOneJson(String(raw || ''));
+  if (!text) return '';
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const json = JSON.parse(trimmed);
+      if (typeof json === 'string') return json;
+      if (json && typeof json.Body === 'string') return json.Body;
+      if (Array.isArray(json) && json[0] && typeof json[0].Body === 'string') return json[0].Body;
+    } catch {
+      /* texto plano con llaves */
+    }
+  }
+  return text;
+}
+
+async function readFetchResponseTextPrefix(res, maxBytes) {
+  const limit = Math.max(8_192, Number(maxBytes) || APEX_LOG_BODY_PREFIX_BYTES);
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    const full = await res.text();
+    return full.length > limit ? full.slice(0, limit) : full;
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let out = '';
+  let total = 0;
+  try {
+    while (total < limit) {
+      const { done, value } = await reader.read();
+      if (done || !value?.length) break;
+      const chunk = decoder.decode(value, { stream: true });
+      out += chunk;
+      total += value.length;
+      if (total >= limit) break;
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      /* ignore */
+    }
+  }
+  return out;
+}
+
+async function fetchApexLogBodyResponse(instanceUrl, sid, apiVersion, logId) {
   const id = String(logId || '').replace(/[^a-zA-Z0-9]/g, '');
   if (!id) throw new Error('ApexLog Id inválido');
   const base = String(instanceUrl).replace(/\/$/, '');
-  const url = `${base}/services/data/v${apiVersion}/tooling/sobjects/ApexLog/${id}/Body`;
   const headers = new Headers();
   headers.set('Authorization', `Bearer ${sid}`);
-  headers.set('Accept', 'text/plain,*/*');
-  let res = await fetch(url, { headers });
-  if (!res.ok) {
-    const restUrl = `${base}/services/data/v${apiVersion}/sobjects/ApexLog/${id}/Body`;
-    res = await fetch(restUrl, { headers });
+  headers.set('Accept', 'text/plain,application/json,*/*');
+  const urls = [
+    `${base}/services/data/v${apiVersion}/tooling/sobjects/ApexLog/${id}/Body`,
+    `${base}/services/data/v${apiVersion}/sobjects/ApexLog/${id}/Body`
+  ];
+  let lastStatus = 0;
+  for (const url of urls) {
+    await restGate.acquire();
+    const res = await fetch(url, { headers });
+    if (res.ok) return res;
+    lastStatus = res.status;
   }
-  if (!res.ok) {
-    const err = new Error(`ApexLog Body: HTTP ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-  return await res.text();
+  const err = new Error(`ApexLog Body: HTTP ${lastStatus || 404}`);
+  err.status = lastStatus || 404;
+  throw err;
+}
+
+/**
+ * Cuerpo de un ApexLog (texto plano) vía Tooling/REST API.
+ * @param {{ maxBytes?: number }} [opts] Si `maxBytes` está definido, solo lee ese prefijo (suficiente para Type/Name/Method).
+ */
+export async function fetchApexLogBody(instanceUrl, sid, apiVersion, logId, opts = {}) {
+  const res = await fetchApexLogBodyResponse(instanceUrl, sid, apiVersion, logId);
+  const maxBytes = opts.maxBytes;
+  const raw =
+    maxBytes != null && Number.isFinite(Number(maxBytes))
+      ? await readFetchResponseTextPrefix(res, Number(maxBytes))
+      : await res.text();
+  return normalizeApexLogBodyText(raw);
 }
 
 /**
@@ -1327,6 +1404,203 @@ export function apexLogBodyLooksLikeTestClass(body, className) {
   const compact = cn.replace(/[^a-zA-Z0-9_]/g, '');
   if (compact.length >= 4 && head.includes(compact)) return true;
   return /\bEXECUTION_STARTED\b/i.test(head) && lo.includes(b);
+}
+
+function normalizeLogNameWithNamespace(fullName) {
+  const s = String(fullName || '').trim();
+  if (!s) return '';
+  const parts = s.split('.');
+  if (parts.length <= 1) return s;
+  const namespace = parts[0];
+  const name = parts.slice(1).join('.');
+  return namespace ? `${namespace}.${name}` : name;
+}
+
+function apexLogContextIsEmpty(meta) {
+  return !meta || (meta.logType === 'N/A' && meta.logName === 'N/A' && meta.logMethod === 'N/A');
+}
+
+/** Combina contexto del body con metadatos SOQL (Location/Operation). */
+export function mergeApexLogExecutionContext(primary, fallback) {
+  const a = primary || { logType: 'N/A', logName: 'N/A', logMethod: 'N/A' };
+  const b = fallback || { logType: 'N/A', logName: 'N/A', logMethod: 'N/A' };
+  if (apexLogContextIsEmpty(a)) return b;
+  if (apexLogContextIsEmpty(b)) return a;
+  return {
+    logType: a.logType !== 'N/A' ? a.logType : b.logType,
+    logName: a.logName !== 'N/A' ? a.logName : b.logName,
+    logMethod: a.logMethod !== 'N/A' ? a.logMethod : b.logMethod
+  };
+}
+
+/**
+ * Fallback cuando no se puede parsear el body: usa `Location` y `Operation` del ApexLog.
+ */
+export function inferApexLogExecutionFromMetadata(row) {
+  const loc = String(row?.Location || '').trim();
+  const op = String(row?.Operation || '').trim();
+  if (!loc && !op) {
+    return { logType: 'N/A', logName: 'N/A', logMethod: 'N/A' };
+  }
+  if (!loc) {
+    return { logType: op || 'N/A', logName: 'N/A', logMethod: 'N/A' };
+  }
+  const triggerMatch = loc.match(/^(.+?)\s+on\s+.+\s+trigger event\s+([A-Za-z]+)$/i);
+  if (triggerMatch) {
+    return {
+      logType: 'Trigger',
+      logName: normalizeLogNameWithNamespace(triggerMatch[1]),
+      logMethod: triggerMatch[2] || 'N/A'
+    };
+  }
+  const segments = loc.split('.').filter(Boolean);
+  const last = segments[segments.length - 1] || '';
+  if (segments.length >= 2 && /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(last)) {
+    return {
+      logType: op === 'ApexTestHandler' ? 'Apex' : op || 'Apex',
+      logName: normalizeLogNameWithNamespace(segments.slice(0, -1).join('.')),
+      logMethod: last
+    };
+  }
+  return {
+    logType: op || 'N/A',
+    logName: loc,
+    logMethod: 'N/A'
+  };
+}
+
+/**
+ * Extrae contexto legible de un ApexLog para identificar ejecución.
+ * Devuelve siempre strings seguras para UI (`N/A` cuando no aplica).
+ */
+export function parseApexLogExecutionContext(logBody) {
+  const text = normalizeApexLogBodyText(logBody);
+  if (!text) {
+    return { logType: 'N/A', logName: 'N/A', logMethod: 'N/A' };
+  }
+  const head = text.length > APEX_LOG_BODY_PREFIX_BYTES ? text.slice(0, APEX_LOG_BODY_PREFIX_BYTES) : text;
+  const lines = head.split(/\r?\n/);
+  let match;
+
+  if ((match = head.match(/apex:\/\/([a-zA-Z0-9_.]+)\/ACTION\$([a-zA-Z0-9_]+)/))) {
+    return {
+      logType: 'Apex',
+      logName: normalizeLogNameWithNamespace(match[1]),
+      logMethod: match[2] || 'N/A'
+    };
+  }
+
+  if ((match = head.match(/CODE_UNIT_STARTED\|\[EXTERNAL\]\|\w+\|([a-zA-Z0-9_.]+)\.([a-zA-Z0-9_]+)\s*\(/))) {
+    return {
+      logType: 'Apex',
+      logName: normalizeLogNameWithNamespace(match[1]),
+      logMethod: match[2] || 'N/A'
+    };
+  }
+
+  if (head.includes('CODE_UNIT_STARTED|[EXTERNAL]|execute_anonymous_apex')) {
+    for (const line of lines) {
+      const m = line.match(/METHOD_ENTRY\|.*\|(?:\w+\|)?(?:(\w+)\.)?([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\(/);
+      if (!m) continue;
+      const namespace = m[1] ? `${m[1]}.` : '';
+      const className = m[2] || '';
+      const methodName = m[3] || '';
+      if (className && methodName && className !== methodName) {
+        return {
+          logType: 'Execute Anonymous',
+          logName: `${namespace}${className}`,
+          logMethod: methodName
+        };
+      }
+    }
+    return { logType: 'Execute Anonymous', logName: 'N/A', logMethod: 'N/A' };
+  }
+
+  if ((match = head.match(/CODE_UNIT_STARTED\|\[EXTERNAL\]\|\w+\|([a-zA-Z0-9_.]+) on .* trigger event ([a-zA-Z]+)/))) {
+    return {
+      logType: 'Trigger',
+      logName: normalizeLogNameWithNamespace(match[1]),
+      logMethod: match[2] || 'N/A'
+    };
+  }
+
+  if ((match = head.match(/FLOW_START_INTERVIEW_BEGIN\|[^|]*\|(.+)/))) {
+    const flowFullName = String(match[1] || '').trim();
+    const [namespace, flowName] = flowFullName.includes('/') ? flowFullName.split('/') : ['', flowFullName];
+    const normalized = namespace ? `${namespace}.${flowName}` : flowName;
+    return { logType: 'Flow', logName: normalized || 'N/A', logMethod: 'N/A' };
+  }
+
+  for (const line of lines) {
+    if ((match = line.match(/CODE_UNIT_STARTED\|\[EXTERNAL\]\|\w+\|VF: \/apex\/([a-zA-Z0-9_.]+)/))) {
+      return {
+        logType: 'Visualforce',
+        logName: normalizeLogNameWithNamespace(match[1]),
+        logMethod: 'N/A'
+      };
+    }
+
+    if ((match = line.match(/ENTERING_MANAGED_PKG\|([a-zA-Z0-9_.]+)/))) {
+      return {
+        logType: 'Managed Package',
+        logName: normalizeLogNameWithNamespace(match[1]),
+        logMethod: 'N/A'
+      };
+    }
+
+    if ((match = line.match(/CODE_UNIT_STARTED\|\[EXTERNAL\]\|Validation:([a-zA-Z0-9_]+)(?::([a-zA-Z0-9_]+))?/))) {
+      const objectName = match[1] || '';
+      const context = match[2] || '';
+      return {
+        logType: 'Validation',
+        logName: context ? `${objectName}:${context}` : objectName || 'N/A',
+        logMethod: 'N/A'
+      };
+    }
+
+    if ((match = line.match(/CODE_UNIT_STARTED\|\[EXTERNAL\]\|Workflow:([a-zA-Z0-9_]+)/))) {
+      return { logType: 'Workflow', logName: match[1] || 'N/A', logMethod: 'N/A' };
+    }
+
+    if ((match = line.match(/CODE_UNIT_STARTED\|\[EXTERNAL\]\|Flow:([a-zA-Z0-9_]+)/))) {
+      return { logType: 'Flow', logName: match[1] || 'N/A', logMethod: 'N/A' };
+    }
+
+    if ((match = line.match(/CODE_UNIT_STARTED\|\[EXTERNAL\]\|(.+)/))) {
+      return { logType: 'N/A', logName: String(match[1] || '').trim() || 'N/A', logMethod: 'N/A' };
+    }
+  }
+
+  return { logType: 'N/A', logName: 'N/A', logMethod: 'N/A' };
+}
+
+/** Body parseado + fallback con Location/Operation del registro ApexLog. */
+export function resolveApexLogExecutionContext(logBody, row) {
+  return mergeApexLogExecutionContext(
+    parseApexLogExecutionContext(logBody),
+    inferApexLogExecutionFromMetadata(row)
+  );
+}
+
+/**
+ * ApexLogs candidatos a un test run: no anteriores al inicio del AsyncApexJob.
+ */
+export function filterApexTestRunCandidateLogs(logs, jobCreatedMs) {
+  const startMs =
+    jobCreatedMs != null && Number.isFinite(Number(jobCreatedMs)) ? Number(jobCreatedMs) : null;
+  if (startMs == null) return Array.isArray(logs) ? [...logs] : [];
+  return (Array.isArray(logs) ? logs : []).filter((l) => {
+    const st = parseLogTimeMs(l?.StartTime);
+    if (st != null && st < startMs) return false;
+    return true;
+  });
+}
+
+/** Tras parsear el body, conserva solo logs del tipo indicado (p. ej. `Apex`). */
+export function filterApexTestRunLogsByExecutionType(logs, executionType = 'Apex') {
+  const want = String(executionType || '').trim();
+  if (!want) return Array.isArray(logs) ? [...logs] : [];
+  return (Array.isArray(logs) ? logs : []).filter((l) => String(l?.Type || '').trim() === want);
 }
 
 /**
