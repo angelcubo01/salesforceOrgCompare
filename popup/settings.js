@@ -180,27 +180,35 @@ function refreshGeneralTraceFieldI18n() {
   const hiCov = document.getElementById('settingsApexCoverageMinPercent_hint');
   if (lbCov) lbCov.textContent = t('settings.general.apexTestsCoverageMinPercent.label');
   if (hiCov) hiCov.textContent = t('settings.general.apexTestsCoverageMinPercent.hint');
+  const lbOrgLimits = document.getElementById('settingsOrgLimitsWarningPercent_label');
+  const hiOrgLimits = document.getElementById('settingsOrgLimitsWarningPercent_hint');
+  if (lbOrgLimits) lbOrgLimits.textContent = t('settings.general.orgLimitsWarningPercent.label');
+  if (hiOrgLimits) hiOrgLimits.textContent = t('settings.general.orgLimitsWarningPercent.hint');
 }
 
 function wireGeneralTraceSettings() {
   const inp = document.getElementById('settingsApexTraceDebugLevel');
   const inpCov = document.getElementById('settingsApexCoverageMinPercent');
+  const inpOrgLimits = document.getElementById('settingsOrgLimitsWarningPercent');
   const btn = document.getElementById('settingsGeneralTraceSave');
   const statusEl = document.getElementById('settingsGeneralTraceStatus');
   void loadExtensionSettings().then((cfg) => {
     if (inp) inp.value = String(cfg.apexTestsTraceDebugLevel ?? '');
     if (inpCov) inpCov.value = String(cfg.apexTestsCoverageMinPercent ?? '');
+    if (inpOrgLimits) inpOrgLimits.value = String(cfg.orgLimitsWarningPercent ?? '');
   });
   refreshGeneralTraceFieldI18n();
   btn?.addEventListener('click', async () => {
     if (statusEl) statusEl.textContent = '';
     const partial = {
       apexTestsTraceDebugLevel: inp?.value ?? '',
-      apexTestsCoverageMinPercent: inpCov?.value ?? ''
+      apexTestsCoverageMinPercent: inpCov?.value ?? '',
+      orgLimitsWarningPercent: inpOrgLimits?.value ?? ''
     };
     const cfg = await saveExtensionSettings(partial);
     if (inp) inp.value = String(cfg.apexTestsTraceDebugLevel ?? '');
     if (inpCov) inpCov.value = String(cfg.apexTestsCoverageMinPercent ?? '');
+    if (inpOrgLimits) inpOrgLimits.value = String(cfg.orgLimitsWarningPercent ?? '');
     if (statusEl) {
       statusEl.textContent = t('settings.advancedSaved');
       statusEl.style.color = '#94a3b8';

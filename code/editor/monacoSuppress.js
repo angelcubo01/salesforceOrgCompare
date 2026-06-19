@@ -19,6 +19,8 @@
       errorString.includes('workerMain.js') ||
       errorString.includes('vs/base/worker') ||
       errorString.includes('Failed trying to load default language strings') ||
+      errorString.includes('Could not find source file') ||
+      errorString.includes('tsMode.js') ||
       (errorString.includes('Monaco') && errorString.includes('worker'))
     ) {
       return;
@@ -69,6 +71,8 @@
       reason.includes('workerMain.js') ||
       reason.includes('vs/base/worker') ||
       reason.includes('vs/editor') ||
+      reason.includes('Could not find source file') ||
+      reason.includes('tsMode.js') ||
       (reason.includes('Monaco') && reason.includes('worker'))
     ) {
       event.preventDefault();

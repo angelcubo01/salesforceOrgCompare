@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS } from '../shared/deployStatusApi.js';
+import {
+  collectSlowTests,
+  DEPLOY_SLOW_TEST_THRESHOLD_MS,
+  hasCoverageFailureInRow,
+  hasCoverageFailureInSoap
+} from '../shared/deployStatusApi.js';
 
 describe('deployStatus run test helpers', () => {
   it('collectSlowTests incluye éxitos y fallos por encima del umbral', () => {
@@ -20,5 +25,28 @@ describe('deployStatus run test helpers', () => {
       successes: [{ className: 'Cls', methodName: 'm', time: String(DEPLOY_SLOW_TEST_THRESHOLD_MS - 1) }]
     });
     expect(slow).toHaveLength(0);
+  });
+
+  it('hasCoverageFailureInRow detecta ErrorMessage de cobertura en DeployRequest', () => {
+    expect(
+      hasCoverageFailureInRow({
+        status: 'Failed',
+        errorMessage: 'Average test coverage across all Apex Classes and Triggers is 71%, at least 75% test coverage is required.'
+      })
+    ).toBe(true);
+    expect(hasCoverageFailureInRow({ status: 'Failed', errorMessage: 'Un problema genérico' })).toBe(false);
+    expect(hasCoverageFailureInRow({ status: 'Succeeded', errorMessage: 'coverage' })).toBe(false);
+  });
+
+  it('hasCoverageFailureInSoap detecta codeCoverageWarnings', () => {
+    expect(
+      hasCoverageFailureInSoap({
+        runTestResult: {
+          codeCoverageWarnings: [{ name: 'MyClass', message: 'Test coverage is 0%' }]
+        }
+      })
+    ).toBe(true);
+    expect(hasCoverageFailureInSoap({ errorMessage: 'Code coverage failure' })).toBe(true);
+    expect(hasCoverageFailureInSoap({ errorMessage: 'Other error' })).toBe(false);
   });
 });

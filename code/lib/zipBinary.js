@@ -133,3 +133,22 @@ export async function readZipAllTextFiles(bytes) {
   out.sort((a, b) => a.path.localeCompare(b.path));
   return out;
 }
+
+/** Como readZipAllTextFiles pero incluye *-meta.xml (flows, objetos, etc.). */
+export async function readZipAllMetadataCompareFiles(bytes) {
+  const entries = getZipEntries(bytes);
+  if (!entries || !entries.length) return [];
+  const out = [];
+  for (const e of entries) {
+    let name = (e.fileName || '').replace(/\\/g, '/');
+    if (name.endsWith('/')) continue;
+    if (name.includes('__MACOSX/')) continue;
+    const lower = name.toLowerCase();
+    if (lower === 'package.xml' || lower.endsWith('/package.xml')) continue;
+    const content = await extractZipFileContent(bytes, e);
+    if (content == null) continue;
+    out.push({ path: name, content });
+  }
+  out.sort((a, b) => a.path.localeCompare(b.path));
+  return out;
+}

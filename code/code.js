@@ -46,7 +46,14 @@ import { applyArtifactTypeUi, getSelectedArtifactType } from './ui/artifactTypeU
 import { setupAppHelp, maybeShowToolOnboarding } from './ui/appHelp.js';
 import { setupAppSupport, refreshAppSupportUi } from './ui/appSupport.js';
 import { setupFeatureControlsUi, applyFeatureControlsUi } from './ui/featureControlsUi.js';
-import { setupGeneratePackageXmlPanel, refreshGeneratePackageXmlTypes } from './ui/generatePackageXmlPanel.js';
+import {
+  setupGeneratePackageXmlPanel,
+  refreshGeneratePackageXmlTypes
+} from './ui/generatePackageXmlPanel.js';
+import {
+  setupMetadataTypeComparePanel,
+  refreshMetadataTypeComparePanel
+} from './ui/metadataTypeComparePanel.js';
 import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
 import {
   setupDependencyExplorerPanel,
@@ -113,6 +120,11 @@ import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.j
 import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
 
 function applyStaticTranslations() {
+  const brandLogo = document.getElementById('sidebarBrandLogo');
+  if (brandLogo && typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+    brandLogo.src = chrome.runtime.getURL('icons/icon-32.png');
+  }
+
   document.querySelectorAll('[data-i18n]').forEach((elem) => {
     elem.textContent = t(elem.getAttribute('data-i18n'));
   });
@@ -219,6 +231,8 @@ async function init() {
   await loadItemsFromStorage();
   prunePinnedKeysToSavedItems();
 
+  applyArtifactTypeUi();
+
   applyDeepLinkOrgs(urlDeepLink);
   if (urlDeepLink.leftOrgId && !urlDeepLink.rightOrgId) {
     ensureRightOrgDistinctFromLeft();
@@ -238,6 +252,7 @@ async function init() {
   setupAppHelp();
   setupAppSupport();
   setupGeneratePackageXmlPanel();
+  setupMetadataTypeComparePanel();
   setupApexTestsPanel();
   setupAnonymousApexPanel();
   setupOrgLimitsPanel();
@@ -258,6 +273,7 @@ async function init() {
   setupDependencyExplorerPanel();
   renderEditor();
   refreshGeneratePackageXmlTypes();
+  void refreshMetadataTypeComparePanel();
   void refreshApexTestsPanel();
   void refreshAnonymousApexPanel();
   void refreshOrgLimitsPanel();

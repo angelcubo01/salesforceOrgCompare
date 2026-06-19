@@ -8,20 +8,7 @@ export function formatLastModified(meta) {
   const name = meta.lastModifiedByName || '';
   const rawDate = meta.lastModifiedDate || '';
 
-  let dateStr = '';
-  if (rawDate) {
-    try {
-      const d = new Date(rawDate);
-      if (!isNaN(d.getTime())) {
-        const pad = (n) => String(n).padStart(2, '0');
-        dateStr = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-      } else {
-        dateStr = String(rawDate);
-      }
-    } catch {
-      dateStr = String(rawDate);
-    }
-  }
+  let dateStr = formatMetadataDate(rawDate);
 
   const parts = [];
   if (name) parts.push(name);
@@ -31,6 +18,21 @@ export function formatLastModified(meta) {
   if (who) return who;
   if (dateStr) return dateStr;
   return '—';
+}
+
+/** Fecha compacta para buscadores y pestañas (sin autor). */
+export function formatMetadataDate(rawDate) {
+  if (!rawDate) return '';
+  try {
+    const d = new Date(rawDate);
+    if (!isNaN(d.getTime())) {
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    return String(rawDate);
+  } catch {
+    return String(rawDate);
+  }
 }
 
 export function updateFileMeta(leftFile, rightFile, hasRightOrg) {
@@ -80,6 +82,8 @@ export function updateDocumentTitle() {
     }
   } else if (state.selectedArtifactType === 'GeneratePackageXml') {
     document.title = t('docTitle.generatePkg');
+  } else if (state.selectedArtifactType === 'MetadataTypeCompare') {
+    document.title = t('docTitle.metadataTypeCompare');
   } else if (state.selectedArtifactType === 'FieldDependency') {
     document.title = t('docTitle.fieldDep');
   } else if (state.selectedArtifactType === 'DependencyExplorer') {

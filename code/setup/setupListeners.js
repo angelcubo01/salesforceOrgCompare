@@ -14,6 +14,10 @@ import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
 import { resolveRetrieveTargetItem } from '../ui/viewerChrome.js';
 import { getSelectedArtifactType } from '../ui/artifactTypeUi.js';
 import { refreshGeneratePackageXmlTypes } from '../ui/generatePackageXmlPanel.js';
+import {
+  invalidateMetadataTypeComparePanel,
+  refreshMetadataTypeComparePanel
+} from '../ui/metadataTypeComparePanel.js';
 import { resetFieldDependencyToInitial } from '../ui/fieldDependencyPanel.js';
 import { resetDependencyExplorerPanel } from '../ui/dependencyExplorerPanel.js';
 import { refreshApexTestsPanel } from '../ui/apexTestsPanel.js';
@@ -55,6 +59,10 @@ export function wireSelectors() {
     renderEditor({ leftChanged: true, rightChanged: false, prevLeftOrgId: prevLeft });
     if (getSelectedArtifactType() === 'GeneratePackageXml') {
       refreshGeneratePackageXmlTypes();
+    }
+    if (getSelectedArtifactType() === 'MetadataTypeCompare') {
+      invalidateMetadataTypeComparePanel();
+      void refreshMetadataTypeComparePanel();
     }
     if (getSelectedArtifactType() === 'ApexTests') {
       void refreshApexTestsPanel();
@@ -106,6 +114,10 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'RecordCompare') {
       void refreshRecordComparePanel();
+    }
+    if (getSelectedArtifactType() === 'MetadataTypeCompare') {
+      invalidateMetadataTypeComparePanel();
+      void refreshMetadataTypeComparePanel();
     }
     if (getSelectedArtifactType() === 'DeployStatus') {
       onDeployStatusOrgChange();
@@ -161,6 +173,10 @@ export function wireSelectors() {
     if (getSelectedArtifactType() === 'RecordCompare') {
       void refreshRecordComparePanel();
     }
+    if (getSelectedArtifactType() === 'MetadataTypeCompare') {
+      invalidateMetadataTypeComparePanel();
+      void refreshMetadataTypeComparePanel();
+    }
   });
 
   leftReauth.addEventListener('click', async () => {
@@ -179,6 +195,10 @@ export function wireSelectors() {
         await swapOrgs();
         if (getSelectedArtifactType() === 'GeneratePackageXml') {
           refreshGeneratePackageXmlTypes();
+        }
+        if (getSelectedArtifactType() === 'MetadataTypeCompare') {
+          invalidateMetadataTypeComparePanel();
+          void refreshMetadataTypeComparePanel();
         }
         if (getSelectedArtifactType() === 'ApexTests') {
           void refreshApexTestsPanel();

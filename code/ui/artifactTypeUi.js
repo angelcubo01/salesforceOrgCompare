@@ -1,6 +1,6 @@
 import { state } from '../core/state.js';
 import { APP_NAV_DEVELOPMENT_TOOLS } from '../core/constants.js';
-import { updateOrgDropdownLayout, updateAuthIndicators } from './orgs.js';
+import { updateOrgDropdownLayout, updateAuthIndicators, restorePausedRightOrgIfDualMode, stashAndClearRightOrg } from './orgs.js';
 import { updateOrgSelectorsLockedState } from './viewerChrome.js';
 import { updateDocumentTitle } from './documentMeta.js';
 import { t } from '../../shared/i18n.js';
@@ -14,6 +14,10 @@ export function getSelectedArtifactType() {
 
 export function isGeneratePackageXmlMode() {
   return getSelectedArtifactType() === 'GeneratePackageXml';
+}
+
+export function isMetadataTypeCompareMode() {
+  return getSelectedArtifactType() === 'MetadataTypeCompare';
 }
 
 export function isFieldDependencyMode() {
@@ -100,6 +104,7 @@ export function isComparatorMode() {
 export function isFullScreenToolMode() {
   return (
     isGeneratePackageXmlMode() ||
+    isMetadataTypeCompareMode() ||
     isApexTestsMode() ||
     isFieldDependencyMode() ||
     isDependencyExplorerMode() ||
@@ -174,6 +179,7 @@ export function applyArtifactTypeUi() {
   state.selectedArtifactType = op;
   const isNone = !op;
   const isGen = op === 'GeneratePackageXml';
+  const isMetadataTypeCompare = op === 'MetadataTypeCompare';
   const isApexTests = op === 'ApexTests';
   const isAnonymousApex = op === 'AnonymousApex';
   const isQueryExplorer = op === 'QueryExplorer';
@@ -239,7 +245,7 @@ export function applyArtifactTypeUi() {
     'artifact-org-limits-compare',
     isOrgLimits && !!state.orgLimitsCompareMode
   );
-  document.body.classList.toggle('artifact-no-operation', isNone);
+  document.body.classList.toggle('artifact-metadata-type-compare', isMetadataTypeCompare);
 
   const searchPanel = document.getElementById('searchPanel');
   const clearBtn = document.getElementById('clearHistoryButton');
@@ -247,6 +253,7 @@ export function applyArtifactTypeUi() {
   const compareListToolbar = document.getElementById('compareListToolbar');
   const standardPanel = document.getElementById('standardComparePanel');
   const genPanel = document.getElementById('generatePackageXmlPanel');
+  const metadataTypeComparePanel = document.getElementById('metadataTypeComparePanel');
   const apexTestsPanel = document.getElementById('apexTestsPanel');
   const fieldDepPanel = document.getElementById('fieldDependencyPanel');
   const depExplorerPanel = document.getElementById('dependencyExplorerPanel');
@@ -301,6 +308,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     hideSidebarSearchResults();
     syncSearchInputState();
     updateOrgDropdownLayout();
@@ -314,7 +322,8 @@ export function applyArtifactTypeUi() {
   landingPanel?.classList.add('hidden');
   orgDropdowns?.classList.remove('hidden');
 
-  function applySingleLeftOrgToolUi() {
+  /** Oculta paneles del comparador sin tocar la selección de orgs (p. ej. estado entornos). */
+  function applyFullScreenToolShellUi() {
     searchPanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
     syncComparatorActionButtons();
@@ -333,7 +342,6 @@ export function applyArtifactTypeUi() {
     debugLogsPanel?.classList.add('hidden');
     setupAuditPanel?.classList.add('hidden');
     fieldHistoryPanel?.classList.add('hidden');
-    fieldHistoryPanel?.classList.add('hidden');
     permissionDiffPanel?.classList.add('hidden');
     quickEditPanel?.classList.add('hidden');
     lightningQuickEditPanel?.classList.add('hidden');
@@ -341,13 +349,15 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
+  }
 
-    state.rightOrgId = null;
+  function applySingleLeftOrgToolUi() {
+    applyFullScreenToolShellUi();
+
+    stashAndClearRightOrg();
     const right = document.getElementById('rightOrg');
-    if (right) {
-      right.value = '';
-      right.disabled = true;
-    }
+    if (right) right.disabled = true;
     const rightReauth = document.getElementById('rightReauthBtn');
     if (rightReauth) {
       rightReauth.classList.add('hidden');
@@ -381,6 +391,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.generatePackageXmlCompareMode) {
@@ -390,7 +401,7 @@ export function applyArtifactTypeUi() {
         rightReauth.classList.remove('hidden');
       }
     } else {
-      state.rightOrgId = null;
+      stashAndClearRightOrg();
       if (right) {
         right.value = '';
         right.disabled = true;
@@ -399,6 +410,40 @@ export function applyArtifactTypeUi() {
         rightReauth.classList.add('hidden');
         rightReauth.disabled = true;
       }
+    }
+  } else if (isMetadataTypeCompare) {
+    searchPanel?.classList.add('hidden');
+    clearBtn?.classList.add('hidden');
+    syncComparatorActionButtons();
+    compareListBody?.classList.add('hidden');
+    compareListToolbar?.classList.add('hidden');
+    standardPanel?.classList.add('hidden');
+    genPanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.remove('hidden');
+    apexTestsPanel?.classList.add('hidden');
+    fieldDepPanel?.classList.add('hidden');
+    depExplorerPanel?.classList.add('hidden');
+    anonymousApexPanel?.classList.add('hidden');
+    queryExplorerPanel?.classList.add('hidden');
+    orgLimitsPanel?.classList.add('hidden');
+    environmentStatusPanel?.classList.add('hidden');
+    deployStatusPanel?.classList.add('hidden');
+    debugLogsPanel?.classList.add('hidden');
+    setupAuditPanel?.classList.add('hidden');
+    fieldHistoryPanel?.classList.add('hidden');
+    permissionDiffPanel?.classList.add('hidden');
+    quickEditPanel?.classList.add('hidden');
+    lightningQuickEditPanel?.classList.add('hidden');
+    apexCoverageComparePanel?.classList.add('hidden');
+    customSettingsComparePanel?.classList.add('hidden');
+    customMetadataComparePanel?.classList.add('hidden');
+    recordComparePanel?.classList.add('hidden');
+    const rightMtc = document.getElementById('rightOrg');
+    if (rightMtc) rightMtc.disabled = false;
+    const rightReauthMtc = document.getElementById('rightReauthBtn');
+    if (rightReauthMtc) {
+      rightReauthMtc.disabled = false;
+      rightReauthMtc.classList.remove('hidden');
     }
   } else if (isApexTests) {
     applySingleLeftOrgToolUi();
@@ -431,6 +476,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.anonymousApexCompareMode) {
@@ -440,7 +486,7 @@ export function applyArtifactTypeUi() {
         rightReauth.classList.remove('hidden');
       }
     } else {
-      state.rightOrgId = null;
+      stashAndClearRightOrg();
       if (right) {
         right.value = '';
         right.disabled = true;
@@ -476,6 +522,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const rightQx = document.getElementById('rightOrg');
     const rightReauthQx = document.getElementById('rightReauthBtn');
     if (state.queryExplorerCompareMode) {
@@ -485,7 +532,7 @@ export function applyArtifactTypeUi() {
         rightReauthQx.classList.remove('hidden');
       }
     } else {
-      state.rightOrgId = null;
+      stashAndClearRightOrg();
       if (rightQx) {
         rightQx.value = '';
         rightQx.disabled = true;
@@ -521,6 +568,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const rightPd = document.getElementById('rightOrg');
     const rightReauthPd = document.getElementById('rightReauthBtn');
     if (state.permissionDiffCompareMode) {
@@ -530,7 +578,7 @@ export function applyArtifactTypeUi() {
         rightReauthPd.classList.remove('hidden');
       }
     } else {
-      state.rightOrgId = null;
+      stashAndClearRightOrg();
       if (rightPd) {
         rightPd.value = '';
         rightPd.disabled = true;
@@ -541,7 +589,7 @@ export function applyArtifactTypeUi() {
       }
     }
   } else if (isEnvironmentStatus) {
-    applySingleLeftOrgToolUi();
+    applyFullScreenToolShellUi();
     environmentStatusPanel?.classList.remove('hidden');
     orgDropdowns?.classList.add('hidden');
   } else if (isDeployStatus) {
@@ -573,6 +621,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     const rightReauth = document.getElementById('rightReauthBtn');
     if (state.orgLimitsCompareMode) {
@@ -582,7 +631,7 @@ export function applyArtifactTypeUi() {
         rightReauth.classList.remove('hidden');
       }
     } else {
-      state.rightOrgId = null;
+      stashAndClearRightOrg();
       if (right) {
         right.value = '';
         right.disabled = true;
@@ -637,6 +686,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const right = document.getElementById('rightOrg');
     if (right) right.disabled = false;
     const rightReauth = document.getElementById('rightReauthBtn');
@@ -669,6 +719,7 @@ export function applyArtifactTypeUi() {
     apexCoverageComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     customSettingsComparePanel?.classList.remove('hidden');
     const rightCs = document.getElementById('rightOrg');
     if (rightCs) rightCs.disabled = false;
@@ -703,6 +754,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.remove('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const rightCm = document.getElementById('rightOrg');
     if (rightCm) rightCm.disabled = false;
     const rightReauthCm = document.getElementById('rightReauthBtn');
@@ -745,7 +797,7 @@ export function applyArtifactTypeUi() {
         rightReauthRc.classList.remove('hidden');
       }
     } else {
-      state.rightOrgId = null;
+      stashAndClearRightOrg();
       if (rightRc) {
         rightRc.value = '';
         rightRc.disabled = true;
@@ -781,6 +833,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
     const rightDep = document.getElementById('rightOrg');
     const rightReauthDep = document.getElementById('rightReauthBtn');
     if (state.dependencyExplorerCompareMode) {
@@ -790,7 +843,7 @@ export function applyArtifactTypeUi() {
         rightReauthDep.classList.remove('hidden');
       }
     } else {
-      state.rightOrgId = null;
+      stashAndClearRightOrg();
       if (rightDep) {
         rightDep.value = '';
         rightDep.disabled = true;
@@ -826,6 +879,7 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
 
     const right = document.getElementById('rightOrg');
     if (right) {
@@ -861,10 +915,17 @@ export function applyArtifactTypeUi() {
     customSettingsComparePanel?.classList.add('hidden');
     customMetadataComparePanel?.classList.add('hidden');
     recordComparePanel?.classList.add('hidden');
+    metadataTypeComparePanel?.classList.add('hidden');
 
+    const left = document.getElementById('leftOrg');
+    if (left) {
+      left.disabled = false;
+      left.value = state.leftOrgId || '';
+    }
     const right = document.getElementById('rightOrg');
     if (right) {
       right.disabled = false;
+      right.value = state.rightOrgId || '';
     }
     const rightReauth = document.getElementById('rightReauthBtn');
     if (rightReauth) {
@@ -875,6 +936,7 @@ export function applyArtifactTypeUi() {
 
   if (
     isGen ||
+    isMetadataTypeCompare ||
     isApexTests ||
     isAnonymousApex ||
     isQueryExplorer ||
@@ -903,8 +965,12 @@ export function applyArtifactTypeUi() {
 
   if (isEnvironmentStatus) {
     orgDropdowns?.classList.add('hidden');
+  } else {
+    orgDropdowns?.classList.remove('hidden');
   }
 
+  updateOrgDropdownLayout();
+  restorePausedRightOrgIfDualMode();
   updateOrgDropdownLayout();
   updateAuthIndicators();
   updateOrgSelectorsLockedState();

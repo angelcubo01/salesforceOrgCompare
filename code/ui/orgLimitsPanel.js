@@ -6,9 +6,11 @@ import { applyArtifactTypeUi } from './artifactTypeUi.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { renderDonutChart, renderMultiSeriesPieChart } from '../lib/orgLimitsCharts.js';
 import { handleToolError } from '../../shared/reportToolError.js';
+import { getOrgLimitsWarningPercent } from '../../shared/extensionSettings.js';
 
 const LEFT_COLOR = '#22d3ee';
 const RIGHT_COLOR = '#22c55e';
+const WARNING_COLOR = '#ef4444';
 const METRIC_TITLE_OVERRIDES = {
   DailyApiRequests: 'Daily API Requests',
   DailyApexCursorLimit: 'Daily Apex Cursor Limit',
@@ -72,7 +74,8 @@ function used(entry) {
   return Math.max(0, max - remaining);
 }
 
-function getMetricsToRender(leftLimits, rightLimits) {
+function getMetricsToRender(leftLimits, rightLimits, warningThreshold) {
+  const threshold = clampThreshold(warningThreshold);
   const all = new Set([
     ...Object.keys(leftLimits || {}),
     ...Object.keys(rightLimits || {})
@@ -85,7 +88,31 @@ function getMetricsToRender(leftLimits, rightLimits) {
       const rUsed = used(r);
       return lUsed > 0 || rUsed > 0;
     })
-    .sort((a, b) => formatMetricTitle(a).localeCompare(formatMetricTitle(b)));
+    .sort((a, b) => {
+      const aPeak = metricPeakPct(a, leftLimits, rightLimits);
+      const bPeak = metricPeakPct(b, leftLimits, rightLimits);
+      const aWarn = aPeak >= threshold;
+      const bWarn = bPeak >= threshold;
+      if (aWarn !== bWarn) return aWarn ? -1 : 1;
+      if (aWarn) return bPeak - aPeak;
+      return formatMetricTitle(a).localeCompare(formatMetricTitle(b));
+    });
+}
+
+function clampThreshold(raw) {
+  const x = Number(raw);
+  if (!Number.isFinite(x)) return 0.85;
+  return Math.max(0, Math.min(1, x / 100));
+}
+
+function metricPeakPct(metric, leftLimits, rightLimits) {
+  const l = pct(leftLimits?.[metric]);
+  const r = pct(rightLimits?.[metric]);
+  return Math.max(l, r);
+}
+
+function ringColor(percent, defaultColor, warningThreshold) {
+  return percent >= warningThreshold ? WARNING_COLOR : defaultColor;
 }
 
 function left(entry) {
@@ -120,7 +147,8 @@ function renderCards(leftOrgId, leftLimits, rightOrgId, rightLimits) {
   if (!wrap) return;
   wrap.innerHTML = '';
   const compare = !!rightOrgId && !!rightLimits;
-  const metrics = getMetricsToRender(leftLimits, rightLimits);
+  const warningThreshold = clampThreshold(getOrgLimitsWarningPercent());
+  const metrics = getMetricsToRender(leftLimits, rightLimits, warningThreshold);
   for (const metric of metrics) {
     const left = leftLimits?.[metric] || null;
     const right = compare ? rightLimits?.[metric] || null : null;
@@ -129,8 +157,9 @@ function renderCards(leftOrgId, leftLimits, rightOrgId, rightLimits) {
     if (leftUsed === 0 && (!compare || rightUsed === 0)) continue;
     const leftPct = pct(left);
     const rightPct = pct(right);
+    const isWarning = metricPeakPct(metric, leftLimits, rightLimits) >= warningThreshold;
     const card = document.createElement('article');
-    card.className = 'org-limits-card';
+    card.className = `org-limits-card${isWarning ? ' org-limits-card--warning' : ''}`;
     card.innerHTML = `
       <h3>${formatMetricTitle(metric)}</h3>
       <div class="org-limits-chart-wrap ${compare ? 'is-compare' : 'is-single'}">
@@ -147,12 +176,19 @@ function renderCards(leftOrgId, leftLimits, rightOrgId, rightLimits) {
     `;
     const chartSlot = card.querySelector('[data-slot="chart"]');
     if (compare) {
-      renderMultiSeriesPieChart(chartSlot, leftPct, rightPct, LEFT_COLOR, RIGHT_COLOR, {
-        outerLabel: getCompactOrgLabel(leftOrgId),
-        innerLabel: getCompactOrgLabel(rightOrgId)
-      });
+      renderMultiSeriesPieChart(
+        chartSlot,
+        leftPct,
+        rightPct,
+        ringColor(leftPct, LEFT_COLOR, warningThreshold),
+        ringColor(rightPct, RIGHT_COLOR, warningThreshold),
+        {
+          outerLabel: getCompactOrgLabel(leftOrgId),
+          innerLabel: getCompactOrgLabel(rightOrgId)
+        }
+      );
     } else {
-      renderDonutChart(chartSlot, leftPct, LEFT_COLOR);
+      renderDonutChart(chartSlot, leftPct, ringColor(leftPct, LEFT_COLOR, warningThreshold));
     }
     wrap.appendChild(card);
   }

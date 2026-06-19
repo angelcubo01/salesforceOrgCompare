@@ -25,6 +25,10 @@
         <div class="resize-handle"></div>
         <div class="sidebar-header">
           <p id="sidebarHomeHint" class="sidebar-home-hint hidden" data-i18n="code.sidebarHomeHint"></p>
+          <div id="sidebarBrand" class="sidebar-brand" data-i18n-aria-label="code.landingTitle">
+            <img id="sidebarBrandLogo" class="sidebar-brand-logo" src="" alt="" width="28" height="28" aria-hidden="true" />
+            <span class="sidebar-brand-name" data-i18n="code.landingTitle">Salesforce Org Compare</span>
+          </div>
           <div class="sidebar-header-bottom">
             <div id="searchPanel" class="search sidebar-search-panel">
               <label for="searchInput" class="sidebar-search-label" data-i18n="code.searchTitle">Búsqueda</label>
@@ -500,6 +504,67 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+        <div
+          id="metadataTypeComparePanel"
+          class="setup-records-compare-panel org-limits-panel hidden"
+          aria-label="Metadata type compare"
+        >
+          <div class="setup-records-compare-panel-inner org-limits-panel-inner">
+            <div class="setup-records-compare-sticky-head">
+              <div class="org-limits-head">
+                <h2 class="org-limits-title" data-i18n="metadataTypeCompare.title">Comparar tipo de metadata</h2>
+                <div class="org-limits-head-controls setup-records-compare-head-controls">
+                  <label class="setup-records-compare-type-filter-wrap">
+                    <span class="setup-records-compare-type-filter-label" data-i18n="metadataTypeCompare.filterTypes"
+                      >Filtrar tipos</span
+                    >
+                    <input
+                      type="search"
+                      id="metadataTypeCompareTypeSearch"
+                      class="setup-records-compare-type-filter"
+                      data-i18n-placeholder="metadataTypeCompare.filterTypesPh"
+                      placeholder="Nombre o etiqueta…"
+                    />
+                  </label>
+                  <label class="setup-records-compare-type-select-wrap" for="metadataTypeCompareTypeSelect">
+                    <span class="setup-records-compare-type-filter-label" data-i18n="metadataTypeCompare.selectTypeLabel"
+                      >Tipo</span
+                    >
+                    <select id="metadataTypeCompareTypeSelect" class="setup-records-compare-type-select"></select>
+                  </label>
+                  <label class="setup-records-compare-diff-only-head" for="metadataTypeCompareDiffOnly">
+                    <input type="checkbox" id="metadataTypeCompareDiffOnly" checked />
+                    <span data-i18n="metadataTypeCompare.diffOnly">Solo diferencias</span>
+                  </label>
+                  <button
+                    type="button"
+                    id="metadataTypeCompareCancelBtn"
+                    class="setup-records-compare-secondary-btn hidden"
+                    data-i18n="metadataTypeCompare.cancel"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    id="metadataTypeCompareRunBtn"
+                    class="org-limits-refresh-btn"
+                    data-i18n="metadataTypeCompare.compareBtn"
+                  >
+                    Comparar
+                  </button>
+                </div>
+              </div>
+              <progress
+                id="metadataTypeCompareProgressBar"
+                class="metadata-type-compare-progress hidden"
+                value="0"
+                max="100"
+              ></progress>
+              <p id="metadataTypeCompareStatus" class="org-limits-status" role="status"></p>
+            </div>
+            <div id="metadataTypeCompareTableMount" class="setup-records-compare-table-mount"></div>
           </div>
         </div>
         <div id="apexTestsPanel" class="apex-tests-panel ph-no-capture hidden" aria-label="Pruebas Apex">
@@ -1015,7 +1080,10 @@
               </div>
             </div>
             <p id="anonymousApexOrgStatus" class="anonymous-apex-org-status" role="status"></p>
-            <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount ph-no-capture"></div>
+            <div class="vscode-editor-shell">
+              <div id="anonymousApexDocTabs" class="vscode-tabs" role="tablist"></div>
+              <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount ph-no-capture vscode-editor-mount"></div>
+            </div>
             <div class="anonymous-apex-actions">
               <button type="button" id="anonymousApexRunBtn" class="anonymous-apex-run-btn" data-i18n="anonymousApex.run">
                 Ejecutar
@@ -1909,6 +1977,17 @@
                   <option value="100">100</option>
                 </select>
               </div>
+              <div
+                id="debugLogBrowserContextLoading"
+                class="debug-log-browser-context-loading hidden"
+                role="status"
+                aria-live="polite"
+              >
+                <span class="debug-log-browser-loading-spinner debug-log-browser-context-loading-spinner" aria-hidden="true"></span>
+                <span class="debug-log-browser-context-loading-text" data-i18n="debugLogs.loadingContext"
+                  >Cargando Type, Name y Method…</span
+                >
+              </div>
             </div>
           </div>
         </div>
@@ -1925,20 +2004,27 @@
                   autocomplete="off"
                   spellcheck="false"
                 />
-                <div id="quickEditResultsList" class="quick-edit-results-dropdown sfoc-autocomplete-panel"></div>
+                <div id="quickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
               </div>
             </div>
             <div class="quick-edit-panel-body">
               <div class="quick-edit-editor-toolbar">
-                <span id="quickEditCurrentFile" class="quick-edit-current-file" data-i18n="quickEdit.noFileLoaded">Ningún archivo cargado</span>
+                <div class="quick-edit-editor-toolbar-meta">
+                  <span id="quickEditCurrentFile" class="quick-edit-current-file" data-i18n="quickEdit.noFileLoaded">Ningún archivo cargado</span>
+                  <span id="quickEditLastModified" class="quick-edit-last-modified" hidden></span>
+                </div>
                 <div class="quick-edit-editor-actions">
                   <span id="quickEditModifiedIndicator" class="quick-edit-modified-indicator hidden" data-i18n="quickEdit.modified">Modificado</span>
-                  <button type="button" id="quickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="quickEdit.clear">Limpiar</button>
+                  <button type="button" id="quickEditNewTabBtn" class="quick-edit-action-btn hidden" hidden data-i18n="codeEditor.newTab">Nueva pestaña</button>
+                  <button type="button" id="quickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="codeEditor.clearAll">Limpiar todo</button>
                   <button type="button" id="quickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n="quickEdit.validate">Validar</button>
                   <button type="button" id="quickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
                 </div>
               </div>
-              <div id="quickEditEditorMount" class="quick-edit-editor-mount ph-no-capture"></div>
+              <div class="vscode-editor-shell">
+                <div id="quickEditDocTabs" class="vscode-tabs" role="tablist" hidden></div>
+                <div id="quickEditEditorMount" class="quick-edit-editor-mount ph-no-capture vscode-editor-mount"></div>
+              </div>
               <p id="quickEditStatus" class="quick-edit-status" role="status"></p>
               <p id="quickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
             </div>
@@ -1946,36 +2032,37 @@
         </div>
         <div id="lightningQuickEditPanel" class="quick-edit-panel lightning-quick-edit-panel hidden" aria-label="Lightning Quick Editor">
           <div class="quick-edit-panel-inner">
-            <div class="lightning-quick-edit-type-row" role="group" aria-label="Component type">
-              <button type="button" id="lightningQuickEditTypeLwc" class="lightning-quick-edit-type-btn is-active" data-type="LWC">LWC</button>
-              <button type="button" id="lightningQuickEditTypeAura" class="lightning-quick-edit-type-btn" data-type="Aura">Aura</button>
-            </div>
             <div class="quick-edit-search-zone">
               <div class="quick-edit-search-bar">
                 <input
                   id="lightningQuickEditSearchInput"
                   type="search"
                   class="quick-edit-search-input sfoc-query-input"
-                  data-i18n-placeholder="lightningQuickEdit.searchPlaceholderLwc"
-                  placeholder="Buscar componente LWC..."
+                  data-i18n-placeholder="codeEditor.searchPlaceholderLightning"
+                  placeholder="Buscar LWC o Aura..."
                   autocomplete="off"
                   spellcheck="false"
                 />
-                <div id="lightningQuickEditResultsList" class="quick-edit-results-dropdown sfoc-autocomplete-panel"></div>
+                <div id="lightningQuickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
               </div>
             </div>
             <div class="quick-edit-panel-body">
-              <div id="lightningQuickEditFileTabs" class="lightning-quick-edit-file-tabs" role="tablist" hidden></div>
               <div class="quick-edit-editor-toolbar">
-                <span id="lightningQuickEditCurrentFile" class="quick-edit-current-file" data-i18n="lightningQuickEdit.noBundleLoaded">Ningún componente cargado</span>
+                <div class="quick-edit-editor-toolbar-meta">
+                  <span id="lightningQuickEditCurrentFile" class="quick-edit-current-file" data-i18n="lightningQuickEdit.noBundleLoaded">Ningún componente cargado</span>
+                  <span id="lightningQuickEditLastModified" class="quick-edit-last-modified" hidden></span>
+                </div>
                 <div class="quick-edit-editor-actions">
                   <span id="lightningQuickEditModifiedIndicator" class="quick-edit-modified-indicator hidden" data-i18n="quickEdit.modified">Modificado</span>
-                  <button type="button" id="lightningQuickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="quickEdit.clear">Limpiar</button>
+                  <button type="button" id="lightningQuickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="codeEditor.clearAll">Limpiar todo</button>
                   <button type="button" id="lightningQuickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n="quickEdit.validate">Validar</button>
                   <button type="button" id="lightningQuickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
                 </div>
               </div>
-              <div id="lightningQuickEditEditorMount" class="quick-edit-editor-mount ph-no-capture"></div>
+              <div class="vscode-editor-shell">
+                <div id="lightningQuickEditBundleTabs" class="vscode-tabs" role="tablist" hidden></div>
+                <div id="lightningQuickEditEditorMount" class="quick-edit-editor-mount ph-no-capture vscode-editor-mount"></div>
+              </div>
               <p id="lightningQuickEditStatus" class="quick-edit-status" role="status"></p>
               <p id="lightningQuickEditDeployStatus" class="quick-edit-deploy-status" role="status"></p>
             </div>

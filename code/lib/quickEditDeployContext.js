@@ -7,6 +7,8 @@ import { state } from '../core/state.js';
  * @property {string} fileName
  * @property {string} content
  * @property {string} originalContent
+ * @property {string} [tabId]
+ * @property {string} [lastModifiedDate]
  */
 
 /**
@@ -26,6 +28,8 @@ import { state } from '../core/state.js';
  * @property {string} activeFileName
  * @property {'LWC' | 'Aura'} selectedComponentType
  * @property {LightningQuickEditFileDraft[]} files
+ * @property {string} [tabId]
+ * @property {string} [lastModifiedDate]
  */
 
 /**
@@ -68,9 +72,9 @@ export function updateReturnContextAsyncId(asyncId) {
 }
 
 /**
- * @param {{ orgId: string, checkOnly: boolean, item: { type: string, name: string, fileName: string }, content: string, originalContent: string }} params
+ * @param {{ orgId: string, checkOnly: boolean, tabId?: string, item: { type: string, name: string, fileName: string }, content: string, originalContent: string }} params
  */
-export function saveApexDraft({ orgId, checkOnly, item, content, originalContent }) {
+export function saveApexDraft({ orgId, checkOnly, tabId, item, content, originalContent }) {
   /** @type {QuickEditDeployReturnContext} */
   state.quickEditDeployReturn = {
     tool: 'QuickEdit',
@@ -81,7 +85,9 @@ export function saveApexDraft({ orgId, checkOnly, item, content, originalContent
       name: item.name,
       fileName: item.fileName,
       content,
-      originalContent
+      originalContent,
+      sourceOrgId: orgId,
+      ...(tabId ? { tabId } : {})
     }
   };
 }
@@ -90,6 +96,7 @@ export function saveApexDraft({ orgId, checkOnly, item, content, originalContent
  * @param {{
  *   orgId: string,
  *   checkOnly: boolean,
+ *   tabId?: string,
  *   selectedComponentType: 'LWC' | 'Aura',
  *   bundleState: {
  *     artifactType: 'LWC' | 'Aura',
@@ -97,18 +104,22 @@ export function saveApexDraft({ orgId, checkOnly, item, content, originalContent
  *     bundleName: string,
  *     bundleId: string,
  *     activeFileName: string,
+ *     lastModifiedDate?: string,
  *     files: Map<string, { content: string, originalContent: string, language: string }>
  *   }
  * }} params
  */
-export function saveLightningDraft({ orgId, checkOnly, selectedComponentType, bundleState }) {
+export function saveLightningDraft({ orgId, checkOnly, tabId, selectedComponentType, bundleState }) {
   const files = [];
   for (const [fileName, file] of bundleState.files.entries()) {
     files.push({
       fileName,
       content: file.content,
       originalContent: file.originalContent,
-      language: file.language
+      language: file.language,
+      lastModifiedDate: file.lastModifiedDate || '',
+      lastModifiedByName: file.lastModifiedByName || '',
+      lastModifiedByUsername: file.lastModifiedByUsername || ''
     });
   }
   /** @type {QuickEditDeployReturnContext} */
@@ -123,7 +134,10 @@ export function saveLightningDraft({ orgId, checkOnly, selectedComponentType, bu
       bundleId: bundleState.bundleId,
       activeFileName: bundleState.activeFileName,
       selectedComponentType,
-      files
+      files,
+      sourceOrgId: orgId,
+      ...(tabId ? { tabId } : {}),
+      ...(bundleState.lastModifiedDate ? { lastModifiedDate: bundleState.lastModifiedDate } : {})
     }
   };
 }

@@ -8,6 +8,35 @@ export function resolveMonacoThemeId() {
 }
 
 /**
+ * Desactiva diagnóstico TS/JS pesado (imports, proyecto virtual) en editores aislados.
+ * @param {import('monaco-editor')} monaco
+ */
+export function configureMonacoLanguageServices(monaco) {
+  const ts = monaco?.languages?.typescript;
+  if (!ts?.javascriptDefaults || !ts?.typescriptDefaults) return;
+
+  const diagnostics = {
+    noSemanticValidation: true,
+    noSyntaxValidation: true,
+    noSuggestionDiagnostics: true
+  };
+  const compiler = {
+    allowNonTsExtensions: true,
+    noResolve: true,
+    checkJs: false
+  };
+
+  try {
+    ts.javascriptDefaults.setDiagnosticsOptions(diagnostics);
+    ts.typescriptDefaults.setDiagnosticsOptions(diagnostics);
+    ts.javascriptDefaults.setCompilerOptions(compiler);
+    ts.typescriptDefaults.setCompilerOptions(compiler);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
  * Aplica el tema guardado en ajustes a Monaco (diff, editor único y opciones hijas).
  * @param {import('monaco-editor')} monaco
  */
@@ -135,6 +164,7 @@ export async function loadMonaco() {
           // Non-fatal: continue even if Apex registration fails
           // Silently fail - language registration error is not critical
         }
+        configureMonacoLanguageServices(monaco);
         resolve(monaco);
       }, reject);
     } catch (e) {

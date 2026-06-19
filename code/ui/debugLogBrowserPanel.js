@@ -7,39 +7,39 @@ import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { randomStagingId } from '../../shared/randomId.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
-import { inferApexLogExecutionFromMetadata } from '../../shared/salesforceApi.js';
+
+const CONTEXT_PLACEHOLDER = '—';
 
 let lastRows = [];
 let currentPage = 1;
 let lastLoadSignature = '';
 let enrichSeq = 0;
+let enrichInFlight = false;
+/** Ids de logs cuyo body ya se pidió para Type/Name/Method (por página visitada). */
+const bodyEnrichedIds = new Set();
+/** Ids en vuelo en la petición de enriquecimiento actual. */
+const enrichingIds = new Set();
 let isLoading = false;
 
-function metadataContextFields(row) {
-  const meta = inferApexLogExecutionFromMetadata(row);
-  return {
-    Type: meta.logType || 'N/A',
-    Name: meta.logName || 'N/A',
-    Method: meta.logMethod || 'N/A'
-  };
-}
-
 function rowExecutionFields(row) {
-  if (row?.contextFromBody) {
+  if (!row?.contextFromBody) {
     return {
-      Type: String(row.Type || 'N/A'),
-      Name: String(row.Name || 'N/A'),
-      Method: String(row.Method || 'N/A')
+      Type: CONTEXT_PLACEHOLDER,
+      Name: CONTEXT_PLACEHOLDER,
+      Method: CONTEXT_PLACEHOLDER
     };
   }
-  return metadataContextFields(row);
+  return {
+    Type: String(row.Type || 'N/A'),
+    Name: String(row.Name || 'N/A'),
+    Method: String(row.Method || 'N/A')
+  };
 }
 
 function normalizeLogRow(row) {
   const base = row && typeof row === 'object' ? { ...row } : {};
   return {
     ...base,
-    ...metadataContextFields(base),
     contextFromBody: !!base.contextFromBody
   };
 }
@@ -145,7 +145,8 @@ function getFilterElements() {
     nextPage: document.getElementById('debugLogBrowserNextPage'),
     pageLabel: document.getElementById('debugLogBrowserPageLabel'),
     tbody: document.getElementById('debugLogBrowserTbody'),
-    empty: document.getElementById('debugLogBrowserEmpty')
+    empty: document.getElementById('debugLogBrowserEmpty'),
+    contextLoading: document.getElementById('debugLogBrowserContextLoading')
   };
 }
 
@@ -172,9 +173,30 @@ function setLoadingState(loading) {
     if (status) status.textContent = '';
     renderLoadingSkeleton();
   }
+  updateContextLoadingUi();
   for (const el of [deleteAllBtn, user, operation, since, until, pageSize, prevPage, nextPage]) {
     if (el) el.disabled = !!loading;
   }
+}
+
+function shouldShowContextLoading() {
+  if (isLoading) return false;
+  const { pageRows } = getVisiblePageRows();
+  if (!pageRows.length) return false;
+  if (enrichInFlight) return true;
+  return pageRows.some((row) => {
+    const id = normalizeSfId(row?.Id);
+    return id && !row?.contextFromBody && !bodyEnrichedIds.has(id);
+  });
+}
+
+function updateContextLoadingUi() {
+  const { contextLoading } = getFilterElements();
+  if (!contextLoading) return;
+  const show = shouldShowContextLoading();
+  contextLoading.classList.toggle('hidden', !show);
+  const textEl = contextLoading.querySelector('.debug-log-browser-context-loading-text');
+  if (textEl) textEl.textContent = t('debugLogs.loadingContext');
 }
 
 function formatDateTime(value) {
@@ -283,10 +305,14 @@ function updatePaginationUi(totalFilteredRows) {
   }
 }
 
-function getVisiblePageRows() {
+function getRowsPerPage() {
   const { pageSize } = getFilterElements();
+  return Math.max(1, Math.min(100, Number(pageSize?.value || 25)));
+}
+
+function getVisiblePageRows() {
   const rows = applyClientFilters(lastRows);
-  const perPage = Math.max(1, Number(pageSize?.value || 25));
+  const perPage = getRowsPerPage();
   const start = (currentPage - 1) * perPage;
   return {
     rows,
@@ -316,28 +342,66 @@ function mergeEnrichedRows(enrichedRows) {
   });
 }
 
-async function enrichVisiblePageRows() {
-  if (!state.leftOrgId) return;
+function cancelPageEnrichment() {
+  enrichSeq += 1;
+  enrichInFlight = false;
+  enrichingIds.clear();
+}
+
+function getPageEnrichmentCandidates() {
   const { pageRows } = getVisiblePageRows();
-  const pending = pageRows.filter((r) => r?.Id && !r.contextFromBody);
+  return pageRows.filter((row) => {
+    const id = normalizeSfId(row?.Id);
+    return id && !bodyEnrichedIds.has(id);
+  });
+}
+
+function schedulePageBodyEnrichment() {
+  if (isLoading || !state.leftOrgId || enrichInFlight) return;
+  void enrichVisiblePageRows();
+}
+
+async function enrichVisiblePageRows() {
+  if (!state.leftOrgId || enrichInFlight) return;
+  const pending = getPageEnrichmentCandidates();
   if (!pending.length) return;
   const seq = ++enrichSeq;
-  const res = await bg({
-    type: 'debugLogs:enrichRows',
-    orgId: state.leftOrgId,
-    rows: pending.map((r) => ({
-      Id: r.Id,
-      Location: r.Location,
-      Operation: r.Operation
-    }))
-  });
-  if (seq !== enrichSeq) return;
-  if (!res?.ok) {
-    void handleToolResponseFailure(res, { artifact_type: 'DebugLogs', phase: 'enrich_rows' });
-    return;
+  enrichInFlight = true;
+  enrichingIds.clear();
+  for (const row of pending) {
+    const id = normalizeSfId(row?.Id);
+    if (id) {
+      bodyEnrichedIds.add(id);
+      enrichingIds.add(id);
+    }
   }
-  mergeEnrichedRows(res.rows);
   renderRows();
+  try {
+    const res = await bg({
+      type: 'debugLogs:enrichRows',
+      orgId: state.leftOrgId,
+      maxBodyFetches: pending.length,
+      rows: pending.map((r) => ({
+        Id: r.Id,
+        Location: r.Location,
+        Operation: r.Operation
+      }))
+    });
+    if (seq !== enrichSeq) return;
+    if (!res?.ok) {
+      void handleToolResponseFailure(res, { artifact_type: 'DebugLogs', phase: 'enrich_rows' });
+      return;
+    }
+    mergeEnrichedRows(res.rows);
+  } catch {
+    /* bodyEnrichedIds se conserva: no reintentar en bucle ni dejar el spinner colgado */
+  } finally {
+    if (seq === enrichSeq) {
+      enrichInFlight = false;
+      enrichingIds.clear();
+      renderRows();
+    }
+  }
 }
 
 function renderRows() {
@@ -359,7 +423,8 @@ function renderRows() {
     const userId = row?.LogUserId ? String(row.LogUserId) : '';
     const userCell = userName || userId || '—';
     const ctx = rowExecutionFields(row);
-    const pendingContext = !row?.contextFromBody;
+    const logIdNorm = normalizeSfId(logId);
+    const pendingContext = !!logIdNorm && !row?.contextFromBody;
     tr.innerHTML = `
       <td class="debug-log-browser-id-cell">${escapeHtml(logId || '—')}</td>
       <td>${escapeHtml(formatDateTime(row?.StartTime))}</td>
@@ -409,7 +474,12 @@ function renderRows() {
     actionCell?.appendChild(openBtn);
     tbody.appendChild(tr);
   }
-  void enrichVisiblePageRows();
+  updateContextLoadingUi();
+}
+
+function renderRowsAndEnrich() {
+  renderRows();
+  schedulePageBodyEnrichment();
 }
 
 async function loadLogs() {
@@ -449,7 +519,8 @@ async function loadLogs() {
     const rawRows = Array.isArray(res.logs) ? res.logs : [];
     lastRows = (await resolveUserNamesForLogs(rawRows)).map(normalizeLogRow);
     currentPage = 1;
-    enrichSeq += 1;
+    cancelPageEnrichment();
+    bodyEnrichedIds.clear();
     populateUserOptions(lastRows);
     populateOperationOptions(lastRows);
     if (status) status.textContent = '';
@@ -461,7 +532,7 @@ async function loadLogs() {
   } finally {
     setLoadingState(false);
     dismissSpinnerToast();
-    renderRows();
+    renderRowsAndEnrich();
   }
 }
 
@@ -494,7 +565,7 @@ export async function refreshDebugLogBrowserPanel() {
     lastLoadSignature = sig;
     await loadLogs();
   } else if (!isLoading) {
-    renderRows();
+    renderRowsAndEnrich();
   }
 }
 
@@ -504,14 +575,14 @@ export function setupDebugLogBrowserPanel() {
   if (user)
     user.addEventListener('change', () => {
       currentPage = 1;
-      enrichSeq += 1;
-      renderRows();
+      cancelPageEnrichment();
+      renderRowsAndEnrich();
     });
   if (operation)
     operation.addEventListener('change', () => {
       currentPage = 1;
-      enrichSeq += 1;
-      renderRows();
+      cancelPageEnrichment();
+      renderRowsAndEnrich();
     });
   const triggerReload = () => {
     lastLoadSignature = '';
@@ -522,20 +593,20 @@ export function setupDebugLogBrowserPanel() {
   if (pageSize)
     pageSize.addEventListener('change', () => {
       currentPage = 1;
-      enrichSeq += 1;
-      renderRows();
+      cancelPageEnrichment();
+      renderRowsAndEnrich();
     });
   if (prevPage)
     prevPage.addEventListener('click', () => {
       currentPage = Math.max(1, currentPage - 1);
-      enrichSeq += 1;
-      renderRows();
+      cancelPageEnrichment();
+      renderRowsAndEnrich();
     });
   if (nextPage)
     nextPage.addEventListener('click', () => {
       currentPage += 1;
-      enrichSeq += 1;
-      renderRows();
+      cancelPageEnrichment();
+      renderRowsAndEnrich();
     });
   const deleteAllBtn = document.getElementById('debugLogBrowserDeleteAllBtn');
   if (deleteAllBtn) {

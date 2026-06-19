@@ -15,6 +15,67 @@ let syncOrgsInFlight = null;
 /** Tras el primer relleno de desplegables, no reasignar org por defecto si el usuario eligió None. */
 let orgSelectDefaultsApplied = false;
 
+/** Org derecha guardada al ocultar el selector en herramientas mono-org; se restaura al volver al comparador. */
+let pausedRightOrgId = null;
+
+/** @param {(className: string) => boolean} hasClass */
+export function isSingleOrgToolActiveFromBody(hasClass) {
+  if (hasClass('artifact-environment-status')) return true;
+  if (hasClass('artifact-deploy-status')) return true;
+  if (hasClass('artifact-apex-tests')) return true;
+  if (hasClass('artifact-quick-edit')) return true;
+  if (hasClass('artifact-lightning-quick-edit')) return true;
+  if (hasClass('artifact-debug-log-browser')) return true;
+  if (hasClass('artifact-setup-audit-trail')) return true;
+  if (hasClass('artifact-field-history')) return true;
+  if (hasClass('artifact-generate-package-xml') && !hasClass('artifact-generate-package-xml-compare')) {
+    return true;
+  }
+  if (hasClass('artifact-org-limits') && !hasClass('artifact-org-limits-compare')) return true;
+  if (hasClass('artifact-permission-diff') && !hasClass('artifact-permission-diff-compare')) {
+    return true;
+  }
+  if (hasClass('artifact-anonymous-apex') && !hasClass('artifact-anonymous-apex-compare')) return true;
+  if (hasClass('artifact-query-explorer') && !hasClass('artifact-query-explorer-compare')) return true;
+  if (hasClass('artifact-dependency-explorer') && !hasClass('artifact-dependency-explorer-compare')) {
+    return true;
+  }
+  if (hasClass('artifact-record-compare') && !hasClass('artifact-record-compare-compare')) return true;
+  return false;
+}
+
+/** Herramientas que solo usan la org izquierda (sin intercambio). */
+export function isSingleOrgToolActive() {
+  return isSingleOrgToolActiveFromBody((className) => document.body.classList.contains(className));
+}
+
+/** @param {(className: string) => boolean} hasClass */
+export function isDualOrgUiActiveFromBody(hasClass) {
+  if (isSingleOrgToolActiveFromBody(hasClass)) return false;
+  if (hasClass('artifact-field-dependency')) return true;
+  if (hasClass('artifact-apex-coverage-compare')) return true;
+  if (hasClass('artifact-custom-settings-compare')) return true;
+  if (hasClass('artifact-custom-metadata-compare')) return true;
+  if (hasClass('artifact-metadata-type-compare')) return true;
+  if (hasClass('artifact-generate-package-xml-compare')) return true;
+  if (hasClass('artifact-anonymous-apex-compare')) return true;
+  if (hasClass('artifact-query-explorer-compare')) return true;
+  if (hasClass('artifact-org-limits-compare')) return true;
+  if (hasClass('artifact-permission-diff-compare')) return true;
+  if (hasClass('artifact-dependency-explorer-compare')) return true;
+  if (hasClass('artifact-record-compare-compare')) return true;
+  return false;
+}
+
+/** Herramientas / modos que usan org izquierda y derecha a la vez. */
+export function isDualOrgUiActive() {
+  const dualFromBody = isDualOrgUiActiveFromBody((className) =>
+    document.body.classList.contains(className)
+  );
+  if (dualFromBody) return true;
+  return state.appNavMode === 'comparator';
+}
+
 /**
  * Resuelve la org derecha tras refrescar la lista (exportado para tests).
  * @param {string | null | undefined} prevRight
@@ -75,10 +136,53 @@ function populateOrgSelects(orgs, aliases, groups) {
   state.rightOrgId = pickRightOrgSelection(prevRight, orgs, orgSelectDefaultsApplied);
   right.value = state.rightOrgId || '';
 
+  if (!isDualOrgUiActive()) {
+    stashAndClearRightOrg();
+  }
+
   orgSelectDefaultsApplied = true;
 
   ensureRightOrgDistinctFromLeft();
   syncTelemetryUserFromOrgState();
+}
+
+/**
+ * Guarda la org derecha actual y la limpia (herramientas que solo usan org izquierda).
+ */
+export function stashAndClearRightOrg() {
+  if (state.rightOrgId) {
+    pausedRightOrgId = state.rightOrgId;
+  }
+  state.rightOrgId = null;
+  const right = document.getElementById('rightOrg');
+  if (right) right.value = '';
+}
+
+/**
+ * Restaura la org derecha guardada si el comparador vuelve a modo dual.
+ * @returns {boolean} true si se restauró la selección
+ */
+export function restorePausedRightOrgIfDualMode() {
+  if (state.rightOrgId || !pausedRightOrgId) {
+    pausedRightOrgId = null;
+    return false;
+  }
+  if (!isDualOrgUiActive()) {
+    return false;
+  }
+
+  const orgs = state.orgsList || [];
+  if (!orgs.some((o) => o.id === pausedRightOrgId)) {
+    pausedRightOrgId = null;
+    return false;
+  }
+
+  state.rightOrgId = pausedRightOrgId;
+  pausedRightOrgId = null;
+  const right = document.getElementById('rightOrg');
+  if (right) right.value = state.rightOrgId;
+  ensureRightOrgDistinctFromLeft();
+  return true;
 }
 
 /** Sincroniza usuario Salesforce en PostHog al cambiar orgs (telemetría activa). */
@@ -169,19 +273,25 @@ export function updateOrgDropdownLayout() {
   if (document.body.classList.contains('artifact-environment-status')) {
     leftDropdown.classList.add('hidden');
     rightDropdown.classList.add('hidden');
+    updateOrgSwapButtonState();
     return;
   }
+
+  leftDropdown.classList.remove('hidden');
 
   if (
     (document.body.classList.contains('artifact-generate-package-xml') &&
       !document.body.classList.contains('artifact-generate-package-xml-compare')) ||
     document.body.classList.contains('artifact-apex-tests') ||
+    document.body.classList.contains('artifact-quick-edit') ||
+    document.body.classList.contains('artifact-lightning-quick-edit') ||
     document.body.classList.contains('artifact-debug-log-browser') ||
     document.body.classList.contains('artifact-setup-audit-trail') ||
     document.body.classList.contains('artifact-field-history')
   ) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (
@@ -189,12 +299,14 @@ export function updateOrgDropdownLayout() {
     !document.body.classList.contains('artifact-org-limits-compare')
   ) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (document.body.classList.contains('artifact-deploy-status')) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (
@@ -202,7 +314,8 @@ export function updateOrgDropdownLayout() {
     !document.body.classList.contains('artifact-permission-diff-compare')
   ) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (
@@ -210,7 +323,8 @@ export function updateOrgDropdownLayout() {
     !document.body.classList.contains('artifact-anonymous-apex-compare')
   ) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (
@@ -218,12 +332,14 @@ export function updateOrgDropdownLayout() {
     !document.body.classList.contains('artifact-query-explorer-compare')
   ) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (document.body.classList.contains('artifact-field-dependency')) {
     rightDropdown.classList.remove('hidden');
     leftDropdown.classList.remove('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (
@@ -231,12 +347,14 @@ export function updateOrgDropdownLayout() {
     !document.body.classList.contains('artifact-dependency-explorer-compare')
   ) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (document.body.classList.contains('artifact-apex-coverage-compare')) {
     rightDropdown.classList.remove('hidden');
     leftDropdown.classList.remove('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (
@@ -245,6 +363,7 @@ export function updateOrgDropdownLayout() {
   ) {
     rightDropdown.classList.remove('hidden');
     leftDropdown.classList.remove('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   if (
@@ -252,7 +371,8 @@ export function updateOrgDropdownLayout() {
     !document.body.classList.contains('artifact-record-compare-compare')
   ) {
     rightDropdown.classList.add('hidden');
-    leftDropdown.classList.remove('single-mode');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
     return;
   }
   rightDropdown.classList.remove('hidden');
@@ -364,10 +484,16 @@ export function updateOrgSwapButtonState() {
   const btn = document.getElementById('swapOrgsBtn');
   if (!btn) return;
   const rightDropdown = document.querySelector('.org-dropdown-right');
-  const rightHidden = rightDropdown?.classList.contains('hidden');
+  const rightHidden =
+    rightDropdown?.classList.contains('hidden') || isSingleOrgToolActive();
   const editor = document.getElementById('editorContainer');
   const locked = editor?.classList.contains('org-selectors-locked');
-  const canSwap = !!state.leftOrgId && !!state.rightOrgId && !rightHidden && !locked;
+  const canSwap =
+    isDualOrgUiActive() &&
+    !!state.leftOrgId &&
+    !!state.rightOrgId &&
+    !rightHidden &&
+    !locked;
   btn.classList.toggle('hidden', !canSwap);
   btn.disabled = !canSwap;
 }
@@ -403,6 +529,7 @@ export function updateAuthIndicators() {
     rightReauth.classList.add('hidden');
   }
   updateOrgSwapButtonState();
+  void import('../lib/codeEditorOrgAuth.js').then((m) => m.retryCodeEditorAuthPendingLoads());
 }
 
 export async function refreshAuthStatuses() {

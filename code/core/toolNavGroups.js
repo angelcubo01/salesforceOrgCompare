@@ -13,7 +13,7 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     }),
     Object.freeze({
       id: 'apexCode',
-      i18nKey: 'code.toolGroup.devApexCode',
+      i18nKey: 'code.toolGroup.devCode',
       tools: Object.freeze(['QuickEdit', 'LightningQuickEdit', 'AnonymousApex'])
     }),
     Object.freeze({

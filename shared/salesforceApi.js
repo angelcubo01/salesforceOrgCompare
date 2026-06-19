@@ -565,9 +565,9 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
         instanceUrl,
         sid,
         apiVersion,
-        `SELECT Name FROM ApexClass ${q} ORDER BY Name LIMIT 50`
+        `SELECT Name, LastModifiedDate FROM ApexClass ${q} ORDER BY Name LIMIT 50`
       );
-      return rows.map(r => ({ type, name: r.Name }));
+      return rows.map(r => ({ type, name: r.Name, lastModifiedDate: r.LastModifiedDate || '' }));
     }
     case 'ApexTrigger': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
@@ -601,13 +601,33 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
     }
     case 'LWC': {
       const q = prefix ? `WHERE DeveloperName LIKE '%${like}%'` : '';
-      const rows = await toolingQuery(instanceUrl, sid, apiVersion, `SELECT Id, DeveloperName FROM LightningComponentBundle ${q} ORDER BY DeveloperName LIMIT 50`);
-      return rows.map(r => ({ type, id: r.Id, developerName: r.DeveloperName }));
+      const rows = await toolingQuery(
+        instanceUrl,
+        sid,
+        apiVersion,
+        `SELECT Id, DeveloperName, LastModifiedDate FROM LightningComponentBundle ${q} ORDER BY DeveloperName LIMIT 50`
+      );
+      return rows.map(r => ({
+        type,
+        id: r.Id,
+        developerName: r.DeveloperName,
+        lastModifiedDate: r.LastModifiedDate || ''
+      }));
     }
     case 'Aura': {
       const q = prefix ? `WHERE DeveloperName LIKE '%${like}%'` : '';
-      const rows = await toolingQuery(instanceUrl, sid, apiVersion, `SELECT Id, DeveloperName FROM AuraDefinitionBundle ${q} ORDER BY DeveloperName LIMIT 50`);
-      return rows.map(r => ({ type, id: r.Id, developerName: r.DeveloperName }));
+      const rows = await toolingQuery(
+        instanceUrl,
+        sid,
+        apiVersion,
+        `SELECT Id, DeveloperName, LastModifiedDate FROM AuraDefinitionBundle ${q} ORDER BY DeveloperName LIMIT 50`
+      );
+      return rows.map(r => ({
+        type,
+        id: r.Id,
+        developerName: r.DeveloperName,
+        lastModifiedDate: r.LastModifiedDate || ''
+      }));
     }
     case 'PermissionSet': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
@@ -1925,14 +1945,128 @@ export async function runTestsAsynchronous(instanceUrl, sid, apiVersion, body) {
   return json;
 }
 
+/** Umbral conservador: REST GET pone el script en la query string (límite ~414). */
+const ANONYMOUS_BODY_SOAP_CHAR_THRESHOLD = 4000;
+const ANONYMOUS_BODY_SOAP_ENCODED_THRESHOLD = 6000;
+
+function escapeXmlText(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function extractSoapTagValue(xml, tagName) {
+  try {
+    const re = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+    const m = re.exec(xml || '');
+    if (!m) return null;
+    const openTag = (m[0].match(new RegExp(`<${tagName}[^>]*>`, 'i')) || [''])[0];
+    if (/xsi:nil\s*=\s*["']true["']/i.test(openTag)) return null;
+    return m[1] != null ? m[1].trim() : '';
+  } catch {
+    return null;
+  }
+}
+
+function parseSoapBool(val) {
+  if (val == null || val === '') return false;
+  return String(val).toLowerCase() === 'true';
+}
+
+function parseSoapInt(val, fallback = -1) {
+  if (val == null || val === '') return fallback;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 /**
- * Ejecuta Apex anónimo vía Tooling API.
- * Devuelve el JSON de Salesforce (`compiled`, `success`, `compileProblem`, `exceptionMessage`, `exceptionStackTrace`, `logs`, etc).
+ * Indica si el script debe enviarse por SOAP (POST) en lugar de REST GET.
+ * @param {unknown} anonymousBody
  */
-export async function executeAnonymous(instanceUrl, sid, apiVersion, anonymousBody) {
+export function shouldUseSoapForAnonymousBody(anonymousBody) {
+  const body = String(anonymousBody == null ? '' : anonymousBody);
+  if (body.length >= ANONYMOUS_BODY_SOAP_CHAR_THRESHOLD) return true;
+  if (encodeURIComponent(body).length >= ANONYMOUS_BODY_SOAP_ENCODED_THRESHOLD) return true;
+  return false;
+}
+
+/**
+ * Parsea la respuesta SOAP de executeAnonymous al shape REST de Tooling API.
+ * @param {string} responseXml
+ */
+export function parseExecuteAnonymousSoapResponse(responseXml) {
+  const xml = String(responseXml || '');
+  if (/<faultcode/i.test(xml) || /<soapenv:Fault/i.test(xml) || /<Fault[\s>]/i.test(xml)) {
+    const msg = extractSoapTagValue(xml, 'faultstring') || 'executeAnonymous SOAP fault';
+    const err = new Error(msg);
+    err.soapFault = true;
+    throw err;
+  }
+  const resultBlock =
+    extractSoapTagValue(xml, 'result') != null
+      ? (() => {
+          const re = /<result[^>]*>([\s\S]*?)<\/result>/i;
+          const m = re.exec(xml);
+          return m ? m[1] : xml;
+        })()
+      : xml;
+  const compileProblem = extractSoapTagValue(resultBlock, 'compileProblem');
+  const exceptionMessage = extractSoapTagValue(resultBlock, 'exceptionMessage');
+  const exceptionStackTrace = extractSoapTagValue(resultBlock, 'exceptionStackTrace');
+  return {
+    line: parseSoapInt(extractSoapTagValue(resultBlock, 'line')),
+    column: parseSoapInt(extractSoapTagValue(resultBlock, 'column')),
+    compiled: parseSoapBool(extractSoapTagValue(resultBlock, 'compiled')),
+    success: parseSoapBool(extractSoapTagValue(resultBlock, 'success')),
+    compileProblem: compileProblem || null,
+    exceptionMessage: exceptionMessage || null,
+    exceptionStackTrace: exceptionStackTrace || null
+  };
+}
+
+const APEX_SOAP_NS = 'http://soap.sforce.com/2006/08/apex';
+
+/**
+ * Construye el envelope SOAP para executeAnonymous (Apex API).
+ * @param {string} sid
+ * @param {string} body
+ */
+export function buildExecuteAnonymousSoapEnvelope(sid, body) {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/" ` +
+    `xmlns:xsd="http://www.w3.org/2001/XMLSchema" ` +
+    `xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ` +
+    `xmlns="${APEX_SOAP_NS}">` +
+    `<env:Header>` +
+    `<SessionHeader>` +
+    `<sessionId>${escapeXmlText(sid)}</sessionId>` +
+    `</SessionHeader>` +
+    `</env:Header>` +
+    `<env:Body>` +
+    `<executeAnonymous>` +
+    `<String>${escapeXmlText(body)}</String>` +
+    `</executeAnonymous>` +
+    `</env:Body>` +
+    `</env:Envelope>`
+  );
+}
+
+function buildApexSoapEndpoint(instanceUrl, apiVersion, salesforceOrgId) {
+  const base = String(instanceUrl).replace(/\/$/, '');
+  const apiVer = Number(apiVersion) || 60;
+  const orgId = String(salesforceOrgId || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9]/g, '');
+  const orgSuffix = orgId ? `/${orgId}` : '';
+  return `${base}/services/Soap/s/${apiVer.toFixed(1)}${orgSuffix}`;
+}
+
+async function executeAnonymousViaRest(instanceUrl, sid, apiVersion, body) {
   await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');
-  const body = String(anonymousBody == null ? '' : anonymousBody);
   const url = `${base}/services/data/v${apiVersion}/tooling/executeAnonymous/?anonymousBody=${encodeURIComponent(body)}`;
   const headers = new Headers();
   headers.set('Authorization', `Bearer ${sid}`);
@@ -1958,5 +2092,45 @@ export async function executeAnonymous(instanceUrl, sid, apiVersion, anonymousBo
     throw err;
   }
   return json;
+}
+
+async function executeAnonymousViaSoap(instanceUrl, sid, apiVersion, body, salesforceOrgId) {
+  await restGate.acquire();
+  const url = buildApexSoapEndpoint(instanceUrl, apiVersion, salesforceOrgId);
+  const envelope = buildExecuteAnonymousSoapEnvelope(sid, body);
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml; charset=UTF-8',
+      SOAPAction: '""'
+    },
+    body: envelope
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    const err = new Error(`executeAnonymous SOAP failed: HTTP ${res.status}`);
+    err.status = res.status;
+    err.body = text;
+    throw err;
+  }
+  return parseExecuteAnonymousSoapResponse(text);
+}
+
+/**
+ * Ejecuta Apex anónimo vía Tooling REST (scripts pequeños) o SOAP API (scripts grandes).
+ * Devuelve el JSON de Salesforce (`compiled`, `success`, `compileProblem`, `exceptionMessage`, `exceptionStackTrace`, `logs`, etc).
+ */
+export async function executeAnonymous(
+  instanceUrl,
+  sid,
+  apiVersion,
+  anonymousBody,
+  salesforceOrgId
+) {
+  const body = String(anonymousBody == null ? '' : anonymousBody);
+  if (shouldUseSoapForAnonymousBody(body)) {
+    return executeAnonymousViaSoap(instanceUrl, sid, apiVersion, body, salesforceOrgId);
+  }
+  return executeAnonymousViaRest(instanceUrl, sid, apiVersion, body);
 }
 

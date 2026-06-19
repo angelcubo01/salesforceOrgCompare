@@ -38,7 +38,7 @@ export const MODE_TOOLS = {
   development: [...APP_NAV_DEVELOPMENT_TOOLS],
   analysis: [...APP_NAV_ANALYSIS_TOOLS],
   monitoring: [...APP_NAV_MONITORING_TOOLS],
-  manifests: ['GeneratePackageXml']
+  manifests: ['GeneratePackageXml', 'MetadataTypeCompare']
 };
 
 export const TOOL_I18N = {
@@ -69,6 +69,7 @@ export const TOOL_I18N = {
   CustomMetadataCompare: 'code.opCustomMetadataCompare',
   RecordCompare: 'code.opRecordCompare',
   GeneratePackageXml: 'code.opPkgGenerate',
+  MetadataTypeCompare: 'code.opMetadataTypeCompare',
   PackageXml: 'code.opPkgCompare'
 };
 

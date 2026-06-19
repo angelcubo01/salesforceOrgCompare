@@ -6,6 +6,7 @@ import {
   createStandaloneEditorSafe,
   languageForFileName
 } from '../editor/monaco.js';
+import { MonacoWorkbench, compositeDocumentId } from '../editor/monacoWorkbench.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
@@ -17,17 +18,59 @@ import {
   getReturnContext,
   navigateToDeployStatus
 } from '../lib/quickEditDeployContext.js';
+import { setupCodeEditorSearch } from './codeEditorSearch.js';
+import { renderVscodeTabBar } from './vscodeTabs.js';
+import { pickNewestSourceMetadata, updateCodeEditorToolbarDisplay, findCodeEditorTabByArtifact, formatCodeEditorTabLabel, getOrgDisplayLabel } from './codeEditorToolbar.js';
+import {
+  isOrgAuthActive,
+  isTabOrgAuthExpired,
+  setTabPendingRemoteLoad,
+  tabNeedsRemoteReload
+} from '../lib/codeEditorOrgAuth.js';
+import {
+  createTabId,
+  isTabContentDirty,
+  loadCodeEditorSession,
+  saveCodeEditorSession,
+  setupCodeEditorSessionPersistence,
+  scheduleCodeEditorSessionPersist,
+  clearCodeEditorSession,
+  hasStoredCodeEditorTabs,
+  MAX_CODE_EDITOR_TABS,
+  trimTabsToLimit
+} from '../lib/codeEditorSession.js';
 
-const SEARCH_MIN_PX = 288;
-const RESULTS_WIDTH_CAP_PX = 1400;
+const lightningWorkbench = new MonacoWorkbench({
+  uriScheme: 'sfoc-lightning',
+  onContentChange: () => {
+    persistActiveEditorContent();
+    syncActiveTabFromBundleState();
+    scheduleCodeEditorSessionPersist('LightningQuickEdit', persistSession);
+    updateDeployButtonState();
+    updateModifiedIndicator();
+    renderFileTabs();
+    renderBundleDocTabs();
+  }
+});
 
-/** @type {'LWC' | 'Aura'} */
-let selectedComponentType = 'LWC';
+/**
+ * @typedef {object} LightningBundleTab
+ * @property {string} id
+ * @property {'LWC' | 'Aura'} artType
+ * @property {string} metadataType
+ * @property {string} bundleName
+ * @property {string} bundleId
+ * @property {string} activeFileName
+ * @property {string} lastModifiedDate
+ * @property {string} [lastModifiedByName]
+ * @property {string} [lastModifiedByUsername]
+ * @property {string} [sourceOrgId]
+ * @property {boolean} [pendingRemoteLoad]
+ * @property {{ fileName: string, content: string, originalContent: string, language: string, lastModifiedDate?: string, lastModifiedByName?: string, lastModifiedByUsername?: string }[]} files
+ */
 
-/** @type {import('monaco-editor').editor.IStandaloneCodeEditor | null} */
-let lightningQuickEditEditor = null;
-/** @type {Promise<import('monaco-editor').editor.IStandaloneCodeEditor | null> | null} */
-let lightningQuickEditEditorInit = null;
+/** @type {{ orgId: string | null, activeTabId: string | null, tabs: LightningBundleTab[] }} */
+let editorSession = { orgId: null, activeTabId: null, tabs: [] };
 
 /**
  * @type {{
@@ -36,12 +79,15 @@ let lightningQuickEditEditorInit = null;
  *   bundleName: string,
  *   bundleId: string,
  *   activeFileName: string,
- *   files: Map<string, { content: string, originalContent: string, language: string }>
+ *   lastModifiedDate: string,
+ *   sourceOrgId: string,
+ *   files: Map<string, { content: string, originalContent: string, language: string, lastModifiedDate?: string, lastModifiedByName?: string, lastModifiedByUsername?: string }>
  * } | null}
  */
 let bundleState = null;
 
 let isDeploying = false;
+let sessionRestored = false;
 
 function metadataTypeForArtifact(artifactType) {
   return artifactType === 'LWC' ? 'LightningComponentBundle' : 'AuraDefinitionBundle';
@@ -72,7 +118,6 @@ function sortFileNames(fileNames) {
   });
 }
 
-/** LWC Tooling API devuelve FilePath completo (`lwc/bundle/file.js`); usamos solo el nombre. */
 function normalizeBundleFileName(fileName) {
   const raw = String(fileName || '').replace(/\\/g, '/').trim();
   if (!raw) return 'unknown';
@@ -112,61 +157,98 @@ function fileTabBadgeLabel(kind) {
   }
 }
 
-function syncSearchInputWidth() {
-  const input = document.getElementById('lightningQuickEditSearchInput');
-  if (!input) return;
-  if (typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content')) {
-    input.style.removeProperty('width');
-    scheduleSyncResultsListWidth();
-    return;
-  }
-  const zone = input.closest('.quick-edit-search-zone');
-  const maxW =
-    zone?.getBoundingClientRect().width || input.closest('.quick-edit-panel-inner')?.clientWidth || 1200;
-
-  window.requestAnimationFrame(() => {
-    if (!input.value.trim()) {
-      input.style.width = `${Math.min(maxW, SEARCH_MIN_PX)}px`;
-      syncResultsListWidth();
-      return;
-    }
-    input.style.width = '0';
-    const needed = Math.max(SEARCH_MIN_PX, input.scrollWidth + 20);
-    input.style.width = `${Math.min(maxW, needed)}px`;
-    syncResultsListWidth();
-  });
+function getActiveTab() {
+  return editorSession.tabs.find((tab) => tab.id === editorSession.activeTabId) || null;
 }
 
-function syncResultsListWidth() {
-  const list = document.getElementById('lightningQuickEditResultsList');
-  const input = document.getElementById('lightningQuickEditSearchInput');
-  if (!list || !input || list.childElementCount === 0) {
-    list?.style.removeProperty('width');
-    return;
-  }
-
-  const cap = Math.min(window.innerWidth - 40, RESULTS_WIDTH_CAP_PX);
-
-  window.requestAnimationFrame(() => {
-    list.style.width = `${cap}px`;
-    let maxChild = 0;
-    for (const el of list.children) {
-      maxChild = Math.max(maxChild, el.scrollWidth);
-    }
-    const cs = getComputedStyle(list);
-    const chromeW =
-      (parseFloat(cs.borderLeftWidth) || 0) +
-      (parseFloat(cs.borderRightWidth) || 0) +
-      (parseFloat(cs.paddingLeft) || 0) +
-      (parseFloat(cs.paddingRight) || 0);
-    const inputW = Math.ceil(input.getBoundingClientRect().width);
-    const w = Math.min(cap, Math.max(inputW, Math.ceil(maxChild + chromeW)));
-    list.style.width = `${w}px`;
-  });
+function bundleFileRecord(f, fileName) {
+  return {
+    content: f?.content ?? '',
+    originalContent: f?.originalContent ?? '',
+    language: f?.language || languageForFileName(fileName),
+    lastModifiedDate: String(f?.lastModifiedDate || ''),
+    lastModifiedByName: String(f?.lastModifiedByName || ''),
+    lastModifiedByUsername: String(f?.lastModifiedByUsername || '')
+  };
 }
 
-function scheduleSyncResultsListWidth() {
-  window.requestAnimationFrame(() => syncResultsListWidth());
+function getActiveBundleFileMeta() {
+  if (!bundleState?.activeFileName) {
+    return {
+      lastModifiedDate: bundleState?.lastModifiedDate || '',
+      lastModifiedByName: '',
+      lastModifiedByUsername: ''
+    };
+  }
+  const file = bundleState.files.get(bundleState.activeFileName);
+  return {
+    lastModifiedDate: file?.lastModifiedDate || bundleState.lastModifiedDate || '',
+    lastModifiedByName: file?.lastModifiedByName || '',
+    lastModifiedByUsername: file?.lastModifiedByUsername || ''
+  };
+}
+
+function tabFromBundleState(tabId) {
+  if (!bundleState) return null;
+  persistActiveEditorContent();
+  const newest = pickNewestSourceMetadata(
+    [...bundleState.files.values()].map((file) => ({
+      lastModifiedDate: file.lastModifiedDate,
+      lastModifiedByName: file.lastModifiedByName,
+      lastModifiedByUsername: file.lastModifiedByUsername
+    }))
+  );
+  const existing = editorSession.tabs.find((t) => t.id === tabId);
+  return {
+    id: tabId,
+    artType: bundleState.artifactType,
+    metadataType: bundleState.metadataType,
+    bundleName: bundleState.bundleName,
+    bundleId: bundleState.bundleId,
+    activeFileName: bundleState.activeFileName,
+    lastModifiedDate: bundleState.lastModifiedDate || newest.lastModifiedDate || '',
+    lastModifiedByName: newest.lastModifiedByName || '',
+    lastModifiedByUsername: newest.lastModifiedByUsername || '',
+    sourceOrgId: bundleState.sourceOrgId || editorSession.orgId || null,
+    pendingRemoteLoad: existing?.pendingRemoteLoad === true,
+    files: sortFileNames([...bundleState.files.keys()]).map((fileName) => {
+      const file = bundleState.files.get(fileName);
+      return {
+        fileName,
+        content: file?.content ?? '',
+        originalContent: file?.originalContent ?? '',
+        language: file?.language || languageForFileName(fileName),
+        lastModifiedDate: file?.lastModifiedDate || '',
+        lastModifiedByName: file?.lastModifiedByName || '',
+        lastModifiedByUsername: file?.lastModifiedByUsername || ''
+      };
+    })
+  };
+}
+
+function applyTabToBundleState(tab) {
+  const fileMap = new Map();
+  for (const f of tab.files || []) {
+    fileMap.set(f.fileName, bundleFileRecord(f, f.fileName));
+  }
+  bundleState = {
+    artifactType: tab.artType,
+    metadataType: tab.metadataType,
+    bundleName: tab.bundleName,
+    bundleId: tab.bundleId,
+    activeFileName: tab.activeFileName,
+    lastModifiedDate: tab.lastModifiedDate || '',
+    sourceOrgId: tab.sourceOrgId || editorSession.orgId || null,
+    files: fileMap
+  };
+}
+
+function syncActiveTabFromBundleState() {
+  const tab = getActiveTab();
+  if (!tab || !bundleState) return;
+  const updated = tabFromBundleState(tab.id);
+  if (!updated) return;
+  editorSession.tabs = editorSession.tabs.map((t) => (t.id === tab.id ? updated : t));
 }
 
 function isCurrentOrgSandbox() {
@@ -185,7 +267,7 @@ async function logUsage(action, success, errorMessage = '') {
         artifactType: 'LightningQuickEdit',
         descriptor: {
           name: bundleState?.bundleName || '',
-          componentType: bundleState?.artifactType || selectedComponentType
+          componentType: bundleState?.artifactType || ''
         },
         leftOrgId: state.leftOrgId,
         success,
@@ -193,7 +275,7 @@ async function logUsage(action, success, errorMessage = '') {
       }
     });
   } catch {
-    // ignoramos errores de logging
+    /* ignore */
   }
 }
 
@@ -217,21 +299,212 @@ function setDeployStatus(text, tone = '') {
   if (tone === 'warning') el.classList.add('is-warning');
 }
 
+function fileDocumentId(bundleTabId, fileName) {
+  return compositeDocumentId(bundleTabId, fileName);
+}
+
+function syncModelFromFile(bundleTabId, fileName, file) {
+  const tab = editorSession.tabs.find((t) => t.id === bundleTabId);
+  const authExpired = tab ? isTabOrgAuthExpired(tab) : false;
+  const docId = fileDocumentId(bundleTabId, fileName);
+  const content = authExpired ? '' : (file?.content ?? '');
+  lightningWorkbench.ensureTab({
+    tabId: docId,
+    content,
+    language: file?.language || languageForFileName(fileName)
+  });
+  if (!authExpired) {
+    const loaded = lightningWorkbench.markLoadedAsClean(docId);
+    if (file) {
+      file.content = loaded;
+      file.originalContent = loaded;
+    }
+  }
+}
+
+function syncEditorReadOnly() {
+  const editor = lightningWorkbench.getEditor();
+  if (!editor) return;
+  const tab = getActiveTab();
+  editor.updateOptions({ readOnly: tab ? isTabOrgAuthExpired(tab) : false });
+}
+
+function showTabAuthExpiredStatus(tab) {
+  if (!tab?.sourceOrgId) return;
+  const orgLabel = getOrgDisplayLabel(tab.sourceOrgId);
+  setStatus(t('codeEditor.tabAuthExpired', { org: orgLabel }), 'warning');
+}
+
+/**
+ * @param {LightningBundleTab} tab
+ * @param {{ silent?: boolean }} [opts]
+ */
+async function reloadBundleFromOrg(tab, opts = {}) {
+  const orgId = tab.sourceOrgId;
+  if (!orgId || !isOrgAuthActive(orgId)) return false;
+
+  if (!opts.silent) setStatus(t('quickEdit.loading'), 'warning');
+
+  try {
+    const res = await bg({
+      type: 'fetchSource',
+      orgId,
+      artifactType: tab.artType,
+      descriptor: {
+        name: tab.bundleName,
+        bundleId: tab.bundleId,
+        bundleDeveloperName: tab.bundleName
+      }
+    });
+
+    if (!res?.ok) {
+      if (!opts.silent) {
+        setStatus(res?.reason === 'NO_SID' ? t('toast.noSession') : t('quickEdit.loadError'), 'error');
+      }
+      setTabPendingRemoteLoad(tab, true);
+      return false;
+    }
+
+    const files = res.files || [];
+    if (!files.length) return false;
+
+    const fileMap = new Map();
+    for (const f of files) {
+      const fn = f.fileName || f.path || 'unknown';
+      fileMap.set(fn, {
+        content: f.content || '',
+        originalContent: f.content || '',
+        language: languageForFileName(fn),
+        lastModifiedDate: String(f.lastModifiedDate || ''),
+        lastModifiedByName: String(f.lastModifiedByName || ''),
+        lastModifiedByUsername: String(f.lastModifiedByUsername || '')
+      });
+    }
+
+    tab.files = sortFileNames([...fileMap.keys()]).map((fileName) => {
+      const file = fileMap.get(fileName);
+      return {
+        fileName,
+        content: file.content,
+        originalContent: file.originalContent,
+        language: file.language,
+        lastModifiedDate: file.lastModifiedDate,
+        lastModifiedByName: file.lastModifiedByName,
+        lastModifiedByUsername: file.lastModifiedByUsername
+      };
+    });
+    tab.activeFileName = tab.activeFileName || tab.files[0]?.fileName || '';
+    setTabPendingRemoteLoad(tab, false);
+
+    if (tab.id === editorSession.activeTabId) {
+      applyTabToBundleState(tab);
+      await ensureEditor();
+      if (bundleState?.activeFileName) {
+        await switchToFile(bundleState.activeFileName);
+      }
+      if (!opts.silent) {
+        setStatus(
+          t('lightningQuickEdit.loaded', { name: tab.bundleName, count: tab.files.length }),
+          'success'
+        );
+      }
+    }
+
+    renderBundleDocTabs();
+    void persistSession();
+    return true;
+  } catch (e) {
+    if (!opts.silent) {
+      void handleToolError(e, { artifact_type: 'LightningQuickEdit', phase: 'load' });
+    }
+    setTabPendingRemoteLoad(tab, true);
+    return false;
+  }
+}
+
+export async function retryLightningQuickEditAuthPendingLoads() {
+  if (getSelectedArtifactType() !== 'LightningQuickEdit') return;
+  if (!editorSession.tabs.length) return;
+
+  for (const tab of editorSession.tabs) {
+    if (tabNeedsRemoteReload(tab)) {
+      await reloadBundleFromOrg(tab, { silent: true });
+    }
+  }
+
+  if (editorSession.activeTabId) {
+    await switchToBundleTab(editorSession.activeTabId, { forceReload: true });
+  } else {
+    renderBundleDocTabs();
+  }
+}
+
+function isBundleTabModified(tab) {
+  for (const f of tab.files || []) {
+    const docId = fileDocumentId(tab.id, f.fileName);
+    if (lightningWorkbench.hasTab(docId)) {
+      if (lightningWorkbench.isDirty(docId, f.originalContent)) return true;
+    } else if (isTabContentDirty(f.content, f.originalContent)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function persistActiveEditorContent() {
-  if (!bundleState || !lightningQuickEditEditor || !bundleState.activeFileName) return;
+  if (!bundleState || !bundleState.activeFileName || !editorSession.activeTabId) return;
+  const tab = getActiveTab();
+  if (tab && isTabOrgAuthExpired(tab)) return;
+  const docId = fileDocumentId(editorSession.activeTabId, bundleState.activeFileName);
+  if (!lightningWorkbench.hasTab(docId)) return;
   const file = bundleState.files.get(bundleState.activeFileName);
   if (!file) return;
-  file.content = lightningQuickEditEditor.getValue();
+  file.content = lightningWorkbench.getValue(docId);
+}
+
+async function persistSession() {
+  syncActiveTabFromBundleState();
+  if (!editorSession.orgId && editorSession.tabs.length > 0) {
+    const first = editorSession.tabs[0];
+    editorSession.orgId = first?.sourceOrgId || state.leftOrgId || null;
+  }
+  await saveCodeEditorSession(
+    'LightningQuickEdit',
+    editorSession.tabs.length
+      ? {
+          activeTabId: editorSession.activeTabId,
+          orgId: editorSession.orgId,
+          tabs: editorSession.tabs
+        }
+      : null
+  );
 }
 
 function isFileModified(fileName) {
   if (!bundleState) return false;
   const file = bundleState.files.get(fileName);
   if (!file) return false;
-  return file.content !== file.originalContent;
+  const bundleTabId = editorSession.activeTabId;
+  if (bundleTabId) {
+    const docId = fileDocumentId(bundleTabId, fileName);
+    if (lightningWorkbench.hasTab(docId)) {
+      return lightningWorkbench.isDirty(docId, file.originalContent);
+    }
+  }
+  return isTabContentDirty(file.content, file.originalContent);
 }
 
 function hasUnsavedChanges() {
+  persistActiveEditorContent();
+  for (const tab of editorSession.tabs) {
+    for (const f of tab.files || []) {
+      if (isTabContentDirty(f.content, f.originalContent)) return true;
+    }
+  }
+  return false;
+}
+
+function hasActiveBundleUnsavedChanges() {
   if (!bundleState) return false;
   persistActiveEditorContent();
   for (const fileName of bundleState.files.keys()) {
@@ -243,7 +516,7 @@ function hasUnsavedChanges() {
 function updateModifiedIndicator() {
   const indicator = document.getElementById('lightningQuickEditModifiedIndicator');
   if (!indicator) return;
-  if (hasUnsavedChanges()) {
+  if (hasActiveBundleUnsavedChanges()) {
     indicator.classList.remove('hidden');
   } else {
     indicator.classList.add('hidden');
@@ -262,142 +535,130 @@ function updateDeployButtonState() {
 
   deployBtn.disabled = !canDeploy;
   validateBtn.disabled = !canValidate;
-
-  if (hasBundle && !isSandbox) {
-    deployBtn.title = t('quickEdit.productionBlocked');
-  } else {
-    deployBtn.title = '';
-  }
+  deployBtn.title = hasBundle && !isSandbox ? t('quickEdit.productionBlocked') : '';
 }
 
 function updateCurrentFileDisplay() {
   const display = document.getElementById('lightningQuickEditCurrentFile');
+  const metaEl = document.getElementById('lightningQuickEditLastModified');
+  const tab = getActiveTab();
   if (!display) return;
-  if (bundleState) {
-    display.textContent = t('lightningQuickEdit.bundleLoaded', {
-      type: bundleState.artifactType,
-      name: bundleState.bundleName
+
+  if (!bundleState) {
+    updateCodeEditorToolbarDisplay({
+      titleEl: display,
+      metaEl,
+      title: '',
+      meta: null,
+      sourceOrgId: null
     });
-  } else {
     display.textContent = t('lightningQuickEdit.noBundleLoaded');
-  }
-}
-
-function updateSearchPlaceholder() {
-  const input = document.getElementById('lightningQuickEditSearchInput');
-  if (!input) return;
-  input.placeholder =
-    selectedComponentType === 'LWC'
-      ? t('lightningQuickEdit.searchPlaceholderLwc')
-      : t('lightningQuickEdit.searchPlaceholderAura');
-}
-
-function updateTypeToggleUi() {
-  const lwcBtn = document.getElementById('lightningQuickEditTypeLwc');
-  const auraBtn = document.getElementById('lightningQuickEditTypeAura');
-  lwcBtn?.classList.toggle('is-active', selectedComponentType === 'LWC');
-  auraBtn?.classList.toggle('is-active', selectedComponentType === 'Aura');
-  updateSearchPlaceholder();
-}
-
-function renderFileTabs() {
-  const tabsEl = document.getElementById('lightningQuickEditFileTabs');
-  if (!tabsEl) return;
-
-  if (!bundleState || bundleState.files.size === 0) {
-    tabsEl.innerHTML = '';
-    tabsEl.hidden = true;
     return;
   }
 
-  tabsEl.hidden = false;
-  tabsEl.innerHTML = '';
+  const sourceOrgId = bundleState.sourceOrgId || tab?.sourceOrgId || editorSession.orgId;
+  updateCodeEditorToolbarDisplay({
+    titleEl: display,
+    metaEl,
+    title: t('lightningQuickEdit.bundleLoaded', {
+      type: bundleState.artifactType,
+      name: bundleState.bundleName
+    }),
+    meta: getActiveBundleFileMeta(),
+    sourceOrgId
+  });
+}
 
-  for (const fileName of sortFileNames([...bundleState.files.keys()])) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    const kind = fileTabKind(fileName);
-    btn.className = `lightning-quick-edit-file-tab lightning-quick-edit-file-tab--${kind}`;
-    btn.setAttribute('role', 'tab');
-    const badge = document.createElement('span');
-    badge.className = 'lightning-quick-edit-file-tab-badge';
-    badge.textContent = fileTabBadgeLabel(kind);
-    const label = document.createElement('span');
-    label.className = 'lightning-quick-edit-file-tab-name';
-    label.textContent = normalizeBundleFileName(fileName);
-    btn.append(badge, label);
-    btn.title = fileName;
-    if (fileName === bundleState.activeFileName) {
-      btn.classList.add('is-active');
-      btn.setAttribute('aria-selected', 'true');
-    } else {
-      btn.setAttribute('aria-selected', 'false');
-    }
-    if (isFileModified(fileName)) {
-      btn.classList.add('is-modified');
-    }
-    btn.addEventListener('click', () => {
-      void switchToFile(fileName);
-    });
-    tabsEl.appendChild(btn);
-  }
+function buildBundleFilePicker() {
+  if (!bundleState || bundleState.files.size === 0) return null;
+  return {
+    activeFileId: bundleState.activeFileName,
+    files: sortFileNames([...bundleState.files.keys()]).map((fileName) => {
+      const kind = fileTabKind(fileName);
+      return {
+        id: fileName,
+        label: normalizeBundleFileName(fileName),
+        prefix: fileTabBadgeLabel(kind),
+        iconKind: kind,
+        isModified: isFileModified(fileName),
+        title: fileName
+      };
+    }),
+    onSelect: (id) => void switchToFile(id)
+  };
+}
+
+function renderBundleDocTabs() {
+  const tabsEl = document.getElementById('lightningQuickEditBundleTabs');
+  renderVscodeTabBar(tabsEl, {
+    tabs: editorSession.tabs.map((tab) => ({
+      id: tab.id,
+      label: formatCodeEditorTabLabel(tab.bundleName, tab.sourceOrgId),
+      prefix: tab.artType,
+      iconKind: tab.artType.toLowerCase(),
+      isActive: tab.id === editorSession.activeTabId,
+      isModified: !isTabOrgAuthExpired(tab) && isBundleTabModified(tab),
+      isAuthExpired: isTabOrgAuthExpired(tab),
+      title: isTabOrgAuthExpired(tab) ? t('codeEditor.tabAuthExpiredHint') : undefined
+    })),
+    hidden: editorSession.tabs.length === 0,
+    onSelect: (id) => void switchToBundleTab(id),
+    onClose: (id) => void closeBundleTab(id),
+    getFilePicker: (tabId) => (tabId === editorSession.activeTabId ? buildBundleFilePicker() : null)
+  });
+}
+
+function renderFileTabs() {
+  renderBundleDocTabs();
 }
 
 async function ensureEditor() {
   const mount = document.getElementById('lightningQuickEditEditorMount');
   if (!mount) return null;
-  if (lightningQuickEditEditor) {
-    try {
-      if (lightningQuickEditEditor.getContainerDomNode() === mount) return lightningQuickEditEditor;
-    } catch {
-      lightningQuickEditEditor = null;
+
+  const editor = await lightningWorkbench.ensureEditor(
+    mount,
+    {
+      language: 'javascript',
+      readOnly: false,
+      automaticLayout: true,
+      minimap: { enabled: true },
+      wordWrap: state.wordWrapEnabled ? 'on' : 'off',
+      theme: resolveMonacoThemeId(),
+      fontSize: 13,
+      lineHeight: 20,
+      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+      scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
+    },
+    createStandaloneEditorSafe,
+    async () => {
+      const monaco = state.monaco || (await loadMonaco());
+      state.monaco = monaco;
+      return monaco;
+    },
+    lightningWorkbench.getEditor()
+  );
+
+  if (editorSession.activeTabId && bundleState?.activeFileName) {
+    const file = bundleState.files.get(bundleState.activeFileName);
+    if (file) {
+      const docId = fileDocumentId(editorSession.activeTabId, bundleState.activeFileName);
+      syncModelFromFile(editorSession.activeTabId, bundleState.activeFileName, file);
+      if (lightningWorkbench.activeTabId !== docId) {
+        lightningWorkbench.switchTab(docId);
+      }
     }
+  } else if (!bundleState) {
+    editor?.setModel(null);
   }
-  if (lightningQuickEditEditorInit) return lightningQuickEditEditorInit;
 
-  lightningQuickEditEditorInit = (async () => {
-    const monaco = state.monaco || (await loadMonaco());
-    state.monaco = monaco;
+  syncEditorReadOnly();
 
-    lightningQuickEditEditor = createStandaloneEditorSafe(
-      monaco,
-      mount,
-      {
-        value: '',
-        language: 'javascript',
-        readOnly: false,
-        automaticLayout: true,
-        minimap: { enabled: true },
-        wordWrap: state.wordWrapEnabled ? 'on' : 'off',
-        theme: resolveMonacoThemeId(),
-        fontSize: 13,
-        lineHeight: 20,
-        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-        scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
-      },
-      lightningQuickEditEditor
-    );
-
-    lightningQuickEditEditor.onDidChangeModelContent(() => {
-      persistActiveEditorContent();
-      updateDeployButtonState();
-      updateModifiedIndicator();
-      renderFileTabs();
-    });
-
-    return lightningQuickEditEditor;
-  })();
-
-  try {
-    return await lightningQuickEditEditorInit;
-  } finally {
-    lightningQuickEditEditorInit = null;
-  }
+  return editor;
 }
 
 async function switchToFile(fileName) {
-  if (!bundleState) return;
-
+  if (!bundleState || !editorSession.activeTabId) return;
   const file = bundleState.files.get(fileName);
   if (!file) return;
 
@@ -406,120 +667,131 @@ async function switchToFile(fileName) {
   }
 
   bundleState.activeFileName = fileName;
+  syncActiveTabFromBundleState();
   await ensureEditor();
 
-  const monaco = state.monaco;
-  const lang = file.language || languageForFileName(fileName);
-  if (monaco && lightningQuickEditEditor) {
-    monaco.editor.setModelLanguage(lightningQuickEditEditor.getModel(), lang);
-    lightningQuickEditEditor.setValue(file.content);
+  const docId = fileDocumentId(editorSession.activeTabId, fileName);
+  syncModelFromFile(editorSession.activeTabId, fileName, file);
+  lightningWorkbench.switchTab(docId);
+  syncEditorReadOnly();
+
+  const tab = getActiveTab();
+  if (tab && isTabOrgAuthExpired(tab)) {
+    showTabAuthExpiredStatus(tab);
   }
 
   renderFileTabs();
   updateModifiedIndicator();
+  updateCurrentFileDisplay();
+  void persistSession();
 }
 
-async function searchComponents() {
-  const searchInput = document.getElementById('lightningQuickEditSearchInput');
-  const resultsList = document.getElementById('lightningQuickEditResultsList');
-  const bumpListWidth = () => scheduleSyncResultsListWidth();
+async function switchToBundleTab(tabId, options = {}) {
+  const forceReload = options.forceReload === true;
+  if (editorSession.activeTabId === tabId && !forceReload) return;
+  syncActiveTabFromBundleState();
 
-  if (!searchInput || !resultsList) return;
+  const tab = editorSession.tabs.find((t) => t.id === tabId);
+  if (!tab) return;
 
-  const searchTerm = searchInput.value.trim();
+  editorSession.activeTabId = tabId;
+  applyTabToBundleState(tab);
+  await ensureEditor();
 
-  if (!state.leftOrgId) {
-    resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.selectOrgFirst')}</div>`;
-    bumpListWidth();
-    return;
+  if (bundleState.activeFileName) {
+    await switchToFile(bundleState.activeFileName);
+  } else if (isTabOrgAuthExpired(tab)) {
+    showTabAuthExpiredStatus(tab);
   }
 
-  if (searchTerm.length < 2) {
-    resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.minChars')}</div>`;
-    bumpListWidth();
-    return;
-  }
-
-  resultsList.innerHTML = `<div class="quick-edit-results-loading">${t('quickEdit.searching')}</div>`;
-  bumpListWidth();
-
-  try {
-    const res = await bg({
-      type: 'searchIndex',
-      orgId: state.leftOrgId,
-      artifactType: selectedComponentType,
-      prefix: searchTerm
-    });
-
-    if (!res?.ok) {
-      void handleToolResponseFailure(res, { artifact_type: 'LightningQuickEdit', phase: 'search' });
-      if (res?.reason === 'NO_SID') {
-        resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('toast.noSession')}</div>`;
-      } else {
-        resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
-      }
-      bumpListWidth();
-      return;
-    }
-
-    const items = res.items || [];
-    if (items.length === 0) {
-      resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.noResults')}</div>`;
-      bumpListWidth();
-      return;
-    }
-
-    resultsList.innerHTML = '';
-    for (const item of items.slice(0, 50)) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'quick-edit-result-item';
-      btn.textContent = item.developerName || item.name || '(sin nombre)';
-      btn.addEventListener('click', () => loadBundle(item));
-      resultsList.appendChild(btn);
-    }
-    bumpListWidth();
-  } catch (e) {
-    void handleToolError(e, { artifact_type: 'LightningQuickEdit', phase: 'search' });
-    resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
-    bumpListWidth();
-  }
+  renderBundleDocTabs();
+  updateCurrentFileDisplay();
+  updateDeployButtonState();
+  updateModifiedIndicator();
+  void persistSession();
 }
 
-async function loadBundle(item) {
-  if (hasUnsavedChanges()) {
-    const confirm = window.confirm(t('quickEdit.unsavedChanges'));
-    if (!confirm) return;
+async function closeBundleTab(tabId) {
+  const tab = editorSession.tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+
+  const dirty = (tab.files || []).some((f) => isTabContentDirty(f.content, f.originalContent));
+  if (dirty && !window.confirm(t('codeEditor.unsavedTab'))) return;
+
+  const wasActive = editorSession.activeTabId === tabId;
+  editorSession.tabs = editorSession.tabs.filter((t) => t.id !== tabId);
+
+  if (wasActive) {
+    editorSession.activeTabId = editorSession.tabs[0]?.id || null;
+    if (editorSession.activeTabId) {
+      await switchToBundleTab(editorSession.activeTabId);
+    } else {
+      bundleState = null;
+      lightningWorkbench.getEditor()?.setModel(null);
+    }
   }
 
+  lightningWorkbench.closeTabsWithPrefix(tabId);
+
+  renderBundleDocTabs();
+  renderFileTabs();
+  updateCurrentFileDisplay();
+  updateDeployButtonState();
+  updateModifiedIndicator();
+  void persistSession();
+}
+
+function findTabByEntry(entry) {
+  return findCodeEditorTabByArtifact(editorSession.tabs, {
+    artType: entry.artType,
+    artifactName: entry.name,
+    orgId: state.leftOrgId
+  });
+}
+
+async function openTabFromEntry(entry) {
+  const existing = findTabByEntry(entry);
+  if (existing) {
+    await switchToBundleTab(existing.id);
+    setStatus(t('lightningQuickEdit.loaded', { name: existing.bundleName, count: existing.files.length }), 'success');
+    return;
+  }
+  if (editorSession.tabs.length >= MAX_CODE_EDITOR_TABS) {
+    showToast(t('codeEditor.maxTabs'), 'warn');
+    return;
+  }
+  await loadBundle(entry);
+}
+
+async function loadBundle(entry) {
+  if (hasActiveBundleUnsavedChanges()) {
+    if (!window.confirm(t('quickEdit.unsavedChanges'))) return;
+  }
+
+  persistActiveEditorContent();
+  syncActiveTabFromBundleState();
   clearReturnContext();
   setStatus(t('quickEdit.loading'), 'warning');
   setDeployStatus('');
 
-  const bundleName = item.developerName || item.name;
-  const artifactType = selectedComponentType;
+  const bundleName = entry.name;
+  const artifactType = /** @type {'LWC' | 'Aura'} */ (entry.artType);
 
   try {
-    const descriptor = {
-      name: bundleName,
-      bundleId: item.id,
-      bundleDeveloperName: item.developerName || bundleName
-    };
-
     const res = await bg({
       type: 'fetchSource',
       orgId: state.leftOrgId,
       artifactType,
-      descriptor
+      descriptor: {
+        name: bundleName,
+        bundleId: entry.id,
+        bundleDeveloperName: bundleName
+      }
     });
 
     if (!res?.ok) {
       void handleToolResponseFailure(res, { artifact_type: 'LightningQuickEdit', phase: 'load' });
-      if (res?.reason === 'NO_SID') {
-        setStatus(t('toast.noSession'), 'error');
-      } else {
-        setStatus(t('quickEdit.loadError'), 'error');
-      }
+      setStatus(res?.reason === 'NO_SID' ? t('toast.noSession') : t('quickEdit.loadError'), 'error');
       return;
     }
 
@@ -536,35 +808,46 @@ async function loadBundle(item) {
       fileMap.set(fileName, {
         content,
         originalContent: content,
-        language: f.language || languageForFileName(fileName)
+        language: f.language || languageForFileName(fileName),
+        lastModifiedDate: String(f.lastModifiedDate || ''),
+        lastModifiedByName: String(f.lastModifiedByName || ''),
+        lastModifiedByUsername: String(f.lastModifiedByUsername || '')
       });
     }
 
     const sorted = sortFileNames([...fileMap.keys()]);
+    const tabId = createTabId('bundle');
+    const newest = pickNewestSourceMetadata(files);
 
     bundleState = {
       artifactType,
       metadataType: metadataTypeForArtifact(artifactType),
       bundleName,
-      bundleId: item.id,
-      activeFileName: '',
+      bundleId: entry.id || '',
+      activeFileName: sorted[0],
+      lastModifiedDate: String(entry.lastModifiedDate || newest.lastModifiedDate || ''),
+      sourceOrgId: state.leftOrgId || null,
       files: fileMap
     };
 
+    const tab = tabFromBundleState(tabId);
+    if (tab) {
+      tab.pendingRemoteLoad = false;
+      editorSession.tabs = trimTabsToLimit([...editorSession.tabs, tab]);
+      editorSession.activeTabId = tabId;
+      editorSession.orgId = state.leftOrgId || null;
+    }
+
     await ensureEditor();
     await switchToFile(sorted[0]);
+    syncActiveTabFromBundleState();
 
+    renderBundleDocTabs();
     updateDeployButtonState();
     updateModifiedIndicator();
     updateCurrentFileDisplay();
-    renderFileTabs();
-
     setStatus(t('lightningQuickEdit.loaded', { name: bundleName, count: fileMap.size }), 'success');
-
-    const resultsList = document.getElementById('lightningQuickEditResultsList');
-    if (resultsList) resultsList.innerHTML = '';
-    const searchInput = document.getElementById('lightningQuickEditSearchInput');
-    if (searchInput) searchInput.value = '';
+    void persistSession();
   } catch (e) {
     void handleToolError(e, { artifact_type: 'LightningQuickEdit', phase: 'load' });
     setStatus(`${t('quickEdit.loadError')}: ${e.message}`, 'error');
@@ -603,16 +886,19 @@ async function deployBundle(checkOnly = false) {
   }
 
   persistActiveEditorContent();
+  syncActiveTabFromBundleState();
+  const activeTab = getActiveTab();
+
   saveLightningDraft({
     orgId: state.leftOrgId,
     checkOnly,
-    selectedComponentType,
+    tabId: activeTab?.id,
+    selectedComponentType: bundleState.artifactType,
     bundleState
   });
 
   isDeploying = true;
   updateDeployButtonState();
-
   const actionType = checkOnly ? 'validate' : 'deploy';
 
   try {
@@ -634,18 +920,13 @@ async function deployBundle(checkOnly = false) {
       await navigateToDeployStatus(res.asyncId);
     } else {
       let errorMsg = res?.errorMessage || t('quickEdit.deployError');
-      if (res?.reason === 'NO_SID') {
-        errorMsg = t('toast.noSession');
-      }
+      if (res?.reason === 'NO_SID') errorMsg = t('toast.noSession');
       setDeployStatus(errorMsg, 'error');
       showToast(errorMsg, 'error');
       void logUsage(actionType, false, errorMsg);
     }
   } catch (e) {
-    void handleToolError(e, {
-      artifact_type: 'LightningQuickEdit',
-      phase: checkOnly ? 'validate' : 'deploy'
-    });
+    void handleToolError(e, { artifact_type: 'LightningQuickEdit', phase: checkOnly ? 'validate' : 'deploy' });
     const errorMsg = `${t('quickEdit.deployError')}: ${e.message}`;
     setDeployStatus(errorMsg, 'error');
     showToast(errorMsg, 'error');
@@ -656,180 +937,193 @@ async function deployBundle(checkOnly = false) {
   }
 }
 
-function clearBundle() {
-  if (lightningQuickEditEditor) {
-    lightningQuickEditEditor.setValue('');
-  }
+function clearAllTabs() {
+  lightningWorkbench.disposeAll();
+  lightningWorkbench.getEditor()?.setModel(null);
   bundleState = null;
+  editorSession = { orgId: null, activeTabId: null, tabs: [] };
+  sessionRestored = true;
   clearReturnContext();
   setStatus('');
   setDeployStatus('');
+  renderBundleDocTabs();
+  renderFileTabs();
   updateCurrentFileDisplay();
   updateDeployButtonState();
   updateModifiedIndicator();
-  renderFileTabs();
 }
 
-function setComponentType(type) {
-  if (type !== 'LWC' && type !== 'Aura') return;
-  if (type === selectedComponentType) return;
-
-  if (hasUnsavedChanges()) {
-    const confirm = window.confirm(t('quickEdit.unsavedChanges'));
-    if (!confirm) return;
-  }
-
-  selectedComponentType = type;
-  updateTypeToggleUi();
-  clearBundle();
-
-  const resultsList = document.getElementById('lightningQuickEditResultsList');
-  if (resultsList) resultsList.innerHTML = '';
-  const searchInput = document.getElementById('lightningQuickEditSearchInput');
-  if (searchInput) {
-    searchInput.value = '';
-    syncSearchInputWidth();
-  }
+async function clearAllEditorTabs() {
+  if (!window.confirm(t('codeEditor.clearAllConfirm'))) return;
+  clearAllTabs();
+  await clearCodeEditorSession('LightningQuickEdit');
 }
 
 export async function refreshLightningQuickEditPanel() {
-  if (!state.leftOrgId) return;
-
   if (getSelectedArtifactType() === 'LightningQuickEdit') {
+    await restoreSessionFromStorage();
     await ensureEditor();
     const ctx = getReturnContext();
-    if (ctx?.tool === 'LightningQuickEdit' && !bundleState && ctx.draft) {
-      await restoreLightningQuickEditDraft(ctx.draft);
+    if (ctx?.tool === 'LightningQuickEdit' && ctx.draft) {
+      await restoreLightningQuickEditDraft({
+        ...ctx.draft,
+        sourceOrgId: ctx.draft.sourceOrgId || ctx.orgId
+      });
     }
+    await retryLightningQuickEditAuthPendingLoads();
   }
   updateCurrentFileDisplay();
   updateDeployButtonState();
-  updateTypeToggleUi();
+  renderBundleDocTabs();
+  renderFileTabs();
+}
+
+async function restoreSessionFromStorage() {
+  if (sessionRestored) return;
+  sessionRestored = true;
+
+  const stored = await loadCodeEditorSession('LightningQuickEdit');
+  if (!hasStoredCodeEditorTabs(stored)) return;
+
+  editorSession = {
+    orgId: stored.orgId ? String(stored.orgId) : null,
+    activeTabId: stored.activeTabId ? String(stored.activeTabId) : null,
+    tabs: stored.tabs.map((tab) => {
+      const sourceOrgId = tab.sourceOrgId
+        ? String(tab.sourceOrgId)
+        : stored.orgId
+          ? String(stored.orgId)
+          : null;
+      const mapped = {
+        id: String(tab.id),
+        artType: tab.artType === 'Aura' ? 'Aura' : 'LWC',
+        metadataType: String(tab.metadataType || metadataTypeForArtifact(tab.artType === 'Aura' ? 'Aura' : 'LWC')),
+        bundleName: String(tab.bundleName || ''),
+        bundleId: String(tab.bundleId || ''),
+        activeFileName: String(tab.activeFileName || ''),
+        lastModifiedDate: String(tab.lastModifiedDate || ''),
+        lastModifiedByName: String(tab.lastModifiedByName || ''),
+        lastModifiedByUsername: String(tab.lastModifiedByUsername || ''),
+        sourceOrgId,
+        pendingRemoteLoad: tab.pendingRemoteLoad === true,
+        files: Array.isArray(tab.files)
+          ? tab.files.map((f) => ({
+              fileName: String(f.fileName || ''),
+              content: String(f.content ?? ''),
+              originalContent: String(f.originalContent ?? ''),
+              language: String(f.language || languageForFileName(f.fileName)),
+              lastModifiedDate: String(f.lastModifiedDate || ''),
+              lastModifiedByName: String(f.lastModifiedByName || ''),
+              lastModifiedByUsername: String(f.lastModifiedByUsername || '')
+            }))
+          : []
+      };
+      if (isTabOrgAuthExpired(mapped)) {
+        setTabPendingRemoteLoad(mapped, true);
+      }
+      return mapped;
+    })
+  };
+
+  if (!editorSession.activeTabId || !editorSession.tabs.some((t) => t.id === editorSession.activeTabId)) {
+    editorSession.activeTabId = editorSession.tabs[0]?.id || null;
+  }
+
+  if (editorSession.activeTabId) {
+    await switchToBundleTab(editorSession.activeTabId);
+  }
 }
 
 /**
- * @param {{
- *   artifactType: 'LWC' | 'Aura',
- *   metadataType: string,
- *   bundleName: string,
- *   bundleId: string,
- *   activeFileName: string,
- *   selectedComponentType: 'LWC' | 'Aura',
- *   files: { fileName: string, content: string, originalContent: string, language: string }[]
- * }} draft
+ * @param {import('../lib/quickEditDeployContext.js').LightningQuickEditDraft} draft
  */
 export async function restoreLightningQuickEditDraft(draft) {
   if (!draft) return;
 
-  selectedComponentType = draft.selectedComponentType || draft.artifactType;
-  updateTypeToggleUi();
+  let tab = draft.tabId ? editorSession.tabs.find((t) => t.id === draft.tabId) : null;
 
-  const fileMap = new Map();
-  for (const f of draft.files || []) {
-    fileMap.set(f.fileName, {
+  if (!tab) {
+    tab = {
+      id: draft.tabId || createTabId('bundle'),
+      artType: draft.artifactType,
+      metadataType: draft.metadataType,
+      bundleName: draft.bundleName,
+      bundleId: draft.bundleId,
+      activeFileName: draft.activeFileName || draft.files?.[0]?.fileName || '',
+      lastModifiedDate: draft.lastModifiedDate || '',
+      sourceOrgId: draft.sourceOrgId || state.leftOrgId || null,
+      files: (draft.files || []).map((f) => ({
+        fileName: f.fileName,
+        content: f.content,
+        originalContent: f.originalContent,
+        language: f.language || languageForFileName(f.fileName),
+        lastModifiedDate: String(f.lastModifiedDate || ''),
+        lastModifiedByName: String(f.lastModifiedByName || ''),
+        lastModifiedByUsername: String(f.lastModifiedByUsername || '')
+      }))
+    };
+    editorSession.tabs = trimTabsToLimit([...editorSession.tabs.filter((t) => t.id !== tab.id), tab]);
+  } else {
+    tab.files = (draft.files || []).map((f) => ({
+      fileName: f.fileName,
       content: f.content,
       originalContent: f.originalContent,
-      language: f.language || languageForFileName(f.fileName)
-    });
+      language: f.language || languageForFileName(f.fileName),
+      lastModifiedDate: String(f.lastModifiedDate || ''),
+      lastModifiedByName: String(f.lastModifiedByName || ''),
+      lastModifiedByUsername: String(f.lastModifiedByUsername || '')
+    }));
+    tab.activeFileName = draft.activeFileName || tab.files[0]?.fileName || '';
+    tab.lastModifiedDate = draft.lastModifiedDate || tab.lastModifiedDate;
+    tab.sourceOrgId = draft.sourceOrgId || tab.sourceOrgId || state.leftOrgId || null;
   }
 
-  bundleState = {
-    artifactType: draft.artifactType,
-    metadataType: draft.metadataType,
-    bundleName: draft.bundleName,
-    bundleId: draft.bundleId,
-    activeFileName: draft.activeFileName || draft.files?.[0]?.fileName || '',
-    files: fileMap
-  };
+  editorSession.activeTabId = tab.id;
+  editorSession.orgId = state.leftOrgId || editorSession.orgId;
+  applyTabToBundleState(tab);
+
+  lightningWorkbench.closeTabsWithPrefix(tab.id);
 
   await ensureEditor();
-  if (bundleState.activeFileName) {
+  if (bundleState?.activeFileName) {
     await switchToFile(bundleState.activeFileName);
   }
 
+  renderBundleDocTabs();
   updateDeployButtonState();
   updateModifiedIndicator();
   updateCurrentFileDisplay();
   renderFileTabs();
-  setStatus(t('lightningQuickEdit.loaded', { name: draft.bundleName, count: fileMap.size }), 'success');
+  setStatus(t('lightningQuickEdit.loaded', { name: draft.bundleName, count: tab.files.length }), 'success');
   setDeployStatus('');
+  void persistSession();
 }
 
 export function setupLightningQuickEditPanel() {
-  const searchInput = document.getElementById('lightningQuickEditSearchInput');
+  const searchInput = /** @type {HTMLInputElement | null} */ (
+    document.getElementById('lightningQuickEditSearchInput')
+  );
   const resultsList = document.getElementById('lightningQuickEditResultsList');
   const deployBtn = document.getElementById('lightningQuickEditDeployBtn');
   const validateBtn = document.getElementById('lightningQuickEditValidateBtn');
   const clearBtn = document.getElementById('lightningQuickEditClearBtn');
-  const lwcBtn = document.getElementById('lightningQuickEditTypeLwc');
-  const auraBtn = document.getElementById('lightningQuickEditTypeAura');
 
-  updateTypeToggleUi();
-
-  if (lwcBtn) {
-    lwcBtn.addEventListener('click', () => setComponentType('LWC'));
-  }
-  if (auraBtn) {
-    auraBtn.addEventListener('click', () => setComponentType('Aura'));
-  }
-
-  if (searchInput) {
-    let searchTimeout = null;
-    searchInput.addEventListener('input', () => {
-      syncSearchInputWidth();
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => searchComponents(), 400);
-    });
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        clearTimeout(searchTimeout);
-        searchComponents();
-      }
-      if (e.key === 'Escape') {
-        if (resultsList) {
-          resultsList.innerHTML = '';
-          scheduleSyncResultsListWidth();
-        }
-      }
-    });
-    searchInput.addEventListener('focus', () => {
-      syncSearchInputWidth();
-      if (searchInput.value.trim().length >= 2) {
-        searchComponents();
-      }
-    });
-    syncSearchInputWidth();
-    window.addEventListener('resize', () => {
-      syncSearchInputWidth();
-      scheduleSyncResultsListWidth();
+  if (searchInput && resultsList) {
+    setupCodeEditorSearch({
+      inputEl: searchInput,
+      resultsEl: resultsList,
+      artTypes: ['LWC', 'Aura'],
+      onSelect: (entry) => void openTabFromEntry(entry)
     });
   }
 
-  document.addEventListener('click', (e) => {
-    const searchContainer = searchInput?.closest('.quick-edit-search-zone');
-    if (resultsList && searchContainer && !searchContainer.contains(e.target)) {
-      resultsList.innerHTML = '';
-      scheduleSyncResultsListWidth();
-    }
-  });
+  setupCodeEditorSessionPersistence('LightningQuickEdit', persistSession);
 
-  if (deployBtn) {
-    deployBtn.addEventListener('click', () => deployBundle(false));
-  }
-
-  if (validateBtn) {
-    validateBtn.addEventListener('click', () => deployBundle(true));
-  }
+  if (deployBtn) deployBtn.addEventListener('click', () => deployBundle(false));
+  if (validateBtn) validateBtn.addEventListener('click', () => deployBundle(true));
 
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      if (hasUnsavedChanges()) {
-        const confirm = window.confirm(t('quickEdit.unsavedChanges'));
-        if (!confirm) return;
-      }
-      clearBundle();
-    });
+    clearBtn.addEventListener('click', () => void clearAllEditorTabs());
   }
 
   window.addEventListener('beforeunload', (e) => {
@@ -841,9 +1135,10 @@ export function setupLightningQuickEditPanel() {
 }
 
 export function refreshLightningQuickEditEditorTheme() {
-  if (!lightningQuickEditEditor) return;
+  const editor = lightningWorkbench.getEditor();
+  if (!editor) return;
   try {
-    lightningQuickEditEditor.updateOptions({ theme: resolveMonacoThemeId() });
+    editor.updateOptions({ theme: resolveMonacoThemeId() });
   } catch {
     /* ignore */
   }

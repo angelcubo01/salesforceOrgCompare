@@ -8,6 +8,7 @@ import { syncListActiveHighlight } from './listUi.js';
 import { updateDocumentTitle } from './documentMeta.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { refreshGeneratePackageXmlTypes } from './generatePackageXmlPanel.js';
+import { refreshMetadataTypeComparePanel } from './metadataTypeComparePanel.js';
 import { refreshFieldDependencyPanel } from './fieldDependencyPanel.js';
 import { refreshDependencyExplorerPanel } from './dependencyExplorerPanel.js';
 import { refreshApexTestsPanel, resetApexTestsShellToHub } from './apexTestsPanel.js';
@@ -30,7 +31,6 @@ import { t } from '../../shared/i18n.js';
 import {
   capMetadataResults,
   fillBreadcrumb,
-  isNameIndexReady,
   kickSilentIndexBuild,
   metadataSearchItemClasses,
   MIN_METADATA_CHARS,
@@ -38,6 +38,10 @@ import {
   resolveMetadataMatches,
   sanitizeApiPrefix
 } from '../lib/metadataSearch.js';
+import {
+  getMetadataSearchLoadingMessage,
+  renderSearchLoadingSpinner
+} from './searchLoadingUi.js';
 
 const SIDEBAR_MAX_METADATA_RESULTS = 20;
 
@@ -90,6 +94,7 @@ export function handleArtifactTypeSelectChange(options = {}) {
     void renderEditor();
   }
   refreshGeneratePackageXmlTypes();
+  void refreshMetadataTypeComparePanel();
   if (typeSelect?.value === 'ApexTests') {
     resetApexTestsShellToHub();
   }
@@ -224,21 +229,8 @@ function renderSidebarStatusMessage(results, kind, message) {
  * @param {string} message
  */
 function renderSidebarSearchLoading(results, message) {
-  results.innerHTML = '';
   sidebarActiveResultIndex = -1;
-  const row = document.createElement('div');
-  row.className = 'sidebar-search-loading-item';
-  row.setAttribute('role', 'status');
-  row.setAttribute('aria-live', 'polite');
-  const spinner = document.createElement('span');
-  spinner.className = 'sidebar-search-loading-spinner';
-  spinner.setAttribute('aria-hidden', 'true');
-  const text = document.createElement('span');
-  text.className = 'sidebar-search-loading-text';
-  text.textContent = message;
-  row.append(spinner, text);
-  results.appendChild(row);
-  showSidebarSearchResults();
+  renderSearchLoadingSpinner(results, message, { onShow: () => showSidebarSearchResults() });
 }
 
 /**
@@ -309,9 +301,7 @@ async function runComparatorSearchImpl() {
     if (input.value.trim() && gen === sidebarSearchGeneration) void runComparatorSearchImpl();
   });
 
-  const loadingMessage = !isNameIndexReady(orgId)
-    ? t('quickOpen.loadingIndex')
-    : t('quickOpen.searching');
+  const loadingMessage = getMetadataSearchLoadingMessage(orgId);
   renderSidebarSearchLoading(results, loadingMessage);
 
   const metadata = await resolveMetadataMatches(orgId, queryLocal, apiPrefix);
@@ -329,6 +319,7 @@ function isSearchDisabledForTool(selectedType) {
   return (
     !selectedType ||
     selectedType === 'GeneratePackageXml' ||
+    selectedType === 'MetadataTypeCompare' ||
     selectedType === 'ApexTests' ||
     selectedType === 'AnonymousApex' ||
     selectedType === 'QueryExplorer' ||

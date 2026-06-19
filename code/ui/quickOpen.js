@@ -17,6 +17,10 @@ import {
   resolveMetadataMatches,
   sanitizeApiPrefix
 } from '../lib/metadataSearch.js';
+import {
+  getMetadataSearchLoadingMessage,
+  renderSearchLoadingSpinner
+} from './searchLoadingUi.js';
 
 /** Atajo global: Ctrl+Shift+P / ⌘⇧P (evita Ctrl+P = Imprimir en Chrome). */
 const QUICK_OPEN_SHORTCUT = Object.freeze({
@@ -223,6 +227,13 @@ async function runQuickOpenSearchAsync() {
     if (!isOpen) return;
     const inp = /** @type {HTMLInputElement | null} */ (document.getElementById('quickOpenInput'));
     if (inp?.value.trim()) runQuickOpenSearchDebounced();
+  });
+
+  renderSearchLoadingSpinner(results, getMetadataSearchLoadingMessage(orgId), {
+    onShow: () => {
+      results.classList.remove('hidden');
+      syncInputExpanded(true);
+    }
   });
 
   const metadata = await resolveMetadataMatches(orgId, queryLocal, apiPrefix);

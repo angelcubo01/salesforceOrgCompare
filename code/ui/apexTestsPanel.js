@@ -40,6 +40,9 @@ const selectedClassOptionValues = new Set();
 /** Métodos marcados por nombre de clase (persiste al añadir clases / recargar tabla). */
 const methodSelectionsByClass = new Map();
 
+/** Métodos conocidos por clase (se rellena al cargar la tabla de métodos de la clase activa). */
+const methodsByClassCache = new Map();
+
 function classOptionValue(c) {
   if (c?.id) return c.id;
   return `${CLASS_OPT_NAME_PREFIX}${c?.name || ''}`;
@@ -150,6 +153,7 @@ function ensureClassSelectedByName(className) {
 export function clearRunnerSelection() {
   selectedClassOptionValues.clear();
   methodSelectionsByClass.clear();
+  methodsByClassCache.clear();
   activeClassForMethods = null;
   const orgId = state.leftOrgId != null ? String(state.leftOrgId) : '';
   if (orgId) {
@@ -526,6 +530,56 @@ function getSelectedClassNamesOrdered() {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
+function syncClassCheckboxVisual(cb, className) {
+  if (!cb) return;
+  const cn = className || classNameFromOptionValue(cb.value);
+  const valInSet = selectedClassOptionValues.has(cb.value);
+  const methodSet = methodSelectionsByClass.get(cn);
+
+  cb.indeterminate = false;
+
+  if (!valInSet && (!methodSet || methodSet.size === 0)) {
+    cb.checked = false;
+    return;
+  }
+
+  if (valInSet && (!methodSet || methodSet.size === 0)) {
+    cb.checked = true;
+    return;
+  }
+
+  const allMethods = methodsByClassCache.get(cn);
+  if (allMethods && allMethods.length > 0 && methodSet) {
+    const allSelected =
+      allMethods.length === methodSet.size && allMethods.every((m) => methodSet.has(m));
+    if (allSelected) {
+      cb.checked = true;
+      return;
+    }
+    if (methodSet.size > 0) {
+      cb.checked = false;
+      cb.indeterminate = true;
+      return;
+    }
+  }
+
+  if (methodSet && methodSet.size > 0) {
+    cb.checked = false;
+    cb.indeterminate = true;
+    return;
+  }
+
+  cb.checked = valInSet;
+}
+
+function syncAllClassCheckboxVisuals() {
+  const { classTbody } = getEls();
+  if (!classTbody) return;
+  classTbody.querySelectorAll('input.apex-tests-class-cb').forEach((cb) => {
+    syncClassCheckboxVisual(cb);
+  });
+}
+
 function syncMethodCheckboxToMap(cb) {
   try {
     const [cn, mn] = JSON.parse(cb.value);
@@ -539,13 +593,20 @@ function syncMethodCheckboxToMap(cb) {
         const rowCb = getEls().classTbody?.querySelector(
           `input.apex-tests-class-cb[value="${CSS.escape(val)}"]`
         );
-        if (rowCb && !rowCb.checked) rowCb.checked = true;
+        if (rowCb) syncClassCheckboxVisual(rowCb, cn);
       }
     } else {
       const set = methodSelectionsByClass.get(cn);
       if (set) {
         set.delete(mn);
         if (set.size === 0) methodSelectionsByClass.delete(cn);
+      }
+      const val = classOptionValueForName(cn);
+      if (val) {
+        const rowCb = getEls().classTbody?.querySelector(
+          `input.apex-tests-class-cb[value="${CSS.escape(val)}"]`
+        );
+        if (rowCb) syncClassCheckboxVisual(rowCb, cn);
       }
     }
     schedulePersistRunnerSelection();
@@ -612,7 +673,11 @@ function updateClassRowActiveHighlight() {
     const cb = tr.querySelector('input.apex-tests-class-cb');
     tr.classList.toggle(
       'apex-tests-class-row-active',
-      !!(cb && cb.checked && cb.value === activeClassForMethods)
+      !!(
+        cb &&
+        (cb.checked || cb.indeterminate) &&
+        cb.value === activeClassForMethods
+      )
     );
   });
 }
@@ -663,7 +728,7 @@ function applyClassFilter() {
     cb.type = 'checkbox';
     cb.className = 'apex-tests-class-cb';
     cb.value = val;
-    cb.checked = selectedClassOptionValues.has(val);
+    syncClassCheckboxVisual(cb, c.name);
     tdCb.appendChild(cb);
     const tdName = document.createElement('td');
     tdName.className = 'apex-tests-td-name';
@@ -678,6 +743,7 @@ function applyClassFilter() {
   updateClassRowActiveHighlight();
   renderMethodClassTabs();
   refreshSelectionTree();
+  syncAllClassCheckboxVisuals();
   scheduleApexTestsFitScale();
 }
 
@@ -747,6 +813,7 @@ async function reloadMethodsForSelection() {
   const firstClassCb = getEls().classTbody?.querySelector('input.apex-tests-class-cb');
   const cbDisabled = !!(firstClassCb && firstClassCb.disabled);
   for (const entry of res.byClass) {
+    methodsByClassCache.set(entry.name, [...(entry.methods || [])]);
     const saved = methodSelectionsByClass.get(entry.name);
     for (const m of entry.methods || []) {
       const tr = document.createElement('tr');
@@ -771,6 +838,7 @@ async function reloadMethodsForSelection() {
   updateClassRowActiveHighlight();
   renderMethodClassTabs();
   refreshSelectionTree();
+  syncAllClassCheckboxVisuals();
   scheduleApexTestsFitScale();
 }
 
@@ -780,6 +848,7 @@ async function loadApexClasses() {
   if (apexTestsPanelOrgId !== state.leftOrgId) {
     selectedClassOptionValues.clear();
     methodSelectionsByClass.clear();
+    methodsByClassCache.clear();
     activeClassForMethods = null;
     apexTestsPanelOrgId = state.leftOrgId;
     await restoreRunnerSelectionForOrg(state.leftOrgId);
@@ -994,7 +1063,7 @@ export function setupApexTestsPanel() {
     const tr = e.target.closest('tr');
     if (!tr || !classTbody.contains(tr)) return;
     const cb = tr.querySelector('input.apex-tests-class-cb');
-    if (!cb || !cb.checked) return;
+    if (!cb || (!cb.checked && !cb.indeterminate)) return;
     if (activeClassForMethods === cb.value) return;
     activeClassForMethods = cb.value;
     updateClassRowActiveHighlight();
@@ -1003,13 +1072,16 @@ export function setupApexTestsPanel() {
   tablesWrap?.addEventListener('change', (ev) => {
     const el = ev.target;
     if (el?.classList.contains('apex-tests-class-cb')) {
+      const cn = classNameFromOptionValue(el.value);
       if (el.checked) {
         selectedClassOptionValues.add(el.value);
+        if (cn) methodSelectionsByClass.delete(cn);
+        el.indeterminate = false;
         activeClassForMethods = el.value;
       } else {
         selectedClassOptionValues.delete(el.value);
-        const cn = classNameFromOptionValue(el.value);
         if (cn) methodSelectionsByClass.delete(cn);
+        el.indeterminate = false;
         if (activeClassForMethods === el.value) {
           activeClassForMethods = getCheckedClassValues()[0] ?? null;
         }
@@ -1022,6 +1094,7 @@ export function setupApexTestsPanel() {
       syncMethodCheckboxToMap(el);
       refreshSelectionTree();
       updateClassRowActiveHighlight();
+      syncAllClassCheckboxVisuals();
     }
   });
   if (runBtn) runBtn.addEventListener('click', () => void runApexTests());

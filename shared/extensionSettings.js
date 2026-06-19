@@ -15,7 +15,9 @@ export const EXTENSION_FIELD_BOUNDS = {
   apexTestsExpandedMethodsPollIntervalMs: { min: 1000, max: 120_000 },
   apexTestsMaxTrackedJobs: { min: 3, max: 100 },
   /** Porcentaje mínimo (0–100) para listar clases en el modal Cobertura del hub Apex tests. */
-  apexTestsCoverageMinPercent: { min: 0, max: 100 }
+  apexTestsCoverageMinPercent: { min: 0, max: 100 },
+  /** Porcentaje de consumo (0–100) a partir del cual Org Limits marca anillos y tarjetas en rojo. */
+  orgLimitsWarningPercent: { min: 0, max: 100 }
 };
 
 /** Claves ordenadas para el formulario de Ajustes → Avanzado. */
@@ -67,6 +69,8 @@ const DEFAULTS = {
   apexTestsMaxTrackedJobs: 25,
   /** Mínimo de cobertura (0–100) para incluir una clase/trigger en el modal Cobertura. */
   apexTestsCoverageMinPercent: 50,
+  /** Consumo (0–100) a partir del cual Org Limits resalta límites en rojo y los prioriza arriba. */
+  orgLimitsWarningPercent: 85,
   /** Patrones LIKE para SOQL (coma): qué ApexClass se consideran “de prueba” al listar. */
   apexTestsClassNameLikePatterns: '%test%',
   /** DeveloperName del registro DebugLevel al activar trazas USER_DEBUG antes de ejecutar tests Apex. */
@@ -232,6 +236,15 @@ export function getApexTestsMaxTrackedJobs() {
 export function getApexTestsCoverageMinPercent() {
   const v = cache.apexTestsCoverageMinPercent;
   return typeof v === 'number' && Number.isFinite(v) ? v : DEFAULTS.apexTestsCoverageMinPercent;
+}
+
+/**
+ * Porcentaje de consumo (0–100) a partir del cual Org Limits marca anillos y tarjetas en rojo.
+ * @returns {number}
+ */
+export function getOrgLimitsWarningPercent() {
+  const v = cache.orgLimitsWarningPercent;
+  return typeof v === 'number' && Number.isFinite(v) ? v : DEFAULTS.orgLimitsWarningPercent;
 }
 
 /**

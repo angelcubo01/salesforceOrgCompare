@@ -3,7 +3,7 @@ import { bg } from '../core/bridge.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { renderDonutChart } from '../lib/orgLimitsCharts.js';
-import { buildSetupDeployDetailsUrl, isDeployInProgress, collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS } from '../../shared/deployStatusApi.js';
+import { buildSetupDeployDetailsUrl, isDeployInProgress, collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS, hasCoverageFailureInRow, hasCoverageFailureInSoap } from '../../shared/deployStatusApi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { getReturnContext, returnToQuickEditEditor } from '../lib/quickEditDeployContext.js';
 
@@ -14,7 +14,7 @@ const DONUT_SIZE = 176;
 const ACTIVE_DONUT_SIZE = 152;
 
 const COLOR_SUCCESS = '#22c55e';
-const COLOR_PROGRESS = '#f59e0b';
+const COLOR_PROGRESS = '#0176d3';
 const COLOR_ERROR = '#ef4444';
 const COLOR_NEUTRAL = '#64748b';
 
@@ -30,6 +30,8 @@ let componentSearchQuery = '';
 let cancelInFlight = false;
 let summaryBootstrapped = false;
 let lastDeployPanelOrgId = '';
+/** @type {Map<string, { coverageWarningCount: number }>} */
+const deployRowHintById = new Map();
 /** @type {Record<string, unknown> | null} */
 let lastPollData = null;
 
@@ -197,9 +199,40 @@ function buildStatusBadgeHtml(row, soap = {}, opts = {}) {
   </span>`;
 }
 
-function getProgressColor(done, hasError, inProgress) {
-  if (hasError) return COLOR_ERROR;
-  if (done) return COLOR_SUCCESS;
+/**
+ * @param {Record<string, unknown>} row
+ * @param {Record<string, unknown>} [soap]
+ */
+function hasDeployFailure(row, soap = {}) {
+  const status = resolveDeployStatus(row, soap);
+  const compErrors = Number(soap.numberComponentErrors ?? row?.componentErrors) || 0;
+  const testErrors = Number(soap.numberTestErrors ?? row?.testErrors) || 0;
+  const componentFailures = soap.componentFailures?.length || 0;
+  const testFailures = soap.runTestResult?.failures?.length || 0;
+  const coverageWarnings = soap.runTestResult?.codeCoverageWarnings?.length || 0;
+
+  return (
+    status === 'Failed' ||
+    compErrors > 0 ||
+    testErrors > 0 ||
+    componentFailures > 0 ||
+    testFailures > 0 ||
+    coverageWarnings > 0
+  );
+}
+
+/**
+ * @param {Record<string, unknown>} row
+ * @param {Record<string, unknown>} [soap]
+ */
+function getDonutColor(row, soap = {}) {
+  if (hasDeployFailure(row, soap)) return COLOR_ERROR;
+
+  const status = resolveDeployStatus(row, soap);
+  const inProgress = isDeployInProgress(status);
+  const done = soap.done || ['Succeeded', 'Failed', 'Canceled'].includes(status);
+
+  if (done && status === 'Succeeded') return COLOR_SUCCESS;
   if (inProgress) return COLOR_PROGRESS;
   return COLOR_NEUTRAL;
 }
@@ -224,7 +257,6 @@ function renderProgressDonut(slotEl, labelEl, processed, total, color, size = DO
 function renderTestsDonut(slotEl, labelEl, row, soap, size = DONUT_SIZE) {
   const testsTotal = Number(soap?.numberTestsTotal ?? row?.testsTotal) || 0;
   const testsCompleted = Number(soap?.numberTestsCompleted ?? row?.testsCompleted) || 0;
-  const testErrors = Number(soap?.numberTestErrors ?? row?.testErrors) || 0;
   const runTests = row?.runTestsEnabled || testsTotal > 0;
 
   if (!runTests && testsTotal === 0) {
@@ -236,27 +268,56 @@ function renderTestsDonut(slotEl, labelEl, row, soap, size = DONUT_SIZE) {
   }
 
   labelEl.classList.remove('is-muted');
-  const done = ['Succeeded', 'Failed'].includes(resolveDeployStatus(row, soap));
-  const inProgress = isDeployInProgress(resolveDeployStatus(row, soap));
-  const color = getProgressColor(done, testErrors > 0 && resolveDeployStatus(row, soap) === 'Failed', inProgress);
+  const color = getDonutColor(row, soap);
   renderProgressDonut(slotEl, labelEl, testsCompleted, testsTotal, color, size);
 }
 
-function updateActiveComponentPercent(processed, total) {
-  const el = document.getElementById('deployStatusActiveComponentPct');
-  if (!el) return;
-  const proc = Math.max(0, Number(processed) || 0);
-  const tot = Math.max(0, Number(total) || 0);
-  if (tot <= 0) {
-    el.textContent = '';
-    el.classList.add('hidden');
-    return;
+function clearDeployRowHintCache() {
+  deployRowHintById.clear();
+}
+
+function mergeFailedCoverageHints(hints) {
+  if (!hints || typeof hints !== 'object') return;
+  for (const [asyncId, hint] of Object.entries(hints)) {
+    if (!asyncId || !hint || typeof hint !== 'object') continue;
+    const count = Number(hint.coverageWarningCount) || 0;
+    if (count <= 0) continue;
+    deployRowHintById.set(String(asyncId), { coverageWarningCount: count });
   }
-  el.textContent = `${Math.round((proc / tot) * 100)}%`;
-  el.classList.remove('hidden');
+}
+
+function cacheDeployRowHintsFromSoap(asyncId, soap) {
+  const id = String(asyncId || '').trim();
+  if (!id || !soap) return;
+
+  const coverageWarningCount = soap.runTestResult?.codeCoverageWarnings?.length || 0;
+  const coverageFailure = hasCoverageFailureInSoap(soap);
+  if (coverageWarningCount <= 0 && !coverageFailure) return;
+
+  deployRowHintById.set(id, {
+    coverageWarningCount: coverageWarningCount || 1
+  });
+}
+
+function getDeployRowHints(asyncId) {
+  return deployRowHintById.get(String(asyncId || '')) || null;
+}
+
+function getCachedSoapForRow(row) {
+  const id = String(row?.asyncId || '');
+  if (!id || !lastPollData) return null;
+  if (lastPollData.active?.asyncId === id && lastPollData.activeSoap) return lastPollData.activeSoap;
+  if (lastPollData.detail?.row?.asyncId === id && lastPollData.detail?.soap) return lastPollData.detail.soap;
+  return null;
+}
+
+function isCoverageFailure(row, soap) {
+  return hasCoverageFailureInSoap(soap) || hasCoverageFailureInRow(row);
 }
 
 function buildErrorsSummary(row) {
+  const soap = getCachedSoapForRow(row);
+  const hints = getDeployRowHints(row?.asyncId);
   const compErr = Number(row?.componentErrors) || 0;
   const testErr = Number(row?.testErrors) || 0;
   const parts = [];
@@ -268,6 +329,19 @@ function buildErrorsSummary(row) {
       testErr === 1 ? t('deployStatus.oneTestFailure') : t('deployStatus.nTestFailures', { count: testErr })
     );
   }
+
+  const coverageCount =
+    soap?.runTestResult?.codeCoverageWarnings?.length || hints?.coverageWarningCount || 0;
+  if (coverageCount > 0) {
+    parts.push(
+      coverageCount === 1
+        ? t('deployStatus.oneCoverageFailure')
+        : t('deployStatus.nCoverageFailures', { count: coverageCount })
+    );
+  } else if (isCoverageFailure(row, soap)) {
+    parts.push(t('deployStatus.coverageFailure'));
+  }
+
   return parts.join(', ') || '—';
 }
 
@@ -276,7 +350,7 @@ function applyViewMode() {
   panel?.classList.toggle('deploy-status-is-detail', viewMode === 'detail');
   document.getElementById('deployStatusSummaryView')?.classList.toggle('hidden', viewMode === 'detail');
   document.getElementById('deployStatusDetailView')?.classList.toggle('hidden', viewMode !== 'detail');
-  syncBackToEditorButton();
+  syncDeployDetailBackButton();
 }
 
 function emptySummaryPollData() {
@@ -296,6 +370,7 @@ function resetDeployStatusPanelToHome() {
   componentSearchQuery = '';
   lastPollData = null;
   summaryBootstrapped = false;
+  clearDeployRowHintCache();
   applyViewMode();
   showPanelError('');
   const searchInput = /** @type {HTMLInputElement | null} */ (document.getElementById('deployStatusComponentsSearch'));
@@ -312,19 +387,21 @@ function resetDeployStatusPanelToHome() {
   setPanelLoading(false);
 }
 
-function syncBackToEditorButton() {
-  const btn = document.getElementById('deployStatusBackToEditorBtn');
+function syncDeployDetailBackButton() {
+  const backBtn = document.getElementById('deployStatusBackBtn');
+  const editorBtn = document.getElementById('deployStatusBackToEditorBtn');
   const ctx = getReturnContext();
-  if (!btn) return;
-  if (!ctx || viewMode !== 'detail') {
-    btn.hidden = true;
-    return;
+  if (editorBtn) editorBtn.hidden = true;
+  if (!backBtn) return;
+  if (ctx && viewMode === 'detail') {
+    const labelKey =
+      ctx.tool === 'LightningQuickEdit'
+        ? 'deployStatus.backToLightningEditor'
+        : 'deployStatus.backToApexEditor';
+    backBtn.textContent = `← ${t(labelKey)}`;
+  } else {
+    backBtn.textContent = t('deployStatus.backToSummary');
   }
-  btn.hidden = false;
-  btn.textContent =
-    ctx.tool === 'LightningQuickEdit'
-      ? t('deployStatus.backToLightningEditor')
-      : t('deployStatus.backToApexEditor');
 }
 
 function findRowByAsyncId(data, asyncId) {
@@ -385,6 +462,14 @@ function navigateToSummary() {
   void tickDeployStatus();
 }
 
+function handleDeployDetailBack() {
+  if (getReturnContext()) {
+    void returnToQuickEditEditor();
+    return;
+  }
+  navigateToSummary();
+}
+
 function openDeployDetail(asyncId) {
   navigateToDetail(asyncId);
 }
@@ -395,7 +480,7 @@ export function openDeployStatusDetail(asyncId) {
 }
 
 function closeDeployDetail() {
-  navigateToSummary();
+  handleDeployDetailBack();
 }
 
 function buildMetaListHtml(row) {
@@ -424,7 +509,6 @@ function buildActiveChartsHtml() {
         <div class="deploy-status-chart-header">
           <span class="deploy-status-chart-num">1</span>
           <span class="deploy-status-chart-title">${escapeHtml(t('deployStatus.chartComponents'))}</span>
-          <span id="deployStatusActiveComponentPct" class="deploy-status-chart-pct hidden" aria-hidden="true"></span>
         </div>
         <div class="deploy-status-chart-wrap deploy-status-chart-wrap--compact">
           <div id="deployStatusActiveComponentChart" class="deploy-status-chart-slot"></div>
@@ -448,23 +532,18 @@ function buildActiveChartsHtml() {
 
 function renderDonutsForRow(row, soap, chartIds = {}, donutSize = DONUT_SIZE) {
   const viewSoap = coalesceDetailSoap(row, soap);
-  const status = resolveDeployStatus(row, viewSoap);
   const compDeployed = viewSoap.numberComponentsDeployed ?? row.componentsDeployed;
   const compTotal = viewSoap.numberComponentsTotal ?? row.componentsTotal;
-  const compErrors = viewSoap.numberComponentErrors ?? row.componentErrors;
-  const inProgress = isDeployInProgress(status);
-  const done = viewSoap.done || ['Succeeded', 'Failed', 'Canceled'].includes(status);
-  const compColor = getProgressColor(done, compErrors > 0 && status === 'Failed', inProgress);
+  const donutColor = getDonutColor(row, viewSoap);
 
   renderProgressDonut(
     document.getElementById(chartIds.componentChart || 'deployStatusComponentChart'),
     document.getElementById(chartIds.componentLabel || 'deployStatusComponentLabel'),
     compDeployed,
     compTotal,
-    compColor,
+    donutColor,
     donutSize
   );
-  updateActiveComponentPercent(compDeployed, compTotal);
   renderTestsDonut(
     document.getElementById(chartIds.testsChart || 'deployStatusTestsChart'),
     document.getElementById(chartIds.testsLabel || 'deployStatusTestsLabel'),
@@ -741,7 +820,8 @@ function renderCoverageWarningsSection(soap) {
   section.classList.toggle('hidden', !warnings.length);
   tbody.innerHTML = '';
   for (const w of warnings) {
-    const classLabel = [w.namespace, w.name].filter(Boolean).join('.') || w.id || '—';
+    const classLabel =
+      [w.namespace, w.name].filter(Boolean).join('.') || w.id || t('deployStatus.coverageFailure');
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="deploy-status-mono">${escapeHtml(classLabel)}</td>
@@ -822,6 +902,7 @@ function renderDetailView(data) {
   renderDonutsForRow(row, rawSoap);
 
   if (soapReady) {
+    cacheDeployRowHintsFromSoap(row.asyncId, rawSoap);
     renderGlobalError(row, rawSoap);
     renderFailuresSection(rawSoap);
     renderTestFailuresSection(rawSoap);
@@ -843,6 +924,13 @@ function renderDetailView(data) {
 }
 
 function renderSummaryView(data) {
+  mergeFailedCoverageHints(data?.failedCoverageHints);
+  if (data?.active?.asyncId && data.activeSoap) {
+    cacheDeployRowHintsFromSoap(data.active.asyncId, data.activeSoap);
+  }
+  if (data?.detail?.row?.asyncId && data.detail?.soap) {
+    cacheDeployRowHintsFromSoap(data.detail.row.asyncId, data.detail.soap);
+  }
   renderActiveCard(data);
   renderHistoryTable(data?.failedHistory, 'failed');
   renderHistoryTable(data?.succeededHistory, 'succeeded');
@@ -914,7 +1002,8 @@ async function tickDeployStatus(opts = {}) {
       failedPage,
       succeededPage,
       pageSize: PAGE_SIZE,
-      fetchDetail: viewMode === 'detail' && !!selectedAsyncId
+      fetchDetail: viewMode === 'detail' && !!selectedAsyncId,
+      knownCoverageHintIds: [...deployRowHintById.keys()]
     });
     if (!res?.ok) {
       if (viewMode === 'summary') {
@@ -925,6 +1014,7 @@ async function tickDeployStatus(opts = {}) {
       return;
     }
     lastPollData = res;
+    mergeFailedCoverageHints(res.failedCoverageHints);
     lastFetchedAt = Date.now();
     showPanelError('');
     renderPanel(res);
@@ -1010,7 +1100,7 @@ export function setupDeployStatusPanel() {
   });
 
   document.getElementById('deployStatusBackBtn')?.addEventListener('click', () => {
-    navigateToSummary();
+    handleDeployDetailBack();
   });
 
   document.getElementById('deployStatusBackToEditorBtn')?.addEventListener('click', () => {
@@ -1062,7 +1152,7 @@ export function setupDeployStatusPanel() {
     if (getSelectedArtifactType() !== 'DeployStatus') return;
     if (viewMode !== 'detail') return;
     ev.preventDefault();
-    navigateToSummary();
+    handleDeployDetailBack();
   });
 
   window.addEventListener(

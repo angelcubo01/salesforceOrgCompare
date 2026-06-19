@@ -87,6 +87,16 @@ import {
   fetchSetupRecordsForType
 } from '../shared/setupRecordsCompareApi.js';
 import {
+  compareRestMemberBatch,
+  listMembersForMetadataType
+} from '../shared/metadataTypeCompareApi.js';
+import {
+  beginMetadataTypeCompareSession,
+  cancelMetadataTypeCompareSessions,
+  isMetadataTypeCompareGenerationCurrent,
+  metadataTypeCompareCancelOpts
+} from './metadataTypeCompareSession.js';
+import {
   resolveObjectFromRecordId,
   fetchRecordForCompare
 } from '../shared/recordCompareApi.js';
@@ -125,10 +135,25 @@ import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
 
 const apexLogContextCache = new Map();
 
+function resolveApexLogBodyFetchLimit(listLength, opts = {}) {
+  if (opts.pageBodiesOnly === true) {
+    return Math.max(0, listLength);
+  }
+  const explicit = Number(opts.maxBodyFetches);
+  if (Number.isFinite(explicit) && explicit >= 0) {
+    return Math.min(listLength, Math.floor(explicit));
+  }
+  const legacy = Number(opts.maxRows);
+  if (Number.isFinite(legacy) && legacy >= 0) {
+    return Math.min(listLength, Math.floor(legacy));
+  }
+  return 0;
+}
+
 async function enrichApexLogRowsWithExecutionContext(instanceUrl, sid, apiVersion, rows, opts = {}) {
   const list = Array.isArray(rows) ? rows : [];
   if (!list.length) return [];
-  const bodyFetchLimit = Math.max(0, Number(opts.maxBodyFetches) ?? Number(opts.maxRows) ?? 80);
+  const bodyFetchLimit = resolveApexLogBodyFetchLimit(list.length, opts);
   const concurrency = Math.max(1, Math.min(6, Number(opts.concurrency) || 4));
   const queue = list.map((row, index) => ({ row, index }));
   const out = new Array(list.length);
@@ -465,6 +490,87 @@ export function installMessageHandlers() {
           }
           case 'retrieve:cancel': {
             reply({ ok: true, generation: cancelRetrieveSessions() });
+            break;
+          }
+          case 'metadataTypeCompare:begin': {
+            reply({ ok: true, generation: beginMetadataTypeCompareSession() });
+            break;
+          }
+          case 'metadataTypeCompare:cancel': {
+            reply({ ok: true, generation: cancelMetadataTypeCompareSessions() });
+            break;
+          }
+          case 'metadataTypeCompare:listMembers': {
+            const { orgId, metadataType, folder, compareGeneration: gen } = message;
+            if (!isMetadataTypeCompareGenerationCurrent(gen)) {
+              return reply({ ok: false, reason: 'CANCELLED' });
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) throw new Error('Org not saved');
+            const sid = await resolveSidForOrg(org);
+            if (!sid) return reply({ ok: false, reason: 'NO_SID' });
+            try {
+              const members = await listMembersForMetadataType(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                String(metadataType || ''),
+                folder != null && folder !== '' ? String(folder) : undefined
+              );
+              if (!isMetadataTypeCompareGenerationCurrent(gen)) {
+                return reply({ ok: false, reason: 'CANCELLED' });
+              }
+              reply({ ok: true, members });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'metadataTypeCompare:compareRestBatch': {
+            const {
+              leftOrgId,
+              rightOrgId,
+              metadataType,
+              memberNames,
+              compareGeneration: gen
+            } = message;
+            if (!isMetadataTypeCompareGenerationCurrent(gen)) {
+              return reply({ ok: false, reason: 'CANCELLED' });
+            }
+            const saved = await loadSavedOrgs();
+            const leftOrg = saved[leftOrgId];
+            const rightOrg = saved[rightOrgId];
+            if (!leftOrg || !rightOrg) throw new Error('Org not saved');
+            const leftSid = await resolveSidForOrg(leftOrg);
+            const rightSid = await resolveSidForOrg(rightOrg);
+            if (!leftSid || !rightSid) return reply({ ok: false, reason: 'NO_SID' });
+            try {
+              const resultsMap = await compareRestMemberBatch({
+                leftInstanceUrl: leftOrg.instanceUrl,
+                leftSid,
+                rightInstanceUrl: rightOrg.instanceUrl,
+                rightSid,
+                apiVersion: leftOrg.apiVersion,
+                metadataType: String(metadataType || ''),
+                memberNames: Array.isArray(memberNames) ? memberNames : [],
+                isCancelled: metadataTypeCompareCancelOpts(gen).isCancelled
+              });
+              if (!isMetadataTypeCompareGenerationCurrent(gen)) {
+                return reply({ ok: false, reason: 'CANCELLED' });
+              }
+              const rows = [...resultsMap.entries()].map(([key, value]) => ({
+                key,
+                status: value.status,
+                ...(value.detail ? { detail: value.detail } : {})
+              }));
+              reply({ ok: true, rows });
+            } catch (e) {
+              if (e?.code === 'METADATA_TYPE_COMPARE_CANCELLED') {
+                return reply({ ok: false, reason: 'CANCELLED' });
+              }
+              replyHandlerError(reply, e);
+            }
             break;
           }
           case 'syncOrgsFromActiveTab': {
@@ -1396,7 +1502,8 @@ export function installMessageHandlers() {
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
-                String(anonymousBody || '')
+                String(anonymousBody || ''),
+                org.id
               );
               let logId = '';
               // Errores de compilación (compiled=false) no generan ejecución ni log útil.
@@ -1520,7 +1627,15 @@ export function installMessageHandlers() {
             break;
           }
           case 'deployStatus:poll': {
-            const { orgId, selectedAsyncId, failedPage, succeededPage, pageSize, fetchDetail } = message;
+            const {
+              orgId,
+              selectedAsyncId,
+              failedPage,
+              succeededPage,
+              pageSize,
+              fetchDetail,
+              knownCoverageHintIds
+            } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
@@ -1538,7 +1653,8 @@ export function installMessageHandlers() {
                 failedPage,
                 succeededPage,
                 pageSize,
-                fetchDetail: !!fetchDetail
+                fetchDetail: !!fetchDetail,
+                knownCoverageHintIds
               });
               reply({ ok: true, ...data });
             } catch (e) {
@@ -2167,7 +2283,7 @@ export function installMessageHandlers() {
             break;
           }
           case 'debugLogs:enrichRows': {
-            const { orgId, rows } = message;
+            const { orgId, rows, maxBodyFetches } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
@@ -2180,13 +2296,14 @@ export function installMessageHandlers() {
               break;
             }
             try {
-              const inputRows = Array.isArray(rows) ? rows : [];
+              const cap = Math.max(1, Math.min(100, Math.floor(Number(maxBodyFetches) || 25)));
+              const inputRows = (Array.isArray(rows) ? rows : []).slice(0, cap);
               const enriched = await enrichApexLogRowsWithExecutionContext(
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
                 inputRows,
-                { maxBodyFetches: inputRows.length, concurrency: 3 }
+                { pageBodiesOnly: true, maxBodyFetches: inputRows.length, concurrency: 3 }
               );
               reply({
                 ok: true,
@@ -3175,7 +3292,7 @@ export function installMessageHandlers() {
                 sid,
                 org.apiVersion,
                 slimLogs,
-                { maxBodyFetches: slimLogs.length, concurrency: 3 }
+                { pageBodiesOnly: true, maxBodyFetches: slimLogs.length, concurrency: 3 }
               );
               const apexLogs = filterApexTestRunLogsByExecutionType(enrichedLogs, 'Apex');
               if (!apexLogs.length) {

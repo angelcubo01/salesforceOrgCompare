@@ -1,6 +1,7 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { loadMonaco, resolveMonacoThemeId, createStandaloneEditorSafe } from '../editor/monaco.js';
+import { MonacoWorkbench } from '../editor/monacoWorkbench.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
@@ -11,15 +12,387 @@ import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { randomStagingId } from '../../shared/randomId.js';
 import { guardToolAction } from './featureControlsUi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
+import { renderVscodeTabBar } from './vscodeTabs.js';
+
+import {
+  createTabId,
+  isTabContentDirty,
+  loadCodeEditorSession,
+  saveCodeEditorSession,
+  setupCodeEditorSessionPersistence,
+  scheduleCodeEditorSessionPersist,
+  codeEditorSessionOrgMismatch,
+  hasStoredCodeEditorTabs,
+  MAX_CODE_EDITOR_TABS,
+  trimTabsToLimit
+} from '../lib/codeEditorSession.js';
 
 const ANON_EDITOR_CACHE_KEY = 'sfoc_anon_apex_editor_text';
 const ANON_SAVED_SCRIPTS_KEY = 'sfoc_anon_apex_saved_scripts';
-let anonEditor = null;
-/** @type {Promise<import('monaco-editor').editor.IStandaloneCodeEditor | null> | null} */
-let anonEditorInit = null;
+const anonWorkbench = new MonacoWorkbench({
+  uriScheme: 'sfoc-anon',
+  onContentChange: () => {
+    scheduleCodeEditorSessionPersist('AnonymousApex', persistSession);
+    renderDocTabs();
+  }
+});
 let lastAnonLogs = [];
 let selectedSavedScriptId = '';
 let logPickerResolve = null;
+let sessionRestored = false;
+
+/**
+ * @typedef {object} AnonScriptTab
+ * @property {string} id
+ * @property {string} label
+ * @property {string} [savedScriptId]
+ * @property {string} content
+ * @property {string} originalContent
+ */
+
+/** @type {{ activeTabId: string | null, tabs: AnonScriptTab[] }} */
+let editorSession = { activeTabId: null, tabs: [] };
+/** @type {string | null} */
+let renamingTabId = null;
+
+function defaultTabLabel() {
+  return t('codeEditor.newTab');
+}
+
+function displayTabLabel(tab) {
+  const label = String(tab?.label || '').trim();
+  return label || defaultTabLabel();
+}
+
+function isDefaultTabLabel(label) {
+  return !String(label || '').trim() || label === defaultTabLabel();
+}
+
+function getActiveTab() {
+  return editorSession.tabs.find((tab) => tab.id === editorSession.activeTabId) || null;
+}
+
+function defaultScriptContent() {
+  try {
+    return localStorage.getItem(ANON_EDITOR_CACHE_KEY) || "System.debug('Hello from Salesforce Org Compare');";
+  } catch {
+    return "System.debug('Hello from Salesforce Org Compare');";
+  }
+}
+
+function persistActiveTabContent() {
+  const tab = getActiveTab();
+  if (!tab || !anonWorkbench.hasTab(tab.id)) return;
+  tab.content = anonWorkbench.getValue(tab.id);
+}
+
+async function persistSession() {
+  persistActiveTabContent();
+  await saveCodeEditorSession(
+    'AnonymousApex',
+    editorSession.tabs.length
+      ? {
+          activeTabId: editorSession.activeTabId,
+          tabs: editorSession.tabs
+        }
+      : null
+  );
+}
+
+function renderDocTabs() {
+  const tabsEl = document.getElementById('anonymousApexDocTabs');
+  renderVscodeTabBar(tabsEl, {
+    tabs: editorSession.tabs.map((tab) => ({
+      id: tab.id,
+      label: displayTabLabel(tab),
+      isActive: tab.id === editorSession.activeTabId,
+      isModified: false,
+      iconKind: 'script',
+      renameValue: isDefaultTabLabel(tab.label) ? '' : tab.label
+    })),
+    showAddButton: true,
+    addDisabled: editorSession.tabs.length >= MAX_CODE_EDITOR_TABS,
+    renamingTabId,
+    onSelect: (id) => void switchToTab(id),
+    onClose: (id) => void closeTab(id),
+    onAdd: () => void createNewTab({ blank: true }),
+    onRenameStart: startRenameTab,
+    onRenameFinish: (id, val) => void finishRenameTab(id, val),
+    onRenameCancel: cancelRenameTab
+  });
+}
+
+function startRenameTab(tabId) {
+  const tab = editorSession.tabs.find((x) => x.id === tabId);
+  if (!tab) return;
+  if (editorSession.activeTabId !== tabId) {
+    void switchToTab(tabId).then(() => {
+      renamingTabId = tabId;
+      renderDocTabs();
+    });
+    return;
+  }
+  renamingTabId = tabId;
+  renderDocTabs();
+}
+
+function cancelRenameTab() {
+  renamingTabId = null;
+  renderDocTabs();
+}
+
+async function finishRenameTab(tabId, rawName) {
+  if (renamingTabId !== tabId) return;
+  renamingTabId = null;
+
+  const tab = editorSession.tabs.find((x) => x.id === tabId);
+  if (!tab) {
+    renderDocTabs();
+    return;
+  }
+
+  const trimmed = String(rawName || '').trim();
+  const nextLabel = trimmed || defaultTabLabel();
+
+  if (tab.savedScriptId && trimmed) {
+    const list = readSavedScripts();
+    const ix = list.findIndex((x) => x.id === tab.savedScriptId);
+    if (ix >= 0) {
+      const duplicate = list.some(
+        (x) =>
+          x.id !== tab.savedScriptId &&
+          String(x?.name || '')
+            .trim()
+            .toLocaleLowerCase() === trimmed.toLocaleLowerCase()
+      );
+      if (duplicate) {
+        showToast(t('anonymousApex.scriptNameDuplicate'), 'warn');
+        renderDocTabs();
+        startRenameTab(tabId);
+        return;
+      }
+      list[ix] = { ...list[ix], name: trimmed, updatedAt: Date.now() };
+      writeSavedScripts(list);
+      refreshSavedScriptsUi();
+    }
+  }
+
+  tab.label = nextLabel;
+
+  if (tab.id === editorSession.activeTabId) {
+    const inp = document.getElementById('anonymousApexScriptNameInput');
+    if (inp) {
+      inp.value = isDefaultTabLabel(nextLabel) ? '' : nextLabel;
+    }
+    syncSaveButtonLabel();
+  }
+
+  renderDocTabs();
+  await persistSession();
+}
+
+async function switchToTab(tabId, options = {}) {
+  const skipPersist = options.skipPersist === true;
+  const forceReload = options.forceReload === true;
+
+  if (renamingTabId && renamingTabId !== tabId) {
+    renamingTabId = null;
+  }
+  if (!skipPersist) {
+    persistActiveTabContent();
+  }
+
+  const tab = editorSession.tabs.find((x) => x.id === tabId);
+  if (!tab) return;
+
+  const sameTab = editorSession.activeTabId === tabId && !forceReload;
+  editorSession.activeTabId = tabId;
+  selectedSavedScriptId = tab.savedScriptId || '';
+
+  await ensureEditor(false);
+  anonWorkbench.ensureTab({
+    tabId: tab.id,
+    content: tab.content ?? '',
+    language: 'apex',
+    forceReload: forceReload || !anonWorkbench.hasTab(tab.id)
+  });
+  anonWorkbench.syncSavedBaseline(tab.id, tab.originalContent);
+  if (!sameTab || forceReload) {
+    anonWorkbench.switchTab(tab.id);
+  }
+
+  const inp = document.getElementById('anonymousApexScriptNameInput');
+  if (inp) {
+    if (tab.savedScriptId) {
+      const saved = readSavedScripts().find((s) => s.id === tab.savedScriptId);
+      inp.value = saved?.name || (isDefaultTabLabel(tab.label) ? '' : tab.label);
+    } else {
+      inp.value = isDefaultTabLabel(tab.label) ? '' : tab.label;
+    }
+  }
+
+  renderDocTabs();
+  syncSaveButtonLabel();
+  if (!sameTab || forceReload) void persistSession();
+}
+
+async function closeTab(tabId) {
+  persistActiveTabContent();
+
+  const tabIndex = editorSession.tabs.findIndex((x) => x.id === tabId);
+  const tab = editorSession.tabs[tabIndex];
+  if (!tab) return;
+
+  if (isTabContentDirty(
+    anonWorkbench.hasTab(tab.id) ? anonWorkbench.getValue(tab.id) : tab.content,
+    tab.originalContent
+  )) {
+    if (!window.confirm(t('codeEditor.unsavedTab'))) return;
+  }
+
+  if (renamingTabId === tabId) renamingTabId = null;
+
+  const wasActive = editorSession.activeTabId === tabId;
+  const nextActiveId = wasActive
+    ? editorSession.tabs[tabIndex + 1]?.id ?? editorSession.tabs[tabIndex - 1]?.id ?? null
+    : editorSession.activeTabId;
+
+  editorSession.tabs = editorSession.tabs.filter((x) => x.id !== tabId);
+  anonWorkbench.closeTab(tabId);
+
+  if (editorSession.tabs.length === 0) {
+    editorSession.activeTabId = null;
+    await createNewTab({ blank: true });
+    return;
+  }
+
+  if (wasActive && nextActiveId) {
+    await switchToTab(nextActiveId, { skipPersist: true, forceReload: true });
+  } else {
+    renderDocTabs();
+    void persistSession();
+  }
+}
+
+async function createNewTab(options = {}) {
+  persistActiveTabContent();
+
+  if (editorSession.tabs.length >= MAX_CODE_EDITOR_TABS) {
+    showToast(t('codeEditor.maxTabs'), 'warn');
+    return null;
+  }
+
+  const blank = options.blank === true;
+  const body = blank ? '' : options.content ?? defaultScriptContent();
+  const tab = {
+    id: createTabId('script'),
+    label: defaultTabLabel(),
+    content: body,
+    originalContent: body
+  };
+
+  editorSession.tabs = trimTabsToLimit([...editorSession.tabs, tab]);
+  selectedSavedScriptId = '';
+
+  await switchToTab(tab.id, { skipPersist: true, forceReload: true });
+  anonWorkbench.getEditor()?.focus();
+  return tab;
+}
+
+async function restoreSessionFromStorage() {
+  if (sessionRestored) return;
+  sessionRestored = true;
+
+  const stored = await loadCodeEditorSession('AnonymousApex');
+  if (hasStoredCodeEditorTabs(stored)) {
+    editorSession = {
+      activeTabId: stored.activeTabId ? String(stored.activeTabId) : null,
+      tabs: stored.tabs.map((tab) => ({
+        id: String(tab.id),
+        label: String(tab.label || t('codeEditor.newTab')),
+        savedScriptId: tab.savedScriptId ? String(tab.savedScriptId) : undefined,
+        content: String(tab.content ?? ''),
+        originalContent: String(tab.originalContent ?? tab.content ?? '')
+      }))
+    };
+    if (!editorSession.activeTabId || !editorSession.tabs.some((t) => t.id === editorSession.activeTabId)) {
+      editorSession.activeTabId = editorSession.tabs[0]?.id || null;
+    }
+    if (editorSession.activeTabId) {
+      await switchToTab(editorSession.activeTabId);
+    }
+    return;
+  }
+
+  await createNewTab();
+}
+
+async function openScriptInTab(s, { activateOnly = false } = {}) {
+  if (!s) return false;
+  persistActiveTabContent();
+
+  const body = String(s.body || '');
+  const existing = editorSession.tabs.find((tab) => tab.savedScriptId === s.id);
+  if (existing) {
+    await switchToTab(existing.id);
+    closeScriptsModal();
+    return true;
+  }
+  if (activateOnly) return false;
+
+  if (editorSession.tabs.length >= MAX_CODE_EDITOR_TABS) {
+    showToast(t('codeEditor.maxTabs'), 'warn');
+    return false;
+  }
+
+  const tab = {
+    id: createTabId('script'),
+    label: String(s.name || 'script'),
+    savedScriptId: s.id,
+    content: body,
+    originalContent: body
+  };
+  editorSession.tabs = trimTabsToLimit([...editorSession.tabs, tab]);
+  editorSession.activeTabId = tab.id;
+  selectedSavedScriptId = s.id;
+  renamingTabId = null;
+
+  await ensureEditor(false);
+  anonWorkbench.ensureTab({ tabId: tab.id, content: body, language: 'apex', forceReload: true });
+  anonWorkbench.syncSavedBaseline(tab.id, body);
+  anonWorkbench.switchTab(tab.id);
+  anonWorkbench.getEditor()?.focus();
+
+  const inp = document.getElementById('anonymousApexScriptNameInput');
+  if (inp) inp.value = String(s.name || '');
+
+  renderDocTabs();
+  syncSaveButtonLabel();
+  void persistSession();
+  closeScriptsModal();
+  return true;
+}
+
+function updateActiveTabAfterSave(name, body, scriptId) {
+  const tab = getActiveTab();
+  if (!tab) return;
+  tab.label = name || defaultTabLabel();
+  tab.savedScriptId = scriptId;
+  tab.content = body;
+  tab.originalContent = body;
+  if (anonWorkbench.hasTab(tab.id)) {
+    anonWorkbench.setValue(tab.id, body);
+    anonWorkbench.markClean(tab.id);
+  }
+  renderDocTabs();
+  void persistSession();
+}
+
+function isAnonymousApexPanelActive() {
+  if (getSelectedArtifactType() !== 'AnonymousApex') return false;
+  const panel = document.getElementById('anonymousApexPanel');
+  return !!panel && !panel.classList.contains('hidden');
+}
 
 function getOrgLabelById(orgId) {
   const org = (state.orgsList || []).find((o) => o.id === orgId);
@@ -154,7 +527,7 @@ function syncSaveButtonLabel() {
 async function persistScriptWithName(name) {
   await ensureEditor();
   const n = String(name || '').trim();
-  const body = String(anonEditor?.getValue() || '');
+  const body = String(anonWorkbench.getActiveValue() || '');
   if (!n) {
     showToast(t('anonymousApex.scriptNameRequired'), 'warn');
     return false;
@@ -171,6 +544,7 @@ async function persistScriptWithName(name) {
       list[ix] = { ...list[ix], name: n, body, updatedAt: Date.now() };
       selectedSavedScriptId = list[ix].id;
       writeSavedScripts(list);
+      updateActiveTabAfterSave(n, body, list[ix].id);
       refreshSavedScriptsUi();
       showToast(t('anonymousApex.scriptUpdated'), 'info');
       syncSaveButtonLabel();
@@ -180,6 +554,7 @@ async function persistScriptWithName(name) {
   selectedSavedScriptId = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   list.unshift({ id: selectedSavedScriptId, name: n, body, updatedAt: Date.now() });
   writeSavedScripts(list.slice(0, 100));
+  updateActiveTabAfterSave(n, body, selectedSavedScriptId);
   refreshSavedScriptsUi();
   showToast(t('anonymousApex.scriptSaved'), 'info');
   syncSaveButtonLabel();
@@ -188,7 +563,7 @@ async function persistScriptWithName(name) {
 
 async function quickSaveCurrentScript() {
   await ensureEditor();
-  const body = String(anonEditor?.getValue() || '');
+  const body = String(anonWorkbench.getActiveValue() || '');
   if (!body.trim()) {
     showToast(t('anonymousApex.emptyBody'), 'warn');
     return;
@@ -201,6 +576,7 @@ async function quickSaveCurrentScript() {
     if (ix >= 0) {
       list[ix] = { ...list[ix], body, updatedAt: Date.now() };
       writeSavedScripts(list);
+      updateActiveTabAfterSave(byId.name, body, byId.id);
       refreshSavedScriptsUi();
       showToast(t('anonymousApex.scriptUpdated'), 'info');
       syncSaveButtonLabel();
@@ -273,12 +649,7 @@ function refreshSavedScriptsUi() {
     btn.className = `anonymous-apex-script-item${selectedSavedScriptId === s.id ? ' active' : ''}`;
     btn.textContent = s.name || 'script';
     btn.addEventListener('click', () => {
-      selectedSavedScriptId = s.id;
-      if (anonEditor) anonEditor.setValue(String(s.body || ''));
-      const inp = document.getElementById('anonymousApexScriptNameInput');
-      if (inp) inp.value = String(s.name || '');
-      syncSaveButtonLabel();
-      refreshSavedScriptsUi();
+      void openScriptInTab(s);
     });
     const actions = document.createElement('div');
     actions.className = 'anonymous-apex-script-item-actions';
@@ -315,6 +686,10 @@ function refreshSavedScriptsUi() {
       if (ix < 0) return;
       list[ix] = { ...list[ix], name: nextName, updatedAt: Date.now() };
       writeSavedScripts(list);
+      for (const tab of editorSession.tabs) {
+        if (tab.savedScriptId === s.id) tab.label = nextName;
+      }
+      renderDocTabs();
       if (selectedSavedScriptId === s.id) {
         const inp = document.getElementById('anonymousApexScriptNameInput');
         if (inp) inp.value = nextName;
@@ -335,9 +710,15 @@ function refreshSavedScriptsUi() {
       if (!ok) return;
       const list = readSavedScripts().filter((x) => x.id !== s.id);
       writeSavedScripts(list);
+      for (const tab of editorSession.tabs) {
+        if (tab.savedScriptId === s.id) {
+          tab.savedScriptId = undefined;
+        }
+      }
       if (selectedSavedScriptId === s.id) {
         selectedSavedScriptId = '';
       }
+      renderDocTabs();
       syncSaveButtonLabel();
       refreshSavedScriptsUi();
     });
@@ -378,56 +759,65 @@ function renderResult(resultByOrg) {
   logBtn.disabled = !lastAnonLogs.length;
 }
 
-async function ensureEditor() {
+async function ensureEditor(restoreIfNeeded = true) {
+  if (restoreIfNeeded && !sessionRestored) {
+    await restoreSessionFromStorage();
+  }
+
   const mount = document.getElementById('anonymousApexEditorMount');
   if (!mount) return null;
-  if (anonEditor) {
-    try {
-      if (anonEditor.getContainerDomNode() === mount) return anonEditor;
-    } catch {
-      anonEditor = null;
-    }
-  }
-  if (anonEditorInit) return anonEditorInit;
 
-  anonEditorInit = (async () => {
-    const monaco = state.monaco || (await loadMonaco());
-    state.monaco = monaco;
-    anonEditor = createStandaloneEditorSafe(
-      monaco,
-      mount,
-      {
-        value:
-          localStorage.getItem(ANON_EDITOR_CACHE_KEY) ||
-          "System.debug('Hello from Salesforce Org Compare');",
-        language: 'apex',
-        readOnly: false,
-        automaticLayout: true,
-        minimap: { enabled: false },
-        wordWrap: state.wordWrapEnabled ? 'on' : 'off',
-        theme: resolveMonacoThemeId(),
-        fontSize: 13,
-        lineHeight: 20,
-        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-        scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
-      },
-      anonEditor
-    );
-    anonEditor.onDidChangeModelContent(() => {
+  const editor = await anonWorkbench.ensureEditor(
+    mount,
+    {
+      language: 'apex',
+      readOnly: false,
+      automaticLayout: true,
+      minimap: { enabled: false },
+      wordWrap: state.wordWrapEnabled ? 'on' : 'off',
+      theme: resolveMonacoThemeId(),
+      fontSize: 13,
+      lineHeight: 20,
+      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+      scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
+    },
+    createStandaloneEditorSafe,
+    async () => {
+      const monaco = state.monaco || (await loadMonaco());
+      state.monaco = monaco;
+      return monaco;
+    },
+    anonWorkbench.getEditor()
+  );
+
+  for (const tab of editorSession.tabs) {
+    anonWorkbench.ensureTab({
+      tabId: tab.id,
+      content: tab.content ?? '',
+      language: 'apex'
+    });
+    anonWorkbench.syncSavedBaseline(tab.id, tab.originalContent);
+  }
+
+  if (editorSession.activeTabId && anonWorkbench.hasTab(editorSession.activeTabId)) {
+    if (anonWorkbench.activeTabId !== editorSession.activeTabId) {
+      anonWorkbench.switchTab(editorSession.activeTabId);
+    }
+  } else if (editorSession.tabs.length === 0) {
+    editor?.setModel(null);
+  }
+
+  if (editor) {
+    window.requestAnimationFrame(() => {
       try {
-        localStorage.setItem(ANON_EDITOR_CACHE_KEY, anonEditor.getValue());
+        editor.layout();
       } catch {
         /* ignore */
       }
     });
-    return anonEditor;
-  })();
-
-  try {
-    return await anonEditorInit;
-  } finally {
-    anonEditorInit = null;
   }
+
+  return editor;
 }
 
 async function runAnonymousApex() {
@@ -625,35 +1015,25 @@ export async function openAnonymousApexSavedScript(scriptId) {
   const s = readSavedScripts().find((x) => x.id === scriptId);
   if (!s) return false;
 
-  const body = String(s.body || '');
-  selectedSavedScriptId = s.id;
-
-  try {
-    localStorage.setItem(ANON_EDITOR_CACHE_KEY, body);
-  } catch {
-    /* ignore */
-  }
-
   await navigateToModeAndTool('development', 'AnonymousApex', { userInitiated: true });
+  sessionRestored = true;
 
-  const ed = await ensureEditor();
+  const ok = await openScriptInTab(s);
+  if (!ok) return false;
+
+  const ed = await ensureEditor(false);
   if (!ed) return false;
 
   await new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(resolve));
   });
 
-  ed.setValue(body);
   try {
     ed.layout();
   } catch {
     /* ignore */
   }
   ed.focus();
-
-  const inp = document.getElementById('anonymousApexScriptNameInput');
-  if (inp) inp.value = String(s.name || '');
-  syncSaveButtonLabel();
   refreshSavedScriptsUi();
   return true;
 }
@@ -670,6 +1050,7 @@ export async function refreshAnonymousApexPanel() {
   orgStatus.textContent = '';
   if (getSelectedArtifactType() === 'AnonymousApex') {
     await ensureEditor();
+    renderDocTabs();
   }
   refreshSavedScriptsUi();
 }
@@ -699,7 +1080,22 @@ export function setupAnonymousApexPanel() {
   if (scriptsBackdrop) scriptsBackdrop.addEventListener('click', () => closeScriptsModal());
   if (scriptsCloseBtn) scriptsCloseBtn.addEventListener('click', () => closeScriptsModal());
   document.addEventListener('keydown', (e) => {
+    if (e.key === 'F2' && isAnonymousApexPanelActive()) {
+      const scriptsModal = document.getElementById('anonymousApexScriptsModal');
+      if (scriptsModal && !scriptsModal.classList.contains('hidden')) return;
+      const tab = getActiveTab();
+      if (tab) {
+        e.preventDefault();
+        startRenameTab(tab.id);
+      }
+      return;
+    }
     if (e.key !== 'Escape') return;
+    if (renamingTabId) {
+      e.preventDefault();
+      cancelRenameTab();
+      return;
+    }
     const scriptsModal = document.getElementById('anonymousApexScriptsModal');
     if (scriptsModal && !scriptsModal.classList.contains('hidden')) {
       e.preventDefault();
@@ -732,15 +1128,17 @@ export function setupAnonymousApexPanel() {
     logBtn.classList.add('hidden');
     logBtn.disabled = true;
   }
+  setupCodeEditorSessionPersistence('AnonymousApex', persistSession);
   refreshSavedScriptsUi();
   syncSaveButtonLabel();
 }
 
 /** Aplica el tema Monaco guardado en ajustes (p. ej. tras cambiar desde Ajustes con esta pantalla abierta). */
 export function refreshAnonymousApexEditorTheme() {
-  if (!anonEditor) return;
+  const editor = anonWorkbench.getEditor();
+  if (!editor) return;
   try {
-    anonEditor.updateOptions({ theme: resolveMonacoThemeId() });
+    editor.updateOptions({ theme: resolveMonacoThemeId() });
   } catch {
     /* ignore */
   }

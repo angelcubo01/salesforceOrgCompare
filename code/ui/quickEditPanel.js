@@ -1,6 +1,7 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { loadMonaco, resolveMonacoThemeId, createStandaloneEditorSafe } from '../editor/monaco.js';
+import { MonacoWorkbench } from '../editor/monacoWorkbench.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
@@ -12,76 +13,62 @@ import {
   getReturnContext,
   navigateToDeployStatus
 } from '../lib/quickEditDeployContext.js';
+import { setupCodeEditorSearch } from './codeEditorSearch.js';
+import { renderVscodeTabBar } from './vscodeTabs.js';
+import { updateCodeEditorToolbarDisplay, findCodeEditorTabByArtifact, formatCodeEditorTabLabel, getOrgDisplayLabel } from './codeEditorToolbar.js';
+import {
+  isOrgAuthActive,
+  isTabOrgAuthExpired,
+  setTabPendingRemoteLoad,
+  tabNeedsRemoteReload
+} from '../lib/codeEditorOrgAuth.js';
+import {
+  createTabId,
+  isTabContentDirty,
+  loadCodeEditorSession,
+  saveCodeEditorSession,
+  setupCodeEditorSessionPersistence,
+  scheduleCodeEditorSessionPersist,
+  clearCodeEditorSession,
+  hasStoredCodeEditorTabs,
+  MAX_CODE_EDITOR_TABS,
+  trimTabsToLimit
+} from '../lib/codeEditorSession.js';
 
-const QUICK_EDIT_SEARCH_MIN_PX = 288;
-
-/** Si no hay `field-sizing: content`, ajusta el ancho del input al texto (Chrome antiguo / fallback). */
-function syncQuickEditSearchInputWidth() {
-  const input = document.getElementById('quickEditSearchInput');
-  if (!input) return;
-  if (typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content')) {
-    input.style.removeProperty('width');
-    scheduleSyncQuickEditResultsListWidth();
-    return;
+const quickEditWorkbench = new MonacoWorkbench({
+  uriScheme: 'sfoc-quickedit',
+  onContentChange: () => {
+    scheduleCodeEditorSessionPersist('QuickEdit', persistSession);
+    updateDeployButtonState();
+    updateModifiedIndicator();
+    renderDocTabs();
   }
-  const zone = input.closest('.quick-edit-search-zone');
-  const maxW =
-    zone?.getBoundingClientRect().width || input.closest('.quick-edit-panel-inner')?.clientWidth || 1200;
-
-  window.requestAnimationFrame(() => {
-    if (!input.value.trim()) {
-      input.style.width = `${Math.min(maxW, QUICK_EDIT_SEARCH_MIN_PX)}px`;
-      syncQuickEditResultsListWidth();
-      return;
-    }
-    input.style.width = '0';
-    const needed = Math.max(QUICK_EDIT_SEARCH_MIN_PX, input.scrollWidth + 20);
-    input.style.width = `${Math.min(maxW, needed)}px`;
-    syncQuickEditResultsListWidth();
-  });
-}
-
-const QUICK_EDIT_RESULTS_WIDTH_CAP_PX = 1400;
-
-/** Ancho lista = max(ancho input, contenido más ancho); tope viewport (complementa CSS #quickEditResultsList). */
-function syncQuickEditResultsListWidth() {
-  const list = document.getElementById('quickEditResultsList');
-  const input = document.getElementById('quickEditSearchInput');
-  if (!list || !input || list.childElementCount === 0) {
-    list?.style.removeProperty('width');
-    return;
-  }
-
-  const cap = Math.min(window.innerWidth - 40, QUICK_EDIT_RESULTS_WIDTH_CAP_PX);
-
-  window.requestAnimationFrame(() => {
-    list.style.width = `${cap}px`;
-    let maxChild = 0;
-    for (const el of list.children) {
-      maxChild = Math.max(maxChild, el.scrollWidth);
-    }
-    const cs = getComputedStyle(list);
-    const chromeW =
-      (parseFloat(cs.borderLeftWidth) || 0) +
-      (parseFloat(cs.borderRightWidth) || 0) +
-      (parseFloat(cs.paddingLeft) || 0) +
-      (parseFloat(cs.paddingRight) || 0);
-    const inputW = Math.ceil(input.getBoundingClientRect().width);
-    const w = Math.min(cap, Math.max(inputW, Math.ceil(maxChild + chromeW)));
-    list.style.width = `${w}px`;
-  });
-}
-
-function scheduleSyncQuickEditResultsListWidth() {
-  window.requestAnimationFrame(() => syncQuickEditResultsListWidth());
-}
-
-let quickEditEditor = null;
-/** @type {Promise<import('monaco-editor').editor.IStandaloneCodeEditor | null> | null} */
-let quickEditEditorInit = null;
-let currentEditItem = null;
-let originalContent = '';
+});
 let isDeploying = false;
+let sessionRestored = false;
+
+/**
+ * @typedef {object} QuickEditTab
+ * @property {string} id
+ * @property {string} artType
+ * @property {string} name
+ * @property {string} fileName
+ * @property {string} content
+ * @property {string} originalContent
+ * @property {string} lastModifiedDate
+ * @property {string} [lastModifiedByName]
+ * @property {string} [lastModifiedByUsername]
+ * @property {string} [sourceOrgId]
+ * @property {string} [bundleId]
+ * @property {boolean} [pendingRemoteLoad]
+ */
+
+/** @type {{ orgId: string | null, activeTabId: string | null, tabs: QuickEditTab[] }} */
+let editorSession = { orgId: null, activeTabId: null, tabs: [] };
+
+function getActiveTab() {
+  return editorSession.tabs.find((tab) => tab.id === editorSession.activeTabId) || null;
+}
 
 function isCurrentOrgSandbox() {
   if (!state.leftOrgId) return false;
@@ -90,21 +77,22 @@ function isCurrentOrgSandbox() {
 }
 
 async function logQuickEditUsage(action, success, errorMessage = '') {
+  const tab = getActiveTab();
   try {
     await bg({
       type: 'usage:log',
       entry: {
         kind: 'codeComparison',
         action,
-        artifactType:  'ApexClassQuickEdit',
-        descriptor: { name: currentEditItem?.name || '' },
+        artifactType: 'ApexClassQuickEdit',
+        descriptor: { name: tab?.name || '' },
         leftOrgId: state.leftOrgId,
         success,
         errorMessage: errorMessage.slice(0, 500)
       }
     });
   } catch {
-    // ignoramos errores de logging
+    /* ignore */
   }
 }
 
@@ -128,21 +116,180 @@ function setDeployStatus(text, tone = '') {
   if (tone === 'warning') el.classList.add('is-warning');
 }
 
+function persistActiveTabContent() {
+  const tab = getActiveTab();
+  if (!tab || !quickEditWorkbench.hasTab(tab.id)) return;
+  if (isTabOrgAuthExpired(tab)) return;
+  tab.content = quickEditWorkbench.getValue(tab.id);
+}
+
+function syncEditorReadOnly() {
+  const editor = quickEditWorkbench.getEditor();
+  if (!editor) return;
+  const tab = getActiveTab();
+  editor.updateOptions({ readOnly: tab ? isTabOrgAuthExpired(tab) : false });
+}
+
+function showTabAuthExpiredStatus(tab) {
+  if (!tab?.sourceOrgId) return;
+  const orgLabel = getOrgDisplayLabel(tab.sourceOrgId);
+  setStatus(t('codeEditor.tabAuthExpired', { org: orgLabel }), 'warning');
+}
+
+/**
+ * @param {QuickEditTab} tab
+ * @param {{ silent?: boolean }} [opts]
+ */
+async function reloadTabFromOrg(tab, opts = {}) {
+  const orgId = tab.sourceOrgId;
+  if (!orgId || !isOrgAuthActive(orgId)) return false;
+
+  if (!opts.silent) setStatus(t('quickEdit.loading'), 'warning');
+
+  try {
+    const res = await bg({
+      type: 'fetchSource',
+      orgId,
+      artifactType: tab.artType || 'ApexClass',
+      descriptor: {
+        name: tab.name,
+        bundleId: tab.bundleId,
+        bundleDeveloperName: tab.name
+      }
+    });
+
+    if (!res?.ok) {
+      if (!opts.silent) {
+        setStatus(res?.reason === 'NO_SID' ? t('toast.noSession') : t('quickEdit.loadError'), 'error');
+      }
+      setTabPendingRemoteLoad(tab, true);
+      return false;
+    }
+
+    const files = res.files || [];
+    if (!files.length) return false;
+
+    const mainFile = files[0];
+    const content = mainFile.content || '';
+    tab.content = content;
+    tab.originalContent = content;
+    tab.fileName = mainFile.fileName || tab.fileName;
+    tab.lastModifiedDate = String(mainFile.lastModifiedDate || tab.lastModifiedDate || '');
+    tab.lastModifiedByName = String(mainFile.lastModifiedByName || '');
+    tab.lastModifiedByUsername = String(mainFile.lastModifiedByUsername || '');
+    setTabPendingRemoteLoad(tab, false);
+
+    if (tab.id === editorSession.activeTabId) {
+      quickEditWorkbench.ensureTab({
+        tabId: tab.id,
+        content,
+        language: 'apex',
+        forceReload: true
+      });
+      const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
+      tab.content = loaded;
+      tab.originalContent = loaded;
+      syncEditorReadOnly();
+      if (!opts.silent) setStatus(t('quickEdit.loaded', { name: tab.name }), 'success');
+    }
+
+    renderDocTabs();
+    void persistSession();
+    return true;
+  } catch (e) {
+    if (!opts.silent) {
+      void handleToolError(e, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
+    }
+    setTabPendingRemoteLoad(tab, true);
+    return false;
+  }
+}
+
+export async function retryQuickEditAuthPendingLoads() {
+  if (getSelectedArtifactType() !== 'QuickEdit') return;
+  if (!editorSession.tabs.length) return;
+
+  for (const tab of editorSession.tabs) {
+    if (tabNeedsRemoteReload(tab)) {
+      await reloadTabFromOrg(tab, { silent: true });
+    }
+  }
+
+  if (editorSession.activeTabId) {
+    await switchToTab(editorSession.activeTabId, { skipPersist: true, forceReload: true });
+  } else {
+    renderDocTabs();
+  }
+}
+
+function isQuickEditTabModified(tab) {
+  if (quickEditWorkbench.hasTab(tab.id)) {
+    return quickEditWorkbench.isDirty(tab.id, tab.originalContent);
+  }
+  return isTabContentDirty(tab.content, tab.originalContent);
+}
+
+async function persistSession() {
+  persistActiveTabContent();
+  if (!editorSession.orgId && editorSession.tabs.length > 0) {
+    const first = editorSession.tabs[0];
+    editorSession.orgId = first?.sourceOrgId || state.leftOrgId || null;
+  }
+  await saveCodeEditorSession(
+    'QuickEdit',
+    editorSession.tabs.length
+      ? {
+          activeTabId: editorSession.activeTabId,
+          orgId: editorSession.orgId,
+          tabs: editorSession.tabs
+        }
+      : null
+  );
+}
+
+async function clearAllEditorTabs() {
+  if (!window.confirm(t('codeEditor.clearAllConfirm'))) return;
+
+  editorSession = { orgId: null, activeTabId: null, tabs: [] };
+  sessionRestored = true;
+  quickEditWorkbench.disposeAll();
+  quickEditWorkbench.getEditor()?.setModel(null);
+  clearReturnContext();
+  setStatus('');
+  setDeployStatus('');
+  renderDocTabs();
+  updateCurrentFileDisplay();
+  updateDeployButtonState();
+  updateModifiedIndicator();
+  await clearCodeEditorSession('QuickEdit');
+}
+
+function hasUnsavedChanges() {
+  persistActiveTabContent();
+  return editorSession.tabs.some((tab) => isTabContentDirty(tab.content, tab.originalContent));
+}
+
+function hasActiveTabUnsavedChanges() {
+  const tab = getActiveTab();
+  if (!tab) return false;
+  return quickEditWorkbench.isDirty(tab.id, tab.originalContent);
+}
 
 function updateDeployButtonState() {
   const deployBtn = document.getElementById('quickEditDeployBtn');
   const validateBtn = document.getElementById('quickEditValidateBtn');
   if (!deployBtn || !validateBtn) return;
 
-  const hasContent = quickEditEditor && quickEditEditor.getValue().trim().length > 0;
-  const hasItem = !!currentEditItem;
+  const tab = getActiveTab();
+  const hasContent = quickEditWorkbench.getActiveValue().trim().length > 0;
+  const hasItem = !!tab;
   const isSandbox = isCurrentOrgSandbox();
   const canValidate = hasContent && hasItem && !isDeploying;
   const canDeploy = canValidate && isSandbox;
 
   deployBtn.disabled = !canDeploy;
   validateBtn.disabled = !canValidate;
-  
+
   if (hasItem && !isSandbox) {
     deployBtn.title = t('quickEdit.productionBlocked');
   } else {
@@ -150,170 +297,240 @@ function updateDeployButtonState() {
   }
 }
 
-function hasUnsavedChanges() {
-  if (!quickEditEditor || !currentEditItem) return false;
-  return quickEditEditor.getValue() !== originalContent;
-}
-
 async function ensureEditor() {
   const mount = document.getElementById('quickEditEditorMount');
   if (!mount) return null;
-  if (quickEditEditor) {
-    try {
-      if (quickEditEditor.getContainerDomNode() === mount) return quickEditEditor;
-    } catch {
-      quickEditEditor = null;
+
+  const editor = await quickEditWorkbench.ensureEditor(
+    mount,
+    {
+      language: 'apex',
+      readOnly: false,
+      automaticLayout: true,
+      minimap: { enabled: true },
+      wordWrap: state.wordWrapEnabled ? 'on' : 'off',
+      theme: resolveMonacoThemeId(),
+      fontSize: 13,
+      lineHeight: 20,
+      fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
+      scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
+    },
+    createStandaloneEditorSafe,
+    async () => {
+      const monaco = state.monaco || (await loadMonaco());
+      state.monaco = monaco;
+      return monaco;
+    },
+    quickEditWorkbench.getEditor()
+  );
+
+  for (const tab of editorSession.tabs) {
+    const authExpired = isTabOrgAuthExpired(tab);
+    const sessionClean = !authExpired && !isTabContentDirty(tab.content, tab.originalContent);
+    quickEditWorkbench.ensureTab({
+      tabId: tab.id,
+      content: authExpired ? '' : (tab.content ?? ''),
+      language: 'apex'
+    });
+    if (sessionClean && quickEditWorkbench.hasTab(tab.id)) {
+      const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
+      tab.content = loaded;
+      tab.originalContent = loaded;
     }
   }
-  if (quickEditEditorInit) return quickEditEditorInit;
 
-  quickEditEditorInit = (async () => {
-    const monaco = state.monaco || (await loadMonaco());
-    state.monaco = monaco;
+  syncEditorReadOnly();
 
-    quickEditEditor = createStandaloneEditorSafe(
-      monaco,
-      mount,
-      {
-        value: '',
-        language: 'apex',
-        readOnly: false,
-        automaticLayout: true,
-        minimap: { enabled: true },
-        wordWrap: state.wordWrapEnabled ? 'on' : 'off',
-        theme: resolveMonacoThemeId(),
-        fontSize: 13,
-        lineHeight: 20,
-        fontFamily: 'Monaco, Menlo, "Ubuntu Mono", monospace',
-        scrollbar: { useShadows: false, vertical: 'auto', horizontal: 'auto' }
-      },
-      quickEditEditor
-    );
-
-    quickEditEditor.onDidChangeModelContent(() => {
-      updateDeployButtonState();
-      updateModifiedIndicator();
-    });
-
-    return quickEditEditor;
-  })();
-
-  try {
-    return await quickEditEditorInit;
-  } finally {
-    quickEditEditorInit = null;
+  if (editorSession.activeTabId && quickEditWorkbench.hasTab(editorSession.activeTabId)) {
+    if (quickEditWorkbench.activeTabId !== editorSession.activeTabId) {
+      quickEditWorkbench.switchTab(editorSession.activeTabId);
+    }
+  } else if (editorSession.tabs.length === 0) {
+    editor?.setModel(null);
   }
+
+  return editor;
 }
 
 function updateModifiedIndicator() {
   const indicator = document.getElementById('quickEditModifiedIndicator');
   if (!indicator) return;
-  if (hasUnsavedChanges()) {
+  if (hasActiveTabUnsavedChanges()) {
     indicator.classList.remove('hidden');
   } else {
     indicator.classList.add('hidden');
   }
 }
 
+function updateCurrentFileDisplay() {
+  const display = document.getElementById('quickEditCurrentFile');
+  const metaEl = document.getElementById('quickEditLastModified');
+  const tab = getActiveTab();
+  if (!display) return;
 
-async function searchComponents() {
-  const searchInput = document.getElementById('quickEditSearchInput');
-  const resultsList = document.getElementById('quickEditResultsList');
-  const bumpListWidth = () => scheduleSyncQuickEditResultsListWidth();
-
-  if (!searchInput || !resultsList) return;
-
-  const searchTerm = searchInput.value.trim();
-
-  if (!state.leftOrgId) {
-    resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.selectOrgFirst')}</div>`;
-    bumpListWidth();
-    return;
-  }
-
-  if (searchTerm.length < 2) {
-    resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.minChars')}</div>`;
-    bumpListWidth();
-    return;
-  }
-
-  resultsList.innerHTML = `<div class="quick-edit-results-loading">${t('quickEdit.searching')}</div>`;
-  bumpListWidth();
-
-  try {
-    const res = await bg({
-      type: 'searchIndex',
-      orgId: state.leftOrgId,
-      artifactType: 'ApexClass',
-      prefix: searchTerm
+  if (!tab) {
+    updateCodeEditorToolbarDisplay({
+      titleEl: display,
+      metaEl,
+      title: '',
+      meta: null,
+      sourceOrgId: null
     });
-
-    if (!res?.ok) {
-      void handleToolResponseFailure(res, { artifact_type: 'ApexClassQuickEdit', phase: 'search' });
-      if (res?.reason === 'NO_SID') {
-        resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('toast.noSession')}</div>`;
-      } else {
-        resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
-      }
-      bumpListWidth();
-      return;
-    }
-
-    const items = res.items || [];
-    if (items.length === 0) {
-      resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.noResults')}</div>`;
-      bumpListWidth();
-      return;
-    }
-
-    resultsList.innerHTML = '';
-    for (const item of items.slice(0, 50)) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'quick-edit-result-item';
-      btn.textContent = item.name || item.developerName || '(sin nombre)';
-      btn.addEventListener('click', () => loadComponent('ApexClass', item));
-      resultsList.appendChild(btn);
-    }
-    bumpListWidth();
-  } catch (e) {
-    void handleToolError(e, { artifact_type: 'ApexClassQuickEdit', phase: 'search' });
-    resultsList.innerHTML = `<div class="quick-edit-results-empty">${t('quickEdit.searchError')}</div>`;
-    bumpListWidth();
+    display.textContent = t('quickEdit.noFileLoaded');
+    return;
   }
+
+  updateCodeEditorToolbarDisplay({
+    titleEl: display,
+    metaEl,
+    title: `${tab.artType}: ${tab.name}`,
+    meta: {
+      lastModifiedDate: tab.lastModifiedDate,
+      lastModifiedByName: tab.lastModifiedByName,
+      lastModifiedByUsername: tab.lastModifiedByUsername
+    },
+    sourceOrgId: tab.sourceOrgId || editorSession.orgId
+  });
 }
 
-async function loadComponent(type, item) {
-  if (hasUnsavedChanges()) {
-    const confirm = window.confirm(t('quickEdit.unsavedChanges'));
-    if (!confirm) return;
+function renderDocTabs() {
+  const tabsEl = document.getElementById('quickEditDocTabs');
+  renderVscodeTabBar(tabsEl, {
+    tabs: editorSession.tabs.map((tab) => ({
+      id: tab.id,
+      label: formatCodeEditorTabLabel(tab.name, tab.sourceOrgId),
+      isActive: tab.id === editorSession.activeTabId,
+      isModified: !isTabOrgAuthExpired(tab) && isQuickEditTabModified(tab),
+      isAuthExpired: isTabOrgAuthExpired(tab),
+      iconKind: 'apex',
+      title: isTabOrgAuthExpired(tab) ? t('codeEditor.tabAuthExpiredHint') : undefined
+    })),
+    onSelect: (id) => void switchToTab(id),
+    onClose: (id) => void closeTab(id)
+  });
+}
+
+async function switchToTab(tabId, options = {}) {
+  const skipPersist = options.skipPersist === true;
+  const forceReload = options.forceReload === true;
+  if (!skipPersist) persistActiveTabContent();
+  if (editorSession.activeTabId === tabId && !forceReload) return;
+
+  const tab = editorSession.tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+
+  editorSession.activeTabId = tabId;
+  await ensureEditor();
+
+  const authExpired = isTabOrgAuthExpired(tab);
+  quickEditWorkbench.ensureTab({
+    tabId: tab.id,
+    content: authExpired ? '' : (tab.content ?? ''),
+    language: 'apex',
+    forceReload
+  });
+  if (!authExpired) {
+    const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
+    tab.content = loaded;
+    tab.originalContent = loaded;
+  }
+  quickEditWorkbench.switchTab(tab.id);
+  syncEditorReadOnly();
+
+  renderDocTabs();
+  updateCurrentFileDisplay();
+  updateDeployButtonState();
+  updateModifiedIndicator();
+  if (authExpired) {
+    showTabAuthExpiredStatus(tab);
+  }
+  void persistSession();
+}
+
+async function closeTab(tabId) {
+  persistActiveTabContent();
+
+  const tab = editorSession.tabs.find((t) => t.id === tabId);
+  if (!tab) return;
+
+  const dirtyContent = quickEditWorkbench.hasTab(tab.id)
+    ? quickEditWorkbench.getValue(tab.id)
+    : tab.content;
+  if (isTabContentDirty(dirtyContent, tab.originalContent)) {
+    if (!window.confirm(t('codeEditor.unsavedTab'))) return;
   }
 
+  const tabIndex = editorSession.tabs.findIndex((t) => t.id === tabId);
+  const wasActive = editorSession.activeTabId === tabId;
+  const nextActiveId = wasActive
+    ? editorSession.tabs[tabIndex + 1]?.id ?? editorSession.tabs[tabIndex - 1]?.id ?? null
+    : editorSession.activeTabId;
+
+  editorSession.tabs = editorSession.tabs.filter((t) => t.id !== tabId);
+  quickEditWorkbench.closeTab(tabId);
+
+  if (wasActive) {
+    editorSession.activeTabId = nextActiveId;
+    if (nextActiveId) {
+      await switchToTab(nextActiveId, { skipPersist: true, forceReload: true });
+    } else {
+      quickEditWorkbench.getEditor()?.setModel(null);
+    }
+  }
+
+  renderDocTabs();
+  updateCurrentFileDisplay();
+  updateDeployButtonState();
+  updateModifiedIndicator();
+  void persistSession();
+}
+
+function findTabByEntry(entry) {
+  return findCodeEditorTabByArtifact(editorSession.tabs, {
+    artType: entry.artType,
+    artifactName: entry.name,
+    orgId: state.leftOrgId
+  });
+}
+
+async function openTabFromEntry(entry) {
+  const existing = findTabByEntry(entry);
+  if (existing) {
+    await switchToTab(existing.id);
+    setStatus(t('quickEdit.loaded', { name: existing.name }), 'success');
+    return;
+  }
+
+  if (editorSession.tabs.length >= MAX_CODE_EDITOR_TABS) {
+    showToast(t('codeEditor.maxTabs'), 'warn');
+    return;
+  }
+
+  await loadComponent(entry);
+}
+
+async function loadComponent(entry) {
+  if (hasActiveTabUnsavedChanges()) {
+    if (!window.confirm(t('quickEdit.unsavedChanges'))) return;
+  }
+
+  persistActiveTabContent();
   clearReturnContext();
   setStatus(t('quickEdit.loading'), 'warning');
   setDeployStatus('');
 
+  const name = entry.name;
   try {
-    const descriptor = {
-      name: item.name || item.developerName,
-      bundleId: item.id,
-      bundleDeveloperName: item.developerName
-    };
-
     const res = await bg({
       type: 'fetchSource',
       orgId: state.leftOrgId,
       artifactType: 'ApexClass',
-      descriptor
+      descriptor: { name, bundleId: entry.id, bundleDeveloperName: entry.name }
     });
 
     if (!res?.ok) {
       void handleToolResponseFailure(res, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
-      if (res?.reason === 'NO_SID') {
-        setStatus(t('toast.noSession'), 'error');
-      } else {
-        setStatus(t('quickEdit.loadError'), 'error');
-      }
+      setStatus(res?.reason === 'NO_SID' ? t('toast.noSession') : t('quickEdit.loadError'), 'error');
       return;
     }
 
@@ -325,55 +542,57 @@ async function loadComponent(type, item) {
 
     const mainFile = files[0];
     const content = mainFile.content || '';
+    const lastModifiedDate =
+      entry.lastModifiedDate || mainFile.lastModifiedDate || files[0]?.lastModifiedDate || '';
 
-    await ensureEditor();
-    
-    const monaco = state.monaco;
-    if (monaco) {
-      monaco.editor.setModelLanguage(quickEditEditor.getModel(), 'apex');
-    }
-
-    quickEditEditor.setValue(content);
-    originalContent = content;
-    currentEditItem = {
-      type: 'ApexClass',
-      name: item.name || item.developerName,
-      fileName: mainFile.fileName
+    const tab = {
+      id: createTabId('apex'),
+      artType: 'ApexClass',
+      name,
+      fileName: mainFile.fileName,
+      content,
+      originalContent: content,
+      lastModifiedDate: String(lastModifiedDate || ''),
+      lastModifiedByName: String(mainFile.lastModifiedByName || ''),
+      lastModifiedByUsername: String(mainFile.lastModifiedByUsername || ''),
+      sourceOrgId: state.leftOrgId || null,
+      bundleId: entry.id || '',
+      pendingRemoteLoad: false
     };
 
+    editorSession.tabs = trimTabsToLimit([...editorSession.tabs, tab]);
+    editorSession.activeTabId = tab.id;
+    editorSession.orgId = state.leftOrgId || null;
+
+    await ensureEditor();
+    quickEditWorkbench.ensureTab({
+      tabId: tab.id,
+      content,
+      language: 'apex',
+      forceReload: true
+    });
+    const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
+    tab.content = loaded;
+    tab.originalContent = loaded;
+    quickEditWorkbench.switchTab(tab.id);
+
+    renderDocTabs();
+    updateCurrentFileDisplay();
     updateDeployButtonState();
     updateModifiedIndicator();
-    updateCurrentFileDisplay();
-    
-    setStatus(t('quickEdit.loaded', { name: currentEditItem.name }), 'success');
-
-    const resultsList = document.getElementById('quickEditResultsList');
-    if (resultsList) {
-      resultsList.innerHTML = '';
-    }
-    const searchInput = document.getElementById('quickEditSearchInput');
-    if (searchInput) {
-      searchInput.value = '';
-    }
+    setStatus(t('quickEdit.loaded', { name }), 'success');
+    void persistSession();
   } catch (e) {
     void handleToolError(e, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
     setStatus(`${t('quickEdit.loadError')}: ${e.message}`, 'error');
   }
 }
 
-function updateCurrentFileDisplay() {
-  const display = document.getElementById('quickEditCurrentFile');
-  if (!display) return;
-  if (currentEditItem) {
-    display.textContent = `${currentEditItem.type}: ${currentEditItem.name}`;
-  } else {
-    display.textContent = t('quickEdit.noFileLoaded');
-  }
-}
-
 async function deployComponent(checkOnly = false) {
   if (guardToolAction(checkOnly ? 'quick_edit_save' : 'deploy')) return;
-  if (!currentEditItem || !quickEditEditor) {
+  persistActiveTabContent();
+  const tab = getActiveTab();
+  if (!tab || !quickEditWorkbench.getEditor()) {
     showToast(t('quickEdit.nothingToDeploy'), 'warn');
     return;
   }
@@ -388,7 +607,7 @@ async function deployComponent(checkOnly = false) {
     return;
   }
 
-  const content = quickEditEditor.getValue();
+  const content = quickEditWorkbench.getValue(tab.id);
   if (!content.trim()) {
     showToast(t('quickEdit.emptyContent'), 'warn');
     return;
@@ -397,24 +616,24 @@ async function deployComponent(checkOnly = false) {
   saveApexDraft({
     orgId: state.leftOrgId,
     checkOnly,
-    item: currentEditItem,
+    tabId: tab.id,
+    item: { type: tab.artType, name: tab.name, fileName: tab.fileName },
     content,
-    originalContent
+    originalContent: tab.originalContent
   });
 
   isDeploying = true;
   updateDeployButtonState();
-
   const actionType = checkOnly ? 'validate' : 'deploy';
 
   try {
     const res = await bg({
       type: 'metadata:deploy',
       orgId: state.leftOrgId,
-      metadataType: currentEditItem.type,
-      memberName: currentEditItem.name,
+      metadataType: tab.artType,
+      memberName: tab.name,
       content,
-      fileName: currentEditItem.fileName,
+      fileName: tab.fileName,
       checkOnly,
       async: true
     });
@@ -427,9 +646,7 @@ async function deployComponent(checkOnly = false) {
       await navigateToDeployStatus(res.asyncId);
     } else {
       let errorMsg = res?.errorMessage || t('quickEdit.deployError');
-      if (res?.reason === 'NO_SID') {
-        errorMsg = t('toast.noSession');
-      }
+      if (res?.reason === 'NO_SID') errorMsg = t('toast.noSession');
       setDeployStatus(errorMsg, 'error');
       showToast(errorMsg, 'error');
       void logQuickEditUsage(actionType, false, errorMsg);
@@ -447,120 +664,148 @@ async function deployComponent(checkOnly = false) {
 }
 
 /**
- * @param {{ type: string, name: string, fileName: string, content: string, originalContent: string }} draft
+ * @param {{ type: string, name: string, fileName: string, content: string, originalContent: string, tabId?: string, lastModifiedDate?: string }} draft
  */
 export async function restoreQuickEditDraft(draft) {
   if (!draft) return;
 
-  await ensureEditor();
-  const monaco = state.monaco;
-  currentEditItem = {
-    type: draft.type,
-    name: draft.name,
-    fileName: draft.fileName
-  };
-  originalContent = draft.originalContent;
-  if (monaco && quickEditEditor) {
-    monaco.editor.setModelLanguage(quickEditEditor.getModel(), 'apex');
-    quickEditEditor.setValue(draft.content);
+  let tab = draft.tabId ? editorSession.tabs.find((t) => t.id === draft.tabId) : null;
+  if (!tab) {
+    tab = {
+      id: draft.tabId || createTabId('apex'),
+      artType: draft.type,
+      name: draft.name,
+      fileName: draft.fileName,
+      content: draft.content,
+      originalContent: draft.originalContent,
+      lastModifiedDate: draft.lastModifiedDate || '',
+      lastModifiedByName: draft.lastModifiedByName || '',
+      lastModifiedByUsername: draft.lastModifiedByUsername || '',
+      sourceOrgId: draft.sourceOrgId || state.leftOrgId || null
+    };
+    editorSession.tabs = trimTabsToLimit([...editorSession.tabs.filter((t) => t.id !== tab.id), tab]);
+  } else {
+    tab.content = draft.content;
+    tab.originalContent = draft.originalContent;
   }
+
+  editorSession.activeTabId = tab.id;
+  editorSession.orgId = state.leftOrgId || editorSession.orgId;
+
+  await ensureEditor();
+  quickEditWorkbench.ensureTab({
+    tabId: tab.id,
+    content: draft.content,
+    language: 'apex',
+    forceReload: true
+  });
+  const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
+  tab.content = loaded;
+  tab.originalContent = loaded;
+  quickEditWorkbench.switchTab(tab.id);
+
+  renderDocTabs();
   updateDeployButtonState();
   updateModifiedIndicator();
   updateCurrentFileDisplay();
   setStatus(t('quickEdit.loaded', { name: draft.name }), 'success');
   setDeployStatus('');
+  void persistSession();
+}
+
+async function restoreSessionFromStorage() {
+  if (sessionRestored) return;
+  sessionRestored = true;
+
+  const stored = await loadCodeEditorSession('QuickEdit');
+  if (!hasStoredCodeEditorTabs(stored)) return;
+
+  editorSession = {
+    orgId: stored.orgId ? String(stored.orgId) : null,
+    activeTabId: stored.activeTabId ? String(stored.activeTabId) : null,
+    tabs: stored.tabs.map((tab) => {
+      const sourceOrgId = tab.sourceOrgId
+        ? String(tab.sourceOrgId)
+        : stored.orgId
+          ? String(stored.orgId)
+          : null;
+      const mapped = {
+        id: String(tab.id),
+        artType: String(tab.artType || 'ApexClass'),
+        name: String(tab.name || ''),
+        fileName: String(tab.fileName || ''),
+        content: String(tab.content ?? ''),
+        originalContent: String(tab.originalContent ?? ''),
+        lastModifiedDate: String(tab.lastModifiedDate || ''),
+        lastModifiedByName: String(tab.lastModifiedByName || ''),
+        lastModifiedByUsername: String(tab.lastModifiedByUsername || ''),
+        sourceOrgId,
+        bundleId: tab.bundleId ? String(tab.bundleId) : '',
+        pendingRemoteLoad: tab.pendingRemoteLoad === true
+      };
+      if (isTabOrgAuthExpired(mapped)) {
+        setTabPendingRemoteLoad(mapped, true);
+      }
+      return mapped;
+    })
+  };
+
+  if (!editorSession.activeTabId || !editorSession.tabs.some((t) => t.id === editorSession.activeTabId)) {
+    editorSession.activeTabId = editorSession.tabs[0]?.id || null;
+  }
+
+  if (editorSession.activeTabId) {
+    await switchToTab(editorSession.activeTabId);
+  }
+  renderDocTabs();
 }
 
 export async function refreshQuickEditPanel() {
-  if (!state.leftOrgId) {
-    return;
-  }
-
   if (getSelectedArtifactType() === 'QuickEdit') {
+    await restoreSessionFromStorage();
     await ensureEditor();
     const ctx = getReturnContext();
-    if (ctx?.tool === 'QuickEdit' && !currentEditItem && ctx.draft) {
-      await restoreQuickEditDraft(ctx.draft);
+    if (ctx?.tool === 'QuickEdit' && ctx.draft) {
+      await restoreQuickEditDraft({
+        ...ctx.draft,
+        sourceOrgId: ctx.draft.sourceOrgId || ctx.orgId
+      });
     }
+    await retryQuickEditAuthPendingLoads();
   }
   updateCurrentFileDisplay();
   updateDeployButtonState();
+  renderDocTabs();
 }
 
 export function setupQuickEditPanel() {
-  const searchInput = document.getElementById('quickEditSearchInput');
+  const searchInput = /** @type {HTMLInputElement | null} */ (document.getElementById('quickEditSearchInput'));
   const resultsList = document.getElementById('quickEditResultsList');
   const deployBtn = document.getElementById('quickEditDeployBtn');
   const validateBtn = document.getElementById('quickEditValidateBtn');
   const clearBtn = document.getElementById('quickEditClearBtn');
+  const newTabBtn = document.getElementById('quickEditNewTabBtn');
 
-  if (searchInput) {
-    let searchTimeout = null;
-    searchInput.addEventListener('input', () => {
-      syncQuickEditSearchInputWidth();
-      clearTimeout(searchTimeout);
-      searchTimeout = setTimeout(() => searchComponents(), 400);
-    });
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        clearTimeout(searchTimeout);
-        searchComponents();
-      }
-      if (e.key === 'Escape') {
-        if (resultsList) {
-          resultsList.innerHTML = '';
-          scheduleSyncQuickEditResultsListWidth();
-        }
-      }
-    });
-    searchInput.addEventListener('focus', () => {
-      syncQuickEditSearchInputWidth();
-      if (searchInput.value.trim().length >= 2) {
-        searchComponents();
-      }
-    });
-    syncQuickEditSearchInputWidth();
-    window.addEventListener('resize', () => {
-      syncQuickEditSearchInputWidth();
-      scheduleSyncQuickEditResultsListWidth();
+  if (searchInput && resultsList) {
+    setupCodeEditorSearch({
+      inputEl: searchInput,
+      resultsEl: resultsList,
+      artTypes: ['ApexClass'],
+      onSelect: (entry) => void openTabFromEntry(entry)
     });
   }
 
-  document.addEventListener('click', (e) => {
-    const searchContainer = searchInput?.closest('.quick-edit-search-zone');
-    if (resultsList && searchContainer && !searchContainer.contains(e.target)) {
-      resultsList.innerHTML = '';
-      scheduleSyncQuickEditResultsListWidth();
-    }
-  });
+  setupCodeEditorSessionPersistence('QuickEdit', persistSession);
 
-  if (deployBtn) {
-    deployBtn.addEventListener('click', () => deployComponent(false));
-  }
+  if (deployBtn) deployBtn.addEventListener('click', () => deployComponent(false));
+  if (validateBtn) validateBtn.addEventListener('click', () => deployComponent(true));
 
-  if (validateBtn) {
-    validateBtn.addEventListener('click', () => deployComponent(true));
+  if (newTabBtn) {
+    newTabBtn.addEventListener('click', () => searchInput?.focus());
   }
 
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      if (hasUnsavedChanges()) {
-        const confirm = window.confirm(t('quickEdit.unsavedChanges'));
-        if (!confirm) return;
-      }
-      if (quickEditEditor) {
-        quickEditEditor.setValue('');
-      }
-      currentEditItem = null;
-      originalContent = '';
-      clearReturnContext();
-      setStatus('');
-      setDeployStatus('');
-      updateCurrentFileDisplay();
-      updateDeployButtonState();
-      updateModifiedIndicator();
-    });
+    clearBtn.addEventListener('click', () => void clearAllEditorTabs());
   }
 
   window.addEventListener('beforeunload', (e) => {
@@ -572,9 +817,10 @@ export function setupQuickEditPanel() {
 }
 
 export function refreshQuickEditEditorTheme() {
-  if (!quickEditEditor) return;
+  const editor = quickEditWorkbench.getEditor();
+  if (!editor) return;
   try {
-    quickEditEditor.updateOptions({ theme: resolveMonacoThemeId() });
+    editor.updateOptions({ theme: resolveMonacoThemeId() });
   } catch {
     /* ignore */
   }

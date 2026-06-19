@@ -191,6 +191,9 @@ export async function pollDeployStatus(instanceUrl, sid, apiVersion, opts = {}) 
   const pageSize = Math.min(50, Math.max(1, Number(opts.pageSize) || 10));
   const selectedAsyncId = opts.selectedAsyncId ? String(opts.selectedAsyncId) : '';
   const fetchDetail = !!opts.fetchDetail && !!selectedAsyncId;
+  const skipCoverageHintIds = new Set(
+    (Array.isArray(opts.knownCoverageHintIds) ? opts.knownCoverageHintIds : []).map(String)
+  );
 
   const [active, pendingHistory, failedHistory, succeededHistory] = await Promise.all([
     fetchActiveDeploy(instanceUrl, sid, apiVersion),
@@ -213,12 +216,21 @@ export async function pollDeployStatus(instanceUrl, sid, apiVersion, opts = {}) 
     }
   }
 
+  const failedCoverageHints = await resolveFailedHistoryCoverageHints(
+    instanceUrl,
+    sid,
+    apiVersion,
+    failedHistory?.records,
+    skipCoverageHintIds
+  );
+
   return {
     active,
     activeSoap,
     pendingHistory,
     failedHistory,
     succeededHistory,
+    failedCoverageHints,
     detail,
     selectedAsyncId: fetchDetail ? selectedAsyncId : ''
   };
@@ -252,6 +264,85 @@ export function collectSlowTests(runTestResult) {
   for (const s of runTestResult.successes || []) add(s);
   items.sort((a, b) => b.timeMs - a.timeMs);
   return items;
+}
+
+function messageIndicatesCoverageFailure(message, statusCode = '') {
+  const msg = String(message || '').toLowerCase();
+  const code = String(statusCode || '').toLowerCase();
+  return (
+    msg.includes('coverage') ||
+    msg.includes('cobertura') ||
+    code.includes('coverage') ||
+    code.includes('cobertura')
+  );
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} row
+ */
+export function hasCoverageFailureInRow(row) {
+  if (String(row?.status || '') !== 'Failed') return false;
+  return messageIndicatesCoverageFailure(row?.errorMessage, row?.errorStatusCode);
+}
+
+/**
+ * @param {Record<string, unknown> | null | undefined} soap
+ */
+export function hasCoverageFailureInSoap(soap) {
+  if (!soap) return false;
+  const warnings = soap.runTestResult?.codeCoverageWarnings;
+  if (Array.isArray(warnings) && warnings.length > 0) return true;
+  return messageIndicatesCoverageFailure(soap.errorMessage, soap.errorStatusCode);
+}
+
+/**
+ * Detecta fallos de cobertura en el historial fallido (página actual) vía checkDeployStatus.
+ * @param {Array<Record<string, unknown>>} records
+ * @param {Set<string>} [skipAsyncIds] IDs ya resueltos en cliente
+ * @returns {Promise<Record<string, { coverageWarningCount: number }>>}
+ */
+export async function resolveFailedHistoryCoverageHints(
+  instanceUrl,
+  sid,
+  apiVersion,
+  records,
+  skipAsyncIds = new Set()
+) {
+  /** @type {Record<string, { coverageWarningCount: number }>} */
+  const hints = {};
+
+  /** @type {Array<Record<string, unknown>>} */
+  const needsSoap = [];
+
+  for (const row of records || []) {
+    const id = String(row?.asyncId || '').trim();
+    if (!id || String(row?.status || '') !== 'Failed') continue;
+    if (skipAsyncIds.has(id)) continue;
+
+    if (hasCoverageFailureInRow(row)) {
+      hints[id] = { coverageWarningCount: 1 };
+      continue;
+    }
+
+    if (toNum(row?.componentErrors) > 0 || toNum(row?.testErrors) > 0) continue;
+    needsSoap.push(row);
+  }
+
+  await Promise.all(
+    needsSoap.map(async (row) => {
+      const id = String(row.asyncId);
+      try {
+        const soap = await checkDeployStatus(instanceUrl, sid, apiVersion, id);
+        if (!hasCoverageFailureInSoap(soap)) return;
+        const count = soap?.runTestResult?.codeCoverageWarnings?.length || 0;
+        hints[id] = { coverageWarningCount: count || 1 };
+      } catch {
+        /* fila individual: no bloquear el resto */
+      }
+    })
+  );
+
+  return hints;
 }
 
 export function buildSetupDeployDetailsUrl(instanceUrl, asyncId) {

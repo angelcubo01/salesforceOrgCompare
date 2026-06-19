@@ -58,6 +58,18 @@ html[data-ui-theme="light"] .sidebar-header {
   background: #f3f3f3;
 }
 
+html[data-ui-theme="light"] .sidebar-brand {
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  border-bottom: 1px solid #cbd5e1;
+}
+
+html[data-ui-theme="light"] .sidebar-brand-name {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 45%, #059669 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 html[data-ui-theme="light"] .sidebar-search-label {
   color: #616161;
 }
@@ -243,6 +255,34 @@ html[data-ui-theme="light"] .list li.retrieve-zip-diff .list-item-name {
   color: #b91c1c;
 }
 
+html[data-ui-theme="light"] .list li.retrieve-zip-left-only .list-item-name {
+  color: #a16207;
+}
+
+html[data-ui-theme="light"] .list li.retrieve-zip-right-only .list-item-name {
+  color: #1d4ed8;
+}
+
+html[data-ui-theme="light"] .retrieve-zip-status-badge--match {
+  background: rgba(22, 163, 74, 0.15);
+  color: #15803d;
+}
+
+html[data-ui-theme="light"] .retrieve-zip-status-badge--diff {
+  background: rgba(185, 28, 28, 0.12);
+  color: #b91c1c;
+}
+
+html[data-ui-theme="light"] .retrieve-zip-status-badge--leftOnly {
+  background: rgba(161, 98, 7, 0.12);
+  color: #a16207;
+}
+
+html[data-ui-theme="light"] .retrieve-zip-status-badge--rightOnly {
+  background: rgba(29, 78, 216, 0.12);
+  color: #1d4ed8;
+}
+
 html[data-ui-theme="light"] .list li.dragging {
   background-color: #cbd5e1;
 }
@@ -270,6 +310,94 @@ html[data-ui-theme="light"] .list li .action-button {
 }
 
 html[data-ui-theme="light"] .sfoc-autocomplete-panel .item:hover,
+html[data-ui-theme="light"] .code-editor-search-results .quick-open-item:hover {
+  background: var(--sfoc-autocomplete-item-hover-bg);
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .vscode-tabs {
+  --vscode-tab-bg: #ececec;
+  --vscode-tab-inactive-fg: #616161;
+  --vscode-tab-active-fg: #333333;
+  --vscode-tab-active-bg: #ffffff;
+  --vscode-tab-hover-bg: #e8e8e8;
+  --vscode-tab-border: #e5e5e5;
+  --vscode-tab-separator: #d4d4d4;
+  --vscode-tab-accent: #007acc;
+  --vscode-editor-bg: #ffffff;
+}
+
+html[data-ui-theme="light"] .vscode-tabs--secondary {
+  --vscode-tab-bg: #f3f3f3;
+}
+
+html[data-ui-theme="light"] .vscode-editor-shell {
+  border-color: #e5e5e5;
+  background: #ffffff;
+}
+
+html[data-ui-theme="light"] .anonymous-apex-panel-inner > .vscode-editor-shell {
+  border-color: #cbd5e1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+html[data-ui-theme="light"] .vscode-tab__close:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+html[data-ui-theme="light"] .vscode-tab__rename-input {
+  background: #ffffff;
+  color: #333333;
+}
+
+html[data-ui-theme="light"] .vscode-tab__file-picker {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333333;
+}
+
+html[data-ui-theme="light"] .vscode-tab__file-picker:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+html[data-ui-theme="light"] .vscode-tab-file-menu {
+  background: #ffffff;
+  border-color: #d4d4d4;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+}
+
+html[data-ui-theme="light"] .vscode-tab-file-menu__item {
+  color: #333333;
+}
+
+html[data-ui-theme="light"] .vscode-tab-file-menu__item:hover,
+html[data-ui-theme="light"] .vscode-tab-file-menu__item.is-active:hover {
+  background: #0060c0;
+  color: #ffffff;
+}
+
+html[data-ui-theme="light"] .vscode-tab-file-menu__item.is-active {
+  background: #e8e8e8;
+  color: #333333;
+}
+
+html[data-ui-theme="light"] .quick-edit-source-org {
+  color: #b45309;
+  background: rgba(180, 83, 9, 0.08);
+  border-color: rgba(180, 83, 9, 0.22);
+}
+
+html[data-ui-theme="light"] .quick-edit-title-sep {
+  background: rgba(100, 116, 139, 0.35);
+}
+
+html[data-ui-theme="light"] .quick-edit-current-file-name {
+  color: #0f172a;
+}
+html[data-ui-theme="light"] .code-editor-search-results .quick-open-crumb-date,
+html[data-ui-theme="light"] .quick-open-crumb-date {
+  color: #64748b;
+}
+
 html[data-ui-theme="light"] .quick-edit-results-dropdown.sfoc-autocomplete-panel .quick-edit-result-item:hover {
   background: var(--sfoc-autocomplete-item-hover-bg);
   color: #0f172a;
@@ -1347,6 +1475,10 @@ html[data-ui-theme="light"] .debug-log-browser-loading {
   color: #334155;
 }
 
+html[data-ui-theme="light"] .debug-log-browser-context-loading {
+  color: #64748b;
+}
+
 html[data-ui-theme="light"] .debug-log-browser-skeleton-bar {
   background: linear-gradient(90deg, rgba(226, 232, 240, 0.9) 0%, rgba(203, 213, 225, 0.95) 50%, rgba(226, 232, 240, 0.9) 100%);
   background-size: 200% 100%;
@@ -1678,6 +1810,19 @@ html[data-ui-theme="light"] .org-limits-card h3 {
   color: #64748b;
 }
 
+html[data-ui-theme="light"] .org-limits-card--warning {
+  border-color: rgba(220, 38, 38, 0.45);
+  background: rgba(254, 226, 226, 0.65);
+}
+
+html[data-ui-theme="light"] .org-limits-card--warning h3 {
+  color: #b91c1c;
+}
+
+html[data-ui-theme="light"] .org-limits-card--warning .org-limits-value-line-main {
+  color: #991b1b;
+}
+
 html[data-ui-theme="light"] .org-limits-value-line {
   color: #334155;
 }
@@ -1805,17 +1950,13 @@ html[data-ui-theme="light"] .deploy-status-active-meta-item dd {
 }
 
 html[data-ui-theme="light"] .deploy-status-active-live-chip {
-  background: #fffbeb;
-  border-color: #fcd34d;
-  color: #b45309;
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
 }
 
 html[data-ui-theme="light"] .deploy-status-chart-label.is-muted {
   color: #64748b;
-}
-
-html[data-ui-theme="light"] .deploy-status-chart-pct {
-  color: #d97706;
 }
 
 html[data-ui-theme="light"] .deploy-status-detail-hero {
@@ -2182,13 +2323,17 @@ html[data-ui-theme="light"] #searchResults.sidebar-search-results .quick-open-em
   color: #64748b;
 }
 
-html[data-ui-theme="light"] #searchResults.sidebar-search-results .sidebar-search-loading-item {
+html[data-ui-theme="light"] #searchResults.sidebar-search-results .sidebar-search-loading-item,
+html[data-ui-theme="light"] .quick-open-results .sidebar-search-loading-item,
+html[data-ui-theme="light"] .code-editor-search-results .sidebar-search-loading-item {
   background: rgba(148, 163, 184, 0.2);
   color: #475569;
   border-bottom-color: #e2e8f0;
 }
 
-html[data-ui-theme="light"] #searchResults.sidebar-search-results .sidebar-search-loading-spinner {
+html[data-ui-theme="light"] #searchResults.sidebar-search-results .sidebar-search-loading-spinner,
+html[data-ui-theme="light"] .quick-open-results .sidebar-search-loading-spinner,
+html[data-ui-theme="light"] .code-editor-search-results .sidebar-search-loading-spinner {
   border-color: #cbd5e1;
   border-top-color: #0284c7;
 }

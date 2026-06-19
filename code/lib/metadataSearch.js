@@ -68,7 +68,7 @@ export const COMPARE_TOOLS_COVERED_BY_METADATA = new Set(
   METADATA_SEARCH_SPECS.map((s) => s.navTool)
 );
 
-/** @typedef {{ artType: string, navTool: string, categoryKey: string, isBundle?: boolean, name: string, id?: string, searchHay: string }} MetadataSearchEntry */
+/** @typedef {{ artType: string, navTool: string, categoryKey: string, isBundle?: boolean, name: string, id?: string, searchHay: string, lastModifiedDate?: string }} MetadataSearchEntry */
 
 let indexBuildGeneration = 0;
 
@@ -115,6 +115,21 @@ export function fillBreadcrumb(crumbs, groupLabel, name) {
 }
 
 /**
+ * @param {HTMLElement} crumbs
+ * @param {string} groupLabel
+ * @param {string} name
+ * @param {string} [lastModifiedDate]
+ */
+export function fillBreadcrumbWithMeta(crumbs, groupLabel, name, lastModifiedDate) {
+  fillBreadcrumb(crumbs, groupLabel, name);
+  if (!lastModifiedDate) return;
+  const dateEl = document.createElement('span');
+  dateEl.className = 'quick-open-crumb-date';
+  dateEl.textContent = lastModifiedDate;
+  crumbs.appendChild(dateEl);
+}
+
+/**
  * @param {Record<string, unknown>[]} items
  * @returns {MetadataSearchEntry[]}
  */
@@ -135,7 +150,8 @@ export function mapApiIndexToEntries(items) {
         isBundle: true,
         name,
         id: row.id != null ? String(row.id) : undefined,
-        searchHay: name.toLowerCase()
+        searchHay: name.toLowerCase(),
+        lastModifiedDate: row.lastModifiedDate ? String(row.lastModifiedDate) : undefined
       });
       continue;
     }
@@ -146,7 +162,8 @@ export function mapApiIndexToEntries(items) {
       navTool: spec.navTool,
       categoryKey: spec.categoryKey,
       name,
-      searchHay: name.toLowerCase()
+      searchHay: name.toLowerCase(),
+      lastModifiedDate: row.lastModifiedDate ? String(row.lastModifiedDate) : undefined
     });
   }
   return out;
@@ -277,4 +294,40 @@ export async function resolveMetadataMatches(orgId, queryLocal, apiPrefix) {
  */
 export function capMetadataResults(metadata, max) {
   return metadata.slice(0, max);
+}
+
+/**
+ * @param {string} orgId
+ * @param {string} queryLocal
+ * @param {string} apiPrefix
+ * @param {string[]} artTypes
+ * @returns {Promise<MetadataSearchEntry[]>}
+ */
+export async function resolveCodeEditorMatches(orgId, queryLocal, apiPrefix, artTypes) {
+  const artSet = new Set(artTypes);
+  if (nameIndex.orgId === orgId && nameIndex.ready) {
+    return filterMetadataEntries(
+      nameIndex.entries.filter((e) => artSet.has(e.artType) && e.searchHay.includes(queryLocal))
+    );
+  }
+  if (apiPrefix.length >= MIN_METADATA_CHARS) {
+    const config = getCachedFeatureControlsConfig();
+    const specs = METADATA_SEARCH_SPECS.filter(
+      (spec) => artSet.has(spec.artType) && isMetadataTypeVisible(config, spec.artType)
+    );
+    const batches = await Promise.all(
+      specs.map(async (spec) => {
+        const r = await bg({ type: 'searchIndex', orgId, artifactType: spec.artType, prefix: apiPrefix });
+        if (!r.ok) return [];
+        return mapApiIndexToEntries(
+          (Array.isArray(r.items) ? r.items : []).map((item) => ({
+            ...item,
+            artifactType: spec.artType
+          }))
+        );
+      })
+    );
+    return batches.flat();
+  }
+  return [];
 }
