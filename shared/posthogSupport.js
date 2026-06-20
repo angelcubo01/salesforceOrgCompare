@@ -272,7 +272,7 @@ export async function showPosthogSupport(ph) {
     ok: false,
     reason: 'widget_not_found',
     extensionId,
-    configuredDomains
+    configuredDomains: configuredDomains ?? []
   };
 }
 

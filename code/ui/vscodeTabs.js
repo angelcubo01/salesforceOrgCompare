@@ -1,6 +1,12 @@
 import { t } from '../../shared/i18n.js';
 
 /**
+ * @typedef {object} VscodeTabActionMeta
+ * @property {number} [tabIndex]
+ * @property {string} [sourceOrgId]
+ */
+
+/**
  * @typedef {object} VscodeTabItem
  * @property {string} id
  * @property {string} label
@@ -12,6 +18,7 @@ import { t } from '../../shared/i18n.js';
  * @property {string} [title]
  * @property {boolean} [showClose]
  * @property {string} [renameValue]
+ * @property {string} [sourceOrgId]
  */
 
 /**
@@ -39,8 +46,8 @@ import { t } from '../../shared/i18n.js';
  * @property {boolean} [addDisabled]
  * @property {string} [addTitle]
  * @property {string} [variant]
- * @property {(tabId: string) => void} onSelect
- * @property {(tabId: string, event: MouseEvent) => void} onClose
+ * @property {(tabId: string, event: MouseEvent, meta?: VscodeTabActionMeta) => void} onSelect
+ * @property {(tabId: string, event: MouseEvent, meta?: VscodeTabActionMeta) => void} onClose
  * @property {() => void} [onAdd]
  * @property {(tabId: string) => void} [onRenameStart]
  * @property {(tabId: string, value: string) => void} [onRenameFinish]
@@ -55,6 +62,79 @@ const CLOSE_ICON_SVG =
 
 const CHEVRON_DOWN_SVG =
   '<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4.427 6.427l3.396 3.396a.25.25 0 00.354 0l3.396-3.396A.25.25 0 0011.396 6H4.604a.25.25 0 00-.177.427z"/></svg>';
+
+/** @type {ResizeObserver | null} */
+let tabLabelTooltipObserver = null;
+/** @type {HTMLElement | null} */
+let tabLabelTooltipObserverTarget = null;
+
+/**
+ * Texto del tooltip de etiqueta según truncado y pista de renombrado.
+ * @param {string} fullLabel
+ * @param {boolean} isTruncated
+ * @param {string} [renameHint]
+ */
+export function resolveVscodeTabLabelTitle(fullLabel, isTruncated, renameHint = '') {
+  if (isTruncated && fullLabel) return fullLabel;
+  if (renameHint) return renameHint;
+  return '';
+}
+
+/**
+ * @param {VscodeTabItem} tab
+ */
+function buildTabLabelTooltip(tab) {
+  const label = String(tab.label || '');
+  const prefix = String(tab.prefix || '').trim();
+  return prefix ? `${prefix} · ${label}` : label;
+}
+
+/**
+ * @param {HTMLElement} labelEl
+ */
+function syncTabLabelTooltip(labelEl) {
+  const fullLabel = labelEl.dataset.fullLabel || labelEl.textContent || '';
+  const renameHint = labelEl.dataset.renameHint || '';
+  const truncated = labelEl.scrollWidth > labelEl.clientWidth + 1;
+  const title = resolveVscodeTabLabelTitle(fullLabel, truncated, renameHint);
+  if (title) {
+    labelEl.title = title;
+  } else {
+    labelEl.removeAttribute('title');
+  }
+}
+
+/**
+ * @param {ParentNode | null} root
+ */
+export function syncVscodeTabLabelTooltips(root) {
+  if (!root) return;
+  for (const label of root.querySelectorAll('.vscode-tab__label')) {
+    syncTabLabelTooltip(/** @type {HTMLElement} */ (label));
+  }
+}
+
+/**
+ * @param {HTMLElement | null} scrollEl
+ */
+function observeTabLabelTooltips(scrollEl) {
+  if (tabLabelTooltipObserver && tabLabelTooltipObserverTarget === scrollEl) {
+    syncVscodeTabLabelTooltips(scrollEl);
+    return;
+  }
+  tabLabelTooltipObserver?.disconnect();
+  tabLabelTooltipObserverTarget = scrollEl;
+  if (!scrollEl || typeof ResizeObserver === 'undefined') {
+    tabLabelTooltipObserver = null;
+    syncVscodeTabLabelTooltips(scrollEl);
+    return;
+  }
+  tabLabelTooltipObserver = new ResizeObserver(() => {
+    syncVscodeTabLabelTooltips(scrollEl);
+  });
+  tabLabelTooltipObserver.observe(scrollEl);
+  syncVscodeTabLabelTooltips(scrollEl);
+}
 
 /** @type {HTMLElement | null} */
 let openFilePickerMenuEl = null;
@@ -155,15 +235,16 @@ function openFilePickerMenu(anchor, picker, tabId) {
 }
 
 /**
- * @param {HTMLButtonElement} btn
+ * @param {HTMLElement} anchor
  * @param {VscodeTabItem} tab
  * @param {VscodeTabFilePicker} picker
  */
-function appendFilePickerTrigger(btn, tab, picker) {
+function appendFilePickerTrigger(anchor, tab, picker) {
   const activeFile = picker.files.find((f) => f.id === picker.activeFileId);
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
+  const trigger = document.createElement('span');
   trigger.className = 'vscode-tab__file-picker';
+  trigger.setAttribute('role', 'button');
+  trigger.tabIndex = 0;
   trigger.setAttribute('aria-haspopup', 'menu');
   trigger.setAttribute('aria-expanded', 'false');
   trigger.setAttribute('aria-label', t('codeEditor.bundleFilePicker'));
@@ -177,6 +258,7 @@ function appendFilePickerTrigger(btn, tab, picker) {
   chevron.innerHTML = CHEVRON_DOWN_SVG;
 
   trigger.append(badge, chevron);
+  trigger.addEventListener('mousedown', (e) => e.stopPropagation());
   trigger.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpen = openFilePickerMenuEl?.dataset.anchorTabId === tab.id;
@@ -188,57 +270,103 @@ function appendFilePickerTrigger(btn, tab, picker) {
       trigger.setAttribute('aria-expanded', 'true');
     }
   });
+  trigger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+      trigger.click();
+    }
+  });
 
-  const closeBtn = btn.querySelector('.vscode-tab__close');
+  const closeBtn = anchor.querySelector('.vscode-tab__close');
   if (closeBtn) {
-    btn.insertBefore(trigger, closeBtn);
+    anchor.insertBefore(trigger, closeBtn);
   } else {
-    btn.appendChild(trigger);
+    anchor.appendChild(trigger);
   }
 }
 
 /**
  * @param {string} tabId
- * @param {(tabId: string, event: MouseEvent) => void} onClose
+ * @param {number} tabIndex
+ * @param {VscodeTabItem} tab
+ * @param {(tabId: string, event: MouseEvent, meta?: VscodeTabActionMeta) => void} onClose
  */
-function createCloseButton(tabId, onClose) {
+function createCloseButton(tabId, tabIndex, tab, onClose) {
   const close = document.createElement('span');
   close.className = 'vscode-tab__close';
   close.setAttribute('role', 'button');
   close.setAttribute('aria-label', t('codeEditor.closeTab'));
   close.innerHTML = CLOSE_ICON_SVG;
+  close.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+  });
   close.addEventListener('click', (e) => {
     e.stopPropagation();
-    onClose?.(tabId, e);
+    e.preventDefault();
+    onClose?.(tabId, e, { tabIndex, sourceOrgId: tab.sourceOrgId });
   });
   return close;
 }
 
 /**
+ * @param {HTMLElement} tabEl
+ * @param {string} tabId
+ * @param {number} tabIndex
  * @param {VscodeTabItem} tab
+ * @param {(tabId: string, event: MouseEvent, meta?: VscodeTabActionMeta) => void} onSelect
+ * @param {(tabId: string, event: MouseEvent, meta?: VscodeTabActionMeta) => void} onClose
+ */
+function wireTabSelectHandlers(tabEl, tabId, tabIndex, tab, onSelect, onClose) {
+  const meta = { tabIndex, sourceOrgId: tab.sourceOrgId };
+  tabEl.addEventListener('click', (e) => {
+    const target = /** @type {HTMLElement | null} */ (e.target instanceof Element ? e.target : null);
+    if (target?.closest('.vscode-tab__close, .vscode-tab__file-picker')) return;
+    onSelect(tabId, e, meta);
+  });
+  tabEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelect(tabId, e, meta);
+    }
+  });
+  tabEl.addEventListener('auxclick', (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      onClose?.(tabId, e, meta);
+    }
+  });
+}
+
+/**
+ * @param {VscodeTabItem} tab
+ * @param {number} tabIndex
  * @param {VscodeTabBarOptions} options
  */
-function createTabElement(tab, options) {
+function createTabElement(tab, tabIndex, options) {
   const { onSelect, onClose, onRenameStart, onRenameFinish, onRenameCancel, renamingTabId, getFilePicker } =
     options;
 
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'vscode-tab';
-  btn.setAttribute('role', 'tab');
-  btn.dataset.tabId = tab.id;
+  const el = document.createElement('div');
+  el.className = 'vscode-tab';
+  el.setAttribute('role', 'tab');
+  el.tabIndex = tab.isActive ? 0 : -1;
+  el.dataset.tabId = tab.id;
+  el.dataset.tabIndex = String(tabIndex);
+  if (tab.sourceOrgId) el.dataset.sourceOrgId = String(tab.sourceOrgId);
 
-  if (tab.iconKind) btn.classList.add(`vscode-tab--${tab.iconKind}`);
+  if (tab.iconKind) el.classList.add(`vscode-tab--${tab.iconKind}`);
   if (tab.isActive) {
-    btn.classList.add('is-active');
-    btn.setAttribute('aria-selected', 'true');
+    el.classList.add('is-active');
+    el.setAttribute('aria-selected', 'true');
   } else {
-    btn.setAttribute('aria-selected', 'false');
+    el.setAttribute('aria-selected', 'false');
   }
-  if (tab.isModified) btn.classList.add('is-modified');
-  if (tab.isAuthExpired) btn.classList.add('vscode-tab--auth-expired');
-  if (renamingTabId === tab.id) btn.classList.add('is-renaming');
-  if (tab.title) btn.title = tab.title;
+  if (tab.isModified) el.classList.add('is-modified');
+  if (tab.isAuthExpired) el.classList.add('vscode-tab--auth-expired');
+  if (renamingTabId === tab.id) el.classList.add('is-renaming');
+  if (tab.title) el.title = tab.title;
 
   if (renamingTabId === tab.id) {
     const input = document.createElement('input');
@@ -261,65 +389,60 @@ function createTabElement(tab, options) {
     input.addEventListener('blur', () => onRenameFinish?.(tab.id, input.value));
 
     if (tab.showClose !== false) {
-      btn.append(input, createCloseButton(tab.id, onClose));
+      el.append(input, createCloseButton(tab.id, tabIndex, tab, onClose));
     } else {
-      btn.appendChild(input);
+      el.appendChild(input);
     }
-    btn.addEventListener('click', (e) => e.stopPropagation());
+    el.addEventListener('click', (e) => e.stopPropagation());
     window.requestAnimationFrame(() => {
       input.focus();
       input.select();
     });
-    return btn;
+    return el;
   }
 
   if (tab.isModified) {
     const dirty = document.createElement('span');
     dirty.className = 'vscode-tab__dirty';
     dirty.setAttribute('aria-hidden', 'true');
-    btn.appendChild(dirty);
+    el.appendChild(dirty);
   }
 
   if (tab.prefix) {
     const prefix = document.createElement('span');
     prefix.className = 'vscode-tab__prefix';
     prefix.textContent = tab.prefix;
-    btn.appendChild(prefix);
+    el.appendChild(prefix);
   }
 
   const label = document.createElement('span');
   label.className = 'vscode-tab__label';
   label.textContent = tab.label;
+  label.dataset.fullLabel = buildTabLabelTooltip(tab);
   if (onRenameStart) {
-    label.title = t('codeEditor.renameTabHint');
+    label.dataset.renameHint = t('codeEditor.renameTabHint');
     label.addEventListener('dblclick', (e) => {
       e.stopPropagation();
       e.preventDefault();
       onRenameStart(tab.id);
     });
   }
-  btn.appendChild(label);
+  el.appendChild(label);
 
   if (tab.isActive && getFilePicker) {
     const picker = getFilePicker(tab.id);
     if (picker?.files?.length) {
-      appendFilePickerTrigger(btn, tab, picker);
+      appendFilePickerTrigger(el, tab, picker);
     }
   }
 
   if (tab.showClose !== false) {
-    btn.appendChild(createCloseButton(tab.id, onClose));
+    el.appendChild(createCloseButton(tab.id, tabIndex, tab, onClose));
   }
 
-  btn.addEventListener('click', () => onSelect(tab.id));
-  btn.addEventListener('auxclick', (e) => {
-    if (e.button === 1) {
-      e.preventDefault();
-      onClose?.(tab.id, e);
-    }
-  });
+  wireTabSelectHandlers(el, tab.id, tabIndex, tab, onSelect, onClose);
 
-  return btn;
+  return el;
 }
 
 /**
@@ -349,6 +472,9 @@ export function renderVscodeTabBar(container, options) {
   container.setAttribute('role', 'tablist');
 
   if (hidden || (tabs.length === 0 && !showAddButton)) {
+    tabLabelTooltipObserver?.disconnect();
+    tabLabelTooltipObserver = null;
+    tabLabelTooltipObserverTarget = null;
     container.innerHTML = '';
     container.hidden = true;
     return;
@@ -366,8 +492,8 @@ export function renderVscodeTabBar(container, options) {
   /** @type {HTMLElement | null} */
   let activeTabEl = null;
 
-  for (const tab of tabs) {
-    const el = createTabElement(tab, options);
+  for (const [tabIndex, tab] of tabs.entries()) {
+    const el = createTabElement(tab, tabIndex, options);
     if (tab.isActive) activeTabEl = el;
     list.appendChild(el);
   }
@@ -386,6 +512,10 @@ export function renderVscodeTabBar(container, options) {
 
   scroll.appendChild(list);
   container.appendChild(scroll);
+
+  window.requestAnimationFrame(() => {
+    observeTabLabelTooltips(scroll);
+  });
 
   scroll.addEventListener(
     'wheel',

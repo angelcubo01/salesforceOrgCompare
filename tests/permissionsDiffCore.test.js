@@ -8,6 +8,8 @@ import {
   buildPermissionDiffBundle,
   diffBoolFields,
   parseResourceInput,
+  resolveFieldResourceSuggestPhase,
+  minFieldResourceSuggestLength,
   containerAccessKey,
   compareAccessByResourceBundles,
   buildAccessByResourceBundle,
@@ -129,5 +131,30 @@ describe('permissionsDiffCore', () => {
       ['PermissionsRead', 'PermissionsEdit']
     );
     expect(ch).toHaveLength(2);
+  });
+
+  it('resolveFieldResourceSuggestPhase distingue objeto y campo', () => {
+    expect(resolveFieldResourceSuggestPhase('Acc')).toEqual({
+      phase: 'object',
+      objectTerm: 'Acc',
+      fieldTerm: ''
+    });
+    expect(resolveFieldResourceSuggestPhase('Account.')).toEqual({
+      phase: 'field',
+      objectTerm: 'Account',
+      fieldTerm: ''
+    });
+    expect(resolveFieldResourceSuggestPhase('Account.Name')).toEqual({
+      phase: 'field',
+      objectTerm: 'Account',
+      fieldTerm: 'Name'
+    });
+  });
+
+  it('minFieldResourceSuggestLength exige punto para campos', () => {
+    expect(minFieldResourceSuggestLength('A')).toBe(1);
+    expect(minFieldResourceSuggestLength('Account')).toBe(1);
+    expect(minFieldResourceSuggestLength('Account.')).toBe(8);
+    expect(minFieldResourceSuggestLength('Account.Na')).toBe(8);
   });
 });

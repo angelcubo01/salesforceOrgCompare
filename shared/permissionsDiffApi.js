@@ -11,7 +11,8 @@ import {
   normalizeObjectAccessGrant,
   normalizeFieldAccessGrant,
   normalizeCustomPermAssignment,
-  parseResourceInput
+  parseResourceInput,
+  resolveFieldResourceSuggestPhase
 } from './permissionsDiffCore.js';
 
 function escapeSoqlLiteral(value) {
@@ -630,26 +631,59 @@ export async function searchPermissionResources(
       .map((s) => ({ name: s.name }));
   }
 
-  const obj = String(objectApiName || '').trim() || (q.includes('.') ? q.split('.')[0] : '');
-  if (!obj && q.includes('.')) {
-    const [o, ...rest] = q.split('.');
-    return searchPermissionResources(instanceUrl, sid, apiVersion, 'field', rest.join('.'), o.trim());
+  const suggestPhase = resolveFieldResourceSuggestPhase(queryText);
+  if (suggestPhase.phase === 'object') {
+    return searchPermissionResources(
+      instanceUrl,
+      sid,
+      apiVersion,
+      'object',
+      suggestPhase.objectTerm,
+      ''
+    );
   }
 
-  const fieldTerm = q.includes('.') ? q.split('.').slice(1).join('.') : q;
-  const fieldLike = soqlLikePattern(fieldTerm);
-  try {
-    let rows = [];
-    if (obj) {
+  const obj =
+    String(objectApiName || '').trim() || suggestPhase.objectTerm;
+  const fieldTerm = suggestPhase.fieldTerm;
+  const trimmedFieldTerm = fieldTerm.trim();
+
+  if (!obj) return [];
+
+  if (trimmedFieldTerm === '') {
+    try {
       const objEsc = escapeSoqlLiteral(obj);
-      rows =
+      const rows =
         (await restQuery(
           instanceUrl,
           sid,
           apiVersion,
-          `SELECT QualifiedApiName, EntityDefinition.QualifiedApiName FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '${objEsc}' AND QualifiedApiName LIKE '${fieldLike}' ORDER BY QualifiedApiName LIMIT 40`
+          `SELECT QualifiedApiName, EntityDefinition.QualifiedApiName FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '${objEsc}' ORDER BY QualifiedApiName LIMIT 40`
         )) || [];
+      if (rows.length) {
+        return rows.map((r) => ({
+          name: `${obj}.${r.QualifiedApiName || ''}`
+        }));
+      }
+    } catch {
+      /* fallback describe */
     }
+    const desc = await restDescribeSobject(instanceUrl, sid, apiVersion, obj);
+    const fields = Array.isArray(desc.fields) ? desc.fields : [];
+    return fields.slice(0, 40).map((f) => ({ name: `${obj}.${f.name}` }));
+  }
+
+  const fieldLike = soqlLikePattern(trimmedFieldTerm);
+  try {
+    let rows = [];
+    const objEsc = escapeSoqlLiteral(obj);
+    rows =
+      (await restQuery(
+        instanceUrl,
+        sid,
+        apiVersion,
+        `SELECT QualifiedApiName, EntityDefinition.QualifiedApiName FROM FieldDefinition WHERE EntityDefinition.QualifiedApiName = '${objEsc}' AND QualifiedApiName LIKE '${fieldLike}' ORDER BY QualifiedApiName LIMIT 40`
+      )) || [];
     if (!rows.length) {
       rows =
         (await restQuery(
@@ -670,10 +704,9 @@ export async function searchPermissionResources(
   } catch {
     /* fallback describe */
   }
-  if (!obj) return [];
   const desc = await restDescribeSobject(instanceUrl, sid, apiVersion, obj);
   const fields = Array.isArray(desc.fields) ? desc.fields : [];
-  const lower = q.toLowerCase();
+  const lower = trimmedFieldTerm.toLowerCase();
   return fields
     .filter((f) => {
       const n = String(f.name || '');

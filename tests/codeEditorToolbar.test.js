@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   pickNewestSourceMetadata,
   findCodeEditorTabByArtifact,
-  formatCodeEditorTabLabel
+  formatCodeEditorTabLabel,
+  formatCodeEditorToolbarMeta
 } from '../code/ui/codeEditorToolbar.js';
 
 describe('codeEditorToolbar', () => {
@@ -28,8 +29,27 @@ describe('codeEditorToolbar', () => {
     ).toBeNull();
   });
 
+  it('findCodeEditorTabByArtifact no empareja pestañas huérfanas sin sourceOrgId', () => {
+    const tabs = [{ id: '1', artType: 'ApexClass', name: 'Foo', sourceOrgId: null }];
+    expect(
+      findCodeEditorTabByArtifact(tabs, { artType: 'ApexClass', artifactName: 'Foo', orgId: 'org-a' })
+    ).toBeNull();
+  });
+
   it('formatCodeEditorTabLabel añade org cuando hay sourceOrgId', () => {
     expect(formatCodeEditorTabLabel('Foo', 'org-a')).toContain('Foo');
     expect(formatCodeEditorTabLabel('Bar', null)).toBe('Bar');
+  });
+
+  it('formatCodeEditorToolbarMeta añade guardado local junto al last modified del org', () => {
+    const meta = {
+      lastModifiedByName: 'Ada Lovelace',
+      lastModifiedDate: '2024-06-15T12:30:00.000Z'
+    };
+    const text = formatCodeEditorToolbarMeta(meta, '2024-06-16T08:15:00.000Z');
+    expect(text).toContain('Ada Lovelace');
+    expect(text).toContain('|');
+    expect(text).toMatch(/Salesforce Org Compare/i);
+    expect(text).toMatch(/16\/06\/2024/);
   });
 });

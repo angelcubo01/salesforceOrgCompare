@@ -2250,6 +2250,23 @@ body.artifact-apex-tests #editorContainer.editor {
   border-bottom: 1px solid #334155;
   background: #1e293b;
 }
+.apex-tests-method-bulk-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #1e293b;
+  background: #0f172a;
+}
+.apex-tests-method-bulk-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.apex-tests-method-bulk-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .apex-tests-method-tab {
   padding: 6px 12px;
   font-size: 12px;
@@ -3290,14 +3307,17 @@ body.artifact-apex-tests #editorContainer.editor {
   width: 16px;
   height: 16px;
   cursor: pointer;
+}
+.apex-tests-table input[type='checkbox']:checked:not(:indeterminate) {
   accent-color: #60a5fa;
+}
+.apex-tests-table input[type='checkbox']:indeterminate,
+.apex-tests-table input[type='checkbox'].apex-tests-cb--partial {
+  accent-color: #f59e0b;
 }
 .apex-tests-table input[type='checkbox']:disabled {
   cursor: not-allowed;
   opacity: 0.5;
-}
-.apex-tests-table input[type='checkbox']:indeterminate {
-  accent-color: #60a5fa;
 }
 
 /* Debajo del bloque de tablas: alto natural; scroll vertical del viewport (.apex-tests-scale-viewport) */
@@ -8194,15 +8214,6 @@ body.artifact-lightning-quick-edit .lightning-quick-edit-panel {
   gap: 12px;
 }
 
-.quick-edit-modified-indicator {
-  background: #f59e0b;
-  color: #1e293b;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
 .quick-edit-editor-toolbar {
   display: flex;
   align-items: center;
@@ -8783,54 +8794,143 @@ body.artifact-lightning-quick-edit .lightning-quick-edit-panel {
 
 .quick-edit-editor-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.quick-edit-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-edit-action-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 10px;
+  flex-shrink: 0;
+  background: rgba(148, 163, 184, 0.35);
 }
 
 .quick-edit-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid rgba(148, 163, 184, 0.45);
   background: #1e293b;
   color: #e2e8f0;
   border-radius: 8px;
-  padding: 7px 14px;
+  padding: 6px 12px;
   cursor: pointer;
   font-size: 12px;
-  font-weight: 500;
-  transition: all 0.15s ease;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quick-edit-action-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.quick-edit-action-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.quick-edit-action-label {
+  line-height: 1;
 }
 
 .quick-edit-action-btn:hover:not(:disabled) {
-  border-color: #38bdf8;
+  border-color: #64748b;
   background: #334155;
 }
 
+.quick-edit-action-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.45);
+}
+
 .quick-edit-action-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.42;
   cursor: not-allowed;
 }
 
-.quick-edit-clear-btn {
-  border-color: #64748b;
+.quick-edit-save-btn {
+  border-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.12);
+  color: #7dd3fc;
+}
+
+.quick-edit-save-btn:hover:not(:disabled) {
+  border-color: #38bdf8;
+  background: rgba(14, 165, 233, 0.22);
+  color: #bae6fd;
+}
+
+.quick-edit-revert-btn {
+  border-color: rgba(148, 163, 184, 0.55);
+  background: #1e293b;
+  color: #cbd5e1;
+}
+
+.quick-edit-revert-btn:hover:not(:disabled) {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  color: #fcd34d;
+}
+
+.quick-edit-retrieve-btn {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+}
+
+.quick-edit-retrieve-btn:hover:not(:disabled) {
+  border-color: #818cf8;
+  background: rgba(99, 102, 241, 0.22);
+  color: #c7d2fe;
 }
 
 .quick-edit-validate-btn {
-  border-color: #f59e0b;
+  border-color: #d97706;
+  background: rgba(217, 119, 6, 0.1);
   color: #fbbf24;
 }
 
 .quick-edit-validate-btn:hover:not(:disabled) {
-  border-color: #fbbf24;
-  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  background: rgba(217, 119, 6, 0.18);
+  color: #fde68a;
 }
 
 .quick-edit-deploy-btn {
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.15);
-  color: #4ade80;
+  border-color: #16a34a;
+  background: linear-gradient(135deg, rgba(22, 163, 74, 0.35) 0%, rgba(21, 128, 61, 0.45) 100%);
+  color: #86efac;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
 
 .quick-edit-deploy-btn:hover:not(:disabled) {
-  border-color: #4ade80;
-  background: rgba(34, 197, 94, 0.25);
+  border-color: #22c55e;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.45) 0%, rgba(22, 163, 74, 0.55) 100%);
+  color: #bbf7d0;
+}
+
+.quick-edit-clear-btn {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(127, 29, 29, 0.15);
+  color: #fca5a5;
+}
+
+.quick-edit-clear-btn:hover:not(:disabled) {
+  border-color: #f87171;
+  background: rgba(185, 28, 28, 0.22);
+  color: #fecaca;
 }
 
 .quick-edit-editor-mount {
@@ -9379,6 +9479,22 @@ body.quick-open-active {
 
 .permission-diff-suggestion.is-status:hover {
   background: transparent;
+}
+
+.permission-diff-suggestion-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.permission-diff-suggestions .sidebar-search-loading-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #475569;
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: file-viewer-loading-spin 0.7s linear infinite;
 }
 
 .permission-diff-suggestion-row {

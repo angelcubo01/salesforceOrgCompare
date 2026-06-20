@@ -3,7 +3,13 @@ import { bg } from '../core/bridge.js';
 import { saveScrollPosition } from '../ui/scrollRestore.js';
 import { renderEditor, focusDiffAtIndex, navigateViewerChunk } from '../editor/editorRender.js';
 import { applyWordWrapToCurrentEditors, scheduleMonacoLayout } from '../editor/monaco.js';
-import { updateOrgDropdownLayout, updateAuthIndicators, swapOrgs, syncTelemetryUserFromOrgState } from '../ui/orgs.js';
+import {
+  updateOrgDropdownLayout,
+  updateAuthIndicators,
+  swapOrgs,
+  syncTelemetryUserFromOrgState,
+  pollAuthAfterReauth
+} from '../ui/orgs.js';
 import { renderSavedItems, removeAllItems } from '../ui/listUi.js';
 import { saveItemsToStorage } from '../core/persistence.js';
 import { downloadAllFiles, copyAllFileNames, copyCompareDeepLink } from '../flows/fileActions.js';
@@ -181,11 +187,15 @@ export function wireSelectors() {
 
   leftReauth.addEventListener('click', async () => {
     if (!state.leftOrgId) return;
-    await bg({ type: 'auth:reauth', orgId: state.leftOrgId });
+    const orgId = state.leftOrgId;
+    await bg({ type: 'auth:reauth', orgId });
+    void pollAuthAfterReauth(orgId);
   });
   rightReauth.addEventListener('click', async () => {
     if (!state.rightOrgId) return;
-    await bg({ type: 'auth:reauth', orgId: state.rightOrgId });
+    const orgId = state.rightOrgId;
+    await bg({ type: 'auth:reauth', orgId });
+    void pollAuthAfterReauth(orgId);
   });
 
   const swapBtn = document.getElementById('swapOrgsBtn');

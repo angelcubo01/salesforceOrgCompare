@@ -3,6 +3,8 @@
  * saveViewState/restoreViewState al cambiar de pestaña y pila de undo independiente por modelo.
  */
 
+import { isMonacoCanceledError } from '../../shared/errorTelemetryPolicy.js';
+
 /**
  * @typedef {object} MonacoWorkbenchTabEntry
  * @property {import('monaco-editor').editor.ITextModel} model
@@ -117,11 +119,19 @@ export class MonacoWorkbench {
     }
 
     if (language && entry.language !== language) {
-      this.monaco.editor.setModelLanguage(entry.model, language);
-      entry.language = language;
+      try {
+        this.monaco.editor.setModelLanguage(entry.model, language);
+        entry.language = language;
+      } catch (err) {
+        if (!isMonacoCanceledError(err)) throw err;
+      }
     }
     if (forceReload && entry.model.getValue() !== content) {
-      entry.model.setValue(content);
+      try {
+        entry.model.setValue(content);
+      } catch (err) {
+        if (!isMonacoCanceledError(err)) throw err;
+      }
     }
     return entry;
   }
@@ -219,12 +229,21 @@ export class MonacoWorkbench {
     const next = this.tabs.get(key);
     if (!next) return false;
 
-    ed.setModel(next.model);
-    if (next.viewState) {
-      ed.restoreViewState(next.viewState);
-    } else {
-      ed.setScrollPosition({ scrollTop: 0, scrollLeft: 0 });
-      ed.setPosition({ lineNumber: 1, column: 1 });
+    try {
+      ed.setModel(next.model);
+      if (next.viewState) {
+        ed.restoreViewState(next.viewState);
+      } else {
+        ed.setScrollPosition({ scrollTop: 0, scrollLeft: 0 });
+        ed.setPosition({ lineNumber: 1, column: 1 });
+      }
+    } catch (err) {
+      if (!isMonacoCanceledError(err)) throw err;
+      try {
+        ed.setModel(next.model);
+      } catch {
+        /* ignore */
+      }
     }
     this.activeTabId = key;
     return true;
@@ -249,13 +268,14 @@ export class MonacoWorkbench {
   }
 
   /**
-   * Cierra modelos cuyo id coincide o empieza por `prefix` (p. ej. bundleTabId + '::').
+   * Cierra modelos del bundle indicado (id exacto o id::fichero).
    * @param {string} prefix
    */
   closeTabsWithPrefix(prefix) {
     const p = String(prefix);
+    const docPrefix = `${p}::`;
     for (const key of [...this.tabs.keys()]) {
-      if (key === p || key.startsWith(`${p}::`)) {
+      if (key === p || key.startsWith(docPrefix)) {
         this.closeTab(key);
       }
     }

@@ -95,9 +95,9 @@ describe('popup notice helpers', () => {
     expect(shouldShowRemoteNotice(cfg, { dismissedFingerprint: fp })).toBe(true);
   });
 
-  it('legacy telemetry solo si flag off y no dismiss', () => {
+  it('no muestra aviso legacy si el flag remoto está apagado', () => {
     const off = parsePopupControlsPayload(null);
-    expect(shouldShowLegacyTelemetryNotice(off, { legacyTelemetryDismissed: false })).toBe(true);
+    expect(shouldShowLegacyTelemetryNotice(off, { legacyTelemetryDismissed: false })).toBe(false);
     expect(shouldShowLegacyTelemetryNotice(off, { legacyTelemetryDismissed: true })).toBe(false);
     const onDisabled = parsePopupControlsPayload(
       { notice: { enabled: false } },

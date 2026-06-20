@@ -5,6 +5,16 @@
 
 /** @typedef {'benign' | 'operational' | 'bug'} ErrorTelemetryCategory */
 
+/** @param {unknown} error */
+export function isMonacoCanceledError(error) {
+  if (!error) return false;
+  if (error instanceof Error) {
+    return error.name === 'Canceled' || error.message === 'Canceled';
+  }
+  const text = String(error);
+  return text === 'Canceled' || text.includes('Canceled: Canceled');
+}
+
 /** @type {ReadonlySet<string>} */
 export const OPERATIONAL_REASON_CODES = new Set([
   'NO_SID',

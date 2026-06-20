@@ -200,6 +200,7 @@ export async function loadSavedOrgs() {
     chrome.storage.sync.get(['orgAliases', 'orgGroups'])
   ]);
   state.authStatuses = auth.ok ? (auth.statuses || {}) : {};
+  lastAuthStatusesSnapshot = { ...state.authStatuses };
   const orgs = res.ok ? (res.orgs || []) : [];
   populateOrgSelects(orgs, extras.orgAliases || {}, extras.orgGroups || {});
   updateAuthIndicators();
@@ -498,6 +499,21 @@ export function updateOrgSwapButtonState() {
   btn.disabled = !canSwap;
 }
 
+/** @type {Record<string, string>} */
+let lastAuthStatusesSnapshot = {};
+
+/**
+ * @param {Record<string, string>} prev
+ * @param {Record<string, string>} next
+ */
+function didAuthStatusRecover(prev, next) {
+  if (!Object.keys(prev).length) return false;
+  for (const [orgId, status] of Object.entries(next)) {
+    if (status === 'active' && prev[orgId] !== 'active') return true;
+  }
+  return false;
+}
+
 export function updateAuthIndicators() {
   const leftReauth = document.getElementById('leftReauthBtn');
   const rightReauth = document.getElementById('rightReauthBtn');
@@ -506,6 +522,9 @@ export function updateAuthIndicators() {
 
   const leftStatus = state.leftOrgId ? (state.authStatuses[state.leftOrgId] || 'expired') : null;
   const rightStatus = state.rightOrgId ? (state.authStatuses[state.rightOrgId] || 'expired') : null;
+  const prevAuthSnapshot = { ...lastAuthStatusesSnapshot };
+  const authRecovered = didAuthStatusRecover(prevAuthSnapshot, state.authStatuses);
+  lastAuthStatusesSnapshot = { ...state.authStatuses };
 
   // Left
   if (leftStatus) {
@@ -529,11 +548,31 @@ export function updateAuthIndicators() {
     rightReauth.classList.add('hidden');
   }
   updateOrgSwapButtonState();
-  void import('../lib/codeEditorOrgAuth.js').then((m) => m.retryCodeEditorAuthPendingLoads());
+  if (authRecovered) {
+    void import('../lib/codeEditorOrgAuth.js').then((m) =>
+      m.retryCodeEditorAuthPendingLoads(prevAuthSnapshot)
+    );
+  }
 }
 
-export async function refreshAuthStatuses() {
-  const auth = await bg({ type: 'auth:getStatuses' });
+export async function refreshAuthStatuses(force = false) {
+  const auth = await bg({ type: 'auth:getStatuses', force });
   state.authStatuses = auth.ok ? (auth.statuses || {}) : {};
   updateAuthIndicators();
+}
+
+/** Tras abrir login de Salesforce, sondea hasta detectar sesión activa. */
+export async function pollAuthAfterReauth(orgId) {
+  if (!orgId) return;
+  const prevBeforePoll = { ...lastAuthStatusesSnapshot };
+  for (let attempt = 0; attempt < 12; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 2000 : 3000));
+    await refreshAuthStatuses(true);
+    if (state.authStatuses[orgId] === 'active') {
+      await import('../lib/codeEditorOrgAuth.js').then((m) =>
+        m.retryCodeEditorAuthPendingLoads(prevBeforePoll)
+      );
+      return;
+    }
+  }
 }

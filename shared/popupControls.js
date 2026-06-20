@@ -200,10 +200,10 @@ export function shouldShowRemoteNotice(config, prefsState) {
 }
 
 /**
- * @param {PopupControlsConfig} config
- * @param {{ dismissedFingerprint?: string | null, legacyTelemetryDismissed?: boolean }} prefsState
+ * Aviso i18n local cuando no hay flag remoto. Desactivado: flag OFF = sin aviso.
+ * @param {PopupControlsConfig} _config
+ * @param {{ dismissedFingerprint?: string | null, legacyTelemetryDismissed?: boolean }} _prefsState
  */
-export function shouldShowLegacyTelemetryNotice(config, prefsState) {
-  if (config.flagActive) return false;
-  return !prefsState.legacyTelemetryDismissed;
+export function shouldShowLegacyTelemetryNotice(_config, _prefsState) {
+  return false;
 }

@@ -103,6 +103,18 @@ function wireAppearanceSettings() {
     await saveExtensionSettings({ telemetryEnabled: enabling });
     await syncPosthogOptOut(enabling);
   });
+  const persistCb = document.getElementById('settingsCodeEditorPersistEnabled');
+  void loadExtensionSettings().then((cfg) => {
+    if (persistCb) persistCb.checked = cfg.codeEditorPersistEnabled !== false;
+  });
+  persistCb?.addEventListener('change', async () => {
+    const enabling = !!persistCb.checked;
+    await saveExtensionSettings({ codeEditorPersistEnabled: enabling });
+    if (!enabling) {
+      const { clearQuickEditEditorSessions } = await import('../code/lib/codeEditorSession.js');
+      await clearQuickEditEditorSessions();
+    }
+  });
 }
 
 async function bg(message) {

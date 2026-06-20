@@ -5,8 +5,6 @@ import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensi
 import {
   ONBOARDING_PREFS_KEY,
   normalizeOnboardingPrefs,
-  hasSeenTelemetryNotice,
-  markTelemetryNoticeDismissedInPrefs,
   markPopupNoticeDismissedInPrefs
 } from '../shared/onboardingPrefs.js';
 import { initPosthogClient, getPosthogClient } from '../shared/posthogClient.js';
@@ -18,7 +16,6 @@ import {
   resolveDismissLabelText,
   resolveNoticeText,
   resolveOpenAppTooltip,
-  shouldShowLegacyTelemetryNotice,
   shouldShowRemoteNotice
 } from '../shared/popupControls.js';
 import { setupPopupHelp } from './popupHelp.js';
@@ -444,8 +441,7 @@ async function setupPopupControls() {
   }
 
   const prefsState = {
-    dismissedFingerprint: prefs.popupNoticeDismissedFingerprint,
-    legacyTelemetryDismissed: hasSeenTelemetryNotice(prefs)
+    dismissedFingerprint: prefs.popupNoticeDismissedFingerprint
   };
 
   /** @type {{ text: string, dismissLabel: string, severity: string, dismissible: boolean, url?: string, onDismiss: () => Promise<void> } | null} */
@@ -469,17 +465,6 @@ async function setupPopupControls() {
         }
       };
     }
-  } else if (shouldShowLegacyTelemetryNotice(config, prefsState)) {
-    noticeSpec = {
-      text: t('popup.telemetryNotice.text'),
-      dismissLabel: t('popup.telemetryNotice.dismiss'),
-      severity: 'info',
-      dismissible: true,
-      onDismiss: async () => {
-        const updated = markTelemetryNoticeDismissedInPrefs(await loadOnboardingPrefs());
-        await saveOnboardingPrefs(updated);
-      }
-    };
   }
 
   if (!noticeSpec?.text) return;

@@ -6,15 +6,17 @@ Guía operativa para activar, desactivar o degradar funcionalidades de **Salesfo
 
 ## Resumen
 
-| Concepto | Valor |
-|----------|--------|
-| **Feature flag (PostHog EU)** | `sfoc_feature_controls` |
-| **Proyecto** | Default project (`191202`) |
-| **Flag ID** | `204164` |
-| **Enlace directo** | [Editar flag en PostHog](https://eu.posthog.com/project/191202/feature_flags/204164) |
-| **Rollout** | 100 % — el comportamiento se cambia editando el **payload JSON**, no el porcentaje |
-| **Estado en producción** | Herramientas en **beta** con aviso informativo no bloqueante (`DependencyExplorer`, `RecordCompare`); el resto sin restricciones |
-| **Depende de telemetría de uso** | **No** — funciona aunque el usuario tenga desactivada la telemetría en Ajustes |
+
+| Concepto                         | Valor                                                                                                                            |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| **Feature flag (PostHog EU)**    | `sfoc_feature_controls`                                                                                                          |
+| **Proyecto**                     | Default project (`191202`)                                                                                                       |
+| **Flag ID**                      | `204164`                                                                                                                         |
+| **Enlace directo**               | [Editar flag en PostHog](https://eu.posthog.com/project/191202/feature_flags/204164)                                             |
+| **Rollout**                      | 100 % — el comportamiento se cambia editando el **payload JSON**, no el porcentaje                                               |
+| **Estado en producción**         | Herramientas en **beta** con aviso informativo no bloqueante (`DependencyExplorer`, `RecordCompare`); el resto sin restricciones |
+| **Depende de telemetría de uso** | **No** — funciona aunque el usuario tenga desactivada la telemetría en Ajustes                                                   |
+
 
 ---
 
@@ -47,11 +49,13 @@ No hace falta tocar el rollout (debe seguir al 100 %). Si el flag está **desact
 
 ### Propagación a usuarios
 
-| Situación | Cuándo ven el cambio |
-|-----------|----------------------|
-| Pestaña ya abierta | Hasta **30 minutos** (TTL de recarga de flags) o al **recargar** la página |
-| Pestaña nueva | Al abrir Compare |
+
+| Situación               | Cuándo ven el cambio                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| Pestaña ya abierta      | Hasta **30 minutos** (TTL de recarga de flags) o al **recargar** la página          |
+| Pestaña nueva           | Al abrir Compare                                                                    |
 | Sin red / PostHog caído | Última configuración en caché local; si no hay caché → **todo visible** (fail-open) |
+
 
 ---
 
@@ -146,19 +150,21 @@ Un único JSON para validar **un poco de cada tipo** de control. Pensado para ~5
 
 ### Qué comprueba cada parte
 
-| # | Tipo | Dónde mirar | Qué debe pasar |
-|---|------|-------------|----------------|
-| 1 | `global` | Cualquier pantalla | Banner azul bajo el menú; **Cerrar aviso** si no es bloqueante |
-| 2 | `modes.hidden` | Menú superior | No aparece la sección **Manifiestos** |
-| 3 | `tools.hidden` | Menú **Tests y depurar** | No aparece **Ejecutar Tests Apex** |
-| 4 | Aviso no bloqueante | **Editor rápido Apex** | Modal ámbar en el contenido; **Cerrar** y usar la herramienta |
-| 5 | Aviso bloqueante | **Ejecutar Apex anónimo** | Modal rojo sin cerrar en el contenido; **el menú sigue usable** para cambiar de herramienta |
-| 6 | `metadataTypes.hidden` | **Comparador** + búsqueda | Un perfil conocido **no** sale; una clase Apex **sí** |
-| 7 | `actions.deploy` | Quick Edit → Deploy | Toast «Función no disponible» + mensaje `[TEST] Deploy…` |
-| 8 | `actions.compare_run` | Comparador → comparar ítem entre orgs | Toast de bloqueo antes de arrancar |
-| 9 | `actions.anonymous_apex_execute` | Apex anónimo | Con modal bloqueante (punto 5) no llegas a Run; si solo `actions`, Run → toast |
-| 10 | Quick Open | Ctrl+Shift+P → «tests» | No lista Apex Tests; «quick» sí lista Quick Edit |
-| 11 | Deep link (opcional) | URL `?nav=development&op=ApexTests` | Redirige; toast de herramienta no disponible |
+
+| #   | Tipo                             | Dónde mirar                           | Qué debe pasar                                                                              |
+| --- | -------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------- |
+| 1   | `global`                         | Cualquier pantalla                    | Banner azul bajo el menú; **Cerrar aviso** si no es bloqueante                              |
+| 2   | `modes.hidden`                   | Menú superior                         | No aparece la sección **Manifiestos**                                                       |
+| 3   | `tools.hidden`                   | Menú **Tests y depurar**              | No aparece **Ejecutar Tests Apex**                                                          |
+| 4   | Aviso no bloqueante              | **Editor rápido Apex**                | Modal ámbar en el contenido; **Cerrar** y usar la herramienta                               |
+| 5   | Aviso bloqueante                 | **Ejecutar Apex anónimo**             | Modal rojo sin cerrar en el contenido; **el menú sigue usable** para cambiar de herramienta |
+| 6   | `metadataTypes.hidden`           | **Comparador** + búsqueda             | Un perfil conocido **no** sale; una clase Apex **sí**                                       |
+| 7   | `actions.deploy`                 | Quick Edit → Deploy                   | Toast «Función no disponible» + mensaje `[TEST] Deploy…`                                    |
+| 8   | `actions.compare_run`            | Comparador → comparar ítem entre orgs | Toast de bloqueo antes de arrancar                                                          |
+| 9   | `actions.anonymous_apex_execute` | Apex anónimo                          | Con modal bloqueante (punto 5) no llegas a Run; si solo `actions`, Run → toast              |
+| 10  | Quick Open                       | Ctrl+Shift+P → «tests»                | No lista Apex Tests; «quick» sí lista Quick Edit                                            |
+| 11  | Deep link (opcional)             | URL `?nav=development&op=ApexTests`   | Redirige; toast de herramienta no disponible                                                |
+
 
 **No cubierto en este payload** (usa los [ejemplos por escenario](#ejemplos-por-escenario) si lo necesitas): `quick_edit_save`, `apex_test_run` (Apex Tests está oculto a propósito), aviso en `modes.message` (solo `hidden` en modos está implementado en UI).
 
@@ -194,14 +200,16 @@ Guarda en PostHog y **F5** en Compare.
 
 ### Campos de nivel raíz
 
-| Campo | Tipo | Descripción |
-|-------|------|-------------|
-| `version` | `number` | Versión del esquema. Usar `1`. |
-| `global` | `object \| null` | Aviso para toda la aplicación. |
-| `modes` | `object` | Restricciones por sección del menú. |
-| `tools` | `object` | Restricciones por herramienta. |
-| `metadataTypes` | `object` | Restricciones por tipo de metadata en el comparador. |
-| `actions` | `object` | Bloqueo de operaciones en UI y service worker. |
+
+| Campo           | Tipo            | Descripción                                          |
+| --------------- | --------------- | ---------------------------------------------------- |
+| `version`       | `number`        | Versión del esquema. Usar `1`.                       |
+| `global`        | `object | null` | Aviso para toda la aplicación.                       |
+| `modes`         | `object`        | Restricciones por sección del menú.                  |
+| `tools`         | `object`        | Restricciones por herramienta.                       |
+| `metadataTypes` | `object`        | Restricciones por tipo de metadata en el comparador. |
+| `actions`       | `object`        | Bloqueo de operaciones en UI y service worker.       |
+
 
 ### Objeto `message` (avisos)
 
@@ -217,12 +225,14 @@ Usado en `global`, `modes`, `tools` y `actions`:
 }
 ```
 
-| Campo | Valores | Efecto |
-|-------|---------|--------|
-| `es` / `en` | string | Texto mostrado según idioma de la UI (fallback: el otro idioma). |
-| `severity` | `info`, `warn`, `error` | Borde del modal (azul / ámbar / rojo). |
-| `blocking` | `true` / `false` | En **herramientas**: modal sin cerrar; bloquea solo el área de contenido (menú libre). `false` = modal cerrable. En **global**: banner sin botón cerrar si es `true`. |
-| `url` | string (opcional) | Enlace «Más información». |
+
+| Campo       | Valores                 | Efecto                                                                                                                                                                |
+| ----------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `es` / `en` | string                  | Texto mostrado según idioma de la UI (fallback: el otro idioma).                                                                                                      |
+| `severity`  | `info`, `warn`, `error` | Borde del modal (azul / ámbar / rojo).                                                                                                                                |
+| `blocking`  | `true` / `false`        | En **herramientas**: modal sin cerrar; bloquea solo el área de contenido (menú libre). `false` = modal cerrable. En **global**: banner sin botón cerrar si es `true`. |
+| `url`       | string (opcional)       | Enlace «Más información».                                                                                                                                             |
+
 
 ### Entrada de modo / herramienta / metadata
 
@@ -256,11 +266,11 @@ Usado en `global`, `modes`, `tools` y `actions`:
 
 De más específico a más general:
 
-1. **`tools[toolId]`** — menú, `#typeSelect`, Quick Open.
-2. **`metadataTypes[artType]`** — resultados del buscador del comparador.
-3. **`modes[mode]`** — pestaña completa del menú superior.
-4. **`actions[actionId]`** — bloqueo de operación (independiente de `hidden`).
-5. **`global`** — banner bajo la barra de modos.
+1. `**tools[toolId]`** — menú, `#typeSelect`, Quick Open.
+2. `**metadataTypes[artType]**` — resultados del buscador del comparador.
+3. `**modes[mode]**` — pestaña completa del menú superior.
+4. `**actions[actionId]**` — bloqueo de operación (independiente de `hidden`).
+5. `**global**` — banner bajo la barra de modos.
 
 Si el JSON está mal formado o PostHog no responde, **no se aplica ninguna restricción**.
 
@@ -270,46 +280,52 @@ Si el JSON está mal formado o PostHog no responde, **no se aplica ninguna restr
 
 ### Modos (`modes`)
 
-| ID | Sección en la UI |
-|----|------------------|
-| `comparator` | Comparador |
-| `development` | Tests y depurar |
-| `monitoring` | Límites y auditoría |
-| `manifests` | Manifiestos |
+
+| ID            | Sección en la UI    |
+| ------------- | ------------------- |
+| `comparator`  | Comparador          |
+| `development` | Tests y depurar     |
+| `monitoring`  | Límites y auditoría |
+| `manifests`   | Manifiestos         |
+
 
 ### Herramientas (`tools`)
 
-| ID | Nombre en la UI |
-|----|-----------------|
-| `Comparator` | Comparador |
-| `ApexTests` | Ejecutar Tests Apex |
-| `QuickEdit` | Editor rápido Apex |
-| `LightningQuickEdit` | Editor rápido LWC / Aura |
-| `AnonymousApex` | Ejecutar Apex anónimo |
-| `QueryExplorer` | Explorador SOQL / SOSL |
-| `DebugLogBrowser` | Explorar Debug Logs |
-| `ApexCoverageCompare` | Comparar cobertura Apex |
-| `OrgLimits` | Límites de org |
-| `SetupAuditTrail` | Setup Audit Trail |
-| `FieldHistory` | Historial de campos |
-| `FieldDependency` | Dependencias de campos |
-| `DependencyExplorer` | Explorador de dependencias |
-| `PermissionDiff` | Diff de permisos |
-| `CustomSettingsCompare` | Comparar Custom Settings |
-| `CustomMetadataCompare` | Comparar Custom Metadata |
-| `RecordCompare` | Comparar registros |
-| `GeneratePackageXml` | Generar package.xml |
+
+| ID                      | Nombre en la UI            |
+| ----------------------- | -------------------------- |
+| `Comparator`            | Comparador                 |
+| `ApexTests`             | Ejecutar Tests Apex        |
+| `QuickEdit`             | Editor rápido Apex         |
+| `LightningQuickEdit`    | Editor rápido LWC / Aura   |
+| `AnonymousApex`         | Ejecutar Apex anónimo      |
+| `QueryExplorer`         | Explorador SOQL / SOSL     |
+| `DebugLogBrowser`       | Explorar Debug Logs        |
+| `ApexCoverageCompare`  | Comparar cobertura Apex    |
+| `OrgLimits`             | Límites de org             |
+| `SetupAuditTrail`       | Setup Audit Trail          |
+| `FieldHistory`          | Historial de campos        |
+| `FieldDependency`       | Dependencias de campos     |
+| `DependencyExplorer`    | Explorador de dependencias |
+| `PermissionDiff`        | Diff de permisos           |
+| `CustomSettingsCompare` | Comparar Custom Settings   |
+| `CustomMetadataCompare` | Comparar Custom Metadata   |
+| `RecordCompare`         | Comparar registros         |
+| `GeneratePackageXml`    | Generar package.xml        |
+
 
 ### Herramientas en beta (`tools.message`)
 
 Algunas herramientas nuevas se publican **visibles** pero con un **modal informativo azul** (severity `info`, `blocking: false`) la primera vez que el usuario entra. La herramienta sigue siendo usable; el aviso se puede cerrar en la sesión.
 
-| ID | Estado |
-|----|--------|
-| `DependencyExplorer` | Beta |
-| `RecordCompare` | Beta |
 
-Fuente de verdad del texto y la lista: [`shared/featureControlsProductionPayload.js`](../shared/featureControlsProductionPayload.js).
+| ID                   | Estado |
+| -------------------- | ------ |
+| `DependencyExplorer` | Beta   |
+| `RecordCompare`      | Beta   |
+
+
+Fuente de verdad del texto y la lista: `[shared/featureControlsProductionPayload.js](../shared/featureControlsProductionPayload.js)`.
 
 Para **añadir o actualizar** los avisos beta sin tocar otras restricciones del payload:
 
@@ -355,28 +371,32 @@ Para **quitar** el aviso beta de una herramienta al salir de beta: elimina su en
 
 ### Tipos de metadata (`metadataTypes`) — comparador
 
-| ID | Tipo |
-|----|------|
-| `ApexClass` | Clases Apex |
-| `ApexTrigger` | Triggers Apex |
-| `ApexPage` | Páginas Visualforce |
-| `ApexComponent` | Componentes Visualforce |
-| `LWC` | Lightning Web Components |
-| `Aura` | Aura Components |
-| `PermissionSet` | Permission sets |
-| `Profile` | Perfiles |
-| `FlexiPage` | Páginas Lightning |
+
+| ID              | Tipo                     |
+| --------------- | ------------------------ |
+| `ApexClass`     | Clases Apex              |
+| `ApexTrigger`   | Triggers Apex            |
+| `ApexPage`      | Páginas Visualforce      |
+| `ApexComponent` | Componentes Visualforce  |
+| `LWC`           | Lightning Web Components |
+| `Aura`          | Aura Components          |
+| `PermissionSet` | Permission sets          |
+| `Profile`       | Perfiles                 |
+| `FlexiPage`     | Páginas Lightning        |
+
 
 ### Acciones (`actions`)
 
-| ID | Qué bloquea |
-|----|-------------|
-| `deploy` | Deploy de metadata (Quick Edit y similares) |
-| `quick_edit_save` | Validación «check only» en Quick Edit |
-| `retrieve` | Retrieve de metadata (Permission Set, Profile, FlexiPage, package.xml, sesión retrieve) |
-| `compare_run` | Comparación con retrieve entre dos orgs |
-| `apex_test_run` | Ejecutar tests Apex |
-| `anonymous_apex_execute` | Ejecutar Apex anónimo |
+
+| ID                       | Qué bloquea                                                                             |
+| ------------------------ | --------------------------------------------------------------------------------------- |
+| `deploy`                 | Deploy de metadata (Quick Edit y similares)                                             |
+| `quick_edit_save`        | Validación «check only» en Quick Edit                                                   |
+| `retrieve`               | Retrieve de metadata (Permission Set, Profile, FlexiPage, package.xml, sesión retrieve) |
+| `compare_run`            | Comparación con retrieve entre dos orgs                                                 |
+| `apex_test_run`          | Ejecutar tests Apex                                                                     |
+| `anonymous_apex_execute` | Ejecutar Apex anónimo                                                                   |
+
 
 ---
 
@@ -676,7 +696,7 @@ Publicar avisos beta de producción (fusiona con restricciones existentes):
 npm run posthog:feature-controls-flag:production
 ```
 
-Script: [`scripts/createPosthogFeatureControlsFlag.mjs`](../scripts/createPosthogFeatureControlsFlag.mjs)
+Script: `[scripts/createPosthogFeatureControlsFlag.mjs](../scripts/createPosthogFeatureControlsFlag.mjs)`
 
 ---
 
@@ -699,13 +719,15 @@ parseFeatureControlsPayload → chrome.storage.local (sfocFeatureControlsCache)
 
 Archivos principales:
 
-| Archivo | Rol |
-|---------|-----|
-| [`shared/featureControls.js`](../shared/featureControls.js) | Parser y reglas de negocio |
-| [`shared/posthogFeatureControlsFlag.js`](../shared/posthogFeatureControlsFlag.js) | Carga desde PostHog |
-| [`shared/featureControlsCache.js`](../shared/featureControlsCache.js) | Persistencia para el SW |
-| [`code/ui/featureControlsUi.js`](../code/ui/featureControlsUi.js) | Banners y guards en UI |
-| [`background/featureControlsGuard.js`](../background/featureControlsGuard.js) | Guards en service worker |
+
+| Archivo                                                                           | Rol                        |
+| --------------------------------------------------------------------------------- | -------------------------- |
+| `[shared/featureControls.js](../shared/featureControls.js)`                       | Parser y reglas de negocio |
+| `[shared/posthogFeatureControlsFlag.js](../shared/posthogFeatureControlsFlag.js)` | Carga desde PostHog        |
+| `[shared/featureControlsCache.js](../shared/featureControlsCache.js)`             | Persistencia para el SW    |
+| `[code/ui/featureControlsUi.js](../code/ui/featureControlsUi.js)`                 | Banners y guards en UI     |
+| `[background/featureControlsGuard.js](../background/featureControlsGuard.js)`     | Guards en service worker   |
+
 
 ---
 
@@ -717,7 +739,7 @@ Si el usuario tiene **telemetría de uso activada**, al bloquear una acción des
 
 ## Ideas futuras (no implementadas aún)
 
-Detalle ampliado, priorización y roadmap en **[`SFOC_DEV_ADMIN_TOOLS.md`](SFOC_DEV_ADMIN_TOOLS.md)**.
+Detalle ampliado, priorización y roadmap en `**[SFOC_DEV_ADMIN_TOOLS.md](SFOC_DEV_ADMIN_TOOLS.md)`**.
 
 - Rollout por cohorte (org Salesforce, versión de extensión)
 - Ventanas de mantenimiento con **Scheduled changes** de PostHog

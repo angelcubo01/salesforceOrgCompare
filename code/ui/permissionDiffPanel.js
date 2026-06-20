@@ -11,6 +11,8 @@ import {
   buildAccessByResourceBundle,
   compareAccessByResourceBundles,
   formatSetupEntityLabel,
+  resolveFieldResourceSuggestPhase,
+  minFieldResourceSuggestLength
 } from '../../shared/permissionsDiffCore.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import {
@@ -43,6 +45,28 @@ let committedContainer = null;
 let committedResource = null;
 
 let searchTimer = null;
+let suggestGeneration = 0;
+
+function getActiveSuggestionsEl() {
+  if (isCustomPermMode()) return els().customPermSuggestions;
+  if (isResourceMode()) return els().resourceSuggestions;
+  return els().suggestions;
+}
+
+function renderSuggestionsLoading(listEl) {
+  if (!listEl) return;
+  listEl.innerHTML = '';
+  const row = document.createElement('div');
+  row.className = 'permission-diff-suggestion is-status permission-diff-suggestion-loading';
+  row.setAttribute('role', 'status');
+  row.setAttribute('aria-live', 'polite');
+  const spinner = document.createElement('span');
+  spinner.className = 'sidebar-search-loading-spinner';
+  spinner.setAttribute('aria-hidden', 'true');
+  row.append(spinner, document.createTextNode(t('permDiff.suggestSearching')));
+  listEl.appendChild(row);
+  listEl.hidden = false;
+}
 
 function els() {
   return {
@@ -213,8 +237,16 @@ function pickResource(item) {
   const rt = getResourceType();
   if (els().resourceTypeSelect) els().resourceTypeSelect.value = rt;
   resourceType = rt;
-  if (els().resourceInput) els().resourceInput.value = item.name;
-  committedResource = { resourceType: rt, name: item.name };
+  const name = String(item?.name || '').trim();
+  if (rt === 'field' && name && !name.includes('.')) {
+    if (els().resourceInput) els().resourceInput.value = `${name}.`;
+    hideSuggestions();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => void runSearchSuggestions(), 0);
+    return;
+  }
+  if (els().resourceInput) els().resourceInput.value = name;
+  committedResource = { resourceType: rt, name };
   hideSuggestions();
   void runLoad();
 }
@@ -308,32 +340,45 @@ async function runSearchSuggestions() {
       hideSuggestions();
       return;
     }
+    const gen = ++suggestGeneration;
+    renderSuggestionsLoading(els().customPermSuggestions);
     try {
       const items = await searchCustomPermissions(state.leftOrgId, q);
+      if (gen !== suggestGeneration) return;
       renderSuggestionsList(els().customPermSuggestions, items, pickCustomPermItem);
     } catch {
+      if (gen !== suggestGeneration) return;
       hideSuggestions();
     }
     return;
   }
 
   const q = isResourceMode() ? getResourceInput() : getContainerName();
-  if (q.length < MIN_SUGGEST_LEN) {
+  const rt = isResourceMode() ? getResourceType() : null;
+  const minLen =
+    isResourceMode() && rt === 'field' ? minFieldResourceSuggestLength(q) : MIN_SUGGEST_LEN;
+  if (q.length < minLen) {
     hideSuggestions();
     return;
   }
 
+  const listEl = getActiveSuggestionsEl();
+  const gen = ++suggestGeneration;
+  renderSuggestionsLoading(listEl);
+
   try {
     if (isResourceMode()) {
-      const rt = getResourceType();
-      const objectApiName = q.includes('.') ? q.split('.')[0] : '';
       const res = await bg({
         type: 'permissionsDiff:searchResource',
         orgId: state.leftOrgId,
         resourceType: rt,
         queryText: q,
-        objectApiName
+        objectApiName:
+          rt === 'field' && q.includes('.')
+            ? resolveFieldResourceSuggestPhase(q).objectTerm
+            : ''
       });
+      if (gen !== suggestGeneration) return;
       renderSuggestionsList(els().resourceSuggestions, res?.ok ? res.items : [], pickResource);
     } else {
       const res = await bg({
@@ -342,9 +387,11 @@ async function runSearchSuggestions() {
         containerType: getContainerType(),
         queryText: q
       });
+      if (gen !== suggestGeneration) return;
       renderSuggestionsList(els().suggestions, res?.ok ? res.items : [], pickContainer);
     }
   } catch {
+    if (gen !== suggestGeneration) return;
     hideSuggestions();
   }
 }

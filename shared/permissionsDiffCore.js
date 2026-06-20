@@ -268,6 +268,37 @@ export function parseResourceInput(raw, resourceType) {
 }
 
 /**
+ * Fase del autocompletado en modo campo: objetos hasta «.», campos del objeto después.
+ * @param {string} raw
+ * @returns {{ phase: 'object'|'field', objectTerm: string, fieldTerm: string }}
+ */
+export function resolveFieldResourceSuggestPhase(raw) {
+  const text = String(raw || '').trim();
+  if (!text.includes('.')) {
+    return { phase: 'object', objectTerm: text, fieldTerm: '' };
+  }
+  const dotIdx = text.indexOf('.');
+  const objectTerm = text.slice(0, dotIdx).trim();
+  const fieldTerm = text.slice(dotIdx + 1);
+  if (!objectTerm) {
+    return { phase: 'object', objectTerm: fieldTerm.trim(), fieldTerm: '' };
+  }
+  return { phase: 'field', objectTerm, fieldTerm };
+}
+
+/**
+ * Longitud mínima del texto para mostrar sugerencias en modo campo.
+ * @param {string} raw
+ * @returns {number}
+ */
+export function minFieldResourceSuggestLength(raw) {
+  const { phase, objectTerm } = resolveFieldResourceSuggestPhase(raw);
+  if (!objectTerm && phase === 'object') return 1;
+  if (phase === 'object') return 1;
+  return objectTerm.length + 1;
+}
+
+/**
  * @param {Record<string, unknown>} row
  * @param {{ containerType: string, name: string, label?: string, viaPermissionSet?: string }} container
  */

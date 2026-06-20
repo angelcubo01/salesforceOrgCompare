@@ -76,7 +76,9 @@ const DEFAULTS = {
   /** DeveloperName del registro DebugLevel al activar trazas USER_DEBUG antes de ejecutar tests Apex. */
   apexTestsTraceDebugLevel: 'SFDC_DevConsole',
   /** Telemetría anónima de uso (PostHog). Desactivar en Ajustes. */
-  telemetryEnabled: true
+  telemetryEnabled: true,
+  /** Recordar pestañas y código en Quick Edit / Lightning Quick Edit (solo storage local). */
+  codeEditorPersistEnabled: true
 };
 
 /** @type {typeof DEFAULTS} */
@@ -137,6 +139,10 @@ function normalizeConfig(partial) {
       continue;
     }
     if (k === 'telemetryEnabled') {
+      next[k] = src[k] !== false;
+      continue;
+    }
+    if (k === 'codeEditorPersistEnabled') {
       next[k] = src[k] !== false;
       continue;
     }
@@ -280,6 +286,11 @@ export function getMonacoThemeId() {
 /** @returns {boolean} */
 export function getTelemetryEnabled() {
   return cache.telemetryEnabled !== false;
+}
+
+/** @returns {boolean} Quick Edit y Lightning Quick Edit: guardar sesión en chrome.storage.local. */
+export function getCodeEditorPersistenceEnabled() {
+  return cache.codeEditorPersistEnabled !== false;
 }
 
 /**

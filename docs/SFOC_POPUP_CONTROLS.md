@@ -12,7 +12,7 @@ Guía operativa para parametrizar el aviso del popup de la extensión y el botó
 | **Proyecto** | Default project (`191202`) |
 | **Rollout** | 100 % — el comportamiento se cambia editando el **payload JSON** |
 | **Depende de telemetría de uso** | **No** — los flags se cargan aunque el usuario tenga desactivada la telemetría en Ajustes |
-| **Flag OFF o sin red** | Aviso local i18n (primera vez) + botón Open app habilitado (fail-open) |
+| **Flag OFF o sin red** | Sin aviso + botón Open app habilitado (fail-open) |
 
 ---
 

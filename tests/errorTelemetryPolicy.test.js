@@ -4,6 +4,7 @@ import {
   isBenignErrorText,
   isBenignPageErrorEvent,
   isBenignPageRejectionEvent,
+  isMonacoCanceledError,
   isOperationalError,
   shouldReportAsBug
 } from '../shared/errorTelemetryPolicy.js';
@@ -18,6 +19,14 @@ describe('errorTelemetryPolicy', () => {
         filename: 'chrome-extension://id/vendor/monaco-editor/min/vs/editor/editor.main.js'
       })
     ).toBe('benign');
+  });
+
+  it('isMonacoCanceledError detecta rechazos de cancelación de Monaco', () => {
+    const err = new Error('Canceled');
+    err.name = 'Canceled';
+    expect(isMonacoCanceledError(err)).toBe(true);
+    expect(isMonacoCanceledError('Canceled: Canceled')).toBe(true);
+    expect(isMonacoCanceledError(new Error('unexpected'))).toBe(false);
   });
 
   it('clasifica rechazos de página benignos', () => {

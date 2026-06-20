@@ -1537,11 +1537,86 @@ html[data-ui-theme="light"] .quick-edit-current-file {
   color: #334155;
 }
 
-html[data-ui-theme="light"] .quick-edit-panel button,
-html[data-ui-theme="light"] .quick-edit-deploy-btn {
+html[data-ui-theme="light"] .quick-edit-action-sep {
+  background: rgba(100, 116, 139, 0.35);
+}
+
+html[data-ui-theme="light"] .quick-edit-action-btn {
   background: #ffffff;
-  border: 1px solid #94a3b8;
+  border-color: #94a3b8;
   color: #0f172a;
+}
+
+html[data-ui-theme="light"] .quick-edit-save-btn {
+  border-color: #0284c7;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+html[data-ui-theme="light"] .quick-edit-save-btn:hover:not(:disabled) {
+  background: #bae6fd;
+  border-color: #0ea5e9;
+  color: #075985;
+}
+
+html[data-ui-theme="light"] .quick-edit-revert-btn {
+  border-color: #94a3b8;
+  background: #f8fafc;
+  color: #475569;
+}
+
+html[data-ui-theme="light"] .quick-edit-revert-btn:hover:not(:disabled) {
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+html[data-ui-theme="light"] .quick-edit-retrieve-btn {
+  border-color: #4f46e5;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+html[data-ui-theme="light"] .quick-edit-retrieve-btn:hover:not(:disabled) {
+  border-color: #6366f1;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+html[data-ui-theme="light"] .quick-edit-validate-btn {
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+html[data-ui-theme="light"] .quick-edit-validate-btn:hover:not(:disabled) {
+  border-color: #f59e0b;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+html[data-ui-theme="light"] .quick-edit-deploy-btn {
+  border-color: #16a34a;
+  background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+  color: #15803d;
+}
+
+html[data-ui-theme="light"] .quick-edit-deploy-btn:hover:not(:disabled) {
+  border-color: #22c55e;
+  background: linear-gradient(135deg, #bbf7d0 0%, #86efac 100%);
+  color: #166534;
+}
+
+html[data-ui-theme="light"] .quick-edit-clear-btn {
+  border-color: #f87171;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+html[data-ui-theme="light"] .quick-edit-clear-btn:hover:not(:disabled) {
+  border-color: #ef4444;
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 html[data-ui-theme="light"] .apex-coverage-compare-panel-inner {
@@ -1747,6 +1822,20 @@ html[data-ui-theme="light"] .apex-tests-method-tab.is-active {
   border-color: #94a3b8 #94a3b8 #ffffff;
   border-bottom-color: #2563eb;
   box-shadow: inset 3px 0 0 #2563eb;
+}
+
+html[data-ui-theme="light"] .apex-tests-method-bulk-actions {
+  background: #f8fafc;
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .apex-tests-table input[type='checkbox']:checked:not(:indeterminate) {
+  accent-color: #2563eb;
+}
+
+html[data-ui-theme="light"] .apex-tests-table input[type='checkbox']:indeterminate,
+html[data-ui-theme="light"] .apex-tests-table input[type='checkbox'].apex-tests-cb--partial {
+  accent-color: #d97706;
 }
 
 html[data-ui-theme="light"] .apex-tests-detail-filter-fail {

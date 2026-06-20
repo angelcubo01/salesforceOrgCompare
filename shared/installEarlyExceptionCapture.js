@@ -27,15 +27,19 @@ export function errorFromPageErrorEvent(event) {
 
 /**
  * Registra captura de errores en la página (idempotente).
- * Independiente del opt-out de telemetría de uso.
+ * Siempre suprime rechazos benignos (p. ej. Monaco «Canceled» al cambiar pestaña).
+ * Telemetría PostHog solo si hay API key configurada.
  */
 export function installExtensionPageExceptionCapture() {
   if (typeof window === 'undefined' || window.__sfocPageExceptionHooked) return;
-  if (!isPosthogApiConfigured()) return;
   window.__sfocPageExceptionHooked = true;
 
   const onError = (event) => {
-    if (isBenignPageErrorEvent(event)) return;
+    if (isBenignPageErrorEvent(event)) {
+      event.preventDefault();
+      return;
+    }
+    if (!isPosthogApiConfigured()) return;
     const err = errorFromPageErrorEvent(event);
     void reportExtensionException(err, {
       sfoc_source: 'extension',
@@ -48,7 +52,11 @@ export function installExtensionPageExceptionCapture() {
   };
 
   const onRejection = (event) => {
-    if (isBenignPageRejectionEvent(event)) return;
+    if (isBenignPageRejectionEvent(event)) {
+      event.preventDefault();
+      return;
+    }
+    if (!isPosthogApiConfigured()) return;
     const reason = event.reason;
     const err = reason instanceof Error ? reason : new Error(String(reason || 'unhandled rejection'));
     void reportExtensionException(err, {

@@ -1,14 +1,34 @@
 import { state } from '../core/state.js';
 import { t } from '../../shared/i18n.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
-import { formatLastModified } from './documentMeta.js';
+import { formatLastModified, formatMetadataDate } from './documentMeta.js';
+import { getCodeEditorPersistenceEnabled } from '../../shared/extensionSettings.js';
 
 /**
  * @typedef {object} SourceFileMeta
  * @property {string} [lastModifiedDate]
  * @property {string} [lastModifiedByName]
  * @property {string} [lastModifiedByUsername]
+ * @property {string} [localSavedAt]
  */
+
+/**
+ * @param {SourceFileMeta | null | undefined} meta
+ * @param {string | null | undefined} [localSavedAt]
+ */
+export function formatCodeEditorToolbarMeta(meta, localSavedAt) {
+  const orgMeta = formatLastModified(meta || {});
+  const localAt = localSavedAt || meta?.localSavedAt || '';
+  const localRaw = localAt ? String(localAt).trim() : '';
+  if (!localRaw) return orgMeta;
+
+  const localDate = formatMetadataDate(localRaw);
+  if (!localDate) return orgMeta;
+
+  const localPart = t('codeEditor.localSaveMeta', { date: localDate });
+  if (!orgMeta || orgMeta === '—') return localPart;
+  return `${orgMeta} | ${localPart}`;
+}
 
 /**
  * @param {string | null | undefined} orgId
@@ -60,15 +80,14 @@ export function normalizeCodeEditorOrgId(orgId) {
  */
 export function findCodeEditorTabByArtifact(tabs, key) {
   const org = normalizeCodeEditorOrgId(key.orgId);
+  if (!org) return null;
   const name = String(key.artifactName || '');
   return (
     (tabs || []).find((tab) => {
       const tabName = String(tab.bundleName || tab.name || '');
-      return (
-        tab.artType === key.artType &&
-        tabName === name &&
-        normalizeCodeEditorOrgId(tab.sourceOrgId) === org
-      );
+      const tabOrg = normalizeCodeEditorOrgId(tab.sourceOrgId);
+      if (!tabOrg) return false;
+      return tab.artType === key.artType && tabName === name && tabOrg === org;
     }) || null
   );
 }
@@ -124,15 +143,16 @@ export function renderCodeEditorToolbarTitle(titleEl, baseTitle, sourceOrgId, cu
  *   title: string,
  *   meta: SourceFileMeta | null | undefined,
  *   sourceOrgId?: string | null,
- *   currentOrgId?: string | null
+ *   currentOrgId?: string | null,
+ *   localSavedAt?: string | null
  * }} options
  */
 export function updateCodeEditorToolbarDisplay(options) {
-  const { titleEl, metaEl, title, meta, sourceOrgId, currentOrgId } = options;
+  const { titleEl, metaEl, title, meta, sourceOrgId, currentOrgId, localSavedAt } = options;
   renderCodeEditorToolbarTitle(titleEl, title, sourceOrgId, currentOrgId);
 
   if (!metaEl) return;
-  const metaText = formatLastModified(meta || {});
+  const metaText = formatCodeEditorToolbarMeta(meta, localSavedAt);
   if (metaText && metaText !== '—') {
     metaEl.textContent = metaText;
     metaEl.hidden = false;
@@ -142,4 +162,20 @@ export function updateCodeEditorToolbarDisplay(options) {
     metaEl.hidden = true;
     metaEl.removeAttribute('title');
   }
+}
+
+/** Muestra u oculta Guardar/Revertir en Quick Edit y Lightning según Ajustes. */
+export function applyQuickEditLocalEditActionsVisibility() {
+  const on = getCodeEditorPersistenceEnabled();
+  for (const id of ['quickEditLocalEditActions', 'lightningQuickEditLocalEditActions']) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !on;
+  }
+}
+
+/** @param {string | null | undefined} localSavedAt */
+export function resolveCodeEditorLocalSavedAt(localSavedAt) {
+  if (!getCodeEditorPersistenceEnabled()) return null;
+  const raw = localSavedAt != null ? String(localSavedAt).trim() : '';
+  return raw || null;
 }

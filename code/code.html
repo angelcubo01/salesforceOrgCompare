@@ -810,6 +810,26 @@
                             role="tablist"
                             aria-label="Clases seleccionadas"
                           ></div>
+                          <div class="apex-tests-method-bulk-actions">
+                            <button
+                              type="button"
+                              id="apexTestsSelectAllMethodsBtn"
+                              class="apex-tests-toolbar-btn apex-tests-method-bulk-btn"
+                              disabled
+                              data-i18n="apexTests.selectAllMethods"
+                            >
+                              Seleccionar todos
+                            </button>
+                            <button
+                              type="button"
+                              id="apexTestsUnselectAllMethodsBtn"
+                              class="apex-tests-toolbar-btn apex-tests-method-bulk-btn"
+                              disabled
+                              data-i18n="apexTests.unselectAllMethods"
+                            >
+                              Quitar todos
+                            </button>
+                          </div>
                           <div id="apexTestsMethodLoading" class="apex-tests-loading-overlay hidden" aria-hidden="true">
                             <span class="apex-tests-spinner" aria-hidden="true"></span>
                           </div>
@@ -2014,11 +2034,41 @@
                   <span id="quickEditLastModified" class="quick-edit-last-modified" hidden></span>
                 </div>
                 <div class="quick-edit-editor-actions">
-                  <span id="quickEditModifiedIndicator" class="quick-edit-modified-indicator hidden" data-i18n="quickEdit.modified">Modificado</span>
+                  <span id="quickEditLocalEditActions" class="quick-edit-local-edit-actions">
+                  <div class="quick-edit-action-group" role="group" aria-label="Edición local">
+                    <button type="button" id="quickEditSaveBtn" class="quick-edit-action-btn quick-edit-save-btn" disabled data-i18n-title="quickEdit.saveLocalTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.saveLocal">Guardar</span>
+                    </button>
+                    <button type="button" id="quickEditRevertBtn" class="quick-edit-action-btn quick-edit-revert-btn" disabled data-i18n-title="quickEdit.revertLocalTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.revertLocal">Revertir</span>
+                    </button>
+                  </div>
+                  <span class="quick-edit-action-sep" aria-hidden="true"></span>
+                  </span>
+                  <div class="quick-edit-action-group" role="group" aria-label="Org">
+                    <button type="button" id="quickEditRetrieveBtn" class="quick-edit-action-btn quick-edit-retrieve-btn" disabled data-i18n-title="quickEdit.retrieveFromOrgTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.retrieveFromOrg">Recuperar</span>
+                    </button>
+                    <button type="button" id="quickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n-title="quickEdit.validateTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.validate">Validar</span>
+                    </button>
+                    <button type="button" id="quickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n-title="quickEdit.deployTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.deploy">Desplegar</span>
+                    </button>
+                  </div>
+                  <span class="quick-edit-action-sep" aria-hidden="true"></span>
+                  <div class="quick-edit-action-group" role="group" aria-label="Sesión">
+                    <button type="button" id="quickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n-title="codeEditor.clearAllTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="codeEditor.clearAll">Limpiar todo</span>
+                    </button>
+                  </div>
                   <button type="button" id="quickEditNewTabBtn" class="quick-edit-action-btn hidden" hidden data-i18n="codeEditor.newTab">Nueva pestaña</button>
-                  <button type="button" id="quickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="codeEditor.clearAll">Limpiar todo</button>
-                  <button type="button" id="quickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n="quickEdit.validate">Validar</button>
-                  <button type="button" id="quickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
                 </div>
               </div>
               <div class="vscode-editor-shell">
@@ -2053,10 +2103,40 @@
                   <span id="lightningQuickEditLastModified" class="quick-edit-last-modified" hidden></span>
                 </div>
                 <div class="quick-edit-editor-actions">
-                  <span id="lightningQuickEditModifiedIndicator" class="quick-edit-modified-indicator hidden" data-i18n="quickEdit.modified">Modificado</span>
-                  <button type="button" id="lightningQuickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n="codeEditor.clearAll">Limpiar todo</button>
-                  <button type="button" id="lightningQuickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n="quickEdit.validate">Validar</button>
-                  <button type="button" id="lightningQuickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n="quickEdit.deploy">Desplegar</button>
+                  <span id="lightningQuickEditLocalEditActions" class="quick-edit-local-edit-actions">
+                  <div class="quick-edit-action-group" role="group" aria-label="Edición local">
+                    <button type="button" id="lightningQuickEditSaveBtn" class="quick-edit-action-btn quick-edit-save-btn" disabled data-i18n-title="quickEdit.saveLocalTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.saveLocal">Guardar</span>
+                    </button>
+                    <button type="button" id="lightningQuickEditRevertBtn" class="quick-edit-action-btn quick-edit-revert-btn" disabled data-i18n-title="quickEdit.revertLocalTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.revertLocal">Revertir</span>
+                    </button>
+                  </div>
+                  <span class="quick-edit-action-sep" aria-hidden="true"></span>
+                  </span>
+                  <div class="quick-edit-action-group" role="group" aria-label="Org">
+                    <button type="button" id="lightningQuickEditRetrieveBtn" class="quick-edit-action-btn quick-edit-retrieve-btn" disabled data-i18n-title="quickEdit.retrieveFromOrgTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.retrieveFromOrg">Recuperar</span>
+                    </button>
+                    <button type="button" id="lightningQuickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n-title="quickEdit.validateTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.validate">Validar</span>
+                    </button>
+                    <button type="button" id="lightningQuickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n-title="quickEdit.deployTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.deploy">Desplegar</span>
+                    </button>
+                  </div>
+                  <span class="quick-edit-action-sep" aria-hidden="true"></span>
+                  <div class="quick-edit-action-group" role="group" aria-label="Sesión">
+                    <button type="button" id="lightningQuickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n-title="codeEditor.clearAllTitle">
+                      <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+                      <span class="quick-edit-action-label" data-i18n="codeEditor.clearAll">Limpiar todo</span>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="vscode-editor-shell">

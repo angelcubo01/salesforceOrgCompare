@@ -207,17 +207,30 @@ async function init() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[EXTENSION_CONFIG_KEY]) {
       void (async () => {
+        const prevCfg = changes[EXTENSION_CONFIG_KEY].oldValue;
+        const nextCfg = changes[EXTENSION_CONFIG_KEY].newValue;
+        const wasPersistEnabled = !prevCfg || prevCfg.codeEditorPersistEnabled !== false;
+        const isPersistEnabled = !nextCfg || nextCfg.codeEditorPersistEnabled !== false;
+
         await loadExtensionSettings();
         applyUiThemeToDocument(document);
         updateApexTestsHubPollingState();
         updateDeployStatusPollingState();
         if (state.monaco) applyMonacoThemeGlobally(state.monaco);
         const { refreshAnonymousApexEditorTheme } = await import('./ui/anonymousApexPanel.js');
-        const { refreshQuickEditEditorTheme } = await import('./ui/quickEditPanel.js');
-        const { refreshLightningQuickEditEditorTheme } = await import('./ui/lightningQuickEditPanel.js');
+        const { refreshQuickEditEditorTheme, refreshQuickEditPersistenceUi } = await import('./ui/quickEditPanel.js');
+        const { refreshLightningQuickEditEditorTheme, refreshLightningQuickEditPersistenceUi } = await import(
+          './ui/lightningQuickEditPanel.js'
+        );
         refreshAnonymousApexEditorTheme();
         refreshQuickEditEditorTheme();
         refreshLightningQuickEditEditorTheme();
+        if (wasPersistEnabled && !isPersistEnabled) {
+          const { clearQuickEditEditorSessions } = await import('./lib/codeEditorSession.js');
+          await clearQuickEditEditorSessions();
+        }
+        refreshQuickEditPersistenceUi();
+        refreshLightningQuickEditPersistenceUi();
         await refreshAppSupportUi();
       })();
     }

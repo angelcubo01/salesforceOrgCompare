@@ -33,7 +33,8 @@ import {
   shouldReportAsBug,
   toError
 } from '../shared/errorTelemetryPolicy.js';
-import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
+import { resolveTelemetryUserLabel, resolveSfUserContextForOrg } from './telemetryUserResolver.js';
+import { orgFieldsForTelemetry } from '../shared/telemetryOrgContext.js';
 
 function posthogDebugLog(...args) {
   if (POSTHOG_DEBUG) console.log('[posthog]', ...args);
@@ -350,9 +351,6 @@ export async function maybeSendFirstOrgConnectedTelemetry(org) {
   } catch {
     return false;
   }
-
-  const { resolveSfUserContextForOrg } = await import('./telemetryUserResolver.js');
-  const { orgFieldsForTelemetry } = await import('../shared/telemetryOrgContext.js');
 
   const sfUser = await resolveSfUserContextForOrg(org);
   if (!sfUser?.sfUserLabel) return false;

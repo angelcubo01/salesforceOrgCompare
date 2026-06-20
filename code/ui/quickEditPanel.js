@@ -7,6 +7,7 @@ import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { guardToolAction } from './featureControlsUi.js';
+import { getCodeEditorPersistenceEnabled } from '../../shared/extensionSettings.js';
 import {
   saveApexDraft,
   clearReturnContext,
@@ -15,13 +16,17 @@ import {
 } from '../lib/quickEditDeployContext.js';
 import { setupCodeEditorSearch } from './codeEditorSearch.js';
 import { renderVscodeTabBar } from './vscodeTabs.js';
-import { updateCodeEditorToolbarDisplay, findCodeEditorTabByArtifact, formatCodeEditorTabLabel, getOrgDisplayLabel } from './codeEditorToolbar.js';
+import { updateCodeEditorToolbarDisplay, findCodeEditorTabByArtifact, formatCodeEditorTabLabel, getOrgDisplayLabel, applyQuickEditLocalEditActionsVisibility, resolveCodeEditorLocalSavedAt } from './codeEditorToolbar.js';
 import {
-  isOrgAuthActive,
   isTabOrgAuthExpired,
+  isOrgAuthActive,
+  isTabContentBlockedByAuth,
   setTabPendingRemoteLoad,
-  tabNeedsRemoteReload
+  tabNeedsRemoteReload,
+  markTabsPendingForRecoveredOrgs,
+  syncTabsPendingAfterAuthRefresh
 } from '../lib/codeEditorOrgAuth.js';
+import { refreshAuthStatuses } from './orgs.js';
 import {
   createTabId,
   isTabContentDirty,
@@ -29,18 +34,25 @@ import {
   saveCodeEditorSession,
   setupCodeEditorSessionPersistence,
   scheduleCodeEditorSessionPersist,
+  flushCodeEditorSessionPersist,
   clearCodeEditorSession,
   hasStoredCodeEditorTabs,
   MAX_CODE_EDITOR_TABS,
-  trimTabsToLimit
+  trimTabsToLimit,
+  resolveStoredTabSourceOrgId,
+  commitTabContentAsSaved,
+  revertContentToBaseline,
+  codeEditorSessionOrgMismatch,
+  ensureUniqueEditorTabIds,
+  createLocalSaveTimestamp,
+  hasTabLocalSave
 } from '../lib/codeEditorSession.js';
 
 const quickEditWorkbench = new MonacoWorkbench({
   uriScheme: 'sfoc-quickedit',
   onContentChange: () => {
     scheduleCodeEditorSessionPersist('QuickEdit', persistSession);
-    updateDeployButtonState();
-    updateModifiedIndicator();
+    updateEditorActionButtons();
     renderDocTabs();
   }
 });
@@ -61,19 +73,103 @@ let sessionRestored = false;
  * @property {string} [sourceOrgId]
  * @property {string} [bundleId]
  * @property {boolean} [pendingRemoteLoad]
+ * @property {string | null} [localSavedAt]
  */
 
-/** @type {{ orgId: string | null, activeTabId: string | null, tabs: QuickEditTab[] }} */
-let editorSession = { orgId: null, activeTabId: null, tabs: [] };
+/** @type {{ orgId: string | null, activeTabId: string | null, activeTabIndex: number | null, tabs: QuickEditTab[] }} */
+let editorSession = { orgId: null, activeTabId: null, activeTabIndex: null, tabs: [] };
+
+function syncActiveTabPointers() {
+  if (!editorSession.tabs.length) {
+    editorSession.activeTabIndex = null;
+    editorSession.activeTabId = null;
+    return;
+  }
+  if (
+    editorSession.activeTabIndex != null &&
+    editorSession.activeTabIndex >= 0 &&
+    editorSession.activeTabIndex < editorSession.tabs.length
+  ) {
+    editorSession.activeTabId = editorSession.tabs[editorSession.activeTabIndex].id;
+    return;
+  }
+  const idx = editorSession.tabs.findIndex((t) => t.id === editorSession.activeTabId);
+  if (idx >= 0) {
+    editorSession.activeTabIndex = idx;
+    return;
+  }
+  editorSession.activeTabIndex = 0;
+  editorSession.activeTabId = editorSession.tabs[0].id;
+}
 
 function getActiveTab() {
+  syncActiveTabPointers();
+  if (
+    editorSession.activeTabIndex != null &&
+    editorSession.tabs[editorSession.activeTabIndex]
+  ) {
+    return editorSession.tabs[editorSession.activeTabIndex];
+  }
   return editorSession.tabs.find((tab) => tab.id === editorSession.activeTabId) || null;
 }
 
-function isCurrentOrgSandbox() {
-  if (!state.leftOrgId) return false;
-  const org = (state.orgsList || []).find((o) => o.id === state.leftOrgId);
+/**
+ * @param {string} tabId
+ * @param {number | undefined} tabIndex
+ * @param {string | undefined} sourceOrgId
+ */
+function resolveSessionTabIndex(tabId, tabIndex, sourceOrgId) {
+  if (typeof tabIndex === 'number' && tabIndex >= 0 && tabIndex < editorSession.tabs.length) {
+    const at = editorSession.tabs[tabIndex];
+    if (at && String(at.id) === String(tabId)) {
+      if (
+        sourceOrgId &&
+        at.sourceOrgId &&
+        String(at.sourceOrgId) !== String(sourceOrgId)
+      ) {
+        /* índice no coincide con org; buscar abajo */
+      } else {
+        return tabIndex;
+      }
+    }
+  }
+  if (sourceOrgId) {
+    const byOrg = editorSession.tabs.findIndex(
+      (t) => String(t.id) === String(tabId) && String(t.sourceOrgId) === String(sourceOrgId)
+    );
+    if (byOrg >= 0) return byOrg;
+  }
+  return editorSession.tabs.findIndex((t) => t.id === tabId);
+}
+
+function isOrgSandbox(orgId) {
+  if (!orgId) return false;
+  const org = (state.orgsList || []).find((o) => o.id === orgId);
   return org?.isSandbox === true;
+}
+
+function getTabSourceOrgId(tab) {
+  return tab?.sourceOrgId || null;
+}
+
+function getDeployTargetOrgId() {
+  return state.leftOrgId || null;
+}
+
+function confirmDeployOrgMismatch(tab) {
+  const tabOrgId = getTabSourceOrgId(tab);
+  const selectorOrgId = getDeployTargetOrgId();
+  if (!selectorOrgId) return true;
+  if (!tabOrgId || String(tabOrgId) === String(selectorOrgId)) return true;
+  const tabOrg = getOrgDisplayLabel(tabOrgId);
+  const selectorOrg = getOrgDisplayLabel(selectorOrgId);
+  return window.confirm(
+    t('quickEdit.deployOrgMismatchConfirm', { tabOrg, selectorOrg })
+  );
+}
+
+function flushPersistSession() {
+  flushCodeEditorSessionPersist('QuickEdit', persistSession);
 }
 
 async function logQuickEditUsage(action, success, errorMessage = '') {
@@ -119,7 +215,20 @@ function setDeployStatus(text, tone = '') {
 function persistActiveTabContent() {
   const tab = getActiveTab();
   if (!tab || !quickEditWorkbench.hasTab(tab.id)) return;
-  if (isTabOrgAuthExpired(tab)) return;
+  if (isTabContentBlockedByAuth(tab)) return;
+  tab.content = quickEditWorkbench.getValue(tab.id);
+}
+
+/** Persiste el contenido Monaco de todas las pestañas abiertas en la sesión. */
+function persistAllTabsContentFromWorkbench() {
+  for (const tab of editorSession.tabs) {
+    persistTabContentFromWorkbench(tab);
+  }
+}
+
+/** @param {import('../lib/codeEditorSession.js').QuickEditTab} tab */
+function persistTabContentFromWorkbench(tab) {
+  if (!tab || !quickEditWorkbench.hasTab(tab.id) || isTabContentBlockedByAuth(tab)) return;
   tab.content = quickEditWorkbench.getValue(tab.id);
 }
 
@@ -127,7 +236,7 @@ function syncEditorReadOnly() {
   const editor = quickEditWorkbench.getEditor();
   if (!editor) return;
   const tab = getActiveTab();
-  editor.updateOptions({ readOnly: tab ? isTabOrgAuthExpired(tab) : false });
+  editor.updateOptions({ readOnly: tab ? isTabContentBlockedByAuth(tab) : false });
 }
 
 function showTabAuthExpiredStatus(tab) {
@@ -136,13 +245,58 @@ function showTabAuthExpiredStatus(tab) {
   setStatus(t('codeEditor.tabAuthExpired', { org: orgLabel }), 'warning');
 }
 
+/** Muestra aviso de auth solo en la pestaña activa; lo quita al cambiar a otra con sesión válida. */
+function syncTabAuthStatus(tab, contentBlocked = tab ? isTabContentBlockedByAuth(tab) : false) {
+  if (contentBlocked && tab) {
+    showTabAuthExpiredStatus(tab);
+  } else {
+    setStatus('');
+  }
+}
+
 /**
  * @param {QuickEditTab} tab
- * @param {{ silent?: boolean }} [opts]
+ * @param {{ silent?: boolean, force?: boolean }} [opts]
  */
+/**
+ * Prioridad: guardado local (SFOC) → org conectada → aviso de sesión.
+ * @param {QuickEditTab} tab
+ * @param {{ silent?: boolean }} [opts]
+ * @returns {Promise<'local' | 'org' | 'session' | 'auth-expired'>}
+ */
+async function ensureTabContentReady(tab, opts = {}) {
+  if (hasTabLocalSave(tab)) {
+    if (tabNeedsRemoteReload(tab)) setTabPendingRemoteLoad(tab, false);
+    return 'local';
+  }
+
+  const orgId = tab.sourceOrgId;
+  if (!orgId) return 'session';
+
+  const connected = isOrgAuthActive(orgId);
+  const needsRemote = tabNeedsRemoteReload(tab) || isTabOrgAuthExpired(tab);
+  const empty = !String(tab.content ?? '').trim();
+
+  if (connected && (needsRemote || empty)) {
+    const ok = await reloadTabFromOrg(tab, { silent: opts.silent !== false, force: true });
+    return ok ? 'org' : 'auth-expired';
+  }
+
+  if (!connected && (needsRemote || empty)) {
+    return 'auth-expired';
+  }
+
+  return 'session';
+}
+
 async function reloadTabFromOrg(tab, opts = {}) {
   const orgId = tab.sourceOrgId;
-  if (!orgId || !isOrgAuthActive(orgId)) return false;
+  if (!orgId) return false;
+
+  if (!opts.force && isQuickEditTabModified(tab)) {
+    setTabPendingRemoteLoad(tab, false);
+    return false;
+  }
 
   if (!opts.silent) setStatus(t('quickEdit.loading'), 'warning');
 
@@ -177,9 +331,11 @@ async function reloadTabFromOrg(tab, opts = {}) {
     tab.lastModifiedDate = String(mainFile.lastModifiedDate || tab.lastModifiedDate || '');
     tab.lastModifiedByName = String(mainFile.lastModifiedByName || '');
     tab.lastModifiedByUsername = String(mainFile.lastModifiedByUsername || '');
+    tab.localSavedAt = null;
     setTabPendingRemoteLoad(tab, false);
+    state.authStatuses[String(orgId)] = 'active';
 
-    if (tab.id === editorSession.activeTabId) {
+    if (isSessionTabActive(tab)) {
       quickEditWorkbench.ensureTab({
         tabId: tab.id,
         content,
@@ -210,7 +366,7 @@ export async function retryQuickEditAuthPendingLoads() {
   if (!editorSession.tabs.length) return;
 
   for (const tab of editorSession.tabs) {
-    if (tabNeedsRemoteReload(tab)) {
+    if (tabNeedsRemoteReload(tab) && !hasTabLocalSave(tab)) {
       await reloadTabFromOrg(tab, { silent: true });
     }
   }
@@ -222,8 +378,21 @@ export async function retryQuickEditAuthPendingLoads() {
   }
 }
 
+/** @param {Record<string, string>} prevAuth @param {Record<string, string>} nextAuth */
+export function markQuickEditTabsPendingForRecoveredOrgs(prevAuth, nextAuth) {
+  markTabsPendingForRecoveredOrgs(prevAuth, nextAuth, editorSession.tabs);
+}
+
+function isSessionTabActive(tab) {
+  const tabIndex = editorSession.tabs.indexOf(tab);
+  if (tabIndex < 0) return false;
+  if (editorSession.activeTabIndex != null) return tabIndex === editorSession.activeTabIndex;
+  return tab.id === editorSession.activeTabId;
+}
+
 function isQuickEditTabModified(tab) {
-  if (quickEditWorkbench.hasTab(tab.id)) {
+  if (isTabContentBlockedByAuth(tab)) return false;
+  if (isSessionTabActive(tab) && quickEditWorkbench.hasTab(tab.id)) {
     return quickEditWorkbench.isDirty(tab.id, tab.originalContent);
   }
   return isTabContentDirty(tab.content, tab.originalContent);
@@ -250,7 +419,7 @@ async function persistSession() {
 async function clearAllEditorTabs() {
   if (!window.confirm(t('codeEditor.clearAllConfirm'))) return;
 
-  editorSession = { orgId: null, activeTabId: null, tabs: [] };
+  editorSession = { orgId: null, activeTabId: null, activeTabIndex: null, tabs: [] };
   sessionRestored = true;
   quickEditWorkbench.disposeAll();
   quickEditWorkbench.getEditor()?.setModel(null);
@@ -260,7 +429,6 @@ async function clearAllEditorTabs() {
   renderDocTabs();
   updateCurrentFileDisplay();
   updateDeployButtonState();
-  updateModifiedIndicator();
   await clearCodeEditorSession('QuickEdit');
 }
 
@@ -275,15 +443,20 @@ function hasActiveTabUnsavedChanges() {
   return quickEditWorkbench.isDirty(tab.id, tab.originalContent);
 }
 
-function updateDeployButtonState() {
+function updateEditorActionButtons() {
   const deployBtn = document.getElementById('quickEditDeployBtn');
   const validateBtn = document.getElementById('quickEditValidateBtn');
+  const saveBtn = document.getElementById('quickEditSaveBtn');
+  const revertBtn = document.getElementById('quickEditRevertBtn');
   if (!deployBtn || !validateBtn) return;
 
   const tab = getActiveTab();
+  const authExpired = tab ? isTabOrgAuthExpired(tab) : false;
   const hasContent = quickEditWorkbench.getActiveValue().trim().length > 0;
-  const hasItem = !!tab;
-  const isSandbox = isCurrentOrgSandbox();
+  const hasItem = !!tab && !isTabContentBlockedByAuth(tab);
+  const isModified = hasItem && hasActiveTabUnsavedChanges();
+  const deployOrgId = getDeployTargetOrgId();
+  const isSandbox = isOrgSandbox(deployOrgId);
   const canValidate = hasContent && hasItem && !isDeploying;
   const canDeploy = canValidate && isSandbox;
 
@@ -295,6 +468,102 @@ function updateDeployButtonState() {
   } else {
     deployBtn.title = '';
   }
+
+  if (saveBtn) saveBtn.disabled = !isModified;
+  if (revertBtn) revertBtn.disabled = !isModified;
+
+  const retrieveBtn = document.getElementById('quickEditRetrieveBtn');
+  if (retrieveBtn) {
+    retrieveBtn.disabled = !hasItem || isDeploying;
+  }
+}
+
+/** @deprecated alias */
+function updateDeployButtonState() {
+  updateEditorActionButtons();
+}
+
+async function saveActiveTabLocally() {
+  if (!getCodeEditorPersistenceEnabled()) return;
+  const tab = getActiveTab();
+  if (!tab || isTabContentBlockedByAuth(tab)) {
+    showToast(t('quickEdit.nothingToSave'), 'warn');
+    return;
+  }
+  if (!hasActiveTabUnsavedChanges()) {
+    showToast(t('quickEdit.nothingToSave'), 'info');
+    return;
+  }
+
+  persistActiveTabContent();
+  const saved = commitTabContentAsSaved(quickEditWorkbench.getValue(tab.id));
+  tab.content = saved.content;
+  tab.originalContent = saved.originalContent;
+  tab.localSavedAt = createLocalSaveTimestamp();
+  quickEditWorkbench.markLoadedAsClean(tab.id);
+
+  renderDocTabs();
+  updateEditorActionButtons();
+  updateCurrentFileDisplay();
+  flushPersistSession();
+  showToast(t('quickEdit.savedLocal'), 'success');
+}
+
+async function revertActiveTabLocally() {
+  if (!getCodeEditorPersistenceEnabled()) return;
+  const tab = getActiveTab();
+  if (!tab || isTabContentBlockedByAuth(tab)) {
+    showToast(t('quickEdit.nothingToRevert'), 'warn');
+    return;
+  }
+  if (!hasActiveTabUnsavedChanges()) {
+    showToast(t('quickEdit.nothingToRevert'), 'info');
+    return;
+  }
+  if (!window.confirm(t('quickEdit.revertLocalConfirm'))) return;
+
+  const reverted = revertContentToBaseline(tab.originalContent);
+  tab.content = reverted.content;
+  tab.originalContent = reverted.originalContent;
+
+  await ensureEditor();
+  quickEditWorkbench.ensureTab({
+    tabId: tab.id,
+    content: tab.content,
+    language: 'apex',
+    forceReload: true
+  });
+  quickEditWorkbench.markLoadedAsClean(tab.id);
+  quickEditWorkbench.switchTab(tab.id);
+
+  renderDocTabs();
+  updateEditorActionButtons();
+  flushPersistSession();
+  showToast(t('quickEdit.revertedLocal'), 'success');
+}
+
+async function retrieveActiveTabFromOrg() {
+  persistActiveTabContent();
+  const tab = getActiveTab();
+  if (!tab?.sourceOrgId) {
+    showToast(t('quickEdit.nothingToRetrieve'), 'warn');
+    return;
+  }
+  if (isTabOrgAuthExpired(tab)) {
+    showTabAuthExpiredStatus(tab);
+    return;
+  }
+  if (isQuickEditTabModified(tab) && !window.confirm(t('quickEdit.retrieveFromOrgConfirm'))) {
+    return;
+  }
+
+  const ok = await reloadTabFromOrg(tab, { force: true });
+  if (!ok) return;
+
+  await switchToTab(tab.id, { forceReload: true });
+  updateEditorActionButtons();
+  flushPersistSession();
+  showToast(t('quickEdit.retrievedFromOrg', { org: getOrgDisplayLabel(tab.sourceOrgId) }), 'success');
 }
 
 async function ensureEditor() {
@@ -326,16 +595,20 @@ async function ensureEditor() {
 
   for (const tab of editorSession.tabs) {
     const authExpired = isTabOrgAuthExpired(tab);
-    const sessionClean = !authExpired && !isTabContentDirty(tab.content, tab.originalContent);
+    const isActive = tab.id === editorSession.activeTabId;
+    const dirty = !authExpired && isTabContentDirty(tab.content, tab.originalContent);
+    if (authExpired) {
+      quickEditWorkbench.ensureTab({ tabId: tab.id, content: '', language: 'apex', forceReload: true });
+      continue;
+    }
     quickEditWorkbench.ensureTab({
       tabId: tab.id,
-      content: authExpired ? '' : (tab.content ?? ''),
-      language: 'apex'
+      content: tab.content ?? '',
+      language: 'apex',
+      forceReload: !isActive || (!dirty && quickEditWorkbench.getValue(tab.id) !== tab.content)
     });
-    if (sessionClean && quickEditWorkbench.hasTab(tab.id)) {
-      const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
-      tab.content = loaded;
-      tab.originalContent = loaded;
+    if (!dirty && quickEditWorkbench.hasTab(tab.id)) {
+      quickEditWorkbench.markLoadedAsClean(tab.id);
     }
   }
 
@@ -350,16 +623,6 @@ async function ensureEditor() {
   }
 
   return editor;
-}
-
-function updateModifiedIndicator() {
-  const indicator = document.getElementById('quickEditModifiedIndicator');
-  if (!indicator) return;
-  if (hasActiveTabUnsavedChanges()) {
-    indicator.classList.remove('hidden');
-  } else {
-    indicator.classList.add('hidden');
-  }
 }
 
 function updateCurrentFileDisplay() {
@@ -389,6 +652,7 @@ function updateCurrentFileDisplay() {
       lastModifiedByName: tab.lastModifiedByName,
       lastModifiedByUsername: tab.lastModifiedByUsername
     },
+    localSavedAt: resolveCodeEditorLocalSavedAt(tab.localSavedAt),
     sourceOrgId: tab.sourceOrgId || editorSession.orgId
   });
 }
@@ -396,43 +660,64 @@ function updateCurrentFileDisplay() {
 function renderDocTabs() {
   const tabsEl = document.getElementById('quickEditDocTabs');
   renderVscodeTabBar(tabsEl, {
-    tabs: editorSession.tabs.map((tab) => ({
+    tabs: editorSession.tabs.map((tab, index) => ({
       id: tab.id,
       label: formatCodeEditorTabLabel(tab.name, tab.sourceOrgId),
-      isActive: tab.id === editorSession.activeTabId,
-      isModified: !isTabOrgAuthExpired(tab) && isQuickEditTabModified(tab),
-      isAuthExpired: isTabOrgAuthExpired(tab),
+      sourceOrgId: tab.sourceOrgId || null,
+      isActive:
+        editorSession.activeTabIndex != null
+          ? index === editorSession.activeTabIndex
+          : tab.id === editorSession.activeTabId,
+      isModified: !isTabContentBlockedByAuth(tab) && isQuickEditTabModified(tab),
+      isAuthExpired: isTabContentBlockedByAuth(tab),
       iconKind: 'apex',
       title: isTabOrgAuthExpired(tab) ? t('codeEditor.tabAuthExpiredHint') : undefined
     })),
-    onSelect: (id) => void switchToTab(id),
-    onClose: (id) => void closeTab(id)
+    onSelect: (id, _e, meta) => void switchToTab(meta?.tabIndex ?? id),
+    onClose: (id, _e, meta) => void closeTab(id, _e, meta)
   });
 }
 
-async function switchToTab(tabId, options = {}) {
+async function switchToTab(tabIdOrIndex, options = {}) {
   const skipPersist = options.skipPersist === true;
   const forceReload = options.forceReload === true;
   if (!skipPersist) persistActiveTabContent();
-  if (editorSession.activeTabId === tabId && !forceReload) return;
 
-  const tab = editorSession.tabs.find((t) => t.id === tabId);
+  const tabIndex =
+    typeof tabIdOrIndex === 'number'
+      ? tabIdOrIndex
+      : editorSession.tabs.findIndex((t) => t.id === tabIdOrIndex);
+  if (tabIndex < 0) return;
+
+  const tab = editorSession.tabs[tabIndex];
   if (!tab) return;
 
-  editorSession.activeTabId = tabId;
+  const activeIndex =
+    editorSession.activeTabIndex != null
+      ? editorSession.activeTabIndex
+      : editorSession.tabs.findIndex((t) => t.id === editorSession.activeTabId);
+  if (activeIndex === tabIndex && !forceReload) return;
+
+  editorSession.activeTabId = tab.id;
+  editorSession.activeTabIndex = tabIndex;
+
+  const loadSource = await ensureTabContentReady(tab, { silent: true });
   await ensureEditor();
 
-  const authExpired = isTabOrgAuthExpired(tab);
+  const contentBlocked = loadSource === 'auth-expired' || isTabContentBlockedByAuth(tab);
   quickEditWorkbench.ensureTab({
     tabId: tab.id,
-    content: authExpired ? '' : (tab.content ?? ''),
+    content: contentBlocked ? '' : (tab.content ?? ''),
     language: 'apex',
     forceReload
   });
-  if (!authExpired) {
-    const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
-    tab.content = loaded;
-    tab.originalContent = loaded;
+  if (!contentBlocked && quickEditWorkbench.hasTab(tab.id)) {
+    tab.content = quickEditWorkbench.getValue(tab.id);
+    if (!isTabContentDirty(tab.content, tab.originalContent)) {
+      const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
+      tab.content = loaded;
+      tab.originalContent = loaded;
+    }
   }
   quickEditWorkbench.switchTab(tab.id);
   syncEditorReadOnly();
@@ -440,18 +725,28 @@ async function switchToTab(tabId, options = {}) {
   renderDocTabs();
   updateCurrentFileDisplay();
   updateDeployButtonState();
-  updateModifiedIndicator();
-  if (authExpired) {
-    showTabAuthExpiredStatus(tab);
-  }
+  syncTabAuthStatus(tab, contentBlocked);
   void persistSession();
 }
 
-async function closeTab(tabId) {
-  persistActiveTabContent();
+async function closeTab(tabId, _event, meta = {}) {
+  syncActiveTabPointers();
 
-  const tab = editorSession.tabs.find((t) => t.id === tabId);
+  const tabIndex = resolveSessionTabIndex(tabId, meta.tabIndex, meta.sourceOrgId);
+  if (tabIndex < 0) return;
+
+  const tab = editorSession.tabs[tabIndex];
   if (!tab) return;
+
+  const isClosingActive =
+    editorSession.activeTabIndex === tabIndex ||
+    (editorSession.activeTabIndex == null && editorSession.activeTabId === tab.id);
+
+  if (isClosingActive) {
+    persistActiveTabContent();
+  } else {
+    persistTabContentFromWorkbench(tab);
+  }
 
   const dirtyContent = quickEditWorkbench.hasTab(tab.id)
     ? quickEditWorkbench.getValue(tab.id)
@@ -460,28 +755,39 @@ async function closeTab(tabId) {
     if (!window.confirm(t('codeEditor.unsavedTab'))) return;
   }
 
-  const tabIndex = editorSession.tabs.findIndex((t) => t.id === tabId);
-  const wasActive = editorSession.activeTabId === tabId;
-  const nextActiveId = wasActive
-    ? editorSession.tabs[tabIndex + 1]?.id ?? editorSession.tabs[tabIndex - 1]?.id ?? null
-    : editorSession.activeTabId;
+  const wasActive = isClosingActive;
+  const nextIndex = wasActive
+    ? tabIndex + 1 < editorSession.tabs.length
+      ? tabIndex + 1
+      : tabIndex - 1
+    : -1;
+  const nextActiveId = nextIndex >= 0 ? editorSession.tabs[nextIndex]?.id ?? null : null;
 
-  editorSession.tabs = editorSession.tabs.filter((t) => t.id !== tabId);
-  quickEditWorkbench.closeTab(tabId);
+  editorSession.tabs.splice(tabIndex, 1);
+  quickEditWorkbench.closeTab(tab.id);
 
+  if (!wasActive && editorSession.activeTabIndex != null && editorSession.activeTabIndex > tabIndex) {
+    editorSession.activeTabIndex -= 1;
+  }
   if (wasActive) {
     editorSession.activeTabId = nextActiveId;
-    if (nextActiveId) {
-      await switchToTab(nextActiveId, { skipPersist: true, forceReload: true });
-    } else {
-      quickEditWorkbench.getEditor()?.setModel(null);
-    }
+    editorSession.activeTabIndex = nextIndex >= 0 ? nextIndex : null;
   }
 
-  renderDocTabs();
-  updateCurrentFileDisplay();
+  syncActiveTabPointers();
+
+  if (editorSession.tabs.length > 0) {
+    await switchToTab(editorSession.activeTabIndex ?? 0, { skipPersist: true, forceReload: true });
+  } else {
+    editorSession.activeTabId = null;
+    editorSession.activeTabIndex = null;
+    quickEditWorkbench.getEditor()?.setModel(null);
+    renderDocTabs();
+    updateCurrentFileDisplay();
+    setStatus('');
+  }
+
   updateDeployButtonState();
-  updateModifiedIndicator();
   void persistSession();
 }
 
@@ -493,11 +799,42 @@ function findTabByEntry(entry) {
   });
 }
 
+function removeQuickEditSessionTab(tabId) {
+  const tabIndex = editorSession.tabs.findIndex((t) => t.id === tabId);
+  if (tabIndex < 0) return;
+  editorSession.tabs.splice(tabIndex, 1);
+  quickEditWorkbench.closeTab(tabId);
+  if (editorSession.activeTabId === tabId) {
+    const nextIndex = Math.min(tabIndex, editorSession.tabs.length - 1);
+    editorSession.activeTabIndex = nextIndex >= 0 ? nextIndex : null;
+    editorSession.activeTabId = nextIndex >= 0 ? editorSession.tabs[nextIndex]?.id ?? null : null;
+  } else if (editorSession.activeTabIndex != null && editorSession.activeTabIndex > tabIndex) {
+    editorSession.activeTabIndex -= 1;
+  }
+  renderDocTabs();
+}
+
 async function openTabFromEntry(entry) {
+  const targetOrgId = state.leftOrgId;
+  if (!targetOrgId) {
+    showToast(t('quickEdit.selectOrgFirst'), 'warn');
+    return;
+  }
+
   const existing = findTabByEntry(entry);
   if (existing) {
-    await switchToTab(existing.id);
-    setStatus(t('quickEdit.loaded', { name: existing.name }), 'success');
+    existing.sourceOrgId = targetOrgId;
+    if (!hasTabLocalSave(existing)) {
+      if (isOrgAuthActive(targetOrgId)) {
+        await reloadTabFromOrg(existing, { force: true });
+      } else {
+        setTabPendingRemoteLoad(existing, true);
+      }
+    }
+    await switchToTab(existing.id, { skipPersist: true, forceReload: true });
+    if (!isTabOrgAuthExpired(existing)) {
+      setStatus(t('quickEdit.loaded', { name: existing.name }), 'success');
+    }
     return;
   }
 
@@ -510,82 +847,48 @@ async function openTabFromEntry(entry) {
 }
 
 async function loadComponent(entry) {
-  if (hasActiveTabUnsavedChanges()) {
-    if (!window.confirm(t('quickEdit.unsavedChanges'))) return;
-  }
-
-  persistActiveTabContent();
+  persistAllTabsContentFromWorkbench();
   clearReturnContext();
-  setStatus(t('quickEdit.loading'), 'warning');
   setDeployStatus('');
 
-  const name = entry.name;
-  try {
-    const res = await bg({
-      type: 'fetchSource',
-      orgId: state.leftOrgId,
-      artifactType: 'ApexClass',
-      descriptor: { name, bundleId: entry.id, bundleDeveloperName: entry.name }
-    });
-
-    if (!res?.ok) {
-      void handleToolResponseFailure(res, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
-      setStatus(res?.reason === 'NO_SID' ? t('toast.noSession') : t('quickEdit.loadError'), 'error');
-      return;
-    }
-
-    const files = res.files || [];
-    if (files.length === 0) {
-      setStatus(t('quickEdit.noContent'), 'error');
-      return;
-    }
-
-    const mainFile = files[0];
-    const content = mainFile.content || '';
-    const lastModifiedDate =
-      entry.lastModifiedDate || mainFile.lastModifiedDate || files[0]?.lastModifiedDate || '';
-
-    const tab = {
-      id: createTabId('apex'),
-      artType: 'ApexClass',
-      name,
-      fileName: mainFile.fileName,
-      content,
-      originalContent: content,
-      lastModifiedDate: String(lastModifiedDate || ''),
-      lastModifiedByName: String(mainFile.lastModifiedByName || ''),
-      lastModifiedByUsername: String(mainFile.lastModifiedByUsername || ''),
-      sourceOrgId: state.leftOrgId || null,
-      bundleId: entry.id || '',
-      pendingRemoteLoad: false
-    };
-
-    editorSession.tabs = trimTabsToLimit([...editorSession.tabs, tab]);
-    editorSession.activeTabId = tab.id;
-    editorSession.orgId = state.leftOrgId || null;
-
-    await ensureEditor();
-    quickEditWorkbench.ensureTab({
-      tabId: tab.id,
-      content,
-      language: 'apex',
-      forceReload: true
-    });
-    const loaded = quickEditWorkbench.markLoadedAsClean(tab.id);
-    tab.content = loaded;
-    tab.originalContent = loaded;
-    quickEditWorkbench.switchTab(tab.id);
-
-    renderDocTabs();
-    updateCurrentFileDisplay();
-    updateDeployButtonState();
-    updateModifiedIndicator();
-    setStatus(t('quickEdit.loaded', { name }), 'success');
-    void persistSession();
-  } catch (e) {
-    void handleToolError(e, { artifact_type: 'ApexClassQuickEdit', phase: 'load' });
-    setStatus(`${t('quickEdit.loadError')}: ${e.message}`, 'error');
+  const targetOrgId = state.leftOrgId;
+  if (!targetOrgId) {
+    showToast(t('quickEdit.selectOrgFirst'), 'warn');
+    return;
   }
+
+  const tab = {
+    id: createTabId('apex'),
+    artType: 'ApexClass',
+    name: entry.name,
+    fileName: '',
+    content: '',
+    originalContent: '',
+    lastModifiedDate: String(entry.lastModifiedDate || ''),
+    lastModifiedByName: '',
+    lastModifiedByUsername: '',
+    sourceOrgId: targetOrgId,
+    bundleId: entry.id || '',
+    pendingRemoteLoad: false
+  };
+
+  editorSession.tabs = trimTabsToLimit([...editorSession.tabs, tab]);
+  editorSession.activeTabId = tab.id;
+  editorSession.activeTabIndex = editorSession.tabs.length - 1;
+  editorSession.orgId = targetOrgId;
+
+  const ok = await reloadTabFromOrg(tab, { force: true });
+  if (!ok) {
+    setTabPendingRemoteLoad(tab, true);
+    await switchToTab(tab.id, { skipPersist: true, forceReload: true });
+    void persistSession();
+    return;
+  }
+
+  await switchToTab(tab.id, { skipPersist: true, forceReload: true });
+  updateCurrentFileDisplay();
+  updateDeployButtonState();
+  void persistSession();
 }
 
 async function deployComponent(checkOnly = false) {
@@ -597,12 +900,15 @@ async function deployComponent(checkOnly = false) {
     return;
   }
 
-  if (!state.leftOrgId) {
+  const deployOrgId = getDeployTargetOrgId();
+  if (!deployOrgId) {
     showToast(t('quickEdit.selectOrgFirst'), 'warn');
     return;
   }
 
-  if (!checkOnly && !isCurrentOrgSandbox()) {
+  if (!confirmDeployOrgMismatch(tab)) return;
+
+  if (!checkOnly && !isOrgSandbox(deployOrgId)) {
     showToast(t('quickEdit.productionBlocked'), 'error');
     return;
   }
@@ -614,7 +920,7 @@ async function deployComponent(checkOnly = false) {
   }
 
   saveApexDraft({
-    orgId: state.leftOrgId,
+    orgId: deployOrgId,
     checkOnly,
     tabId: tab.id,
     item: { type: tab.artType, name: tab.name, fileName: tab.fileName },
@@ -623,13 +929,13 @@ async function deployComponent(checkOnly = false) {
   });
 
   isDeploying = true;
-  updateDeployButtonState();
+  updateEditorActionButtons();
   const actionType = checkOnly ? 'validate' : 'deploy';
 
   try {
     const res = await bg({
       type: 'metadata:deploy',
-      orgId: state.leftOrgId,
+      orgId: deployOrgId,
       metadataType: tab.artType,
       memberName: tab.name,
       content,
@@ -659,7 +965,7 @@ async function deployComponent(checkOnly = false) {
     void logQuickEditUsage(checkOnly ? 'validate' : 'deploy', false, errorMsg);
   } finally {
     isDeploying = false;
-    updateDeployButtonState();
+    updateEditorActionButtons();
   }
 }
 
@@ -690,6 +996,7 @@ export async function restoreQuickEditDraft(draft) {
   }
 
   editorSession.activeTabId = tab.id;
+  editorSession.activeTabIndex = editorSession.tabs.findIndex((t) => t.id === tab.id);
   editorSession.orgId = state.leftOrgId || editorSession.orgId;
 
   await ensureEditor();
@@ -706,7 +1013,6 @@ export async function restoreQuickEditDraft(draft) {
 
   renderDocTabs();
   updateDeployButtonState();
-  updateModifiedIndicator();
   updateCurrentFileDisplay();
   setStatus(t('quickEdit.loaded', { name: draft.name }), 'success');
   setDeployStatus('');
@@ -714,44 +1020,59 @@ export async function restoreQuickEditDraft(draft) {
 }
 
 async function restoreSessionFromStorage() {
-  if (sessionRestored) return;
-  sessionRestored = true;
-
   const stored = await loadCodeEditorSession('QuickEdit');
+  if (sessionRestored && editorSession.tabs.length > 0) return;
+  if (sessionRestored && !hasStoredCodeEditorTabs(stored)) return;
+  sessionRestored = true;
   if (!hasStoredCodeEditorTabs(stored)) return;
 
+  const storedOrgId = stored.orgId ? String(stored.orgId) : null;
+
+  const mappedTabs = stored.tabs.map((tab) => {
+    const sourceOrgId = resolveStoredTabSourceOrgId(tab.sourceOrgId, storedOrgId);
+    const mapped = {
+      id: String(tab.id),
+      artType: String(tab.artType || 'ApexClass'),
+      name: String(tab.name || ''),
+      fileName: String(tab.fileName || ''),
+      content: String(tab.content ?? ''),
+      originalContent: String(tab.originalContent ?? ''),
+      lastModifiedDate: String(tab.lastModifiedDate || ''),
+      lastModifiedByName: String(tab.lastModifiedByName || ''),
+      lastModifiedByUsername: String(tab.lastModifiedByUsername || ''),
+      sourceOrgId,
+      bundleId: tab.bundleId ? String(tab.bundleId) : '',
+      pendingRemoteLoad: tab.pendingRemoteLoad === true,
+      localSavedAt: tab.localSavedAt ? String(tab.localSavedAt) : null
+    };
+    if (isTabOrgAuthExpired(mapped) && !hasTabLocalSave(mapped)) {
+      setTabPendingRemoteLoad(mapped, true);
+    }
+    return mapped;
+  });
+
+  const unique = ensureUniqueEditorTabIds(mappedTabs, 'apex', stored.activeTabId ? String(stored.activeTabId) : null);
+
   editorSession = {
-    orgId: stored.orgId ? String(stored.orgId) : null,
-    activeTabId: stored.activeTabId ? String(stored.activeTabId) : null,
-    tabs: stored.tabs.map((tab) => {
-      const sourceOrgId = tab.sourceOrgId
-        ? String(tab.sourceOrgId)
-        : stored.orgId
-          ? String(stored.orgId)
-          : null;
-      const mapped = {
-        id: String(tab.id),
-        artType: String(tab.artType || 'ApexClass'),
-        name: String(tab.name || ''),
-        fileName: String(tab.fileName || ''),
-        content: String(tab.content ?? ''),
-        originalContent: String(tab.originalContent ?? ''),
-        lastModifiedDate: String(tab.lastModifiedDate || ''),
-        lastModifiedByName: String(tab.lastModifiedByName || ''),
-        lastModifiedByUsername: String(tab.lastModifiedByUsername || ''),
-        sourceOrgId,
-        bundleId: tab.bundleId ? String(tab.bundleId) : '',
-        pendingRemoteLoad: tab.pendingRemoteLoad === true
-      };
-      if (isTabOrgAuthExpired(mapped)) {
-        setTabPendingRemoteLoad(mapped, true);
-      }
-      return mapped;
-    })
+    orgId: storedOrgId,
+    activeTabId: unique.activeTabId,
+    activeTabIndex: null,
+    tabs: unique.tabs
   };
 
   if (!editorSession.activeTabId || !editorSession.tabs.some((t) => t.id === editorSession.activeTabId)) {
     editorSession.activeTabId = editorSession.tabs[0]?.id || null;
+  }
+  editorSession.activeTabIndex = editorSession.activeTabId
+    ? editorSession.tabs.findIndex((t) => t.id === editorSession.activeTabId)
+    : null;
+  if (editorSession.activeTabIndex != null && editorSession.activeTabIndex < 0) {
+    editorSession.activeTabIndex = editorSession.tabs.length ? 0 : null;
+    editorSession.activeTabId = editorSession.tabs[0]?.id || null;
+  }
+
+  if (codeEditorSessionOrgMismatch(storedOrgId, state.leftOrgId)) {
+    showToast(t('codeEditor.orgChanged'), 'info');
   }
 
   if (editorSession.activeTabId) {
@@ -762,7 +1083,10 @@ async function restoreSessionFromStorage() {
 
 export async function refreshQuickEditPanel() {
   if (getSelectedArtifactType() === 'QuickEdit') {
+    persistAllTabsContentFromWorkbench();
+    await refreshAuthStatuses(true);
     await restoreSessionFromStorage();
+    syncTabsPendingAfterAuthRefresh(editorSession.tabs);
     await ensureEditor();
     const ctx = getReturnContext();
     if (ctx?.tool === 'QuickEdit' && ctx.draft) {
@@ -783,8 +1107,12 @@ export function setupQuickEditPanel() {
   const resultsList = document.getElementById('quickEditResultsList');
   const deployBtn = document.getElementById('quickEditDeployBtn');
   const validateBtn = document.getElementById('quickEditValidateBtn');
+  const saveBtn = document.getElementById('quickEditSaveBtn');
+  const revertBtn = document.getElementById('quickEditRevertBtn');
+  const retrieveBtn = document.getElementById('quickEditRetrieveBtn');
   const clearBtn = document.getElementById('quickEditClearBtn');
   const newTabBtn = document.getElementById('quickEditNewTabBtn');
+  const editorMount = document.getElementById('quickEditEditorMount');
 
   if (searchInput && resultsList) {
     setupCodeEditorSearch({
@@ -797,8 +1125,13 @@ export function setupQuickEditPanel() {
 
   setupCodeEditorSessionPersistence('QuickEdit', persistSession);
 
+  applyQuickEditLocalEditActionsVisibility();
+
   if (deployBtn) deployBtn.addEventListener('click', () => deployComponent(false));
   if (validateBtn) validateBtn.addEventListener('click', () => deployComponent(true));
+  if (saveBtn) saveBtn.addEventListener('click', () => void saveActiveTabLocally());
+  if (revertBtn) revertBtn.addEventListener('click', () => void revertActiveTabLocally());
+  if (retrieveBtn) retrieveBtn.addEventListener('click', () => void retrieveActiveTabFromOrg());
 
   if (newTabBtn) {
     newTabBtn.addEventListener('click', () => searchInput?.focus());
@@ -808,8 +1141,16 @@ export function setupQuickEditPanel() {
     clearBtn.addEventListener('click', () => void clearAllEditorTabs());
   }
 
+  editorMount?.addEventListener('keydown', (e) => {
+    if (getSelectedArtifactType() !== 'QuickEdit') return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      e.preventDefault();
+      if (getCodeEditorPersistenceEnabled()) void saveActiveTabLocally();
+    }
+  });
+
   window.addEventListener('beforeunload', (e) => {
-    if (hasUnsavedChanges()) {
+    if (getSelectedArtifactType() === 'QuickEdit' && hasUnsavedChanges()) {
       e.preventDefault();
       e.returnValue = '';
     }
@@ -824,4 +1165,10 @@ export function refreshQuickEditEditorTheme() {
   } catch {
     /* ignore */
   }
+}
+
+export function refreshQuickEditPersistenceUi() {
+  applyQuickEditLocalEditActionsVisibility();
+  updateEditorActionButtons();
+  updateCurrentFileDisplay();
 }
