@@ -42,7 +42,7 @@ import {
   flushCodeEditorSessionPersist,
   clearCodeEditorSession,
   hasStoredCodeEditorTabs,
-  MAX_CODE_EDITOR_TABS,
+  getMaxCodeEditorTabs,
   trimTabsToLimit,
   resolveStoredTabSourceOrgId,
   commitTabContentAsSaved,
@@ -1204,7 +1204,7 @@ async function openTabFromEntry(entry) {
     }
     return;
   }
-  if (editorSession.tabs.length >= MAX_CODE_EDITOR_TABS) {
+  if (editorSession.tabs.length >= getMaxCodeEditorTabs()) {
     showToast(t('codeEditor.maxTabs'), 'warn');
     return;
   }

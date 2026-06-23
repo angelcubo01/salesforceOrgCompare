@@ -27,6 +27,9 @@ import {
   queryApexLogsInWindow,
   deleteAllApexLogs,
   enableUserDebugTraceForSessionUser,
+  searchUsersByNameOrUsername,
+  queryDebugLevels,
+  createUserDebugTraceFlag,
   deleteTraceFlagById,
   fetchSessionUserId,
   fetchOrgLimits,
@@ -203,6 +206,12 @@ import {
   getApexTestsClassNameLikePatterns,
   getApexTestsTraceDebugLevel,
   getApexTestsCoverageMinPercent,
+  getMetadataDeployMaxAttempts,
+  getMetadataDeployPollIntervalMs,
+  getDebugLogsListMaxRows,
+  getSetupAuditQueryDefaultLimit,
+  getAnonymousApexLogSearchMaxAttempts,
+  getAnonymousApexLogSearchDelayMs
 } from '../shared/extensionSettings.js';
 import { stageApexViewerPayload, takeApexViewerPayload } from './apexViewerStaging.js';
 import { isTestSetupApexTestResult } from '../shared/apexTestMakeDataMethod.js';
@@ -967,6 +976,7 @@ export function installMessageHandlers() {
                 } catch {}
               }
 
+              await loadExtensionSettings();
               const { zipBase64, meta } = await retrievePermissionSetZip(
                 org.instanceUrl,
                 sid,
@@ -1009,6 +1019,7 @@ export function installMessageHandlers() {
             if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             try {
+              await loadExtensionSettings();
               const { zipBase64, meta } = await retrieveProfileZip(
                 org.instanceUrl,
                 sid,
@@ -1051,6 +1062,7 @@ export function installMessageHandlers() {
             if (!sid) return reply({ ok: false, reason: 'NO_SID' });
 
             try {
+              await loadExtensionSettings();
               const { zipBase64, meta } = await retrieveFlexiPageZip(
                 org.instanceUrl,
                 sid,
@@ -1098,6 +1110,7 @@ export function installMessageHandlers() {
             }
 
             try {
+              await loadExtensionSettings();
               const { zipBase64, meta } = await retrievePackageXmlZip(
                 org.instanceUrl,
                 sid,
@@ -1176,6 +1189,7 @@ export function installMessageHandlers() {
             if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             const ver = org.apiVersion;
             try {
+              await loadExtensionSettings();
               const zipBase64 = createDeployZipBase64(
                 metadataType,
                 memberName,
@@ -1188,8 +1202,8 @@ export function installMessageHandlers() {
                   checkOnly: !!checkOnly,
                   testLevel: 'NoTestRun'
                 },
-                maxAttempts: 90,
-                pollIntervalMs: 1500
+                maxAttempts: getMetadataDeployMaxAttempts(),
+                pollIntervalMs: getMetadataDeployPollIntervalMs()
               };
               if (deployAsync === true) {
                 const { asyncId } = await deployZipBase64(
@@ -1241,14 +1255,15 @@ export function installMessageHandlers() {
             }
             const ver = org.apiVersion;
             try {
+              await loadExtensionSettings();
               const zipBase64 = createBundleDeployZipBase64(metadataType, memberName, files, ver);
               const deployOpts = {
                 deployOptions: {
                   checkOnly: !!checkOnly,
                   testLevel: 'NoTestRun'
                 },
-                maxAttempts: 90,
-                pollIntervalMs: 1500
+                maxAttempts: getMetadataDeployMaxAttempts(),
+                pollIntervalMs: getMetadataDeployPollIntervalMs()
               };
               if (deployAsync === true) {
                 const { asyncId } = await deployZipBase64(
@@ -1525,8 +1540,12 @@ export function installMessageHandlers() {
                     else if (op === 'developer console') score -= 30;
                     return score;
                   };
-                  for (let attempt = 0; attempt < 5 && !logId; attempt++) {
-                    if (attempt > 0) await sleep(800);
+                  for (
+                    let attempt = 0;
+                    attempt < getAnonymousApexLogSearchMaxAttempts() && !logId;
+                    attempt++
+                  ) {
+                    if (attempt > 0) await sleep(getAnonymousApexLogSearchDelayMs());
                     const since = new Date(startedMs - 120_000).toISOString();
                     const until = new Date(Date.now() + 10_000).toISOString();
                     let logs =
@@ -2272,8 +2291,9 @@ export function installMessageHandlers() {
                 reply({ ok: false, error: 'Missing date range' });
                 break;
               }
+              await loadExtensionSettings();
               const logs = await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
-                limit: 15000
+                limit: getDebugLogsListMaxRows()
               });
               const safeLogs = Array.isArray(logs) ? [...logs].reverse() : [];
               reply({ ok: true, logs: safeLogs });
@@ -2329,6 +2349,79 @@ export function installMessageHandlers() {
             }
             try {
               const result = await deleteAllApexLogs(org.instanceUrl, sid, org.apiVersion);
+              reply({ ok: true, ...result });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:searchUsers': {
+            const { orgId, queryText } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const items = await searchUsersByNameOrUsername(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                queryText
+              );
+              reply({ ok: true, items });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:listDebugLevels': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const levels = await queryDebugLevels(org.instanceUrl, sid, org.apiVersion);
+              reply({ ok: true, levels });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:createTrace': {
+            const { orgId, userId, debugLevelId, startIso, expirationIso } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const result = await createUserDebugTraceFlag(org.instanceUrl, sid, org.apiVersion, {
+                userId,
+                debugLevelId,
+                startIso,
+                expirationIso
+              });
               reply({ ok: true, ...result });
             } catch (e) {
               replyHandlerError(reply, e);
@@ -2434,7 +2527,11 @@ export function installMessageHandlers() {
                 }
                 return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
               };
-              const parsedLimit = Math.max(1, Math.min(50000, Number(limit) || 15000));
+              await loadExtensionSettings();
+              const parsedLimit = Math.max(
+                1,
+                Math.min(50000, Number(limit) || getSetupAuditQueryDefaultLimit())
+              );
               const sinceDt = soqlDateTime(since);
               const untilDt = soqlDateTime(until);
               const soql = `SELECT Id, CreatedDate, CreatedById, CreatedBy.Name, CreatedBy.Username, Section, Action, Display FROM SetupAuditTrail WHERE CreatedDate >= ${sinceDt} AND CreatedDate <= ${untilDt} ORDER BY CreatedDate DESC LIMIT ${parsedLimit}`;

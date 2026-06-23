@@ -1,5 +1,13 @@
 // Utilities for retrieving Salesforce Metadata (SOAP Metadata API)
 
+import {
+  getMetadataRetrieveMaxAttempts,
+  getMetadataRetrievePackageMaxAttempts,
+  getMetadataRetrievePollIntervalMs,
+  getMetadataDeployMaxAttempts,
+  getMetadataDeployPollIntervalMs
+} from './extensionSettings.js';
+
 // Simple rate limiter to avoid flooding the Metadata API
 class MetadataRateLimiter {
   constructor(maxRequests = 5, timeWindow = 1000) {
@@ -189,7 +197,8 @@ async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, mem
   if (DEBUG_LOGS) console.log('[MetadataRetrieve] Retrieve launched', { asyncId });
 
   // 2) Poll checkRetrieveStatus until done and succeeded, with zipFile included
-  const maxAttempts = 30;
+  const maxAttempts = opts.maxAttempts ?? getMetadataRetrieveMaxAttempts();
+  const pollIntervalMs = opts.pollIntervalMs ?? getMetadataRetrievePollIntervalMs();
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     throwIfRetrieveCancelled(isCancelled);
     const statusBody =
@@ -233,7 +242,7 @@ async function retrieveSingleTypeZip(instanceUrl, sid, apiVersion, typeName, mem
     }
 
     // Still in progress – wait and retry
-    await retrievePollDelay(3500, isCancelled);
+    await retrievePollDelay(pollIntervalMs, isCancelled);
   }
 
   console.error('[MetadataRetrieve] Timed out waiting for retrieve', {
@@ -311,7 +320,8 @@ export async function retrievePackageXmlZip(instanceUrl, sid, apiVersion, packag
     throw new Error('Metadata retrieve did not return an async id');
   }
 
-  const maxAttempts = 60;
+  const maxAttempts = opts.maxAttempts ?? getMetadataRetrievePackageMaxAttempts();
+  const pollIntervalMs = opts.pollIntervalMs ?? getMetadataRetrievePollIntervalMs();
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     throwIfRetrieveCancelled(isCancelled);
     const statusBody =
@@ -343,7 +353,7 @@ export async function retrievePackageXmlZip(instanceUrl, sid, apiVersion, packag
       );
     }
 
-    await retrievePollDelay(3500, isCancelled);
+    await retrievePollDelay(pollIntervalMs, isCancelled);
   }
 
   throw new Error(
@@ -1156,8 +1166,8 @@ export async function cancelDeploy(instanceUrl, sid, apiVersion, asyncId) {
 export async function deployAndWait(instanceUrl, sid, apiVersion, zipBase64, opts = {}) {
   const { asyncId } = await deployZipBase64(instanceUrl, sid, apiVersion, zipBase64, opts);
 
-  const maxAttempts = opts.maxAttempts || 60;
-  const pollIntervalMs = opts.pollIntervalMs || 2000;
+  const maxAttempts = opts.maxAttempts ?? getMetadataDeployMaxAttempts();
+  const pollIntervalMs = opts.pollIntervalMs ?? getMetadataDeployPollIntervalMs();
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const result = await checkDeployStatus(instanceUrl, sid, apiVersion, asyncId);

@@ -6,6 +6,8 @@ import {
 } from './salesforceApi.js';
 import { resolveObjectApiName } from './permissionsDiffApi.js';
 
+import { getFieldHistoryQueryDefaultLimit } from './extensionSettings.js';
+
 function escapeSoqlLiteral(value) {
   return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
@@ -183,7 +185,10 @@ export function buildFieldHistorySoql(opts) {
   if (!sinceDt || !untilDt) {
     throw new Error('Invalid date range');
   }
-  const parsedLimit = Math.max(1, Math.min(50000, Number(opts.limit) || 5000));
+  const parsedLimit = Math.max(
+    1,
+    Math.min(50000, Number(opts.limit) || getFieldHistoryQueryDefaultLimit())
+  );
   const rid = escapeSoqlLiteral(recordId);
   let where = `${parentField} = '${rid}' AND CreatedDate >= ${sinceDt} AND CreatedDate <= ${untilDt}`;
   const fieldNames = (opts.fieldNames || [])

@@ -5,6 +5,7 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { isValidSalesforceRecordId } from '../../shared/fieldHistoryApi.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
+import { getFieldHistoryDefaultRangeDays } from '../../shared/extensionSettings.js';
 
 const MIN_SUGGEST_LEN = 2;
 
@@ -282,7 +283,8 @@ function ensureDefaultDateRange() {
   if (!since || !until) return;
   if (!since.value || !until.value) {
     const now = new Date();
-    const prev = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const days = getFieldHistoryDefaultRangeDays();
+    const prev = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
     const toInputValue = (d) => {
       const pad = (n) => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;

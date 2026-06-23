@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Salesforce Org Compare · Herramientas de org</title>
+    <title>Salesforce Org Compare · Centro de mando</title>
     <link rel="stylesheet" href="./popup.css" />
     <link rel="stylesheet" href="./popup-theme-light.css" />
   </head>
@@ -11,7 +11,7 @@
     <header class="topbar">
       <div class="title">
         <div class="title-main">Salesforce Org Compare</div>
-        <div class="title-subtitle" data-i18n="popup.subtitle">Comparación, metadatos y más para tus orgs Salesforce</div>
+        <div class="title-subtitle" data-i18n="popup.subtitle">Tu centro de mando para comparar, probar y hacer deploy entre entornos</div>
       </div>
       <div class="topbar-right">
         <button
@@ -49,7 +49,7 @@
           </svg>
         </button>
         <button id="openCodeBtn" data-i18n-title="popup.openCode">
-          <span data-i18n="popup.compare">Abrir aplicación</span>
+          <span data-i18n="popup.compare">Abrir</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M7 17L17 7"></path>
             <path d="M7 7h10v10"></path>
@@ -68,14 +68,14 @@
     </div>
 
     <section>
-      <h3 data-i18n="popup.savedOrgs">Orgs guardadas</h3>
-      <p class="section-hint" data-i18n="popup.savedOrgsHint">Arrastra el asa ⋮⋮ solo dentro del mismo grupo (o entre orgs sin grupo). Ese orden se usa en los desplegables de la aplicación.</p>
+      <h3 data-i18n="popup.savedOrgs">Tus entornos</h3>
+      <p class="section-hint" data-i18n="popup.savedOrgsHint">Arrastra el asa ⋮⋮ solo dentro del mismo grupo (o entre entornos sin grupo). Ese orden se usa en los desplegables de la aplicación.</p>
       <ul id="savedList" class="list"></ul>
     </section>
 
     <section>
-      <h3 data-i18n="popup.detectedOrg">Org detectada en esta pestaña</h3>
-      <div id="detectedRow" class="row muted" data-i18n="popup.noDetected">No se ha detectado ninguna org Salesforce</div>
+      <h3 data-i18n="popup.detectedOrg">Entorno en esta pestaña</h3>
+      <div id="detectedRow" class="row muted" data-i18n="popup.noDetected">No se ha detectado ningún entorno Salesforce</div>
     </section>
 
     <div id="popupHelpModal" class="popup-help-modal hidden" aria-hidden="true">

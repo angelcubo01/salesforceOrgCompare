@@ -66,6 +66,46 @@ describe('visibilidad y acciones', () => {
   });
 });
 
+describe('segmentación por versión de extensión', () => {
+  it('ignora entrada si minVersion no coincide', () => {
+    const cfg = parseFeatureControlsPayload({
+      tools: { ApexTests: { hidden: true, minVersion: '2.14' } }
+    });
+    expect(isToolVisible(cfg, 'ApexTests', '2.13')).toBe(true);
+    expect(isToolVisible(cfg, 'ApexTests', '2.14')).toBe(false);
+  });
+
+  it('ignora payload raíz fuera de rango', () => {
+    const cfg = parseFeatureControlsPayload({
+      minVersion: '2.14',
+      tools: { ApexTests: { hidden: true } }
+    });
+    expect(isToolVisible(cfg, 'ApexTests', '2.13')).toBe(true);
+    expect(isToolVisible(cfg, 'ApexTests', '2.14')).toBe(false);
+  });
+
+  it('payload sin campos de versión se comporta igual que antes', () => {
+    const cfg = parseFeatureControlsPayload({
+      tools: { QuickEdit: { hidden: true } }
+    });
+    expect(isToolVisible(cfg, 'QuickEdit', '2.10')).toBe(false);
+    expect(isToolVisible(cfg, 'QuickEdit', '2.99')).toBe(false);
+  });
+
+  it('filtra avisos por versión', () => {
+    const cfg = parseFeatureControlsPayload({
+      tools: {
+        QuickEdit: {
+          message: { es: 'Beta', en: 'Beta', severity: 'info' },
+          minVersion: '2.14'
+        }
+      }
+    });
+    expect(getToolNotice(cfg, 'QuickEdit', 'es', '2.13')).toBeNull();
+    expect(getToolNotice(cfg, 'QuickEdit', 'es', '2.14')?.message).toBe('Beta');
+  });
+});
+
 describe('avisos', () => {
   const cfg = parseFeatureControlsPayload({
     global: {

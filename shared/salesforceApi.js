@@ -1913,6 +1913,126 @@ export async function enableUserDebugTraceForSessionUser(
   return await toolingCreateTraceFlag(instanceUrl, sid, apiVersion, body);
 }
 
+/**
+ * SOQL de búsqueda de usuarios activos por un campo (Name o Username).
+ * SOQL REST no admite `ESCAPE` en LIKE: se eliminan comodines del término.
+ * @returns {string|null}
+ */
+export function buildActiveUserSearchSoql(field, query, limit = 15) {
+  const f = field === 'Username' ? 'Username' : 'Name';
+  const q = String(query || '')
+    .trim()
+    .replace(/[%_\\]/g, '');
+  if (q.length < 2) return null;
+  const cap = Math.min(50, Math.max(5, Number(limit) || 15));
+  const like = `%${escapeSoqlLiteral(q)}%`;
+  return `SELECT Id, Name, Username FROM User WHERE IsActive = true AND ${f} LIKE '${like}' ORDER BY Name LIMIT ${cap}`;
+}
+
+/**
+ * Busca usuarios activos por nombre o username (LIKE parcial).
+ * @returns {Promise<Array<{ id: string, name: string, username: string }>>}
+ */
+export async function searchUsersByNameOrUsername(instanceUrl, sid, apiVersion, query, limit = 15) {
+  const cap = Math.min(50, Math.max(5, Number(limit) || 15));
+  const soqlByName = buildActiveUserSearchSoql('Name', query, cap);
+  const soqlByUsername = buildActiveUserSearchSoql('Username', query, cap);
+  if (!soqlByName || !soqlByUsername) return [];
+
+  async function runUserSoql(soql) {
+    try {
+      return (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  const [byName, byUsername] = await Promise.all([runUserSoql(soqlByName), runUserSoql(soqlByUsername)]);
+  const seen = new Set();
+  const merged = [];
+  for (const r of [...byName, ...byUsername]) {
+    const id = String(r?.Id || '').replace(/[^a-zA-Z0-9]/g, '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    merged.push(r);
+    if (merged.length >= cap) break;
+  }
+  merged.sort((a, b) => String(a?.Name || '').localeCompare(String(b?.Name || ''), undefined, { sensitivity: 'base' }));
+
+  return merged
+    .map((r) => ({
+      id: String(r?.Id || '').replace(/[^a-zA-Z0-9]/g, ''),
+      name: String(r?.Name || '').trim(),
+      username: String(r?.Username || '').trim()
+    }))
+    .filter((r) => r.id);
+}
+
+/**
+ * Lista DebugLevels disponibles en el entorno.
+ * @returns {Promise<Array<{ id: string, developerName: string, label: string }>>}
+ */
+export async function queryDebugLevels(instanceUrl, sid, apiVersion) {
+  const soql = 'SELECT Id, DeveloperName, MasterLabel FROM DebugLevel ORDER BY MasterLabel LIMIT 200';
+  let rows = [];
+  try {
+    rows = (await toolingQuery(instanceUrl, sid, apiVersion, soql)) || [];
+  } catch {
+    try {
+      rows = (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
+    } catch {
+      rows = [];
+    }
+  }
+  return rows
+    .map((r) => ({
+      id: String(r?.Id || '').replace(/[^a-zA-Z0-9]/g, ''),
+      developerName: String(r?.DeveloperName || '').trim(),
+      label: String(r?.MasterLabel || r?.DeveloperName || '').trim()
+    }))
+    .filter((r) => r.id);
+}
+
+/**
+ * Crea TraceFlag USER_DEBUG para un usuario con ventana temporal personalizada.
+ * Elimina trazas USER_DEBUG previas del mismo usuario.
+ * @returns {Promise<{ traceFlagId: string }>}
+ */
+export async function createUserDebugTraceFlag(
+  instanceUrl,
+  sid,
+  apiVersion,
+  { userId, debugLevelId, startIso, expirationIso }
+) {
+  const uid = String(userId || '').replace(/[^a-zA-Z0-9]/g, '');
+  const dlId = String(debugLevelId || '').replace(/[^a-zA-Z0-9]/g, '');
+  if (!uid) throw new Error('Missing user id');
+  if (!dlId) throw new Error('Missing debug level id');
+  const startStr = toSfJsonUtcDateTime(startIso);
+  const expStr = toSfJsonUtcDateTime(expirationIso);
+  if (!startStr || !expStr) throw new Error('Invalid date range');
+  const startMs = new Date(startIso).getTime();
+  const expMs = new Date(expirationIso).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(expMs) || expMs <= startMs) {
+    throw new Error('End date must be after start date');
+  }
+  const maxWindowMs = 24 * 60 * 60 * 1000;
+  if (expMs - startMs > maxWindowMs) {
+    throw new Error('Trace window cannot exceed 24 hours');
+  }
+  await deleteExistingUserDebugTraceFlags(instanceUrl, sid, apiVersion, uid);
+  const body = {
+    TracedEntityId: uid,
+    LogType: 'USER_DEBUG',
+    DebugLevelId: dlId,
+    StartDate: startStr,
+    ExpirationDate: expStr
+  };
+  const traceFlagId = await toolingCreateTraceFlag(instanceUrl, sid, apiVersion, body);
+  if (!traceFlagId) throw new Error('Could not create trace flag');
+  return { traceFlagId };
+}
+
 export async function runTestsAsynchronous(instanceUrl, sid, apiVersion, body) {
   await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');

@@ -156,7 +156,7 @@ Un único JSON para validar **un poco de cada tipo** de control. Pensado para ~5
 | 1   | `global`                         | Cualquier pantalla                    | Banner azul bajo el menú; **Cerrar aviso** si no es bloqueante                              |
 | 2   | `modes.hidden`                   | Menú superior                         | No aparece la sección **Manifiestos**                                                       |
 | 3   | `tools.hidden`                   | Menú **Tests y depurar**              | No aparece **Ejecutar Tests Apex**                                                          |
-| 4   | Aviso no bloqueante              | **Editor rápido Apex**                | Modal ámbar en el contenido; **Cerrar** y usar la herramienta                               |
+| 4   | Aviso no bloqueante              | **Editor Apex**                       | Modal ámbar en el contenido; **Cerrar** y usar la herramienta                               |
 | 5   | Aviso bloqueante                 | **Ejecutar Apex anónimo**             | Modal rojo sin cerrar en el contenido; **el menú sigue usable** para cambiar de herramienta |
 | 6   | `metadataTypes.hidden`           | **Comparador** + búsqueda             | Un perfil conocido **no** sale; una clase Apex **sí**                                       |
 | 7   | `actions.deploy`                 | Quick Edit → Deploy                   | Toast «Función no disponible» + mensaje `[TEST] Deploy…`                                    |
@@ -210,6 +210,65 @@ Guarda en PostHog y **F5** en Compare.
 | `metadataTypes` | `object`        | Restricciones por tipo de metadata en el comparador. |
 | `actions`       | `object`        | Bloqueo de operaciones en UI y service worker.       |
 
+### Segmentación por versión de la extensión (opcional)
+
+Puedes limitar **todo el payload** o **entradas concretas** a ciertas versiones instaladas de la extensión (p. ej. `2.13`, `2.14`). Los campos son opcionales; si no los usas, el comportamiento es idéntico al actual.
+
+| Campo | Nivel | Descripción |
+| ----- | ----- | ----------- |
+| `minVersion` / `minExtensionVersion` | Raíz o entrada | Solo aplica desde esta versión (inclusive). |
+| `maxVersion` / `maxExtensionVersion` | Raíz o entrada | Solo aplica hasta esta versión (inclusive). |
+| `versions` | Raíz o entrada | Lista blanca: solo esas versiones exactas. |
+| `excludeVersions` | Raíz o entrada | Lista negra: nunca en esas versiones. |
+
+**Retrocompatibilidad:**
+
+- Payloads **sin** campos de versión → sin cambios para ninguna extensión.
+- Extensiones **anteriores** a la que incluye este soporte **ignoran** los campos de versión en el JSON (los tratan como metadatos desconocidos) y siguen aplicando `hidden` / `disabled` como hasta ahora.
+- Para restringir **solo** a versiones nuevas sin afectar instalaciones antiguas: publica primero la extensión con soporte de segmentación y **después** añade `minVersion` en PostHog.
+
+**Ejemplo** — ocultar una herramienta solo en 2.14+:
+
+```json
+{
+  "version": 1,
+  "tools": {
+    "NewTool": {
+      "hidden": true,
+      "minVersion": "2.14"
+    }
+  }
+}
+```
+
+**Ejemplo** — aviso global solo en 2.13 (excluir 2.14+):
+
+```json
+{
+  "version": 1,
+  "global": {
+    "message": {
+      "es": "Actualiza a 2.14 para nuevas funciones.",
+      "en": "Update to 2.14 for new features.",
+      "severity": "info"
+    },
+    "maxVersion": "2.13"
+  }
+}
+```
+
+**Ejemplo** — payload completo solo para un rango:
+
+```json
+{
+  "version": 1,
+  "minVersion": "2.14",
+  "maxVersion": "2.16",
+  "actions": {
+    "deploy": { "disabled": true }
+  }
+}
+```
 
 ### Objeto `message` (avisos)
 
@@ -295,19 +354,21 @@ Si el JSON está mal formado o PostHog no responde, **no se aplica ninguna restr
 | ID                      | Nombre en la UI            |
 | ----------------------- | -------------------------- |
 | `Comparator`            | Comparador                 |
-| `ApexTests`             | Ejecutar Tests Apex        |
-| `QuickEdit`             | Editor rápido Apex         |
-| `LightningQuickEdit`    | Editor rápido LWC / Aura   |
-| `AnonymousApex`         | Ejecutar Apex anónimo      |
+| `ApexTests`             | Hub de tests Apex          |
+| `QuickEdit`             | Editor Apex                |
+| `LightningQuickEdit`    | Editor Lightning, LWC y Aura |
+| `AnonymousApex`         | Anonymous Apex             |
 | `QueryExplorer`         | Explorador SOQL / SOSL     |
-| `DebugLogBrowser`       | Explorar Debug Logs        |
+| `DebugLogBrowser`       | Debug Log Browser          |
 | `ApexCoverageCompare`  | Comparar cobertura Apex    |
-| `OrgLimits`             | Límites de org             |
+| `OrgLimits`             | Org Limits                 |
+| `DeployStatus`          | Deploy Status              |
+| `EnvironmentStatus`     | Estado entornos Salesforce |
 | `SetupAuditTrail`       | Setup Audit Trail          |
-| `FieldHistory`          | Historial de campos        |
-| `FieldDependency`       | Dependencias de campos     |
+| `FieldHistory`          | Field History              |
+| `FieldDependency`       | Dependencias de picklist   |
 | `DependencyExplorer`    | Explorador de dependencias |
-| `PermissionDiff`        | Diff de permisos           |
+| `PermissionDiff`        | Analizador de permisos     |
 | `CustomSettingsCompare` | Comparar Custom Settings   |
 | `CustomMetadataCompare` | Comparar Custom Metadata   |
 | `RecordCompare`         | Comparar registros         |

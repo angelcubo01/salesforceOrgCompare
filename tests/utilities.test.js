@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeUiTheme, normalizeMonacoThemeId, MONACO_THEME_IDS } from '../shared/extensionSettings.js';
+import {
+  normalizeUiTheme,
+  normalizeMonacoThemeId,
+  normalizeExtensionConfig,
+  MONACO_THEME_IDS
+} from '../shared/extensionSettings.js';
 import { buildOrgPicklistLabel, sameGroupKey } from '../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
 import { isTestSetupApexTestResult } from '../shared/apexTestMakeDataMethod.js';
@@ -23,6 +28,43 @@ describe('extensionSettings', () => {
     expect(normalizeMonacoThemeId('vs-dark')).toBe('vs-dark');
     expect(normalizeMonacoThemeId('invalid')).toBe('sfoc-editor-dark');
     expect(MONACO_THEME_IDS).toContain('sfoc-editor-light');
+  });
+
+  it('normaliza settings imprescindibles nuevos', () => {
+    const cfg = normalizeExtensionConfig({
+      metadataRetrieveMaxAttempts: 999,
+      metadataRetrievePackageMaxAttempts: 1,
+      metadataRetrievePollIntervalMs: 50,
+      metadataDeployMaxAttempts: 0,
+      metadataDeployPollIntervalMs: 99_999,
+      debugLogsDefaultRangeHours: 0,
+      setupAuditDefaultRangeHours: 500,
+      fieldHistoryDefaultRangeDays: 200,
+      codeEditorMaxTabs: 1,
+      debugLogsListMaxRows: 100,
+      setupAuditQueryDefaultLimit: 60_000,
+      fieldHistoryQueryDefaultLimit: NaN,
+      anonymousApexLogSearchMaxAttempts: 0,
+      anonymousApexLogSearchDelayMs: 50
+    });
+    expect(cfg.metadataRetrieveMaxAttempts).toBe(240);
+    expect(cfg.metadataRetrievePackageMaxAttempts).toBe(10);
+    expect(cfg.metadataRetrievePollIntervalMs).toBe(1000);
+    expect(cfg.metadataDeployMaxAttempts).toBe(10);
+    expect(cfg.metadataDeployPollIntervalMs).toBe(10_000);
+    expect(cfg.debugLogsDefaultRangeHours).toBe(1);
+    expect(cfg.setupAuditDefaultRangeHours).toBe(168);
+    expect(cfg.fieldHistoryDefaultRangeDays).toBe(90);
+    expect(cfg.codeEditorMaxTabs).toBe(3);
+    expect(cfg.debugLogsListMaxRows).toBe(500);
+    expect(cfg.setupAuditQueryDefaultLimit).toBe(50_000);
+    expect(cfg.fieldHistoryQueryDefaultLimit).toBe(5000);
+    expect(cfg.anonymousApexLogSearchMaxAttempts).toBe(1);
+    expect(cfg.anonymousApexLogSearchDelayMs).toBe(200);
+  });
+
+  it('metadataRetrieveMaxAttempts por defecto es 60', () => {
+    expect(normalizeExtensionConfig({}).metadataRetrieveMaxAttempts).toBe(60);
   });
 });
 

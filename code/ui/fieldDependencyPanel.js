@@ -600,7 +600,7 @@ function updateOrgHint() {
   } else if (!L && R) {
     el.textContent = t('fieldDep.selectLeftOrgHint');
   } else {
-    el.textContent = t('fieldDep.objectsFromLeft');
+    el.textContent = '';
   }
 }
 

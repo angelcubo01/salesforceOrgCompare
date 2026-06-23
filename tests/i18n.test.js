@@ -7,7 +7,7 @@ describe('i18n', () => {
   });
 
   it('traduce claves en inglés por defecto', () => {
-    expect(t('popup.compare')).toBe('Open app');
+    expect(t('popup.compare')).toBe('Open');
     expect(getCurrentLang()).toBe('en');
   });
 

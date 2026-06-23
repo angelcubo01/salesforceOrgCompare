@@ -5,9 +5,13 @@ import { t } from '../../shared/i18n.js';
 
 const STORAGE_KEY = 'sfoc_query_explorer_editor_text';
 const EDITOR_HEIGHT_STORAGE_KEY = 'sfoc_query_explorer_editor_height_px';
-const EDITOR_MIN_PX = 120;
+const EDITOR_LINE_HEIGHT_PX = 20;
+const EDITOR_INITIAL_LINES = 3;
+/** Barra horizontal y padding inferior de Monaco (alineado con lineHeight: 20). */
+const EDITOR_CHROME_PX = 12;
+const EDITOR_MIN_PX = EDITOR_LINE_HEIGHT_PX * EDITOR_INITIAL_LINES + EDITOR_CHROME_PX;
 const EDITOR_MAX_PX = 720;
-const EDITOR_DEFAULT_PX = 200;
+const EDITOR_DEFAULT_PX = EDITOR_MIN_PX;
 
 /**
  * Ítem mínimo compatible con Monaco 0.52 (sin mezclar range + textEdit rotos).

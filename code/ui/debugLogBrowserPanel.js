@@ -7,6 +7,7 @@ import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { randomStagingId } from '../../shared/randomId.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
+import { getDebugLogsDefaultRangeHours } from '../../shared/extensionSettings.js';
 
 const CONTEXT_PLACEHOLDER = '—';
 
@@ -541,7 +542,8 @@ function ensureDefaultDateRange() {
   if (!since || !until) return;
   if (!since.value || !until.value) {
     const now = new Date();
-    const prev = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const hours = getDebugLogsDefaultRangeHours();
+    const prev = new Date(now.getTime() - hours * 60 * 60 * 1000);
     const toInputValue = (d) => {
       const pad = (n) => String(n).padStart(2, '0');
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;

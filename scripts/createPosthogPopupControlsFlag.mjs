@@ -28,17 +28,18 @@ const EMPTY_PAYLOAD = {
   openApp: { disabled: false }
 };
 
-/** Aviso de telemetría por defecto (mismo texto que i18n local). */
+/** Aviso de telemetría por defecto (solo remoto vía PostHog; sin fallback local). */
 const DEFAULT_PAYLOAD = {
   version: 1,
   notice: {
     enabled: true,
-    es: 'Esta extensión puede enviar telemetría anónima de uso (herramienta y org de referencia) y, opcionalmente, grabaciones de interfaz en PostHog (EU). Puedes desactivarla en Ajustes en cualquier momento.',
-    en: 'This extension may send anonymous usage telemetry (tool and reference org) and, optionally, UI session recordings to PostHog (EU). You can turn this off anytime in Settings.',
+    es: 'Esta extensión puede recoger estadísticas anónimas de uso (qué herramientas utilizas y tu entorno de referencia). Nunca se envían credenciales, código ni datos de tus orgs. Puedes desactivarlo en Ajustes en cualquier momento.',
+    en: 'This extension may collect anonymous usage statistics (which tools you use and your reference org). Your credentials, code, and org data are never sent. You can turn this off anytime in Settings.',
     severity: 'info',
     frequency: 'once',
     dismissible: true,
-    dismissLabel: { es: 'Entendido', en: 'Got it' }
+    dismissLabel: { es: 'Entendido', en: 'Got it' },
+    minVersion: '2.13'
   },
   openApp: { disabled: false }
 };

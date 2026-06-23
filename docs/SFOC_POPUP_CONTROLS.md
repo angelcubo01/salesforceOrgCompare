@@ -59,6 +59,52 @@ Guía operativa para parametrizar el aviso del popup de la extensión y el botó
 | `disabled: true` | Deshabilita el botón «Abrir aplicación» |
 | `message` | Tooltip al pasar el cursor (es/en) |
 
+### Segmentación por versión de la extensión (opcional)
+
+Mismos campos que en [`SFOC_FEATURE_CONTROLS.md`](./SFOC_FEATURE_CONTROLS.md#segmentación-por-versión-de-la-extensión-opcional): `minVersion`, `maxVersion`, `versions`, `excludeVersions` (y alias `minExtensionVersion` / `maxExtensionVersion`).
+
+- A nivel **raíz** del payload → el flag completo solo aplica en esas versiones.
+- En `notice` u `openApp` → solo esa sección se filtra por versión.
+
+**Retrocompatibilidad:** sin campos de versión, comportamiento idéntico al actual. Las extensiones antiguas sin este código ignoran los campos de versión; usa `minVersion` solo tras publicar una extensión que los interprete.
+
+**Ejemplo** — aviso de actualización solo en versiones &lt; 2.14:
+
+```json
+{
+  "version": 1,
+  "notice": {
+    "enabled": true,
+    "es": "Hay una versión nueva disponible en Chrome Web Store.",
+    "en": "A new version is available on the Chrome Web Store.",
+    "severity": "info",
+    "frequency": "once",
+    "maxVersion": "2.13"
+  },
+  "openApp": { "disabled": false }
+}
+```
+
+---
+
+## Aviso de estadísticas de uso (2.13+, solo vía PostHog)
+
+El aviso sobre recogida de **estadísticas anónimas de uso** solo se muestra si el flag `sfoc_popup_controls` está **activo** y PostHog devuelve el payload. Si el flag está OFF, hay timeout o no hay red, **no se muestra ningún aviso**.
+
+| Aspecto | Detalle |
+|---------|---------|
+| **Desde versión** | `minVersion: "2.13"` en el payload del flag |
+| **Frecuencia** | `frequency: "once"` — persistencia en `popupNoticeDismissedFingerprint` |
+| **Texto** | Campos `es` / `en` del payload (no hay copia local en la extensión) |
+| **Mensaje clave** | Estadísticas de uso; **nunca** credenciales, código ni datos de orgs |
+| **Opt-out** | Ajustes → «Enviar telemetría anónima de uso» |
+
+Activa el aviso con `npm run posthog:popup-controls-flag:update` o editando el payload en PostHog.
+
+**Texto recomendado (ES):**
+
+> Esta extensión puede recoger estadísticas anónimas de uso (qué herramientas utilizas y tu entorno de referencia). Nunca se envían credenciales, código ni datos de tus orgs. Puedes desactivarlo en Ajustes en cualquier momento.
+
 ---
 
 ## Crear o actualizar el flag
@@ -112,7 +158,7 @@ Buscar en PostHog: [feature flags → `sfoc_popup_controls`](https://eu.posthog.
 
 ### Aviso informativo una sola vez (por defecto al crear el flag)
 
-El script `posthog:popup-controls-flag` crea el payload con el texto de telemetría actual, `frequency: once`, `severity: info` y `dismissible: true`.
+El script `posthog:popup-controls-flag` crea el payload con el aviso de estadísticas de uso (`minVersion: "2.13"`), `frequency: once`, `severity: info` y `dismissible: true`. Ver [aviso de estadísticas](#aviso-de-estadísticas-de-uso-213-solo-vía-posthog).
 
 ---
 

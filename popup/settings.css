@@ -200,6 +200,13 @@ body {
   margin-bottom: 18px;
 }
 
+.settings-adv-section-title {
+  margin: 1.25rem 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
 .settings-hint--field {
   margin-top: 6px;
   margin-bottom: 0;
@@ -391,6 +398,10 @@ html[data-ui-theme='light'] .settings-advanced {
 
 html[data-ui-theme='light'] .settings-advanced-inner {
   border-top-color: #e2e8f0;
+}
+
+html[data-ui-theme='light'] .settings-adv-section-title {
+  color: #334155;
 }
 
 html[data-ui-theme='light'] .settings-primary {

@@ -75,6 +75,7 @@ import {
 } from './ui/deployStatusPanel.js';
 import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryExplorerPanel.js';
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
+import { setupDebugLogTraceModal } from './ui/debugLogTraceModal.js';
 import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
 import {
   setupCustomSettingsComparePanel,
@@ -274,6 +275,7 @@ async function init() {
   setupPermissionDiffPanel();
   setupQueryExplorerPanel();
   setupDebugLogBrowserPanel();
+  setupDebugLogTraceModal();
   setupApexCoverageComparePanel();
   setupCustomSettingsComparePanel();
   setupCustomMetadataComparePanel();

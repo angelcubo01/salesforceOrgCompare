@@ -23,7 +23,7 @@ import {
   scheduleCodeEditorSessionPersist,
   codeEditorSessionOrgMismatch,
   hasStoredCodeEditorTabs,
-  MAX_CODE_EDITOR_TABS,
+  getMaxCodeEditorTabs,
   trimTabsToLimit
 } from '../lib/codeEditorSession.js';
 
@@ -111,7 +111,7 @@ function renderDocTabs() {
       renameValue: isDefaultTabLabel(tab.label) ? '' : tab.label
     })),
     showAddButton: true,
-    addDisabled: editorSession.tabs.length >= MAX_CODE_EDITOR_TABS,
+    addDisabled: editorSession.tabs.length >= getMaxCodeEditorTabs(),
     renamingTabId,
     onSelect: (id) => void switchToTab(id),
     onClose: (id) => void closeTab(id),
@@ -277,7 +277,7 @@ async function closeTab(tabId) {
 async function createNewTab(options = {}) {
   persistActiveTabContent();
 
-  if (editorSession.tabs.length >= MAX_CODE_EDITOR_TABS) {
+  if (editorSession.tabs.length >= getMaxCodeEditorTabs()) {
     showToast(t('codeEditor.maxTabs'), 'warn');
     return null;
   }
@@ -340,7 +340,7 @@ async function openScriptInTab(s, { activateOnly = false } = {}) {
   }
   if (activateOnly) return false;
 
-  if (editorSession.tabs.length >= MAX_CODE_EDITOR_TABS) {
+  if (editorSession.tabs.length >= getMaxCodeEditorTabs()) {
     showToast(t('codeEditor.maxTabs'), 'warn');
     return false;
   }
@@ -483,6 +483,14 @@ function setExecStatus(text, tone = '') {
   el.classList.remove('is-error', 'is-success');
   if (tone === 'error') el.classList.add('is-error');
   if (tone === 'success') el.classList.add('is-success');
+}
+
+function clearAnonymousApexOutput() {
+  setExecStatus('');
+  const resultWrap = document.getElementById('anonymousApexResultWrap');
+  const combined = document.getElementById('anonymousApexResultCombined');
+  if (resultWrap) resultWrap.classList.add('hidden');
+  if (combined) combined.textContent = '';
 }
 
 function readSavedScripts() {
@@ -1063,7 +1071,7 @@ export function setupAnonymousApexPanel() {
   const openScriptsBtn = document.getElementById('anonymousApexOpenScriptsModalBtn');
   const quickSaveBtn = document.getElementById('anonymousApexQuickSaveBtn');
   const scriptNameInput = document.getElementById('anonymousApexScriptNameInput');
-  const resultWrap = document.getElementById('anonymousApexResultWrap');
+  const closeOutputBtn = document.getElementById('anonymousApexCloseOutputBtn');
   const pickerBackdrop = document.querySelector('#anonymousApexLogPickerModal .anonymous-apex-log-picker-backdrop');
   const scriptsBackdrop = document.querySelector('#anonymousApexScriptsModal [data-anonymous-scripts-backdrop="1"]');
   const scriptsCloseBtn = document.getElementById('anonymousApexScriptsModalCloseBtn');
@@ -1077,6 +1085,7 @@ export function setupAnonymousApexPanel() {
   }
   if (openScriptsBtn) openScriptsBtn.addEventListener('click', () => openScriptsModal());
   if (quickSaveBtn) quickSaveBtn.addEventListener('click', () => void quickSaveCurrentScript());
+  if (closeOutputBtn) closeOutputBtn.addEventListener('click', () => clearAnonymousApexOutput());
   if (scriptsBackdrop) scriptsBackdrop.addEventListener('click', () => closeScriptsModal());
   if (scriptsCloseBtn) scriptsCloseBtn.addEventListener('click', () => closeScriptsModal());
   document.addEventListener('keydown', (e) => {
@@ -1123,7 +1132,7 @@ export function setupAnonymousApexPanel() {
       r?.(null);
     });
   }
-  if (resultWrap) resultWrap.classList.add('hidden');
+  clearAnonymousApexOutput();
   if (logBtn) {
     logBtn.classList.add('hidden');
     logBtn.disabled = true;

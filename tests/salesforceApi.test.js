@@ -289,3 +289,25 @@ describe('probeApiVersion', () => {
     expect(v).toBe('62.0');
   });
 });
+
+describe('buildActiveUserSearchSoql', () => {
+  it('genera LIKE por Name y Username sin ESCAPE', async () => {
+    const { buildActiveUserSearchSoql } = await import('../shared/salesforceApi.js');
+    const byName = buildActiveUserSearchSoql('Name', 'Angel');
+    const byUser = buildActiveUserSearchSoql('Username', 'Angel');
+    expect(byName).toMatch(/Name LIKE '%Angel%'/);
+    expect(byUser).toMatch(/Username LIKE '%Angel%'/);
+    expect(byName).not.toMatch(/ESCAPE/i);
+    expect(byUser).not.toMatch(/ESCAPE/i);
+  });
+
+  it('elimina comodines LIKE del término', async () => {
+    const { buildActiveUserSearchSoql } = await import('../shared/salesforceApi.js');
+    expect(buildActiveUserSearchSoql('Name', 'A%ng_el')).toMatch(/LIKE '%Angel%'/);
+  });
+
+  it('devuelve null con término demasiado corto', async () => {
+    const { buildActiveUserSearchSoql } = await import('../shared/salesforceApi.js');
+    expect(buildActiveUserSearchSoql('Name', 'A')).toBeNull();
+  });
+});

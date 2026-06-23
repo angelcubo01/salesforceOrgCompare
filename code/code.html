@@ -34,7 +34,7 @@
               <label for="searchInput" class="sidebar-search-label" data-i18n="code.searchTitle">Búsqueda</label>
               <div class="sidebar-search-input-row">
                 <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholderComparator" placeholder="Buscar componentes (mín. 1 carácter)" maxlength="64" />
-                <button type="button" id="packageXmlLoadBtn" class="sidebar-action-btn" data-i18n-title="code.loadPackageXmlTitle" aria-label="Cargar package.xml">
+                <button type="button" id="packageXmlLoadBtn" class="sidebar-action-btn" data-i18n-title="code.loadPackageXmlTitle" data-i18n-aria-label="code.loadPackageXmlTitle">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                     <polyline points="17 8 12 3 7 8"></polyline>
@@ -56,7 +56,7 @@
             <div id="searchResults" class="results sfoc-autocomplete-panel sidebar-search-results ph-no-capture" role="listbox" hidden></div>
           </div>
         </div>
-        <div id="compareListToolbar" class="compare-list-toolbar hidden" aria-label="Lista de comparación">
+        <div id="compareListToolbar" class="compare-list-toolbar hidden" data-i18n-aria-label="code.ariaCompareList">
           <input
             id="compareListFilter"
             class="sfoc-query-input compare-list-filter"
@@ -68,9 +68,9 @@
           />
         </div>
         <div id="compareListBody" class="compare-list-body ph-no-capture">
-          <ul id="leftListPinned" class="list compare-list-pinned hidden" aria-label="Fijados"></ul>
+          <ul id="leftListPinned" class="list compare-list-pinned hidden" data-i18n-aria-label="code.ariaPinned"></ul>
           <div id="compareListScrollHost" class="compare-list-scroll-host">
-            <ul id="leftList" class="list compare-tree" aria-label="Lista de comparación"></ul>
+            <ul id="leftList" class="list compare-tree" data-i18n-aria-label="code.ariaCompareList"></ul>
           </div>
         </div>
       </div>
@@ -241,7 +241,7 @@
             class="org-swap-btn diff-nav-button hidden"
             data-i18n-title="code.swapOrgsTitle"
             title="Intercambiar entornos"
-            aria-label="Intercambiar entornos"
+            data-i18n-aria-label="code.swapOrgsTitle"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M4 9h11"></path>
@@ -378,7 +378,7 @@
           </div>
         </div>
         </div>
-        <div id="viewerChunkBar" class="viewer-chunk-bar ph-no-capture hidden" role="region" aria-label="Navegación por fragmentos del visor">
+        <div id="viewerChunkBar" class="viewer-chunk-bar ph-no-capture hidden" role="region" data-i18n-aria-label="code.ariaViewerChunks">
           <button type="button" id="viewerChunkPrev" class="viewer-chunk-btn" disabled data-i18n-title="code.prevChunkTitle" data-i18n="code.prevChunk">
             ← Anterior
           </button>
@@ -401,10 +401,13 @@
           </div>
         </div>
         </div>
-        <div id="generatePackageXmlPanel" class="generate-package-xml-panel ph-no-capture hidden" aria-label="Generar package.xml">
+        <div id="generatePackageXmlPanel" class="generate-package-xml-panel ph-no-capture hidden" data-i18n-aria-label="code.ariaGenPkgPanel">
           <div class="generate-package-xml-panel-inner">
             <div class="generate-package-xml-head">
-              <h2 class="generate-package-xml-title" data-i18n="genPkg.title">Generar package.xml</h2>
+              <div>
+                <h2 class="generate-package-xml-title" data-i18n="genPkg.title">Generar package.xml</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="genPkg.subtitle">Arma un package.xml a medida y lanza Retrieve en ZIP</p>
+              </div>
               <label class="generate-pkg-compare-toggle" for="generatePkgCompareToggle">
                 <input type="checkbox" id="generatePkgCompareToggle" />
                 <span class="generate-pkg-compare-switch" aria-hidden="true"></span>
@@ -455,7 +458,7 @@
                     Quitar todos
                   </button>
                 </div>
-                <div id="generatePkgMembersList" class="generate-pkg-members-list" role="group" aria-label="Miembros del tipo seleccionado"></div>
+                <div id="generatePkgMembersList" class="generate-pkg-members-list" role="group" data-i18n-aria-label="code.ariaGenPkgMembers"></div>
               </div>
 
               <div class="generate-pkg-col generate-pkg-col-right">
@@ -467,7 +470,7 @@
                     class="generate-pkg-download-icon-btn"
                     data-i18n-title="genPkg.download"
                     title="Descargar package.xml"
-                    aria-label="Descargar package.xml"
+                    data-i18n-aria-label="code.ariaGenPkgDownload"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -509,12 +512,15 @@
         <div
           id="metadataTypeComparePanel"
           class="setup-records-compare-panel org-limits-panel hidden"
-          aria-label="Metadata type compare"
+          data-i18n-aria-label="code.ariaMetadataTypeCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
             <div class="setup-records-compare-sticky-head">
               <div class="org-limits-head">
-                <h2 class="org-limits-title" data-i18n="metadataTypeCompare.title">Comparar tipo de metadata</h2>
+                <div>
+                  <h2 class="org-limits-title" data-i18n="metadataTypeCompare.title">Comparar tipo de metadata</h2>
+                  <p class="sfoc-panel-subtitle" data-i18n="metadataTypeCompare.subtitle">Compara un tipo de metadatos entre dos entornos de un vistazo</p>
+                </div>
                 <div class="org-limits-head-controls setup-records-compare-head-controls">
                   <label class="setup-records-compare-type-filter-wrap">
                     <span class="setup-records-compare-type-filter-label" data-i18n="metadataTypeCompare.filterTypes"
@@ -567,13 +573,14 @@
             <div id="metadataTypeCompareTableMount" class="setup-records-compare-table-mount"></div>
           </div>
         </div>
-        <div id="apexTestsPanel" class="apex-tests-panel ph-no-capture hidden" aria-label="Pruebas Apex">
+        <div id="apexTestsPanel" class="apex-tests-panel ph-no-capture hidden" data-i18n-aria-label="code.ariaApexTestsPanel">
           <div id="apexTestsHubView" class="apex-tests-hub-view">
             <div class="apex-tests-hub-header">
               <div class="apex-tests-hub-header-text">
                 <h2 id="apexTestsHubTitle" class="apex-tests-hub-title" data-i18n="apexTests.title">
-                  Hub de pruebas Apex
+                  Hub de tests Apex
                 </h2>
+                <p class="sfoc-panel-subtitle" data-i18n="apexTests.subtitle">Ejecuta, sigue y exporta tus tests en un solo lugar</p>
                 <p id="apexTestsHubStatus" class="apex-tests-hub-status hidden" role="status"></p>
               </div>
               <div class="apex-tests-hub-header-actions">
@@ -739,7 +746,6 @@
                   data-i18n-title="apexTests.backToHub"
                   data-i18n-aria-label="apexTests.backToHub"
                   title="Volver"
-                  aria-label="Volver"
                 >
                   ←
                 </button>
@@ -919,10 +925,13 @@
             </div>
           </div>
         </div>
-        <div id="dependencyExplorerPanel" class="dep-explorer-panel ph-no-capture hidden" aria-label="Dependency Explorer">
+        <div id="dependencyExplorerPanel" class="dep-explorer-panel ph-no-capture hidden" data-i18n-aria-label="code.ariaDepExplorer">
           <div class="dep-explorer-panel-inner">
             <div class="dep-explorer-head">
-              <h2 class="dep-explorer-title" data-i18n="depExplorer.title">Explorador de dependencias</h2>
+              <div>
+                <h2 class="dep-explorer-title" data-i18n="depExplorer.title">Explorador de dependencias</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="depExplorer.subtitle">Descubre qué metadatos referencian un componente antes de hacer deploy</p>
+              </div>
               <label
                 class="dep-explorer-compare-toggle"
                 for="depExplorerCompareToggle"
@@ -1012,12 +1021,10 @@
             <div id="depExplorerCategories" class="dep-explorer-categories" aria-live="polite"></div>
           </div>
         </div>
-        <div id="fieldDependencyPanel" class="field-dependency-panel hidden" aria-label="Field Dependency">
+        <div id="fieldDependencyPanel" class="field-dependency-panel hidden" data-i18n-aria-label="code.ariaFieldDep">
           <div class="field-dependency-panel-inner">
             <h2 class="field-dependency-title" data-i18n="fieldDep.title">Field Dependency</h2>
-            <p class="field-dependency-hint" data-i18n="fieldDep.hint">
-              Elige un objeto (lista de la org izquierda) y obtén el metadata <code>CustomObject</code> en ambos entornos para comparar dependencias.
-            </p>
+            <p class="sfoc-panel-subtitle" data-i18n="fieldDep.subtitle">Revisa dependencias de picklist entre entornos antes de publicar</p>
             <p id="fieldDepOrgHint" class="field-dependency-org-hint" role="status"></p>
 
             <div id="fieldDepControls" class="field-dep-controls">
@@ -1058,7 +1065,7 @@
               </div>
             </div>
 
-            <div id="fieldDepCompareScreen" class="field-dep-compare-screen hidden" aria-label="Comparar relación">
+            <div id="fieldDepCompareScreen" class="field-dep-compare-screen hidden" data-i18n-aria-label="code.ariaFieldDepCompare">
               <div class="field-dep-compare-toolbar">
                 <button type="button" id="fieldDepBackBtn" class="field-dep-back-btn" data-i18n-title="fieldDep.backToTable" title="Volver a la tabla">
                   ←
@@ -1069,10 +1076,13 @@
             </div>
           </div>
         </div>
-        <div id="anonymousApexPanel" class="anonymous-apex-panel hidden" aria-label="Anonymous Apex">
+        <div id="anonymousApexPanel" class="anonymous-apex-panel hidden" data-i18n-aria-label="anonymousApex.title">
           <div class="anonymous-apex-panel-inner">
             <div class="anonymous-apex-head">
-              <h2 class="anonymous-apex-title" data-i18n="anonymousApex.title">Anonymous Apex Executor</h2>
+              <div>
+                <h2 class="anonymous-apex-title" data-i18n="anonymousApex.title">Anonymous Apex</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="anonymousApex.subtitle">Prueba lógica al vuelo y guarda tus scripts</p>
+              </div>
               <div class="anonymous-apex-head-trailing">
                 <button
                   type="button"
@@ -1103,20 +1113,33 @@
             <div class="vscode-editor-shell">
               <div id="anonymousApexDocTabs" class="vscode-tabs" role="tablist"></div>
               <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount ph-no-capture vscode-editor-mount"></div>
-            </div>
-            <div class="anonymous-apex-actions">
-              <button type="button" id="anonymousApexRunBtn" class="anonymous-apex-run-btn" data-i18n="anonymousApex.run">
-                Ejecutar
-              </button>
-              <button type="button" id="anonymousApexOpenLogBtn" class="anonymous-apex-log-btn hidden" data-i18n="anonymousApex.openLog" disabled>
-                Ver log
-              </button>
-            </div>
-            <p id="anonymousApexExecStatus" class="anonymous-apex-exec-status" role="status"></p>
-            <div id="anonymousApexResultWrap" class="anonymous-apex-result-grid ph-no-capture hidden">
-              <div class="anonymous-apex-result-card anonymous-apex-result-card-full">
-                <h3 data-i18n="anonymousApex.executionResult">Resultado de ejecución</h3>
-                <pre id="anonymousApexResultCombined">—</pre>
+              <div class="anonymous-apex-actions">
+                <button type="button" id="anonymousApexRunBtn" class="anonymous-apex-run-btn" data-i18n="anonymousApex.run">
+                  Ejecutar
+                </button>
+                <button type="button" id="anonymousApexOpenLogBtn" class="anonymous-apex-log-btn hidden" data-i18n="anonymousApex.openLog" disabled>
+                  Ver log
+                </button>
+              </div>
+              <div class="anonymous-apex-output">
+                <div class="anonymous-apex-result-card anonymous-apex-result-card-full">
+                  <button
+                    type="button"
+                    id="anonymousApexCloseOutputBtn"
+                    class="anonymous-apex-output-close"
+                    data-i18n-aria-label="anonymousApex.closeResult"
+                    data-i18n-title="anonymousApex.closeResult"
+                    aria-label="Cerrar resultado"
+                    title="Cerrar resultado"
+                  >
+                    ×
+                  </button>
+                  <p id="anonymousApexExecStatus" class="anonymous-apex-exec-status" role="status"></p>
+                  <div id="anonymousApexResultWrap" class="anonymous-apex-result-details ph-no-capture hidden">
+                    <h3 data-i18n="anonymousApex.executionResult">Resultado de ejecución</h3>
+                    <pre id="anonymousApexResultCombined">—</pre>
+                  </div>
+                </div>
               </div>
             </div>
             <div id="anonymousApexLogPickerModal" class="anonymous-apex-log-picker-modal hidden" aria-hidden="true">
@@ -1163,10 +1186,13 @@
             </div>
           </div>
         </div>
-        <div id="queryExplorerPanel" class="query-explorer-panel org-limits-panel hidden" aria-label="Query Explorer">
+        <div id="queryExplorerPanel" class="query-explorer-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaQueryExplorer">
           <div class="org-limits-panel-inner query-explorer-panel-inner">
             <div class="org-limits-head">
-              <h2 class="org-limits-title" data-i18n="queryExplorer.title">SOQL / SOSL Explorer</h2>
+              <div>
+                <h2 class="org-limits-title" data-i18n="queryExplorer.title">Explorador SOQL / SOSL</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="queryExplorer.subtitle">Consulta registros, guarda favoritas y compara entre entornos</p>
+              </div>
               <div class="org-limits-head-controls">
                 <button
                   type="button"
@@ -1242,9 +1268,9 @@
             </div>
             <div id="queryExplorerSingleWrap" class="query-explorer-single-wrap">
               <div class="query-explorer-result-toolbar">
-                <button type="button" id="queryExplorerSinglePrev" class="query-explorer-icon-btn" disabled aria-label="Prev">←</button>
+                <button type="button" id="queryExplorerSinglePrev" class="query-explorer-icon-btn" disabled data-i18n-aria-label="code.ariaQueryPrev">←</button>
                 <span id="queryExplorerSingleMeta" class="query-explorer-page-meta"></span>
-                <button type="button" id="queryExplorerSingleNext" class="query-explorer-icon-btn" disabled aria-label="Next">→</button>
+                <button type="button" id="queryExplorerSingleNext" class="query-explorer-icon-btn" disabled data-i18n-aria-label="code.ariaQueryNext">→</button>
                 <span class="query-explorer-toolbar-spacer"></span>
                 <button type="button" id="queryExplorerSingleCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">
                   CSV
@@ -1342,10 +1368,13 @@
             </div>
           </div>
         </div>
-        <div id="apexCoverageComparePanel" class="apex-coverage-compare-panel org-limits-panel hidden" aria-label="Apex coverage compare">
+        <div id="apexCoverageComparePanel" class="apex-coverage-compare-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaCoverageCompare">
           <div class="apex-coverage-compare-panel-inner org-limits-panel-inner">
             <div class="org-limits-head">
-              <h2 class="org-limits-title" data-i18n="coverageCompare.title">Comparar cobertura Apex</h2>
+              <div>
+                <h2 class="org-limits-title" data-i18n="coverageCompare.title">Comparar cobertura Apex</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="coverageCompare.subtitle">Contrasta la cobertura de clases y triggers entre entornos</p>
+              </div>
               <div class="org-limits-head-controls">
                 <button
                   type="button"
@@ -1364,12 +1393,15 @@
         <div
           id="customSettingsComparePanel"
           class="setup-records-compare-panel org-limits-panel hidden"
-          aria-label="Custom settings compare"
+          data-i18n-aria-label="code.ariaCustomSettingsCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
             <div class="setup-records-compare-sticky-head">
               <div class="org-limits-head">
-                <h2 class="org-limits-title" data-i18n="customSettingsCompare.title">Comparar Custom Settings</h2>
+                <div>
+                  <h2 class="org-limits-title" data-i18n="customSettingsCompare.title">Comparar Custom Settings</h2>
+                  <p class="sfoc-panel-subtitle" data-i18n="customSettingsCompare.subtitle">Compara valores de Custom Settings registro a registro</p>
+                </div>
                 <div class="org-limits-head-controls setup-records-compare-head-controls">
                   <label class="setup-records-compare-type-filter-wrap">
                     <span class="setup-records-compare-type-filter-label" data-i18n="customSettingsCompare.filterTypes"
@@ -1419,12 +1451,15 @@
         <div
           id="customMetadataComparePanel"
           class="setup-records-compare-panel org-limits-panel hidden"
-          aria-label="Custom metadata compare"
+          data-i18n-aria-label="code.ariaCustomMetadataCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
             <div class="setup-records-compare-sticky-head">
               <div class="org-limits-head">
-                <h2 class="org-limits-title" data-i18n="customMetadataCompare.title">Comparar Custom Metadata</h2>
+                <div>
+                  <h2 class="org-limits-title" data-i18n="customMetadataCompare.title">Comparar Custom Metadata</h2>
+                  <p class="sfoc-panel-subtitle" data-i18n="customMetadataCompare.subtitle">Compara registros de Custom Metadata entre entornos</p>
+                </div>
                 <div class="org-limits-head-controls setup-records-compare-head-controls">
                   <label class="setup-records-compare-type-filter-wrap">
                     <span class="setup-records-compare-type-filter-label" data-i18n="customMetadataCompare.filterTypes"
@@ -1474,12 +1509,13 @@
         <div
           id="recordComparePanel"
           class="setup-records-compare-panel org-limits-panel hidden"
-          aria-label="Record compare"
+          data-i18n-aria-label="code.ariaRecordCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
             <div class="setup-records-compare-sticky-head">
               <div class="org-limits-head record-compare-head">
                 <h2 class="org-limits-title" data-i18n="recordCompare.title">Comparar registros</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="recordCompare.subtitle">Contrasta campos del mismo registro o de registros distintos entre entornos</p>
               </div>
               <div class="record-compare-form">
                 <div class="record-compare-form-row record-compare-form-ids">
@@ -1559,13 +1595,13 @@
                   </label>
                 </div>
               </div>
-              <nav id="recordCompareBreadcrumb" class="record-compare-breadcrumb hidden" aria-label="Breadcrumb"></nav>
+              <nav id="recordCompareBreadcrumb" class="record-compare-breadcrumb hidden" data-i18n-aria-label="code.ariaBreadcrumb"></nav>
               <p id="recordCompareStatus" class="org-limits-status record-compare-status" role="status"></p>
             </div>
             <div id="recordCompareTableMount" class="setup-records-compare-table-mount"></div>
           </div>
         </div>
-        <div id="permissionDiffPanel" class="permission-diff-panel ph-no-capture hidden" aria-label="Analizador de permisos">
+        <div id="permissionDiffPanel" class="permission-diff-panel ph-no-capture hidden" data-i18n-aria-label="permDiff.ariaPanel">
           <div class="permission-diff-panel-inner">
             <div class="permission-diff-head">
               <div>
@@ -1584,12 +1620,12 @@
             </div>
             <p id="permissionDiffStatus" class="permission-diff-status" role="status"></p>
             <div class="permission-diff-toolbar">
-              <div class="permission-diff-direction-bar" role="tablist" aria-label="Forma de consulta">
-                <button type="button" class="permission-diff-direction is-active" data-perm-diff-direction="container" data-i18n="permDiff.dirContainer">Por conjunto o perfil</button>
+              <div class="permission-diff-direction-bar" role="tablist" data-i18n-aria-label="code.ariaPermDiffQueryMode">
+                <button type="button" class="permission-diff-direction is-active" data-perm-diff-direction="container" data-i18n="permDiff.dirContainer">Por permission set o perfil</button>
                 <button type="button" class="permission-diff-direction" data-perm-diff-direction="resource" data-i18n="permDiff.dirResource">Por objeto o campo</button>
                 <button type="button" class="permission-diff-direction" data-perm-diff-direction="customPermission" data-i18n="permDiff.dirCustomPermission">Por permiso personalizado</button>
               </div>
-              <div id="permissionDiffSectionTabs" class="permission-diff-section-tabs" role="tablist" aria-label="Sección">
+              <div id="permissionDiffSectionTabs" class="permission-diff-section-tabs" role="tablist" data-i18n-aria-label="code.ariaPermDiffSection">
                 <button type="button" class="permission-diff-tab is-active" data-perm-diff-section="object" role="tab" data-i18n="permDiff.tabObject">Objetos</button>
                 <button type="button" class="permission-diff-tab" data-perm-diff-section="field" role="tab" data-i18n="permDiff.tabField">Campos</button>
                 <button type="button" class="permission-diff-tab" data-perm-diff-section="setup" role="tab" data-i18n="permDiff.tabSetup">Configuración</button>
@@ -1666,12 +1702,15 @@
             </div>
           </div>
         </div>
-        <div id="environmentStatusPanel" class="env-status-panel ph-no-capture hidden" aria-label="Salesforce Environment Status">
+        <div id="environmentStatusPanel" class="env-status-panel ph-no-capture hidden" data-i18n-aria-label="envStatus.title">
           <div class="env-status-panel-inner">
             <div class="env-status-head">
-              <h2 class="env-status-title" data-i18n="envStatus.title">Estado entornos Salesforce</h2>
+              <div>
+                <h2 class="env-status-title" data-i18n="envStatus.title">Estado entornos Salesforce</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="envStatus.subtitle">Vista global de tus entornos guardados: versión, Trust y sesión</p>
+              </div>
               <div class="env-status-head-controls">
-                <div class="env-status-filters" role="group" aria-label="Filtros">
+                <div class="env-status-filters" role="group" data-i18n-aria-label="code.ariaEnvStatusFilters">
                   <button type="button" class="env-status-filter-btn" data-env-status-filter="all" data-i18n="envStatus.filterAll">Todas</button>
                   <button type="button" class="env-status-filter-btn" data-env-status-filter="prod" data-i18n="envStatus.filterProd">Solo prod</button>
                   <button type="button" class="env-status-filter-btn" data-env-status-filter="sandbox" data-i18n="envStatus.filterSandbox">Solo sandbox</button>
@@ -1706,10 +1745,13 @@
             </div>
           </div>
         </div>
-        <div id="orgLimitsPanel" class="org-limits-panel hidden" aria-label="Org Limits Dashboard">
+        <div id="orgLimitsPanel" class="org-limits-panel hidden" data-i18n-aria-label="orgLimits.title">
           <div class="org-limits-panel-inner">
             <div class="org-limits-head">
-              <h2 class="org-limits-title" data-i18n="orgLimits.title">Dashboard de Límites</h2>
+              <div>
+                <h2 class="org-limits-title" data-i18n="orgLimits.title">Dashboard de Límites</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="orgLimits.subtitle">Consulta el consumo de límites y compara entre entornos</p>
+              </div>
               <div class="org-limits-head-controls">
                 <button type="button" id="orgLimitsRefreshBtn" class="org-limits-refresh-btn" data-i18n="orgLimits.refresh">
                   Actualizar límites
@@ -1725,10 +1767,13 @@
             <div id="orgLimitsCards" class="org-limits-cards ph-no-capture"></div>
           </div>
         </div>
-        <div id="deployStatusPanel" class="deploy-status-panel ph-no-capture hidden" aria-label="Deployment Status">
+        <div id="deployStatusPanel" class="deploy-status-panel ph-no-capture hidden" data-i18n-aria-label="deployStatus.title">
           <div class="deploy-status-panel-inner">
             <div class="deploy-status-head">
-              <h2 class="deploy-status-title" data-i18n="deployStatus.title">Estado de despliegue</h2>
+              <div>
+                <h2 class="deploy-status-title" data-i18n="deployStatus.title">Deploy Status</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="deployStatus.subtitle">Sigue el progreso de Deploy y Validate en tiempo real</p>
+              </div>
               <div class="deploy-status-head-controls">
                 <span id="deployStatusLiveBadge" class="deploy-status-live-badge hidden" data-i18n="deployStatus.live">En vivo</span>
                 <button type="button" id="deployStatusRefreshBtn" class="deploy-status-refresh-btn" data-i18n="deployStatus.refresh">Actualizar</button>
@@ -1923,18 +1968,31 @@
             </div>
           </div>
         </div>
-        <div id="debugLogBrowserPanel" class="debug-log-browser-panel ph-no-capture hidden" aria-label="Debug Log Browser">
+        <div id="debugLogBrowserPanel" class="debug-log-browser-panel ph-no-capture hidden" data-i18n-aria-label="debugLogs.title">
           <div class="debug-log-browser-panel-inner">
             <div class="debug-log-browser-head">
-              <h2 class="debug-log-browser-title" data-i18n="debugLogs.title">Navegador de Debug Logs</h2>
-              <button
-                type="button"
-                id="debugLogBrowserDeleteAllBtn"
-                class="debug-log-browser-delete-all-btn"
-                data-i18n="debugLogs.deleteAll"
-              >
-                Borrar todos los logs
-              </button>
+              <div>
+                <h2 class="debug-log-browser-title" data-i18n="debugLogs.title">Debug Log Browser</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="debugLogs.subtitle">Lista, filtra y abre Debug Logs de tu entorno</p>
+              </div>
+              <div class="debug-log-browser-head-actions">
+                <button
+                  type="button"
+                  id="debugLogBrowserAddTraceBtn"
+                  class="debug-log-browser-add-trace-btn"
+                  data-i18n="debugLogs.addTrace"
+                >
+                  Activar trazas
+                </button>
+                <button
+                  type="button"
+                  id="debugLogBrowserDeleteAllBtn"
+                  class="debug-log-browser-delete-all-btn"
+                  data-i18n="debugLogs.deleteAll"
+                >
+                  Borrar todos los logs
+                </button>
+              </div>
             </div>
             <p id="debugLogBrowserStatus" class="debug-log-browser-status" role="status"></p>
             <div class="debug-log-browser-filters" id="debugLogBrowserFilters">
@@ -2010,23 +2068,95 @@
               </div>
             </div>
           </div>
-        </div>
-        <div id="quickEditPanel" class="quick-edit-panel hidden" aria-label="Apex Quick Editor">
-          <div class="quick-edit-panel-inner">
-            <div class="quick-edit-search-zone">
-              <div class="quick-edit-search-bar">
-                <input
-                  id="quickEditSearchInput"
-                  type="search"
-                  class="quick-edit-search-input sfoc-query-input"
-                  data-i18n-placeholder="quickEdit.searchPlaceholder"
-                  placeholder="Buscar Apex Class..."
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <div id="quickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
+          <div id="debugLogTraceModal" class="debug-log-trace-modal hidden" aria-hidden="true">
+            <div class="debug-log-trace-modal-backdrop" data-debug-log-trace-close="1"></div>
+            <div
+              class="debug-log-trace-modal-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="debugLogTraceModalTitle"
+            >
+              <h3 id="debugLogTraceModalTitle" data-i18n="debugLogs.traceModalTitle">Activar trazas de depuración</h3>
+              <div class="debug-log-trace-modal-form">
+                <div class="debug-log-trace-modal-field debug-log-trace-modal-user-wrap">
+                  <label for="debugLogTraceUserInput" class="debug-log-trace-modal-label" data-i18n="debugLogs.traceUserLabel"
+                    >Usuario</label
+                  >
+                  <input
+                    type="search"
+                    id="debugLogTraceUserInput"
+                    class="debug-log-trace-modal-input sfoc-query-input"
+                    data-i18n-placeholder="debugLogs.traceUserPlaceholder"
+                    placeholder="Nombre o username…"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <input type="hidden" id="debugLogTraceUserId" value="" />
+                  <div
+                    id="debugLogTraceUserSuggestions"
+                    class="debug-log-trace-user-suggestions sfoc-autocomplete-panel"
+                    hidden
+                  ></div>
+                </div>
+                <div class="debug-log-trace-modal-field">
+                  <label for="debugLogTraceLevelSelect" class="debug-log-trace-modal-label" data-i18n="debugLogs.traceLevelLabel"
+                    >Nivel de depuración</label
+                  >
+                  <select id="debugLogTraceLevelSelect" class="debug-log-trace-modal-input debug-log-trace-modal-select">
+                    <option value="" data-i18n="debugLogs.traceLevelLoading">Cargando niveles…</option>
+                  </select>
+                </div>
+                <div class="debug-log-trace-modal-field">
+                  <label for="debugLogTraceStartInput" class="debug-log-trace-modal-label" data-i18n="debugLogs.traceStartLabel"
+                    >Fecha inicio</label
+                  >
+                  <input id="debugLogTraceStartInput" type="datetime-local" class="debug-log-trace-modal-input" />
+                </div>
+                <div class="debug-log-trace-modal-field">
+                  <label for="debugLogTraceEndInput" class="debug-log-trace-modal-label" data-i18n="debugLogs.traceEndLabel"
+                    >Fecha fin</label
+                  >
+                  <input id="debugLogTraceEndInput" type="datetime-local" class="debug-log-trace-modal-input" />
+                </div>
+              </div>
+              <div class="debug-log-trace-modal-actions">
+                <button type="button" id="debugLogTraceCancelBtn" class="debug-log-trace-modal-btn" data-i18n="debugLogs.traceCancel">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  id="debugLogTraceSubmitBtn"
+                  class="debug-log-trace-modal-btn debug-log-trace-modal-btn-primary"
+                  data-i18n="debugLogs.traceSubmit"
+                >
+                  Activar traza
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+        <div id="quickEditPanel" class="quick-edit-panel hidden" data-i18n-aria-label="quickEdit.title">
+          <div class="quick-edit-panel-inner">
+            <header class="quick-edit-panel-header">
+              <div class="quick-edit-panel-header-text">
+                <h2 class="org-limits-title" data-i18n="quickEdit.title">Editor Apex</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="quickEdit.subtitle">Edita, Validate y haz deploy sin cambiar de pantalla</p>
+              </div>
+              <div class="quick-edit-search-zone">
+                <div class="quick-edit-search-bar">
+                  <input
+                    id="quickEditSearchInput"
+                    type="search"
+                    class="quick-edit-search-input sfoc-query-input"
+                    data-i18n-placeholder="quickEdit.searchPlaceholder"
+                    placeholder="Buscar Apex Class..."
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <div id="quickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
+                </div>
+              </div>
+            </header>
             <div class="quick-edit-panel-body">
               <div class="quick-edit-editor-toolbar">
                 <div class="quick-edit-editor-toolbar-meta">
@@ -2035,7 +2165,7 @@
                 </div>
                 <div class="quick-edit-editor-actions">
                   <span id="quickEditLocalEditActions" class="quick-edit-local-edit-actions">
-                  <div class="quick-edit-action-group" role="group" aria-label="Edición local">
+                  <div class="quick-edit-action-group" role="group" data-i18n-aria-label="code.ariaQuickEditLocal">
                     <button type="button" id="quickEditSaveBtn" class="quick-edit-action-btn quick-edit-save-btn" disabled data-i18n-title="quickEdit.saveLocalTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
                       <span class="quick-edit-action-label" data-i18n="quickEdit.saveLocal">Guardar</span>
@@ -2047,22 +2177,22 @@
                   </div>
                   <span class="quick-edit-action-sep" aria-hidden="true"></span>
                   </span>
-                  <div class="quick-edit-action-group" role="group" aria-label="Org">
+                  <div class="quick-edit-action-group" role="group" data-i18n-aria-label="code.ariaQuickEditOrg">
                     <button type="button" id="quickEditRetrieveBtn" class="quick-edit-action-btn quick-edit-retrieve-btn" disabled data-i18n-title="quickEdit.retrieveFromOrgTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-                      <span class="quick-edit-action-label" data-i18n="quickEdit.retrieveFromOrg">Recuperar</span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.retrieveFromOrg">Retrieve</span>
                     </button>
                     <button type="button" id="quickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n-title="quickEdit.validateTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
-                      <span class="quick-edit-action-label" data-i18n="quickEdit.validate">Validar</span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.validate">Validate</span>
                     </button>
                     <button type="button" id="quickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n-title="quickEdit.deployTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg></span>
-                      <span class="quick-edit-action-label" data-i18n="quickEdit.deploy">Desplegar</span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.deploy">Deploy</span>
                     </button>
                   </div>
                   <span class="quick-edit-action-sep" aria-hidden="true"></span>
-                  <div class="quick-edit-action-group" role="group" aria-label="Sesión">
+                  <div class="quick-edit-action-group" role="group" data-i18n-aria-label="code.ariaQuickEditSession">
                     <button type="button" id="quickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n-title="codeEditor.clearAllTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                       <span class="quick-edit-action-label" data-i18n="codeEditor.clearAll">Limpiar todo</span>
@@ -2080,22 +2210,28 @@
             </div>
           </div>
         </div>
-        <div id="lightningQuickEditPanel" class="quick-edit-panel lightning-quick-edit-panel hidden" aria-label="Lightning Quick Editor">
+        <div id="lightningQuickEditPanel" class="quick-edit-panel lightning-quick-edit-panel hidden" data-i18n-aria-label="lightningQuickEdit.title">
           <div class="quick-edit-panel-inner">
-            <div class="quick-edit-search-zone">
-              <div class="quick-edit-search-bar">
-                <input
-                  id="lightningQuickEditSearchInput"
-                  type="search"
-                  class="quick-edit-search-input sfoc-query-input"
-                  data-i18n-placeholder="codeEditor.searchPlaceholderLightning"
-                  placeholder="Buscar LWC o Aura..."
-                  autocomplete="off"
-                  spellcheck="false"
-                />
-                <div id="lightningQuickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
+            <header class="quick-edit-panel-header">
+              <div class="quick-edit-panel-header-text">
+                <h2 class="org-limits-title" data-i18n="lightningQuickEdit.title">Editor Lightning, LWC y Aura</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="lightningQuickEdit.subtitle">Componentes LWC y Aura listos para deploy</p>
               </div>
-            </div>
+              <div class="quick-edit-search-zone">
+                <div class="quick-edit-search-bar">
+                  <input
+                    id="lightningQuickEditSearchInput"
+                    type="search"
+                    class="quick-edit-search-input sfoc-query-input"
+                    data-i18n-placeholder="codeEditor.searchPlaceholderLightning"
+                    placeholder="Buscar LWC o Aura..."
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <div id="lightningQuickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
+                </div>
+              </div>
+            </header>
             <div class="quick-edit-panel-body">
               <div class="quick-edit-editor-toolbar">
                 <div class="quick-edit-editor-toolbar-meta">
@@ -2104,7 +2240,7 @@
                 </div>
                 <div class="quick-edit-editor-actions">
                   <span id="lightningQuickEditLocalEditActions" class="quick-edit-local-edit-actions">
-                  <div class="quick-edit-action-group" role="group" aria-label="Edición local">
+                  <div class="quick-edit-action-group" role="group" data-i18n-aria-label="code.ariaQuickEditLocal">
                     <button type="button" id="lightningQuickEditSaveBtn" class="quick-edit-action-btn quick-edit-save-btn" disabled data-i18n-title="quickEdit.saveLocalTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg></span>
                       <span class="quick-edit-action-label" data-i18n="quickEdit.saveLocal">Guardar</span>
@@ -2116,22 +2252,22 @@
                   </div>
                   <span class="quick-edit-action-sep" aria-hidden="true"></span>
                   </span>
-                  <div class="quick-edit-action-group" role="group" aria-label="Org">
+                  <div class="quick-edit-action-group" role="group" data-i18n-aria-label="code.ariaQuickEditOrg">
                     <button type="button" id="lightningQuickEditRetrieveBtn" class="quick-edit-action-btn quick-edit-retrieve-btn" disabled data-i18n-title="quickEdit.retrieveFromOrgTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
-                      <span class="quick-edit-action-label" data-i18n="quickEdit.retrieveFromOrg">Recuperar</span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.retrieveFromOrg">Retrieve</span>
                     </button>
                     <button type="button" id="lightningQuickEditValidateBtn" class="quick-edit-action-btn quick-edit-validate-btn" disabled data-i18n-title="quickEdit.validateTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
-                      <span class="quick-edit-action-label" data-i18n="quickEdit.validate">Validar</span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.validate">Validate</span>
                     </button>
                     <button type="button" id="lightningQuickEditDeployBtn" class="quick-edit-action-btn quick-edit-deploy-btn" disabled data-i18n-title="quickEdit.deployTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></svg></span>
-                      <span class="quick-edit-action-label" data-i18n="quickEdit.deploy">Desplegar</span>
+                      <span class="quick-edit-action-label" data-i18n="quickEdit.deploy">Deploy</span>
                     </button>
                   </div>
                   <span class="quick-edit-action-sep" aria-hidden="true"></span>
-                  <div class="quick-edit-action-group" role="group" aria-label="Sesión">
+                  <div class="quick-edit-action-group" role="group" data-i18n-aria-label="code.ariaQuickEditSession">
                     <button type="button" id="lightningQuickEditClearBtn" class="quick-edit-action-btn quick-edit-clear-btn" data-i18n-title="codeEditor.clearAllTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
                       <span class="quick-edit-action-label" data-i18n="codeEditor.clearAll">Limpiar todo</span>
@@ -2148,10 +2284,11 @@
             </div>
           </div>
         </div>
-        <div id="fieldHistoryPanel" class="field-history-panel ph-no-capture hidden" aria-label="Field History Viewer">
+        <div id="fieldHistoryPanel" class="field-history-panel ph-no-capture hidden" data-i18n-aria-label="fieldHistory.title">
           <div class="field-history-panel-inner">
             <div class="field-history-head">
               <h2 class="field-history-title" data-i18n="fieldHistory.title">Historial de campos (Field History)</h2>
+              <p class="sfoc-panel-subtitle" data-i18n="fieldHistory.subtitle">Consulta quién cambió qué valor en registros con track history</p>
             </div>
             <p id="fieldHistoryStatus" class="field-history-status" role="status"></p>
             <div class="field-history-object-row">
@@ -2278,10 +2415,11 @@
             </div>
           </div>
         </div>
-        <div id="setupAuditTrailPanel" class="setup-audit-panel ph-no-capture hidden" aria-label="Setup Audit Trail Viewer">
+        <div id="setupAuditTrailPanel" class="setup-audit-panel ph-no-capture hidden" data-i18n-aria-label="setupAudit.title">
           <div class="setup-audit-panel-inner">
             <div class="setup-audit-head">
               <h2 class="setup-audit-title" data-i18n="setupAudit.title">Historial de Setup (Audit Trail)</h2>
+              <p class="sfoc-panel-subtitle" data-i18n="setupAudit.subtitle">Audita cambios de Setup con filtros por usuario y fecha</p>
             </div>
             <p id="setupAuditStatus" class="setup-audit-status" role="status"></p>
             <div class="setup-audit-filters setup-audit-filters-row-1">
@@ -2406,7 +2544,7 @@
       class="quick-open-overlay ph-no-capture hidden"
       role="dialog"
       aria-modal="true"
-      aria-label="Búsqueda rápida"
+      data-i18n-aria-label="code.ariaQuickOpen"
       aria-hidden="true"
     >
       <div id="quickOpenBackdrop" class="quick-open-backdrop" tabindex="-1"></div>

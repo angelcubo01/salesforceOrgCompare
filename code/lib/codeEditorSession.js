@@ -1,6 +1,6 @@
 /** @typedef {'QuickEdit' | 'LightningQuickEdit' | 'AnonymousApex'} CodeEditorTool */
 
-import { getCodeEditorPersistenceEnabled } from '../../shared/extensionSettings.js';
+import { getCodeEditorPersistenceEnabled, getCodeEditorMaxTabs } from '../../shared/extensionSettings.js';
 
 export const CODE_EDITOR_SESSION_KEYS = Object.freeze({
   QuickEdit: 'sfocQuickEditSession',
@@ -19,6 +19,11 @@ function canPersistCodeEditorSession(tool) {
   return getCodeEditorPersistenceEnabled();
 }
 
+export function getMaxCodeEditorTabs() {
+  return getCodeEditorMaxTabs();
+}
+
+/** @deprecated Use getMaxCodeEditorTabs() */
 export const MAX_CODE_EDITOR_TABS = 15;
 
 /**
@@ -185,7 +190,7 @@ export async function clearQuickEditEditorSessions() {
  */
 export function trimTabsToLimit(tabs) {
   if (!Array.isArray(tabs)) return [];
-  return tabs.slice(0, MAX_CODE_EDITOR_TABS);
+  return tabs.slice(0, getCodeEditorMaxTabs());
 }
 
 /**

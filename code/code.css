@@ -4917,8 +4917,8 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 }
 
 .vscode-editor-shell .anonymous-apex-editor-mount {
-  flex: 1;
-  min-height: 420px;
+  flex: 1 1 auto;
+  min-height: 0;
   height: auto;
 }
 
@@ -5049,6 +5049,97 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 .anonymous-apex-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
+}
+
+.vscode-editor-shell .anonymous-apex-actions {
+  padding: 8px 12px;
+  border-top: 1px solid var(--vscode-tab-separator, #1a1a1a);
+  background: var(--vscode-tab-bg, #252526);
+}
+
+.anonymous-apex-output {
+  flex-shrink: 0;
+  border-top: 1px solid rgba(71, 85, 105, 0.45);
+  padding: 10px 12px 12px;
+  display: none;
+}
+
+.anonymous-apex-output:has(.anonymous-apex-exec-status:not(:empty)),
+.anonymous-apex-output:has(.anonymous-apex-result-details:not(.hidden)) {
+  display: block;
+}
+
+.vscode-editor-shell .anonymous-apex-output .anonymous-apex-result-card {
+  position: relative;
+  margin: 0;
+  padding-right: 36px;
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(56, 189, 248, 0.22);
+}
+
+.anonymous-apex-output-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.anonymous-apex-output-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.anonymous-apex-output-close:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 1px;
+}
+
+.vscode-editor-shell .anonymous-apex-output .anonymous-apex-exec-status {
+  padding: 0;
+}
+
+.vscode-editor-shell .anonymous-apex-output .anonymous-apex-exec-status:not(:empty) {
+  margin-bottom: 8px;
+}
+
+.vscode-editor-shell .anonymous-apex-output .anonymous-apex-exec-status:empty {
+  display: none;
+  margin: 0;
+}
+
+.vscode-editor-shell .anonymous-apex-output .anonymous-apex-result-details:not(.hidden) .anonymous-apex-exec-status:not(:empty) {
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(71, 85, 105, 0.45);
+}
+
+.anonymous-apex-result-details h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.anonymous-apex-result-details pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
 }
 
 .anonymous-apex-run-btn,
@@ -7108,7 +7199,7 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 .query-explorer-editor-mount {
   width: 100%;
   box-sizing: border-box;
-  min-height: 120px;
+  min-height: 72px;
   flex-shrink: 0;
   border: 1px solid rgba(148, 163, 184, 0.35);
   border-radius: 8px 8px 0 0;
@@ -7325,6 +7416,180 @@ body.artifact-query-explorer-compare .query-explorer-split {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.debug-log-browser-head-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.debug-log-browser-add-trace-btn {
+  flex-shrink: 0;
+  border: 1px solid rgba(34, 197, 94, 0.55);
+  background: rgba(20, 83, 45, 0.35);
+  color: #bbf7d0;
+  border-radius: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.debug-log-browser-add-trace-btn:hover:not(:disabled) {
+  border-color: #22c55e;
+  background: rgba(22, 101, 52, 0.5);
+  color: #fff;
+}
+
+.debug-log-browser-add-trace-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.debug-log-trace-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+}
+
+.debug-log-trace-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.65);
+}
+
+.debug-log-trace-modal-panel {
+  position: relative;
+  max-width: min(96vw, 440px);
+  margin: 10vh auto 0;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  overflow: visible;
+}
+
+.debug-log-trace-modal-panel h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #e2e8f0;
+}
+
+.debug-log-trace-modal-form {
+  display: grid;
+  gap: 10px;
+}
+
+.debug-log-trace-modal-field {
+  display: grid;
+  gap: 4px;
+}
+
+.debug-log-trace-modal-user-wrap {
+  position: relative;
+}
+
+.debug-log-trace-modal-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.debug-log-trace-modal-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0b1220;
+  color: #e2e8f0;
+  padding: 7px 10px;
+  font-size: 13px;
+}
+
+.debug-log-trace-modal-select {
+  cursor: pointer;
+}
+
+.debug-log-trace-user-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 20;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #1e293b;
+  border: 1px solid rgba(71, 85, 105, 0.95);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.debug-log-trace-user-suggestions.sfoc-autocomplete-panel[hidden] {
+  display: none !important;
+}
+
+.debug-log-trace-user-suggestions.sfoc-autocomplete-panel:not([hidden]) {
+  display: block;
+}
+
+.debug-log-trace-user-suggestion {
+  display: block;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid #1e293b;
+  background: #0b1220;
+  color: #e2e8f0;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.debug-log-trace-user-suggestion:hover {
+  background: #1e293b;
+}
+
+.debug-log-trace-user-suggestion.is-status {
+  cursor: default;
+  color: #94a3b8;
+}
+
+.debug-log-trace-modal-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.debug-log-trace-modal-btn {
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0b1220;
+  color: #e2e8f0;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.debug-log-trace-modal-btn-primary {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(20, 83, 45, 0.45);
+  color: #bbf7d0;
+}
+
+.debug-log-trace-modal-btn-primary:hover:not(:disabled) {
+  border-color: #22c55e;
+  background: rgba(22, 101, 52, 0.55);
+  color: #fff;
+}
+
+.debug-log-trace-modal-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .debug-log-browser-title {
@@ -8117,28 +8382,76 @@ body.artifact-lightning-quick-edit .lightning-quick-edit-panel {
 .quick-edit-panel {
   flex: 1;
   min-height: 0;
-  padding: 22px var(--sfoc-workspace-pad-x) 32px;
+  padding: 10px var(--sfoc-workspace-pad-x) 14px;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
 }
 
+body.artifact-quick-edit .quick-edit-panel-inner,
+body.artifact-lightning-quick-edit .quick-edit-panel-inner {
+  max-width: none;
+}
+
 .quick-edit-panel-inner {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
   max-width: var(--sfoc-workspace-max);
   margin: 0 auto;
   width: 100%;
-  padding: 22px 24px 24px;
+  padding: 14px 18px 16px;
   background: linear-gradient(165deg, rgba(15, 23, 42, 0.78) 0%, rgba(15, 23, 42, 0.48) 100%);
   border: 1px solid rgba(71, 85, 105, 0.55);
   border-radius: 14px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28);
   box-sizing: border-box;
   overflow: visible;
+}
+
+.quick-edit-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 14px 20px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.quick-edit-panel-header-text {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.quick-edit-panel-header-text .org-limits-title {
+  margin: 0;
+  font-size: 1.15rem;
+  line-height: 1.25;
+}
+
+.quick-edit-panel-header-text .sfoc-panel-subtitle {
+  margin: 0;
+}
+
+.quick-edit-panel-header .quick-edit-search-zone {
+  flex: 1 1 260px;
+  min-width: min(100%, 220px);
+  max-width: min(100%, 520px);
+  margin-left: auto;
+}
+
+.quick-edit-panel-header .quick-edit-search-bar {
+  width: 100%;
+}
+
+.quick-edit-panel-header .quick-edit-search-bar .quick-edit-search-input.sfoc-query-input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 /* Búsqueda fuera del scroll: el dropdown no se recorta; el resto del panel hace scroll */
@@ -8152,11 +8465,10 @@ body.artifact-lightning-quick-edit .lightning-quick-edit-panel {
 .quick-edit-panel-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   flex: 1;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .quick-edit-search-bar {
@@ -8258,8 +8570,8 @@ body.artifact-lightning-quick-edit .lightning-quick-edit-panel {
 }
 
 .quick-edit-panel-body .vscode-editor-shell {
-  flex: 1;
-  min-height: 280px;
+  flex: 1 1 auto;
+  min-height: min(560px, calc(100vh - 220px));
 }
 
 .vscode-editor-shell .vscode-tabs:not([hidden]) + .vscode-editor-mount,
@@ -8271,7 +8583,7 @@ body.artifact-lightning-quick-edit .lightning-quick-edit-panel {
 .vscode-editor-mount,
 .vscode-editor-shell .quick-edit-editor-mount {
   flex: 1;
-  min-height: 280px;
+  min-height: min(520px, calc(100vh - 260px));
 }
 
 .vscode-tabs {
@@ -8935,7 +9247,7 @@ body.artifact-lightning-quick-edit .lightning-quick-edit-panel {
 
 .quick-edit-editor-mount {
   flex: 1;
-  min-height: 250px;
+  min-height: min(520px, calc(100vh - 260px));
   border: none;
   border-radius: 8px;
   overflow: hidden;
@@ -9375,7 +9687,8 @@ body.quick-open-active {
   color: #f1f5f9;
 }
 
-.permission-diff-subtitle {
+.permission-diff-subtitle,
+.sfoc-panel-subtitle {
   margin: 6px 0 0;
   font-size: 12px;
   color: #94a3b8;

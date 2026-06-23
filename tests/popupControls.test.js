@@ -126,3 +126,50 @@ describe('popup notice helpers', () => {
     expect(isRemoteNoticeActive(cfg)).toBe(false);
   });
 });
+
+describe('segmentación por versión de extensión', () => {
+  it('aviso solo desde minVersion', () => {
+    const cfg = parsePopupControlsPayload(
+      {
+        notice: {
+          enabled: true,
+          es: 'Nuevo aviso',
+          en: 'New notice',
+          severity: 'info',
+          minVersion: '2.14'
+        }
+      },
+      { flagActive: true }
+    );
+    expect(isRemoteNoticeActive(cfg, '2.13')).toBe(false);
+    expect(isRemoteNoticeActive(cfg, '2.14')).toBe(true);
+    expect(shouldShowRemoteNotice(cfg, { dismissedFingerprint: null }, '2.14')).toBe(true);
+  });
+
+  it('openApp disabled solo en versiones indicadas', () => {
+    const cfg = parsePopupControlsPayload(
+      {
+        openApp: {
+          disabled: true,
+          excludeVersions: ['2.13'],
+          message: { es: 'No', en: 'No' }
+        }
+      },
+      { flagActive: true }
+    );
+    expect(isOpenAppDisabled(cfg, '2.13')).toBe(false);
+    expect(isOpenAppDisabled(cfg, '2.14')).toBe(true);
+  });
+
+  it('payload raíz fuera de rango no aplica controles', () => {
+    const cfg = parsePopupControlsPayload(
+      {
+        maxVersion: '2.12',
+        openApp: { disabled: true }
+      },
+      { flagActive: true }
+    );
+    expect(isOpenAppDisabled(cfg, '2.13')).toBe(false);
+    expect(isOpenAppDisabled(cfg, '2.12')).toBe(true);
+  });
+});

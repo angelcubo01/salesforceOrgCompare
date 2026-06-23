@@ -13,7 +13,7 @@ Salesforce Org Compare (SFOC) ya dispone de una base sólida de telemetría anó
 | Área | Ya existe | Gap principal |
 |------|-----------|---------------|
 | Telemetría de uso | PostHog EU, opt-out, eventos por herramienta | Sin visor local ni runbook general de eventos |
-| Kill switch | `sfoc_feature_controls` + guards en service worker | Sin rollout por cohorte ni `minExtensionVersion` |
+| Kill switch | `sfoc_feature_controls` + guards en service worker | Segmentación por versión vía payload (`minVersion`, etc.) |
 | Errores | `$exception` independiente del consentimiento de uso | Sin alertas ni runbook de triage documentado |
 | Replay / soporte | Flags `sfoc_session_replay`, `sfoc_support`, `sfoc_popup_controls` | Ver [SFOC_POPUP_CONTROLS.md](./SFOC_POPUP_CONTROLS.md) |
 | Admin in-app | Ajustes, backup JSON, sección avanzada técnica | Sin panel de diagnóstico ni changelog post-actualización |

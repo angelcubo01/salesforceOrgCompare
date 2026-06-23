@@ -17,11 +17,25 @@ export const EXTENSION_FIELD_BOUNDS = {
   /** Porcentaje mínimo (0–100) para listar clases en el modal Cobertura del hub Apex tests. */
   apexTestsCoverageMinPercent: { min: 0, max: 100 },
   /** Porcentaje de consumo (0–100) a partir del cual Org Limits marca anillos y tarjetas en rojo. */
-  orgLimitsWarningPercent: { min: 0, max: 100 }
+  orgLimitsWarningPercent: { min: 0, max: 100 },
+  debugLogsDefaultRangeHours: { min: 1, max: 168 },
+  setupAuditDefaultRangeHours: { min: 1, max: 168 },
+  fieldHistoryDefaultRangeDays: { min: 1, max: 90 },
+  codeEditorMaxTabs: { min: 3, max: 30 },
+  metadataRetrieveMaxAttempts: { min: 10, max: 240 },
+  metadataRetrievePackageMaxAttempts: { min: 10, max: 360 },
+  metadataRetrievePollIntervalMs: { min: 1000, max: 10_000 },
+  metadataDeployMaxAttempts: { min: 10, max: 240 },
+  metadataDeployPollIntervalMs: { min: 500, max: 10_000 },
+  debugLogsListMaxRows: { min: 500, max: 50_000 },
+  setupAuditQueryDefaultLimit: { min: 500, max: 50_000 },
+  fieldHistoryQueryDefaultLimit: { min: 500, max: 50_000 },
+  anonymousApexLogSearchMaxAttempts: { min: 1, max: 20 },
+  anonymousApexLogSearchDelayMs: { min: 200, max: 5000 }
 };
 
-/** Claves ordenadas para el formulario de Ajustes → Avanzado. */
-export const EXTENSION_ADVANCED_FIELD_KEYS = [
+/** Claves del bloque diff/editor/Apex tests en Ajustes → Avanzado. */
+export const EXTENSION_ADVANCED_LEGACY_KEYS = [
   'nativeDiffMaxChars',
   'maxMonacoModelChars',
   'maxDiffAlgorithmChars',
@@ -30,6 +44,44 @@ export const EXTENSION_ADVANCED_FIELD_KEYS = [
   'apexTestsExpandedMethodsPollIntervalMs',
   'apexTestsMaxTrackedJobs',
   'apexTestsClassNameLikePatterns'
+];
+
+export const EXTENSION_ADVANCED_METADATA_KEYS = [
+  'metadataRetrieveMaxAttempts',
+  'metadataRetrievePackageMaxAttempts',
+  'metadataRetrievePollIntervalMs',
+  'metadataDeployMaxAttempts',
+  'metadataDeployPollIntervalMs'
+];
+
+export const EXTENSION_ADVANCED_DATA_LIMIT_KEYS = [
+  'debugLogsListMaxRows',
+  'setupAuditQueryDefaultLimit',
+  'fieldHistoryQueryDefaultLimit'
+];
+
+export const EXTENSION_ADVANCED_ANONYMOUS_APEX_KEYS = [
+  'anonymousApexLogSearchMaxAttempts',
+  'anonymousApexLogSearchDelayMs'
+];
+
+/** Secciones del formulario Avanzado (headingKey null = sin subtítulo). */
+export const EXTENSION_ADVANCED_SECTIONS = [
+  { headingKey: null, keys: EXTENSION_ADVANCED_LEGACY_KEYS },
+  { headingKey: 'settings.adv.metadataOpsHeading', keys: EXTENSION_ADVANCED_METADATA_KEYS },
+  { headingKey: 'settings.adv.dataLimitsHeading', keys: EXTENSION_ADVANCED_DATA_LIMIT_KEYS },
+  { headingKey: 'settings.adv.anonymousApexHeading', keys: EXTENSION_ADVANCED_ANONYMOUS_APEX_KEYS }
+];
+
+/** Todas las claves Avanzado (aplanado, para guardar/cargar). */
+export const EXTENSION_ADVANCED_FIELD_KEYS = EXTENSION_ADVANCED_SECTIONS.flatMap((s) => s.keys);
+
+/** Claves numéricas en Ajustes → General (guardado con botón General). */
+export const EXTENSION_GENERAL_NUMERIC_KEYS = [
+  'debugLogsDefaultRangeHours',
+  'setupAuditDefaultRangeHours',
+  'fieldHistoryDefaultRangeDays',
+  'codeEditorMaxTabs'
 ];
 
 const LEGACY_NATIVE_DIFF_KEY = 'soc_native_diff_max_chars';
@@ -78,7 +130,21 @@ const DEFAULTS = {
   /** Telemetría anónima de uso (PostHog). Desactivar en Ajustes. */
   telemetryEnabled: true,
   /** Recordar pestañas y código en Quick Edit / Lightning Quick Edit (solo storage local). */
-  codeEditorPersistEnabled: true
+  codeEditorPersistEnabled: true,
+  debugLogsDefaultRangeHours: 24,
+  setupAuditDefaultRangeHours: 24,
+  fieldHistoryDefaultRangeDays: 30,
+  codeEditorMaxTabs: 15,
+  metadataRetrieveMaxAttempts: 60,
+  metadataRetrievePackageMaxAttempts: 90,
+  metadataRetrievePollIntervalMs: 3500,
+  metadataDeployMaxAttempts: 90,
+  metadataDeployPollIntervalMs: 1500,
+  debugLogsListMaxRows: 15_000,
+  setupAuditQueryDefaultLimit: 15_000,
+  fieldHistoryQueryDefaultLimit: 5000,
+  anonymousApexLogSearchMaxAttempts: 5,
+  anonymousApexLogSearchDelayMs: 800
 };
 
 /** @type {typeof DEFAULTS} */
@@ -291,6 +357,67 @@ export function getTelemetryEnabled() {
 /** @returns {boolean} Quick Edit y Lightning Quick Edit: guardar sesión en chrome.storage.local. */
 export function getCodeEditorPersistenceEnabled() {
   return cache.codeEditorPersistEnabled !== false;
+}
+
+export function getDebugLogsDefaultRangeHours() {
+  return cache.debugLogsDefaultRangeHours;
+}
+
+export function getSetupAuditDefaultRangeHours() {
+  return cache.setupAuditDefaultRangeHours;
+}
+
+export function getFieldHistoryDefaultRangeDays() {
+  return cache.fieldHistoryDefaultRangeDays;
+}
+
+export function getCodeEditorMaxTabs() {
+  return cache.codeEditorMaxTabs;
+}
+
+export function getMetadataRetrieveMaxAttempts() {
+  return cache.metadataRetrieveMaxAttempts;
+}
+
+export function getMetadataRetrievePackageMaxAttempts() {
+  return cache.metadataRetrievePackageMaxAttempts;
+}
+
+export function getMetadataRetrievePollIntervalMs() {
+  return cache.metadataRetrievePollIntervalMs;
+}
+
+export function getMetadataDeployMaxAttempts() {
+  return cache.metadataDeployMaxAttempts;
+}
+
+export function getMetadataDeployPollIntervalMs() {
+  return cache.metadataDeployPollIntervalMs;
+}
+
+export function getDebugLogsListMaxRows() {
+  return cache.debugLogsListMaxRows;
+}
+
+export function getSetupAuditQueryDefaultLimit() {
+  return cache.setupAuditQueryDefaultLimit;
+}
+
+export function getFieldHistoryQueryDefaultLimit() {
+  return cache.fieldHistoryQueryDefaultLimit;
+}
+
+export function getAnonymousApexLogSearchMaxAttempts() {
+  return cache.anonymousApexLogSearchMaxAttempts;
+}
+
+export function getAnonymousApexLogSearchDelayMs() {
+  return cache.anonymousApexLogSearchDelayMs;
+}
+
+/** Expuesto para tests de normalización. */
+export function normalizeExtensionConfig(partial) {
+  return normalizeConfig(partial);
 }
 
 /**

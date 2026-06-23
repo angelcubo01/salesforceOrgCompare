@@ -2,8 +2,15 @@ import {
   parseFeatureControlMessage,
   resolveFeatureControlMessageText
 } from './featureControls.js';
+import {
+  getExtensionVersion,
+  matchesVersionTarget,
+  parseVersionTarget
+} from './versionTarget.js';
 
 /** @typedef {'once' | 'always'} PopupNoticeFrequency */
+
+/** @typedef {import('./versionTarget.js').VersionTarget} VersionTarget */
 
 /**
  * @typedef {object} PopupNoticeConfig
@@ -15,18 +22,21 @@ import {
  * @property {boolean} dismissible
  * @property {{ es?: string, en?: string } | null} dismissLabel
  * @property {string} [url]
+ * @property {VersionTarget} [versionTarget]
  */
 
 /**
  * @typedef {object} PopupOpenAppConfig
  * @property {boolean} disabled
  * @property {FeatureControlMessage | null} message
+ * @property {VersionTarget} [versionTarget]
  */
 
 /**
  * @typedef {object} PopupControlsConfig
  * @property {number} version
  * @property {boolean} flagActive
+ * @property {VersionTarget | null} [rootVersionTarget]
  * @property {PopupNoticeConfig | null} notice
  * @property {PopupOpenAppConfig} openApp
  */
@@ -35,12 +45,35 @@ import {
 export const DEFAULT_POPUP_CONTROLS = Object.freeze({
   version: 1,
   flagActive: false,
+  rootVersionTarget: null,
   notice: null,
   openApp: { disabled: false, message: null }
 });
 
 const VALID_SEVERITIES = new Set(['info', 'warn', 'error']);
 const VALID_FREQUENCIES = new Set(['once', 'always']);
+
+/**
+ * @param {PopupControlsConfig | null | undefined} config
+ * @param {string} [extensionVersion]
+ * @returns {boolean}
+ */
+function popupConfigAppliesToVersion(config, extensionVersion) {
+  if (!config) return false;
+  const version = extensionVersion ?? getExtensionVersion();
+  return matchesVersionTarget(config.rootVersionTarget ?? null, version);
+}
+
+/**
+ * @param {{ versionTarget?: VersionTarget } | null | undefined} section
+ * @param {string} [extensionVersion]
+ * @returns {boolean}
+ */
+function popupSectionAppliesToVersion(section, extensionVersion) {
+  if (!section) return false;
+  const version = extensionVersion ?? getExtensionVersion();
+  return matchesVersionTarget(section.versionTarget, version);
+}
 
 /**
  * @param {unknown} raw
@@ -72,6 +105,8 @@ function parseNoticeConfig(raw) {
     ? /** @type {PopupNoticeFrequency} */ (frequencyRaw)
     : 'once';
 
+  const versionTarget = parseVersionTarget(o);
+
   return {
     enabled: true,
     es: message.es,
@@ -80,7 +115,8 @@ function parseNoticeConfig(raw) {
     frequency,
     dismissible: o.dismissible !== false,
     dismissLabel: parseDismissLabel(o.dismissLabel),
-    ...(message.url ? { url: message.url } : {})
+    ...(message.url ? { url: message.url } : {}),
+    ...(versionTarget ? { versionTarget } : {})
   };
 }
 
@@ -94,9 +130,11 @@ function parseOpenAppConfig(raw) {
   }
   const o = /** @type {Record<string, unknown>} */ (raw);
   const message = parseFeatureControlMessage(o.message);
+  const versionTarget = parseVersionTarget(o);
   return {
     disabled: o.disabled === true,
-    ...(message ? { message } : { message: null })
+    ...(message ? { message } : { message: null }),
+    ...(versionTarget ? { versionTarget } : {})
   };
 }
 
@@ -118,11 +156,13 @@ export function parsePopupControlsPayload(raw, opts = {}) {
     return { ...DEFAULT_POPUP_CONTROLS, flagActive: opts.flagActive === true };
   }
   const o = /** @type {Record<string, unknown>} */ (value);
+  const rootVersionTarget = parseVersionTarget(o);
   const notice = parseNoticeConfig(o.notice);
   const openApp = parseOpenAppConfig(o.openApp);
   return {
     version: typeof o.version === 'number' ? o.version : 1,
     flagActive: opts.flagActive === true,
+    ...(rootVersionTarget ? { rootVersionTarget } : {}),
     notice,
     openApp
   };
@@ -175,14 +215,19 @@ export function buildNoticeFingerprint(notice) {
 /**
  * @param {PopupControlsConfig} config
  */
-export function isRemoteNoticeActive(config) {
+export function isRemoteNoticeActive(config, extensionVersion) {
+  if (!popupConfigAppliesToVersion(config, extensionVersion)) return false;
+  if (!popupSectionAppliesToVersion(config.notice, extensionVersion)) return false;
   return config.flagActive === true && !!config.notice?.enabled;
 }
 
 /**
  * @param {PopupControlsConfig} config
+ * @param {string} [extensionVersion]
  */
-export function isOpenAppDisabled(config) {
+export function isOpenAppDisabled(config, extensionVersion) {
+  if (!popupConfigAppliesToVersion(config, extensionVersion)) return false;
+  if (!popupSectionAppliesToVersion(config.openApp, extensionVersion)) return false;
   return config.flagActive === true && config.openApp.disabled === true;
 }
 
@@ -190,9 +235,9 @@ export function isOpenAppDisabled(config) {
  * @param {PopupControlsConfig} config
  * @param {{ dismissedFingerprint?: string | null, legacyTelemetryDismissed?: boolean }} prefsState
  */
-export function shouldShowRemoteNotice(config, prefsState) {
+export function shouldShowRemoteNotice(config, prefsState, extensionVersion) {
   const notice = config.notice;
-  if (!isRemoteNoticeActive(config) || !notice) return false;
+  if (!isRemoteNoticeActive(config, extensionVersion) || !notice) return false;
   if (notice.frequency === 'always') return true;
   const fp = buildNoticeFingerprint(notice);
   if (prefsState.dismissedFingerprint === fp) return false;

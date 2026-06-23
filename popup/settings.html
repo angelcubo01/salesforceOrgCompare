@@ -58,6 +58,50 @@
             spellcheck="false"
           />
           <p class="settings-hint" id="settingsApexTraceDebugLevel_hint"></p>
+          <label class="settings-label" for="settingsDebugLogsDefaultRangeHours" id="settingsDebugLogsDefaultRangeHours_label"></label>
+          <input
+            type="number"
+            id="settingsDebugLogsDefaultRangeHours"
+            class="settings-number settings-number--wide"
+            min="1"
+            max="168"
+            step="1"
+            inputmode="numeric"
+          />
+          <p class="settings-hint" id="settingsDebugLogsDefaultRangeHours_hint"></p>
+          <label class="settings-label" for="settingsSetupAuditDefaultRangeHours" id="settingsSetupAuditDefaultRangeHours_label"></label>
+          <input
+            type="number"
+            id="settingsSetupAuditDefaultRangeHours"
+            class="settings-number settings-number--wide"
+            min="1"
+            max="168"
+            step="1"
+            inputmode="numeric"
+          />
+          <p class="settings-hint" id="settingsSetupAuditDefaultRangeHours_hint"></p>
+          <label class="settings-label" for="settingsFieldHistoryDefaultRangeDays" id="settingsFieldHistoryDefaultRangeDays_label"></label>
+          <input
+            type="number"
+            id="settingsFieldHistoryDefaultRangeDays"
+            class="settings-number settings-number--wide"
+            min="1"
+            max="90"
+            step="1"
+            inputmode="numeric"
+          />
+          <p class="settings-hint" id="settingsFieldHistoryDefaultRangeDays_hint"></p>
+          <label class="settings-label" for="settingsCodeEditorMaxTabs" id="settingsCodeEditorMaxTabs_label"></label>
+          <input
+            type="number"
+            id="settingsCodeEditorMaxTabs"
+            class="settings-number settings-number--wide"
+            min="3"
+            max="30"
+            step="1"
+            inputmode="numeric"
+          />
+          <p class="settings-hint" id="settingsCodeEditorMaxTabs_hint"></p>
           <label class="settings-checkbox-row">
             <input type="checkbox" id="settingsTelemetryEnabled" checked />
             <span data-i18n="settings.telemetryEnabled">Enviar telemetría anónima de uso</span>
@@ -65,7 +109,7 @@
           <p class="settings-hint" data-i18n="settings.telemetryEnabledHint"></p>
           <label class="settings-checkbox-row">
             <input type="checkbox" id="settingsCodeEditorPersistEnabled" checked />
-            <span data-i18n="settings.codeEditorPersistEnabled">Recordar pestañas y código en Quick Edit</span>
+            <span data-i18n="settings.codeEditorPersistEnabled">Recordar tu trabajo en Quick Edit y editores Apex y Lightning</span>
           </label>
           <p class="settings-hint" data-i18n="settings.codeEditorPersistEnabledHint"></p>
           <div class="settings-btn-row">
@@ -90,10 +134,10 @@
           <p class="settings-hint settings-hint--nomargin" data-i18n="settings.backupHint"></p>
           <div class="settings-btn-row">
             <button type="button" id="settingsExportOrgs" class="settings-secondary" data-i18n="settings.backupExport">
-              Exportar
+              Exportar copia
             </button>
             <button type="button" id="settingsImportReplace" class="settings-secondary" data-i18n="settings.backupImportReplace">
-              Sustituir
+              Importar (sustituir todo)
             </button>
           </div>
           <input type="file" id="settingsOrgsFile" class="visually-hidden" accept=".json,application/json" />
@@ -102,7 +146,7 @@
 
         <details class="settings-advanced" id="settingsAdvanced">
           <summary class="settings-advanced-summary">
-            <span data-i18n="settings.advancedSummary">Avanzado</span>
+            <span data-i18n="settings.advancedSummary">Avanzado · límites técnicos</span>
           </summary>
           <div class="settings-advanced-inner">
             <p class="settings-hint settings-hint--nomargin" data-i18n="settings.advancedLead"></p>
@@ -112,7 +156,7 @@
                 Guardar
               </button>
               <button type="button" id="settingsAdvancedReset" class="settings-secondary" data-i18n="settings.advancedResetAll">
-                Predeterminado
+                Valores por defecto
               </button>
             </div>
             <p id="settingsAdvancedStatus" class="settings-status" role="status"></p>
@@ -124,7 +168,7 @@
             Acerca de
           </h2>
           <p class="settings-version-row">
-            <span data-i18n="settings.versionLabel">Versión</span>
+            <span data-i18n="settings.versionLabel">Versión instalada</span>
             <strong id="settingsVersion" class="settings-version-value">—</strong>
           </p>
           <div class="settings-links">
