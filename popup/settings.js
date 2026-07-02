@@ -18,7 +18,8 @@ import {
   EXTENSION_CONFIG_KEY,
   MONACO_THEME_IDS,
   normalizeMonacoThemeId,
-  applyUiThemeToDocument
+  applyUiThemeToDocument,
+  defaultMonacoThemeForUiTheme
 } from '../shared/extensionSettings.js';
 import { initPosthogClient, syncPosthogAppLanguage, syncPosthogOptOut } from '../shared/posthogClient.js';
 import { handleToolError } from '../shared/reportToolError.js';
@@ -85,7 +86,11 @@ function wireAppearanceSettings() {
   });
   uiSel?.addEventListener('change', async () => {
     const v = uiSel.value === 'light' ? 'light' : 'dark';
-    await saveExtensionSettings({ uiTheme: v });
+    const cfg = await saveExtensionSettings({
+      uiTheme: v,
+      monacoTheme: defaultMonacoThemeForUiTheme(v)
+    });
+    if (monSel) monSel.value = normalizeMonacoThemeId(cfg.monacoTheme);
     applyUiThemeToDocument(document);
   });
   monSel?.addEventListener('change', async () => {

@@ -36,7 +36,7 @@ export function addSelected(item) {
 
   // Update document title and open in editor
   updateDocumentTitle();
-  syncCompareUrlFromState(state);
+  syncCompareUrlFromState(state, { method: 'push' });
   renderEditor();
 }
 

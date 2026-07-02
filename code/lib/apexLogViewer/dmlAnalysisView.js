@@ -9,7 +9,7 @@ import {
   renderSummaryChips,
   wireSearchFilter
 } from './analysisTableUtils.js';
-import { panelSectionHeading } from './panelSectionHeading.js';
+import { panelSectionHeading, wirePanelHelpButtons } from './panelSectionHeading.js';
 
 /**
  * @param {object[]} rows
@@ -54,7 +54,7 @@ export function renderDmlView(mount, parsed, onJump, t) {
   let groupMode = 'operation';
 
   mount.innerHTML = `
-    ${panelSectionHeading('dml', t('apexLogViewer.tab.dml'))}
+    ${panelSectionHeading('dml', t('apexLogViewer.tab.dml'), t)}
     <div class="apex-log-panel-toolbar apex-log-panel-toolbar--stack">
       <div class="apex-log-panel-toolbar-row">
         <input type="search" class="apex-log-filter" id="apexLogDmlFilter"
@@ -77,7 +77,6 @@ export function renderDmlView(mount, parsed, onJump, t) {
         <tbody id="apexLogDmlBody"></tbody>
       </table>
     </div>`;
-
   const tbody = mount.querySelector('#apexLogDmlBody');
   const filter = mount.querySelector('#apexLogDmlFilter');
   const summary = mount.querySelector('#apexLogDmlSummary');
@@ -166,4 +165,5 @@ export function renderDmlView(mount, parsed, onJump, t) {
 
   wireSearchFilter(filter, applyFilter);
   applyFilter();
+  wirePanelHelpButtons(mount, t);
 }

@@ -238,7 +238,7 @@ export async function retrieveAndLoadFromZip(item) {
       syncListActiveHighlight();
       updateDocumentTitle();
       updateOrgSelectorsLockedState();
-      syncCompareUrlFromState(state);
+      syncCompareUrlFromState(state, { method: 'push' });
 
       if (!isCompareRetrieveActive(retrieveGeneration)) return;
       await renderEditor();

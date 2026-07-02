@@ -18,7 +18,7 @@ describe('trustStatusApi', () => {
   });
 
   it('builds trust and company urls', () => {
-    expect(buildTrustPageUrl('eu5')).toBe('https://trust.salesforce.com/instances/EU5');
+    expect(buildTrustPageUrl('eu5')).toBe('https://status.salesforce.com/instances/EU5');
     expect(buildCompanyInfoUrl('https://example.my.salesforce.com')).toBe(
       'https://example.my.salesforce.com/lightning/setup/CompanyProfileInfo/home'
     );

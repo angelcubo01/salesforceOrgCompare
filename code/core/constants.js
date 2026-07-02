@@ -11,7 +11,7 @@ export const UPDATE_PAGE_URL = 'https://salesforceorgcompare.web.app/';
  * URL pública de la política de privacidad: pégala en el panel → Privacidad → «Política de privacidad»
  * (no en la descripción del listado). Debe ser accesible sin login.
  */
-export const PRIVACY_POLICY_URL = 'https://salesforceorgcompare.web.app/privacy-polity.html';
+export const PRIVACY_POLICY_URL = 'https://salesforceorgcompare.web.app/privacy-policy';
 
 /**
  * Se abre al desinstalar la extensión (Chrome setUninstallURL).

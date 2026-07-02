@@ -20,6 +20,11 @@ import {
 } from './apexTestsHubRuns.js';
 import { loadApexTestRunProfiles, saveApexTestRunProfiles } from './apexTestRunProfilesStorage.js';
 import { mergeApexTestRunProfiles } from '../../shared/apexTestRunProfilesCore.js';
+import {
+  loadExtensionSettings,
+  saveExtensionSettings,
+  getApexTestsSkipCodeCoverage
+} from '../../shared/extensionSettings.js';
 
 const APEX_TEST_RUNNER_SELECTION_KEY = 'apexTestRunnerSelection';
 
@@ -585,6 +590,73 @@ function initApexTestsProfilesModal() {
   document.getElementById('apexTestsProfilesModalClose')?.addEventListener('click', closeApexTestsProfilesModal);
 }
 
+let runnerSettingsModalInitialized = false;
+/** @type {string | null} */
+let runnerSettingsPatternsSnapshot = null;
+
+function closeApexTestsRunnerSettingsModal() {
+  const modal = document.getElementById('apexTestsRunnerSettingsModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+}
+
+async function openApexTestsRunnerSettingsModal() {
+  const modal = document.getElementById('apexTestsRunnerSettingsModal');
+  if (!modal) return;
+  const patternsInp = document.getElementById('apexTestsRunnerSettingsClassPatterns');
+  const skipCb = document.getElementById('apexTestsRunnerSettingsSkipCoverage');
+  const statusEl = document.getElementById('apexTestsRunnerSettingsStatus');
+  if (statusEl) statusEl.textContent = '';
+  const cfg = await loadExtensionSettings();
+  runnerSettingsPatternsSnapshot = String(cfg.apexTestsClassNameLikePatterns ?? '');
+  if (patternsInp) patternsInp.value = runnerSettingsPatternsSnapshot;
+  if (skipCb) skipCb.checked = cfg.apexTestsSkipCodeCoverage === true;
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+async function saveApexTestsRunnerSettings() {
+  const patternsInp = document.getElementById('apexTestsRunnerSettingsClassPatterns');
+  const skipCb = document.getElementById('apexTestsRunnerSettingsSkipCoverage');
+  const statusEl = document.getElementById('apexTestsRunnerSettingsStatus');
+  const prevPatterns = runnerSettingsPatternsSnapshot;
+  const cfg = await saveExtensionSettings({
+    apexTestsClassNameLikePatterns: patternsInp?.value ?? '',
+    apexTestsSkipCodeCoverage: !!skipCb?.checked
+  });
+  runnerSettingsPatternsSnapshot = String(cfg.apexTestsClassNameLikePatterns ?? '');
+  if (patternsInp) patternsInp.value = runnerSettingsPatternsSnapshot;
+  if (skipCb) skipCb.checked = cfg.apexTestsSkipCodeCoverage === true;
+  if (statusEl) {
+    statusEl.textContent = t('apexTests.runnerSettingsSaved');
+    statusEl.style.color = '#94a3b8';
+  }
+  if (
+    prevPatterns !== runnerSettingsPatternsSnapshot &&
+    isApexTestsRunnerVisible() &&
+    state.leftOrgId
+  ) {
+    await loadApexClasses();
+  }
+}
+
+function initApexTestsRunnerSettingsModal() {
+  if (runnerSettingsModalInitialized) return;
+  runnerSettingsModalInitialized = true;
+  const modal = document.getElementById('apexTestsRunnerSettingsModal');
+  if (!modal) return;
+  modal
+    .querySelector('[data-apex-runner-settings-close]')
+    ?.addEventListener('click', closeApexTestsRunnerSettingsModal);
+  document
+    .getElementById('apexTestsRunnerSettingsModalClose')
+    ?.addEventListener('click', closeApexTestsRunnerSettingsModal);
+  document
+    .getElementById('apexTestsRunnerSettingsSaveBtn')
+    ?.addEventListener('click', () => void saveApexTestsRunnerSettings());
+}
+
 function renderMethodClassTabs() {
   const { methodTabs } = getEls();
   if (!methodTabs) return;
@@ -1064,11 +1136,12 @@ async function loadApexClasses() {
 }
 
 function buildRunBody() {
+  const skipCodeCoverage = getApexTestsSkipCodeCoverage();
   const { classTbody } = getEls();
-  if (!classTbody) return { testLevel: 'RunLocalTests', skipCodeCoverage: false };
+  if (!classTbody) return { testLevel: 'RunLocalTests', skipCodeCoverage };
 
   const classNames = getSelectedClassNamesOrdered();
-  if (!classNames.length) return { testLevel: 'RunLocalTests', skipCodeCoverage: false };
+  if (!classNames.length) return { testLevel: 'RunLocalTests', skipCodeCoverage };
 
   /** Mismo cuerpo que Developer Console (HAR): classId + testMethods, skipCodeCoverage. */
   const tests = [];
@@ -1087,7 +1160,7 @@ function buildRunBody() {
       tests.push({ className: cn });
     }
   }
-  return { tests, testLevel: 'RunSpecifiedTests', skipCodeCoverage: false };
+  return { tests, testLevel: 'RunSpecifiedTests', skipCodeCoverage };
 }
 
 async function rememberQueuedApexRun(orgId, jobId, runBody, traceFlagId) {
@@ -1213,11 +1286,25 @@ export function setupApexTestsPanel() {
     const tr = e.target.closest('tr');
     if (!tr || !classTbody.contains(tr)) return;
     const cb = tr.querySelector('input.apex-tests-class-cb');
-    if (!cb || (!cb.checked && !cb.indeterminate)) return;
-    if (activeClassForMethods === cb.value) return;
-    activeClassForMethods = cb.value;
-    updateClassRowActiveHighlight();
-    void reloadMethodsForSelection();
+    if (!cb || cb.disabled) return;
+    if (cb.indeterminate) {
+      clearClassSelectionByCheckbox(cb);
+      return;
+    }
+    cb.checked = !cb.checked;
+    cb.indeterminate = false;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+    if (cb.checked) activeClassForMethods = cb.value;
+  });
+  const { methodTbody } = getEls();
+  methodTbody?.addEventListener('click', (e) => {
+    if (e.target.closest('input.apex-tests-method-cb')) return;
+    const tr = e.target.closest('tr');
+    if (!tr || !methodTbody.contains(tr)) return;
+    const cb = tr.querySelector('input.apex-tests-method-cb');
+    if (!cb || cb.disabled) return;
+    cb.checked = !cb.checked;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
   });
   tablesWrap?.addEventListener('change', (ev) => {
     const el = ev.target;
@@ -1262,6 +1349,9 @@ export function setupApexTestsPanel() {
   document.getElementById('apexTestsProfilesBtn')?.addEventListener('click', () => {
     openApexTestsProfilesModal();
   });
+  document.getElementById('apexTestsRunnerSettingsBtn')?.addEventListener('click', () => {
+    void openApexTestsRunnerSettingsModal();
+  });
   const { saveProfileBtn, profileName } = getEls();
   saveProfileBtn?.addEventListener('click', async () => {
     const body = buildRunBody();
@@ -1288,6 +1378,7 @@ export function setupApexTestsPanel() {
     if (getSelectedArtifactType() !== 'ApexTests') return;
     if (e.key === 'Escape') {
       closeApexTestsProfilesModal();
+      closeApexTestsRunnerSettingsModal();
       closeHubExpandedDetail();
       return;
     }
@@ -1305,6 +1396,7 @@ export function setupApexTestsPanel() {
   initApexTestsViewTestModal();
   initApexTestsViewLogModal();
   initApexTestsProfilesModal();
+  initApexTestsRunnerSettingsModal();
   initApexTestsClearRunsButton();
   void refreshApexTestsPanel();
 }

@@ -8,13 +8,14 @@ import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js
 import { logApexTestRunUsage } from './apexTestUsageLog.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { exportApexTestRun } from './apexTestsExport.js';
-import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
+import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
 import {
   getApexTestsPollIntervalMs,
   getExtensionSettingsSnapshot,
   getApexTestsMaxTrackedJobs,
   loadExtensionSettings,
-  getApexTestsCoverageMinPercent
+  getApexTestsCoverageMinPercent,
+  getApexTestsSkipCodeCoverage
 } from '../../shared/extensionSettings.js';
 import { parseApexStackFrameLine } from '../../shared/apexStackTraceParse.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
@@ -466,74 +467,6 @@ function sanitizeApexViewerDownloadFileName(name) {
   return s || 'file';
 }
 
-/** Abre apex-log-viewer: staging en SW → chrome.storage → IndexedDB (sin descarga). */
-async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
-  const initialLine =
-    viewerOpts.initialLine != null && Number.isFinite(Number(viewerOpts.initialLine))
-      ? Math.max(1, Math.floor(Number(viewerOpts.initialLine)))
-      : undefined;
-  const downloadFileName =
-    viewerOpts.downloadFileName != null && String(viewerOpts.downloadFileName).trim()
-      ? sanitizeApexViewerDownloadFileName(viewerOpts.downloadFileName)
-      : undefined;
-  const lineQs =
-    initialLine != null ? `&line=${encodeURIComponent(String(initialLine))}` : '';
-  const staged = await bg({
-    type: 'apexViewer:stage',
-    title,
-    content,
-    ...(initialLine != null ? { initialLine } : {}),
-    ...(downloadFileName ? { downloadFileName } : {})
-  });
-  if (staged.ok && staged.id) {
-    window.open(
-      chrome.runtime.getURL(
-        `code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}${lineQs}`
-      ),
-      '_blank'
-    );
-    return true;
-  }
-  const storageKey = randomStagingId('sfoc_al_');
-  try {
-    await chrome.storage.local.set({
-      [storageKey]: {
-        title,
-        content,
-        ...(initialLine != null ? { initialLine } : {}),
-        ...(downloadFileName ? { downloadFileName } : {})
-      }
-    });
-    window.open(
-      chrome.runtime.getURL(
-        `code/apex-log-viewer.html?k=${encodeURIComponent(storageKey)}${lineQs}`
-      ),
-      '_blank'
-    );
-    return true;
-  } catch {
-    /* cuota storage.local */
-  }
-  try {
-    const idbId = randomStagingId('idb_');
-    await apexViewerIdbPut(idbId, {
-      title,
-      content,
-      ...(initialLine != null ? { initialLine } : {}),
-      ...(downloadFileName ? { downloadFileName } : {})
-    });
-    window.open(
-      chrome.runtime.getURL(
-        `code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}${lineQs}`
-      ),
-      '_blank'
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
   const res = await bg({
     type: 'apexTests:getTestClassSource',
@@ -814,7 +747,11 @@ async function rerunFailedMethodsFromJob(rowOrgId, jobId, storedJob) {
     showToast(t('apexTests.rerunFailuresEmpty'), 'warn');
     return;
   }
-  const runBody = { tests, testLevel: 'RunSpecifiedTests', skipCodeCoverage: false };
+  const skipCodeCoverage =
+    storedJob?.runBody && typeof storedJob.runBody === 'object' && storedJob.runBody.skipCodeCoverage === true
+      ? true
+      : getApexTestsSkipCodeCoverage();
+  const runBody = { tests, testLevel: 'RunSpecifiedTests', skipCodeCoverage };
   const envLabel =
     (storedJob?.envLabel && String(storedJob.envLabel).trim()) ||
     storedJob?.displayEnv ||
@@ -2868,12 +2805,15 @@ async function renderHubRunsTable(opts = {}) {
     const canAbortJob =
       pollHealthy && !!run.job && ['queued', 'processing', 'preparing', 'holding'].includes(stLc);
     const inspectDisabled = !!(run.missing || run.pollFailure || !run.job || !terminal || !poll?.ok);
+    const skipCoverageForRun = !!(j.runBody && typeof j.runBody === 'object' && j.runBody.skipCodeCoverage === true);
 
-    const btnCoverage = createApexRunActionButton({
-      icon: 'coverage',
-      label: t('apexTests.runsCoverage'),
-      disabled: inspectDisabled
-    });
+    const btnCoverage = skipCoverageForRun
+      ? null
+      : createApexRunActionButton({
+          icon: 'coverage',
+          label: t('apexTests.runsCoverage'),
+          disabled: inspectDisabled
+        });
     const btnLog = createApexRunActionButton({
       icon: 'log',
       label: t('apexTests.runsLog'),
@@ -2945,7 +2885,9 @@ async function renderHubRunsTable(opts = {}) {
       onExportJson: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'json', exportMeta)
     });
 
-    const groupInspect = createApexRunsActionGroup([btnCoverage, btnLog, btnViewTest]);
+    const groupInspect = createApexRunsActionGroup(
+      skipCoverageForRun ? [btnLog, btnViewTest] : [btnCoverage, btnLog, btnViewTest]
+    );
     const groupRun = createApexRunsActionGroup([
       btnRerun,
       failCount > 0 ? btnRerunFailures : null
@@ -2977,7 +2919,7 @@ async function renderHubRunsTable(opts = {}) {
     });
 
     const canonicalJobId = run.job?.Id || run.canonicalJobId || jobId;
-    btnCoverage.addEventListener('click', (e) => {
+    btnCoverage?.addEventListener('click', (e) => {
       e.stopPropagation();
       if (btnCoverage.disabled) return;
       void openRunCoverageModal(rowOrgId, canonicalJobId);

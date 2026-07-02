@@ -13,6 +13,8 @@ let searchTimer = null;
 let suggestGeneration = 0;
 /** @type {{ id: string, name: string, username: string } | null} */
 let selectedUser = null;
+/** @type {(() => void) | null} */
+let onTraceCreated = null;
 
 function els() {
   return {
@@ -24,8 +26,7 @@ function els() {
     startInput: document.getElementById('debugLogTraceStartInput'),
     endInput: document.getElementById('debugLogTraceEndInput'),
     submitBtn: document.getElementById('debugLogTraceSubmitBtn'),
-    cancelBtn: document.getElementById('debugLogTraceCancelBtn'),
-    openBtn: document.getElementById('debugLogBrowserAddTraceBtn')
+    cancelBtn: document.getElementById('debugLogTraceCancelBtn')
   };
 }
 
@@ -218,6 +219,19 @@ function closeModal() {
   clearSelectedUser();
 }
 
+export function closeDebugLogTraceModal() {
+  closeModal();
+}
+
+export function isDebugLogTraceModalOpen() {
+  const { modal } = els();
+  return !!modal && !modal.classList.contains('hidden');
+}
+
+export function setDebugLogTraceModalOnCreated(callback) {
+  onTraceCreated = typeof callback === 'function' ? callback : null;
+}
+
 export function openDebugLogTraceModal() {
   if (!state.leftOrgId) {
     showToast(t('debugLogs.selectOrg'), 'warn');
@@ -291,6 +305,7 @@ async function submitTrace() {
     const userLabel = selectedUser ? formatUserLabel(selectedUser) : userId;
     showToast(t('debugLogs.traceSuccess', { user: userLabel }), 'info');
     closeModal();
+    onTraceCreated?.();
   } catch {
     showToast(t('debugLogs.traceError'), 'error');
   } finally {
@@ -300,10 +315,9 @@ async function submitTrace() {
 }
 
 export function setupDebugLogTraceModal() {
-  const { modal, userInput, openBtn, cancelBtn, submitBtn } = els();
+  const { modal, userInput, cancelBtn, submitBtn } = els();
   if (!modal) return;
 
-  openBtn?.addEventListener('click', () => openDebugLogTraceModal());
   cancelBtn?.addEventListener('click', () => closeModal());
   submitBtn?.addEventListener('click', () => void submitTrace());
 

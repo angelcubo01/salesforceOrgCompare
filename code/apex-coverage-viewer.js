@@ -2,6 +2,7 @@ import '../shared/installEarlyExceptionCapture.js';
 import { loadMonaco, createSingleEditor } from './editor/monaco.js';
 import { loadLang, t } from '../shared/i18n.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
+import { openStandaloneToolHelpModal } from '../shared/standaloneToolHelpModal.js';
 
 function getStorageKey() {
   const q = new URLSearchParams(window.location.search || '');
@@ -113,6 +114,7 @@ async function main() {
   document.title = t('docTitle.apexCoverage');
 
   const backBtn = document.getElementById('apexCovViewerBack');
+  const helpBtn = document.getElementById('apexCovViewerHelp');
   const titleEl = document.getElementById('apexCovViewerTitle');
   const singleWrap = document.getElementById('apexCovSingleWrap');
   const singleMount = document.getElementById('apexCovViewerMount');
@@ -123,6 +125,13 @@ async function main() {
   const splitRightBadge = document.getElementById('apexCovSplitRightBadge');
 
   if (backBtn) backBtn.textContent = t('apexLogViewer.back');
+  if (helpBtn) {
+    helpBtn.title = t('help.openTitle');
+    helpBtn.setAttribute('aria-label', t('help.open'));
+  }
+  helpBtn?.addEventListener('click', () => {
+    openStandaloneToolHelpModal(t, 'ApexCoverageViewer');
+  });
 
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     const key = el.getAttribute('data-i18n');

@@ -2,10 +2,9 @@ import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
-import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
+import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
-import { randomStagingId } from '../../shared/randomId.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { getDebugLogsDefaultRangeHours } from '../../shared/extensionSettings.js';
 
@@ -78,6 +77,11 @@ async function resolveUserNamesForLogs(rows) {
   });
 }
 
+function getOrgInstanceUrl(orgId) {
+  const org = (state.orgsList || []).find((o) => String(o.id) === String(orgId));
+  return org?.instanceUrl || '';
+}
+
 function sanitizeApexViewerDownloadFileName(name) {
   const s = String(name || '')
     .replace(/[/\\?%*:|"<>]/g, '-')
@@ -85,50 +89,6 @@ function sanitizeApexViewerDownloadFileName(name) {
     .trim()
     .slice(0, 200);
   return s || 'file';
-}
-
-async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
-  const downloadFileName =
-    viewerOpts.downloadFileName != null && String(viewerOpts.downloadFileName).trim()
-      ? sanitizeApexViewerDownloadFileName(viewerOpts.downloadFileName)
-      : undefined;
-  const staged = await bg({
-    type: 'apexViewer:stage',
-    title,
-    content,
-    ...(downloadFileName ? { downloadFileName } : {})
-  });
-  if (staged.ok && staged.id) {
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}`),
-      '_blank'
-    );
-    return true;
-  }
-  const storageKey = randomStagingId('sfoc_dlb_');
-  try {
-    await chrome.storage.local.set({
-      [storageKey]: { title, content, ...(downloadFileName ? { downloadFileName } : {}) }
-    });
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?k=${encodeURIComponent(storageKey)}`),
-      '_blank'
-    );
-    return true;
-  } catch {
-    /* fallback */
-  }
-  try {
-    const idbId = randomStagingId('idb_');
-    await apexViewerIdbPut(idbId, { title, content, ...(downloadFileName ? { downloadFileName } : {}) });
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}`),
-      '_blank'
-    );
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function getFilterElements() {
@@ -426,8 +386,9 @@ function renderRows() {
     const ctx = rowExecutionFields(row);
     const logIdNorm = normalizeSfId(logId);
     const pendingContext = !!logIdNorm && !row?.contextFromBody;
+    const statusText = row?.Status ? String(row.Status) : '—';
     tr.innerHTML = `
-      <td class="debug-log-browser-id-cell">${escapeHtml(logId || '—')}</td>
+      <td class="debug-log-browser-status-cell">${escapeHtml(statusText)}</td>
       <td>${escapeHtml(formatDateTime(row?.StartTime))}</td>
       <td>${escapeHtml(userCell)}</td>
       <td>${escapeHtml(row?.Operation ? String(row.Operation) : '—')}</td>
@@ -465,7 +426,13 @@ function renderRows() {
         const ok = await openApexLogViewerWithPayload(
           `${t('docTitle.apexLog')} · ${logId}`,
           String(bodyRes.body || ''),
-          { downloadFileName: `${sanitizeApexViewerDownloadFileName(logId)}.log` }
+          {
+            downloadFileName: `${sanitizeApexViewerDownloadFileName(logId)}.log`,
+            defaultTab: 'summary',
+            orgId: state.leftOrgId || '',
+            instanceUrl: getOrgInstanceUrl(state.leftOrgId),
+            logId
+          }
         );
         if (!ok) showToast(t('debugLogs.openLogError'), 'error');
       } finally {

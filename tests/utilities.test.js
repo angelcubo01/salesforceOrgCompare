@@ -3,7 +3,8 @@ import {
   normalizeUiTheme,
   normalizeMonacoThemeId,
   normalizeExtensionConfig,
-  MONACO_THEME_IDS
+  MONACO_THEME_IDS,
+  defaultMonacoThemeForUiTheme
 } from '../shared/extensionSettings.js';
 import { buildOrgPicklistLabel, sameGroupKey } from '../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
@@ -28,6 +29,12 @@ describe('extensionSettings', () => {
     expect(normalizeMonacoThemeId('vs-dark')).toBe('vs-dark');
     expect(normalizeMonacoThemeId('invalid')).toBe('sfoc-editor-dark');
     expect(MONACO_THEME_IDS).toContain('sfoc-editor-light');
+  });
+
+  it('empareja tema Monaco SFOC con apariencia de la app', () => {
+    expect(defaultMonacoThemeForUiTheme('light')).toBe('sfoc-editor-light');
+    expect(defaultMonacoThemeForUiTheme('dark')).toBe('sfoc-editor-dark');
+    expect(defaultMonacoThemeForUiTheme('other')).toBe('sfoc-editor-dark');
   });
 
   it('normaliza settings imprescindibles nuevos', () => {
@@ -61,6 +68,26 @@ describe('extensionSettings', () => {
     expect(cfg.fieldHistoryQueryDefaultLimit).toBe(5000);
     expect(cfg.anonymousApexLogSearchMaxAttempts).toBe(1);
     expect(cfg.anonymousApexLogSearchDelayMs).toBe(200);
+  });
+
+  it('normaliza apexTestsSkipCodeCoverage como booleano', () => {
+    expect(normalizeExtensionConfig({ apexTestsSkipCodeCoverage: true }).apexTestsSkipCodeCoverage).toBe(
+      true
+    );
+    expect(normalizeExtensionConfig({}).apexTestsSkipCodeCoverage).toBe(false);
+    expect(normalizeExtensionConfig({ apexTestsSkipCodeCoverage: false }).apexTestsSkipCodeCoverage).toBe(
+      false
+    );
+    expect(normalizeExtensionConfig({ apexTestsSkipCodeCoverage: 1 }).apexTestsSkipCodeCoverage).toBe(
+      false
+    );
+  });
+
+  it('normaliza patrones SOQL de clases test', () => {
+    expect(
+      normalizeExtensionConfig({ apexTestsClassNameLikePatterns: ' %Foo% , %Bar% ' })
+        .apexTestsClassNameLikePatterns
+    ).toBe('%Foo%,%Bar%');
   });
 
   it('metadataRetrieveMaxAttempts por defecto es 60', () => {

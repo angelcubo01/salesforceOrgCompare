@@ -795,7 +795,7 @@ export function renderSavedItems(preserveOrder = true) {
           state.selectedItem = item;
           syncListActiveHighlight();
           updateDocumentTitle();
-          syncCompareUrlFromState(state);
+          syncCompareUrlFromState(state, { method: 'push' });
           renderEditor();
         }
       });
@@ -946,7 +946,7 @@ export function createListItem(item, displayIndex) {
     state.selectedItem = item;
     syncListActiveHighlight();
     updateDocumentTitle();
-    syncCompareUrlFromState(state);
+    syncCompareUrlFromState(state, { method: 'push' });
     renderEditor();
   });
 
@@ -1017,7 +1017,7 @@ export function removeBundleFromList(bundleKey) {
     if (!stillThere) {
       state.selectedItem = null;
       updateDocumentTitle();
-      syncCompareUrlFromState(state);
+      syncCompareUrlFromState(state, { method: 'push' });
     }
   }
 
@@ -1057,7 +1057,7 @@ export function removeItemFromList(item) {
     ) {
       state.selectedItem = null;
       updateDocumentTitle();
-      syncCompareUrlFromState(state);
+      syncCompareUrlFromState(state, { method: 'push' });
     }
   }
   updateOrgSelectorsLockedState();
@@ -1115,7 +1115,7 @@ export function removeAllItems() {
     if (!stillThere) {
       state.selectedItem = null;
       updateDocumentTitle();
-      syncCompareUrlFromState(state);
+      syncCompareUrlFromState(state, { method: 'push' });
       renderEditor();
     }
   }

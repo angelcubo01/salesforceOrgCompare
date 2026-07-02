@@ -298,23 +298,18 @@ export async function restDeleteSobject(instanceUrl, sid, apiVersion, sobjectApi
   return true;
 }
 
-/** Máximo de subrequests por llamada a `/composite` (límite de la plataforma). */
-const COMPOSITE_SUBREQUEST_LIMIT = 25;
+/** Máximo de registros por DELETE en sObject Collections (límite de la plataforma). */
+const SOBJECT_COLLECTION_DELETE_LIMIT = 200;
 
 /**
- * Ejecuta una petición Composite (varias operaciones REST en un solo HTTP round-trip).
- * @param {Array<{ method: string, url: string, referenceId: string, body?: unknown }>} compositeRequest
+ * Borra hasta 200 registros en una sola petición REST (`/composite/sobjects`).
+ * @returns {Array<{ id: string, success: boolean, errors?: unknown[] }>}
  */
-async function restCompositeExecute(instanceUrl, sid, apiVersion, compositeRequest) {
-  const path = `/services/data/v${apiVersion}/composite`;
-  const res = await restFetchWithSid(instanceUrl, sid, path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      allOrNone: false,
-      compositeRequest
-    })
-  });
+async function restDeleteSobjectsCollection(instanceUrl, sid, apiVersion, ids) {
+  if (!ids.length) return [];
+  const idsParam = ids.map((id) => encodeURIComponent(String(id))).join(',');
+  const path = `/services/data/v${apiVersion}/composite/sobjects?ids=${idsParam}&allOrNone=false`;
+  const res = await restFetchWithSid(instanceUrl, sid, path, { method: 'DELETE' });
   if (!res.ok) {
     let detail = '';
     try {
@@ -322,11 +317,12 @@ async function restCompositeExecute(instanceUrl, sid, apiVersion, compositeReque
     } catch {
       /* ignore */
     }
-    const err = new Error(`REST composite: ${res.status} ${detail}`);
+    const err = new Error(`DELETE composite/sobjects: ${res.status} ${detail}`);
     err.status = res.status;
     throw err;
   }
-  return res.json();
+  const body = await res.json();
+  return Array.isArray(body) ? body : [];
 }
 
 /**
@@ -1263,8 +1259,8 @@ export async function fetchApexLogBody(instanceUrl, sid, apiVersion, logId, opts
 
 /**
  * Consulta `SELECT Id FROM ApexLog` (REST o Tooling) y borra los registros en lotes
- * vía Composite API (hasta 25 DELETE por petición HTTP). Si Composite falla en un lote,
- * ese lote se reintenta con DELETE individuales.
+ * vía sObject Collections (hasta 200 DELETE por petición HTTP). Si un lote falla,
+ * se reintenta con DELETE individuales.
  * @returns {{ total: number, deleted: number, failed: number }}
  */
 export async function deleteAllApexLogs(instanceUrl, sid, apiVersion) {
@@ -1278,21 +1274,14 @@ export async function deleteAllApexLogs(instanceUrl, sid, apiVersion) {
   let deleted = 0;
   let failed = 0;
   async function deleteChunkWithFallback(chunk) {
-    const compositeRequest = chunk.map((id, j) => ({
-      method: 'DELETE',
-      referenceId: `apexlogDel_${j}`,
-      url: `/services/data/v${apiVersion}/sobjects/ApexLog/${encodeURIComponent(id)}`
-    }));
     try {
-      const body = await restCompositeExecute(instanceUrl, sid, apiVersion, compositeRequest);
-      const parts = Array.isArray(body?.compositeResponse) ? body.compositeResponse : [];
-      for (const sub of parts) {
-        const code = Number(sub?.httpStatusCode);
-        if (code >= 200 && code < 300) deleted += 1;
+      const results = await restDeleteSobjectsCollection(instanceUrl, sid, apiVersion, chunk);
+      for (const row of results) {
+        if (row?.success) deleted += 1;
         else failed += 1;
       }
-      if (parts.length < chunk.length) {
-        failed += chunk.length - parts.length;
+      if (results.length < chunk.length) {
+        failed += chunk.length - results.length;
       }
     } catch {
       for (const id of chunk) {
@@ -1305,8 +1294,8 @@ export async function deleteAllApexLogs(instanceUrl, sid, apiVersion) {
       }
     }
   }
-  for (let i = 0; i < ids.length; i += COMPOSITE_SUBREQUEST_LIMIT) {
-    const chunk = ids.slice(i, i + COMPOSITE_SUBREQUEST_LIMIT);
+  for (let i = 0; i < ids.length; i += SOBJECT_COLLECTION_DELETE_LIMIT) {
+    const chunk = ids.slice(i, i + SOBJECT_COLLECTION_DELETE_LIMIT);
     await deleteChunkWithFallback(chunk);
   }
   return { total: ids.length, deleted, failed };
@@ -1336,11 +1325,24 @@ function toSoqlUtcDateTimeLiteral(isoOrDate) {
  *   `operationEquals` p. ej. `ApexTestHandler` para acotar a logs de ejecución de tests.
  *   `locationLikeContains` texto literal a buscar en `Location` (se escapan `%`, `_` y `\\` para LIKE).
  */
+/** Alineado con `EXTENSION_FIELD_BOUNDS.debugLogsListMaxRows` en extensionSettings.js */
+const APEX_LOGS_IN_WINDOW_MAX_LIMIT = 50_000;
+
+/**
+ * @param {{ limit?: number }} [opts]
+ * @returns {number}
+ */
+export function resolveApexLogsInWindowLimit(opts = {}) {
+  const raw = Number(opts.limit);
+  if (!Number.isFinite(raw) || raw <= 0) return 80;
+  return Math.min(APEX_LOGS_IN_WINDOW_MAX_LIMIT, Math.max(10, Math.floor(raw)));
+}
+
 export async function queryApexLogsInWindow(instanceUrl, sid, apiVersion, sinceIso, untilIso, opts = {}) {
   const a = toSoqlUtcDateTimeLiteral(sinceIso);
   const b = toSoqlUtcDateTimeLiteral(untilIso);
   if (!a || !b) return [];
-  const limit = Math.min(200, Math.max(10, Number(opts.limit) || 80));
+  const limit = resolveApexLogsInWindowLimit(opts);
   const uid = String(opts.logUserId || '').replace(/[^a-zA-Z0-9]/g, '');
   const userClause = uid ? ` AND LogUserId = '${escapeSoqlLiteral(uid)}'` : '';
   const opEq = String(opts.operationEquals || '').trim();
@@ -1355,12 +1357,14 @@ export async function queryApexLogsInWindow(instanceUrl, sid, apiVersion, sinceI
     likeClause = ` AND Location LIKE '%${pat}%' ESCAPE '\\'`;
   }
   const baseFields =
-    'Id, StartTime, Operation, LogLength, LogUserId, LogUser.Name, DurationMilliseconds, Location';
+    'Id, StartTime, Operation, LogLength, LogUserId, LogUser.Name, DurationMilliseconds, Location, Status';
   const whereCore = `StartTime >= ${a} AND StartTime <= ${b}${userClause}${opClause}`;
   const orderLimit = ` ORDER BY StartTime ASC LIMIT ${limit}`;
   const soqlLocNoLike = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${orderLimit}`;
   const soqlWithLoc = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${likeClause}${orderLimit}`;
-  const soqlNoLoc = `SELECT Id, StartTime, Operation, LogLength, LogUserId, LogUser.Name, DurationMilliseconds FROM ApexLog WHERE ${whereCore}${orderLimit}`;
+  const soqlNoLoc =
+    'SELECT Id, StartTime, Operation, LogLength, LogUserId, LogUser.Name, DurationMilliseconds, Status FROM ApexLog WHERE ' +
+    `${whereCore}${orderLimit}`;
   try {
     if (likeClause) {
       const withLike = (await toolingQueryAll(instanceUrl, sid, apiVersion, soqlWithLoc)) || [];
@@ -2031,6 +2035,187 @@ export async function createUserDebugTraceFlag(
   const traceFlagId = await toolingCreateTraceFlag(instanceUrl, sid, apiVersion, body);
   if (!traceFlagId) throw new Error('Could not create trace flag');
   return { traceFlagId };
+}
+
+/** Ventana máxima de una traza USER_DEBUG (24 h). */
+export const USER_DEBUG_TRACE_MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * @param {{ startIso?: string, expirationIso?: string, StartDate?: string, ExpirationDate?: string }} row
+ * @param {number} [nowMs]
+ */
+export function isUserDebugTraceActive(row, nowMs = Date.now()) {
+  const startIso = row?.startIso || row?.StartDate || '';
+  const expirationIso = row?.expirationIso || row?.ExpirationDate || '';
+  const startMs = new Date(startIso).getTime();
+  const expMs = new Date(expirationIso).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(expMs)) return false;
+  return startMs <= nowMs && nowMs < expMs;
+}
+
+/**
+ * Calcula nueva caducidad sumando `addMs` a la actual, sin superar 24 h desde el inicio.
+ * @returns {{ expirationIso: string, cappedAtMax: boolean }}
+ */
+export function computeTraceExtension({ startIso, expirationIso, addMs }) {
+  const startMs = new Date(startIso).getTime();
+  const expMs = new Date(expirationIso).getTime();
+  const add = Math.max(0, Number(addMs) || 0);
+  if (!Number.isFinite(startMs) || !Number.isFinite(expMs)) {
+    throw new Error('Invalid date range');
+  }
+  const maxExpMs = startMs + USER_DEBUG_TRACE_MAX_WINDOW_MS;
+  const requestedMs = expMs + add;
+  const nextMs = Math.min(requestedMs, maxExpMs);
+  if (nextMs <= expMs) {
+    throw new Error('Trace window cannot exceed 24 hours');
+  }
+  return {
+    expirationIso: new Date(nextMs).toISOString(),
+    cappedAtMax: requestedMs > maxExpMs
+  };
+}
+
+/**
+ * Lista TraceFlags USER_DEBUG recientes del entorno.
+ * @returns {Promise<Array<{ id: string, tracedEntityId: string, debugLevelId: string, debugLevelLabel: string, debugLevelDeveloperName: string, startIso: string, expirationIso: string, logType: string }>>}
+ */
+export async function queryUserDebugTraceFlags(instanceUrl, sid, apiVersion) {
+  const soql =
+    'SELECT Id, TracedEntityId, DebugLevelId, StartDate, ExpirationDate, LogType FROM TraceFlag WHERE LogType = \'USER_DEBUG\' ORDER BY ExpirationDate DESC LIMIT 200';
+  let rows = [];
+  try {
+    rows = (await toolingQuery(instanceUrl, sid, apiVersion, soql)) || [];
+  } catch {
+    try {
+      rows = (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
+    } catch {
+      rows = [];
+    }
+  }
+  const levels = await queryDebugLevels(instanceUrl, sid, apiVersion);
+  const levelById = new Map(levels.map((l) => [l.id, l]));
+  return rows
+    .map((r) => {
+      const id = String(r?.Id || '').replace(/[^a-zA-Z0-9]/g, '');
+      const tracedEntityId = String(r?.TracedEntityId || '').replace(/[^a-zA-Z0-9]/g, '');
+      const debugLevelId = String(r?.DebugLevelId || '').replace(/[^a-zA-Z0-9]/g, '');
+      const lvl = levelById.get(debugLevelId);
+      const startIso = r?.StartDate ? new Date(r.StartDate).toISOString() : '';
+      const expirationIso = r?.ExpirationDate ? new Date(r.ExpirationDate).toISOString() : '';
+      return {
+        id,
+        tracedEntityId,
+        debugLevelId,
+        debugLevelLabel: lvl?.label || debugLevelId || '',
+        debugLevelDeveloperName: lvl?.developerName || '',
+        startIso,
+        expirationIso,
+        logType: String(r?.LogType || 'USER_DEBUG')
+      };
+    })
+    .filter((r) => r.id);
+}
+
+/**
+ * Amplía la caducidad de un TraceFlag USER_DEBUG.
+ * @returns {Promise<{ expirationIso: string, cappedAtMax: boolean }>}
+ */
+export async function extendUserDebugTraceFlag(
+  instanceUrl,
+  sid,
+  apiVersion,
+  { traceFlagId, addMs = 15 * 60 * 1000 }
+) {
+  const id = String(traceFlagId || '').replace(/[^a-zA-Z0-9]/g, '');
+  if (!id) throw new Error('Missing trace flag id');
+  const esc = escapeSoqlLiteral(id);
+  const soql = `SELECT Id, StartDate, ExpirationDate, LogType FROM TraceFlag WHERE Id = '${esc}' LIMIT 1`;
+  let rows = [];
+  try {
+    rows = (await toolingQuery(instanceUrl, sid, apiVersion, soql)) || [];
+  } catch {
+    rows = (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
+  }
+  const row = rows[0];
+  if (!row?.Id) throw new Error('Trace flag not found');
+  if (String(row.LogType || '') !== 'USER_DEBUG') throw new Error('Not a USER_DEBUG trace');
+  const startIso = new Date(row.StartDate).toISOString();
+  const expirationIso = new Date(row.ExpirationDate).toISOString();
+  if (!isUserDebugTraceActive({ startIso, expirationIso })) {
+    throw new Error('Trace is not active');
+  }
+  const { expirationIso: nextIso, cappedAtMax } = computeTraceExtension({
+    startIso,
+    expirationIso,
+    addMs
+  });
+  const expStr = toSfJsonUtcDateTime(nextIso);
+  if (!expStr) throw new Error('Invalid expiration date');
+  await toolingPatchSobject(instanceUrl, sid, apiVersion, 'TraceFlag', id, {
+    ExpirationDate: expStr
+  });
+  return { expirationIso: nextIso, cappedAtMax };
+}
+
+/**
+ * Valida ventana temporal de una traza USER_DEBUG.
+ * @returns {'INVALID_RANGE'|'MAX_WINDOW'|null}
+ */
+export function validateUserDebugTraceDates({ startIso, expirationIso }) {
+  if (!startIso || !expirationIso) return 'INVALID_RANGE';
+  const startMs = new Date(startIso).getTime();
+  const expMs = new Date(expirationIso).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(expMs) || expMs <= startMs) {
+    return 'INVALID_RANGE';
+  }
+  if (expMs - startMs > USER_DEBUG_TRACE_MAX_WINDOW_MS) {
+    return 'MAX_WINDOW';
+  }
+  return null;
+}
+
+/**
+ * Actualiza DebugLevelId y fechas de un TraceFlag USER_DEBUG.
+ * @returns {Promise<{ startIso: string, expirationIso: string, debugLevelId: string }>}
+ */
+export async function updateUserDebugTraceFlag(
+  instanceUrl,
+  sid,
+  apiVersion,
+  { traceFlagId, debugLevelId, startIso, expirationIso }
+) {
+  const id = String(traceFlagId || '').replace(/[^a-zA-Z0-9]/g, '');
+  const dlId = String(debugLevelId || '').replace(/[^a-zA-Z0-9]/g, '');
+  if (!id) throw new Error('Missing trace flag id');
+  if (!dlId) throw new Error('Missing debug level id');
+  const dateErr = validateUserDebugTraceDates({ startIso, expirationIso });
+  if (dateErr === 'INVALID_RANGE') throw new Error('End date must be after start date');
+  if (dateErr === 'MAX_WINDOW') throw new Error('Trace window cannot exceed 24 hours');
+  const esc = escapeSoqlLiteral(id);
+  const soql = `SELECT Id, LogType FROM TraceFlag WHERE Id = '${esc}' LIMIT 1`;
+  let rows = [];
+  try {
+    rows = (await toolingQuery(instanceUrl, sid, apiVersion, soql)) || [];
+  } catch {
+    rows = (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
+  }
+  const row = rows[0];
+  if (!row?.Id) throw new Error('Trace flag not found');
+  if (String(row.LogType || '') !== 'USER_DEBUG') throw new Error('Not a USER_DEBUG trace');
+  const startStr = toSfJsonUtcDateTime(startIso);
+  const expStr = toSfJsonUtcDateTime(expirationIso);
+  if (!startStr || !expStr) throw new Error('Invalid date range');
+  await toolingPatchSobject(instanceUrl, sid, apiVersion, 'TraceFlag', id, {
+    DebugLevelId: dlId,
+    StartDate: startStr,
+    ExpirationDate: expStr
+  });
+  return {
+    startIso: new Date(startIso).toISOString(),
+    expirationIso: new Date(expirationIso).toISOString(),
+    debugLevelId: dlId
+  };
 }
 
 export async function runTestsAsynchronous(instanceUrl, sid, apiVersion, body) {

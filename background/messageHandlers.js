@@ -31,6 +31,9 @@ import {
   queryDebugLevels,
   createUserDebugTraceFlag,
   deleteTraceFlagById,
+  queryUserDebugTraceFlags,
+  extendUserDebugTraceFlag,
+  updateUserDebugTraceFlag,
   fetchSessionUserId,
   fetchOrgLimits,
   queryApexCodeCoverageAggregate,
@@ -918,7 +921,11 @@ export function installMessageHandlers() {
               const il = message.initialLine;
               const id = stageApexViewerPayload(message.title, message.content, {
                 initialLine: il != null ? Number(il) : undefined,
-                downloadFileName: message.downloadFileName
+                downloadFileName: message.downloadFileName,
+                defaultTab: message.defaultTab,
+                orgId: message.orgId,
+                instanceUrl: message.instanceUrl,
+                logId: message.logId
               });
               reply({ ok: true, id });
             } catch (e) {
@@ -937,7 +944,11 @@ export function installMessageHandlers() {
               title: v.title,
               content: v.content,
               ...(v.initialLine != null ? { initialLine: v.initialLine } : {}),
-              ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {})
+              ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {}),
+              ...(v.defaultTab ? { defaultTab: v.defaultTab } : {}),
+              ...(v.orgId ? { orgId: v.orgId } : {}),
+              ...(v.instanceUrl ? { instanceUrl: v.instanceUrl } : {}),
+              ...(v.logId ? { logId: v.logId } : {})
             });
             break;
           }
@@ -2470,6 +2481,135 @@ export function installMessageHandlers() {
                 }
               }
               reply({ ok: true, namesById });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:listTraces': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const traces = await queryUserDebugTraceFlags(org.instanceUrl, sid, org.apiVersion);
+              const userIds = [
+                ...new Set(traces.map((t) => String(t.tracedEntityId || '').replace(/[^a-zA-Z0-9]/g, '')).filter(Boolean))
+              ];
+              const namesById = {};
+              for (let i = 0; i < userIds.length; i += 100) {
+                const chunk = userIds.slice(i, i + 100);
+                const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
+                const soql = `SELECT Id, Name, Username FROM User WHERE Id IN (${inList})`;
+                let rows = [];
+                try {
+                  rows = (await restQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                } catch {
+                  try {
+                    rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                  } catch {
+                    rows = [];
+                  }
+                }
+                for (const row of rows) {
+                  const id = String(row?.Id || '').replace(/[^a-zA-Z0-9]/g, '');
+                  const name = String(row?.Name || '').trim();
+                  const username = String(row?.Username || '').trim();
+                  if (!id) continue;
+                  if (name && username) namesById[id] = `${name} (${username})`;
+                  else namesById[id] = name || username || id;
+                }
+              }
+              const enriched = traces.map((tr) => ({
+                ...tr,
+                userLabel: namesById[tr.tracedEntityId] || tr.tracedEntityId || ''
+              }));
+              reply({ ok: true, traces: enriched });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:extendTrace': {
+            const { orgId, traceFlagId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const result = await extendUserDebugTraceFlag(org.instanceUrl, sid, org.apiVersion, {
+                traceFlagId
+              });
+              reply({ ok: true, ...result });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:deleteTrace': {
+            const { orgId, traceFlagId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              await deleteTraceFlagById(org.instanceUrl, sid, org.apiVersion, traceFlagId);
+              reply({ ok: true });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'debugLogs:updateTrace': {
+            const { orgId, traceFlagId, debugLevelId, startIso, expirationIso } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const result = await updateUserDebugTraceFlag(org.instanceUrl, sid, org.apiVersion, {
+                traceFlagId,
+                debugLevelId,
+                startIso,
+                expirationIso
+              });
+              const levels = await queryDebugLevels(org.instanceUrl, sid, org.apiVersion);
+              const lvl = levels.find((l) => l.id === result.debugLevelId);
+              reply({
+                ok: true,
+                ...result,
+                debugLevelLabel: lvl?.label || '',
+                debugLevelDeveloperName: lvl?.developerName || ''
+              });
             } catch (e) {
               replyHandlerError(reply, e);
             }

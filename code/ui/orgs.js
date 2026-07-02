@@ -445,7 +445,7 @@ export async function swapOrgs() {
   updateOrgDropdownLayout();
   updateAuthIndicators();
   syncTelemetryUserFromOrgState();
-  syncCompareUrlFromState(state);
+  syncCompareUrlFromState(state, { method: 'push' });
 
   const { hideSidebarSearchResults } = await import('./searchSetup.js');
   hideSidebarSearchResults();

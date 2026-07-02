@@ -139,7 +139,7 @@ export async function loadMonaco() {
               inherit: true,
               rules: [],
               colors: {
-                'editor.background': '#f8fafc',
+                'editor.background': '#e2e8f0',
                 'editor.foreground': '#0f172a',
                 'diffEditor.insertedTextBackground': '#34d39940',
                 'diffEditor.removedTextBackground': '#f43f5e38',

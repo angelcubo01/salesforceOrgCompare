@@ -1812,11 +1812,17 @@ body.artifact-apex-tests #editorContainer.editor {
 }
 .app-landing-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
-  gap: 20px 24px;
+  gap: 18px 20px;
   width: 100%;
-  max-width: 880px;
+  max-width: 1080px;
+}
+@media (max-width: 960px) {
+  .app-landing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-width: 720px;
+  }
 }
 @media (max-width: 640px) {
   .app-landing-grid {
@@ -1829,7 +1835,7 @@ body.artifact-apex-tests #editorContainer.editor {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 168px;
+  min-height: 148px;
   box-sizing: border-box;
   padding: 24px 26px;
   border-radius: 12px;
@@ -1844,6 +1850,8 @@ body.artifact-apex-tests #editorContainer.editor {
 .app-landing-card-accent-2 { border-top: 3px solid #a78bfa; }
 .app-landing-card-accent-3 { border-top: 3px solid #fbbf24; }
 .app-landing-card-accent-4 { border-top: 3px solid #fb7185; }
+.app-landing-card-accent-5 { border-top: 3px solid #34d399; }
+.app-landing-card-accent-6 { border-top: 3px solid #818cf8; }
 .app-landing-card-title {
   margin: 0 0 12px;
   font-size: 17px;
@@ -2341,6 +2349,70 @@ body.artifact-apex-tests #editorContainer.editor {
   padding: 12px 16px 16px;
   max-height: min(50vh, 360px);
   overflow: auto;
+}
+.apex-tests-toolbar-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+}
+.apex-tests-toolbar-icon-btn svg {
+  flex-shrink: 0;
+}
+.apex-tests-runner-settings-modal-panel {
+  width: min(480px, 92vw);
+}
+.apex-tests-runner-settings-body {
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.apex-tests-runner-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.apex-tests-runner-settings-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.apex-tests-runner-settings-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+.apex-tests-runner-settings-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+.apex-tests-runner-settings-check input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #60a5fa;
+}
+.apex-tests-runner-settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.apex-tests-runner-settings-status {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.apex-tests-table:not(.apex-tests-class-table) tbody tr {
+  cursor: pointer;
 }
 .apex-tests-profiles-empty {
   margin: 0;
@@ -7448,10 +7520,37 @@ body.artifact-query-explorer-compare .query-explorer-split {
   cursor: not-allowed;
 }
 
+.debug-log-browser-view-traces-btn {
+  flex-shrink: 0;
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  background: rgba(12, 74, 110, 0.35);
+  color: #bae6fd;
+  border-radius: 8px;
+  padding: 7px 11px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.debug-log-browser-view-traces-btn:hover:not(:disabled) {
+  border-color: #38bdf8;
+  background: rgba(7, 89, 133, 0.5);
+  color: #fff;
+}
+
+.debug-log-browser-view-traces-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .debug-log-trace-modal {
   position: fixed;
   inset: 0;
   z-index: 1200;
+}
+
+#debugLogTraceModal {
+  z-index: 1310;
 }
 
 .debug-log-trace-modal-backdrop {
@@ -7590,6 +7689,251 @@ body.artifact-query-explorer-compare .query-explorer-split {
 .debug-log-trace-modal-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.debug-log-view-traces-actions-cell {
+  white-space: nowrap;
+}
+
+.debug-log-view-traces-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.debug-log-view-traces-edit-btn {
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.debug-log-view-traces-edit-btn:hover:not(:disabled) {
+  border-color: #94a3b8;
+  color: #fff;
+}
+
+.debug-log-view-traces-delete-btn {
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(127, 29, 29, 0.35);
+  color: #fecaca;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.debug-log-view-traces-delete-btn:hover:not(:disabled) {
+  border-color: #f87171;
+  color: #fff;
+}
+
+.debug-log-view-traces-edit-btn:disabled,
+.debug-log-view-traces-delete-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.debug-log-edit-trace-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.75);
+  border-radius: 12px;
+}
+
+.debug-log-edit-trace-modal.hidden {
+  display: none;
+}
+
+.debug-log-edit-trace-modal-inner {
+  width: min(96%, 380px);
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+
+.debug-log-edit-trace-modal-inner h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: #e2e8f0;
+}
+
+.debug-log-edit-trace-user {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #94a3b8;
+  word-break: break-word;
+}
+
+.debug-log-view-traces-modal-panel {
+  position: relative;
+  max-width: min(96vw, 720px);
+}
+
+
+.debug-log-view-traces-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.debug-log-view-traces-modal-head h3 {
+  margin: 0;
+}
+
+.debug-log-view-traces-close-btn {
+  border: 1px solid #475569;
+  background: transparent;
+  color: #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.debug-log-view-traces-close-btn:hover {
+  border-color: #94a3b8;
+  color: #f8fafc;
+}
+
+.debug-log-view-traces-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.debug-log-view-traces-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.debug-log-view-traces-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.debug-log-view-traces-refresh-btn {
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.debug-log-view-traces-refresh-btn:hover:not(:disabled) {
+  border-color: #94a3b8;
+}
+
+.debug-log-view-traces-table-wrap {
+  position: relative;
+  min-height: 120px;
+}
+
+.debug-log-view-traces-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.debug-log-view-traces-table th,
+.debug-log-view-traces-table td {
+  border-bottom: 1px solid #334155;
+  padding: 8px 6px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.debug-log-view-traces-table th {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.debug-log-view-traces-status {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.debug-log-view-traces-status--active {
+  background: rgba(22, 101, 52, 0.45);
+  color: #bbf7d0;
+}
+
+.debug-log-view-traces-status--inactive {
+  background: rgba(71, 85, 105, 0.45);
+  color: #cbd5e1;
+}
+
+.debug-log-view-traces-extend-btn {
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  background: rgba(12, 74, 110, 0.35);
+  color: #bae6fd;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.debug-log-view-traces-extend-btn:hover:not(:disabled) {
+  border-color: #38bdf8;
+  color: #fff;
+}
+
+.debug-log-view-traces-extend-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.debug-log-view-traces-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 4px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.debug-log-view-traces-loading.hidden {
+  display: none;
+}
+
+.debug-log-view-traces-empty {
+  margin: 12px 4px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.debug-log-view-traces-empty.hidden {
+  display: none;
 }
 
 .debug-log-browser-title {
@@ -7807,7 +8151,7 @@ body.artifact-query-explorer-compare .query-explorer-split {
   animation: debug-log-browser-skeleton-shimmer 1.2s ease-in-out infinite;
 }
 
-.debug-log-browser-skeleton-row td:nth-child(1) .debug-log-browser-skeleton-bar { width: 88%; }
+.debug-log-browser-skeleton-row td:nth-child(1) .debug-log-browser-skeleton-bar { width: 58%; }
 .debug-log-browser-skeleton-row td:nth-child(2) .debug-log-browser-skeleton-bar { width: 72%; }
 .debug-log-browser-skeleton-row td:nth-child(3) .debug-log-browser-skeleton-bar { width: 64%; }
 .debug-log-browser-skeleton-row td:nth-child(4) .debug-log-browser-skeleton-bar { width: 56%; }
@@ -7845,9 +8189,11 @@ body.artifact-query-explorer-compare .query-explorer-split {
   vertical-align: top;
 }
 
-.debug-log-browser-id-cell {
-  font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
-  word-break: break-all;
+.debug-log-browser-status-cell {
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .debug-log-browser-action-cell {
@@ -8050,7 +8396,8 @@ body.artifact-query-explorer-compare .query-explorer-split {
 }
 
 .field-history-panel-inner {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   max-width: var(--sfoc-workspace-max);
   margin: 0 auto;
@@ -8321,17 +8668,34 @@ body.artifact-query-explorer-compare .query-explorer-split {
   text-align: center;
 }
 
+.field-history-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 0;
+  min-height: clamp(300px, 48vh, 640px);
+  min-width: 0;
+}
+
+.field-history-pagination-top,
+.field-history-pagination-bottom {
+  flex-shrink: 0;
+}
+
 .field-history-table-wrap {
+  position: relative;
+  flex: 1 1 auto;
   border: 1px solid rgba(51, 65, 85, 0.85);
   border-radius: 12px;
   background: #0f172a;
   overflow: auto;
-  max-height: min(52vh, 480px);
+  min-height: 280px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .field-history-table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: 12px;
   color: #e2e8f0;

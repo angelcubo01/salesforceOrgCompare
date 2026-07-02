@@ -10,9 +10,13 @@ import {
   hasDismissedPopupNotice,
   markPopupNoticeDismissedInPrefs
 } from '../shared/onboardingPrefs.js';
+import {
+  HELP_HOME_ID,
+  HELP_TOOL_IDS,
+  helpToolTitleKey,
+  helpToolBodyKeys
+} from '../shared/helpToolIds.js';
 import { t, setLang } from '../shared/i18n.js';
-
-const HELP_MODES = ['home', 'comparator', 'development', 'analysis', 'monitoring', 'manifests'];
 
 describe('onboardingPrefs', () => {
   it('normaliza prefs vacías', () => {
@@ -75,14 +79,18 @@ describe('onboardingPrefs', () => {
     expect(hasDismissedPopupNotice(prefs, 'pn_other')).toBe(false);
   });
 
-  it('lista de herramientas alineada con onboarding (17)', () => {
-    expect(ALL_ONBOARDING_TOOLS).toHaveLength(17);
+  it('lista de herramientas alineada con onboarding (21)', () => {
+    expect(ALL_ONBOARDING_TOOLS).toHaveLength(21);
     expect(ALL_ONBOARDING_TOOLS).toContain('Comparator');
     expect(ALL_ONBOARDING_TOOLS).toContain('FieldHistory');
     expect(ALL_ONBOARDING_TOOLS).toContain('LightningQuickEdit');
     expect(ALL_ONBOARDING_TOOLS).toContain('DeployStatus');
     expect(ALL_ONBOARDING_TOOLS).toContain('QueryExplorer');
     expect(ALL_ONBOARDING_TOOLS).toContain('DependencyExplorer');
+    expect(ALL_ONBOARDING_TOOLS).toContain('MetadataTypeCompare');
+    expect(ALL_ONBOARDING_TOOLS).toContain('CustomSettingsCompare');
+    expect(ALL_ONBOARDING_TOOLS).toContain('CustomMetadataCompare');
+    expect(ALL_ONBOARDING_TOOLS).toContain('RecordCompare');
   });
 });
 
@@ -116,15 +124,25 @@ describe('onboarding i18n keys', () => {
       expect(t('onboarding.gotIt')).not.toBe('onboarding.gotIt');
     });
 
-    it(`claves help.mode.* en ${lang}`, () => {
+    it(`claves help.tool.* en ${lang}`, () => {
       setLang(lang);
       expect(t('help.open')).not.toBe('help.open');
       expect(t('help.close')).not.toBe('help.close');
-      for (const mode of HELP_MODES) {
-        const titleKey = `help.mode.${mode}.title`;
+      for (const toolId of HELP_TOOL_IDS) {
+        const titleKey = helpToolTitleKey(toolId);
         expect(t(titleKey)).not.toBe(titleKey);
-        expect(t(`help.mode.${mode}.body1`)).not.toBe(`help.mode.${mode}.body1`);
+        for (const bodyKey of helpToolBodyKeys(toolId)) {
+          expect(t(bodyKey)).not.toBe(bodyKey);
+        }
       }
     });
   }
+});
+
+describe('helpToolIds', () => {
+  it('incluye home y vistas auxiliares', () => {
+    expect(HELP_TOOL_IDS).toContain(HELP_HOME_ID);
+    expect(HELP_TOOL_IDS).toContain('ApexCoverageViewer');
+    expect(HELP_TOOL_IDS.length).toBe(ALL_ONBOARDING_TOOLS.length + 2);
+  });
 });

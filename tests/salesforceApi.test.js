@@ -14,7 +14,8 @@ import {
   apexLogBodyLooksLikeTestClass,
   pickBestApexLogForTestRun,
   restSoqlQueryPage,
-  probeApiVersion
+  probeApiVersion,
+  resolveApexLogsInWindowLimit
 } from '../shared/salesforceApi.js';
 
 describe('parseApexTestMethodNames', () => {
@@ -287,6 +288,24 @@ describe('probeApiVersion', () => {
   it('devuelve la última versión de la lista', async () => {
     const v = await probeApiVersion('https://example.my.salesforce.com', 'sid');
     expect(v).toBe('62.0');
+  });
+});
+
+describe('resolveApexLogsInWindowLimit', () => {
+  it('respeta el límite configurado sin capar a 200', () => {
+    expect(resolveApexLogsInWindowLimit({ limit: 15_000 })).toBe(15_000);
+    expect(resolveApexLogsInWindowLimit({ limit: 500 })).toBe(500);
+    expect(resolveApexLogsInWindowLimit({ limit: 200 })).toBe(200);
+  });
+
+  it('acota al máximo de plataforma/ajustes', () => {
+    expect(resolveApexLogsInWindowLimit({ limit: 99_999 })).toBe(50_000);
+    expect(resolveApexLogsInWindowLimit({ limit: 5 })).toBe(10);
+  });
+
+  it('usa 80 por defecto cuando no hay límite válido', () => {
+    expect(resolveApexLogsInWindowLimit({})).toBe(80);
+    expect(resolveApexLogsInWindowLimit({ limit: 0 })).toBe(80);
   });
 });
 

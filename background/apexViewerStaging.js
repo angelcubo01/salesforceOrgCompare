@@ -14,7 +14,14 @@ function prune() {
 /**
  * @param {string} title
  * @param {string} content
- * @param {{ initialLine?: number, downloadFileName?: string }} [options]
+ * @param {{
+ *   initialLine?: number,
+ *   downloadFileName?: string,
+ *   defaultTab?: string,
+ *   orgId?: string,
+ *   instanceUrl?: string,
+ *   logId?: string
+ * }} [options]
  */
 export function stageApexViewerPayload(title, content, options = {}) {
   prune();
@@ -31,6 +38,10 @@ export function stageApexViewerPayload(title, content, options = {}) {
     content: content != null ? String(content) : '',
     ...(initialLine != null ? { initialLine } : {}),
     ...(df ? { downloadFileName: df } : {}),
+    ...(options.defaultTab ? { defaultTab: String(options.defaultTab) } : {}),
+    ...(options.orgId ? { orgId: String(options.orgId) } : {}),
+    ...(options.instanceUrl ? { instanceUrl: String(options.instanceUrl) } : {}),
+    ...(options.logId ? { logId: String(options.logId) } : {}),
     at: Date.now()
   });
   return id;
@@ -46,7 +57,11 @@ export function takeApexViewerPayload(id) {
         title: v.title,
         content: v.content,
         ...(v.initialLine != null ? { initialLine: v.initialLine } : {}),
-        ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {})
+        ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {}),
+        ...(v.defaultTab ? { defaultTab: v.defaultTab } : {}),
+        ...(v.orgId ? { orgId: v.orgId } : {}),
+        ...(v.instanceUrl ? { instanceUrl: v.instanceUrl } : {}),
+        ...(v.logId ? { logId: v.logId } : {})
       }
     : null;
 }

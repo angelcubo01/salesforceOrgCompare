@@ -7,47 +7,15 @@ import {
   markToolSeenInPrefs,
   markHelpOpenedInPrefs
 } from '../../shared/onboardingPrefs.js';
+import {
+  HELP_HOME_ID,
+  HELP_TOOL_IDS,
+  helpToolTitleKey,
+  helpToolBodyKeys
+} from '../../shared/helpToolIds.js';
+import { getSelectedArtifactType } from './artifactTypeUi.js';
 
 const APP_NAV_MODE_HOME = 'home';
-
-const HELP_MODES = ['home', 'comparator', 'development', 'analysis', 'monitoring', 'manifests'];
-
-/** @type {Record<string, string[]>} */
-const HELP_MODE_BODY_KEYS = {
-  home: [
-    'help.mode.home.body1',
-    'help.mode.home.body2',
-    'help.mode.home.body3',
-    'help.mode.home.body4'
-  ],
-  comparator: [
-    'help.mode.comparator.body1',
-    'help.mode.comparator.body2',
-    'help.mode.comparator.body3',
-    'help.mode.comparator.body4',
-    'help.mode.comparator.body5'
-  ],
-  development: [
-    'help.mode.development.body1',
-    'help.mode.development.body2',
-    'help.mode.development.body3',
-    'help.mode.development.body4'
-  ],
-  analysis: [
-    'help.mode.analysis.body1',
-    'help.mode.analysis.body2',
-    'help.mode.analysis.body3',
-    'help.mode.analysis.body4',
-    'help.mode.analysis.body5'
-  ],
-  monitoring: [
-    'help.mode.monitoring.body1',
-    'help.mode.monitoring.body2',
-    'help.mode.monitoring.body3',
-    'help.mode.monitoring.body4'
-  ],
-  manifests: ['help.mode.manifests.body1', 'help.mode.manifests.body2', 'help.mode.manifests.body3']
-};
 
 let prefsCache = normalizeOnboardingPrefs(null);
 let prefsLoaded = false;
@@ -125,26 +93,32 @@ function syncModalChrome() {
 }
 
 /**
- * @param {string} [mode]
+ * @returns {string}
  */
-export function refreshHelpModalContent(mode) {
+function resolveHelpToolId() {
+  if (state.appNavMode === APP_NAV_MODE_HOME) return HELP_HOME_ID;
+  const tool = getSelectedArtifactType();
+  if (tool && HELP_TOOL_IDS.includes(tool)) return tool;
+  return HELP_HOME_ID;
+}
+
+/**
+ * @param {string} [toolId]
+ */
+export function refreshHelpModalContent(toolId) {
   const titleEl = document.getElementById('appHelpModalTitle');
   const bodyEl = document.getElementById('appHelpModalBody');
   if (!titleEl || !bodyEl) return;
 
-  const resolved =
-    mode ||
-    (state.appNavMode === APP_NAV_MODE_HOME ? 'home' : state.appNavMode) ||
-    'home';
-  const safeMode = HELP_MODES.includes(resolved) ? resolved : 'home';
+  const resolved = toolId || resolveHelpToolId();
+  const safeTool = HELP_TOOL_IDS.includes(resolved) ? resolved : HELP_HOME_ID;
 
-  const titleKey = `help.mode.${safeMode}.title`;
+  const titleKey = helpToolTitleKey(safeTool);
   const title = t(titleKey);
   titleEl.textContent = title !== titleKey ? title : t('help.title');
 
   const paragraphs = [];
-  const keys = HELP_MODE_BODY_KEYS[safeMode] || [];
-  for (const bodyKey of keys) {
+  for (const bodyKey of helpToolBodyKeys(safeTool)) {
     const text = t(bodyKey);
     if (!text || text === bodyKey) continue;
     paragraphs.push(text);
@@ -225,7 +199,7 @@ export async function closeHelpModal(markOnboardingSeen = true) {
   document.getElementById('appHelpBtn')?.focus();
 }
 
-/** Actualiza el modal de ayuda por modo si está abierto (no interrumpe onboarding). */
+/** Actualiza el modal de ayuda por herramienta si está abierto (no interrumpe onboarding). */
 export function refreshHelpModalIfOpen() {
   const modal = document.getElementById('appHelpModal');
   if (!modal || modal.classList.contains('hidden') || modalKind !== 'help') return;

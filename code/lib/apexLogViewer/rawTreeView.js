@@ -2,6 +2,7 @@ import { buildApexLogTreeModel } from '../../../shared/apexLogParser.js';
 import { createSingleEditor } from '../../editor/monaco.js';
 import { registerSfocApexLogTreeLanguage, resolveTreeThemeId } from './registerTreelogLanguage.js';
 import { ensurePanelSectionHeading } from './panelSectionHeading.js';
+import { escapeHtml } from '../../../shared/htmlEscape.js';
 
 /** @type {import('monaco-editor').editor.IStandaloneCodeEditor | null} */
 let treeEditor = null;
@@ -11,6 +12,8 @@ let treeFoldRanges = [];
 let foldingProviderRegistered = false;
 /** @type {Map<number, number>} */
 let treeLogLineToRow = new Map();
+/** @type {string[]} */
+let treeAllLines = [];
 
 /**
  * @param {import('monaco-editor')} monaco
@@ -59,23 +62,57 @@ export function revealTreeLogLine(line) {
   return true;
 }
 
+function applyTreeFilter(query, slowOnly, errorsOnly, parsed) {
+  if (!treeEditor) return;
+  const q = String(query || '').trim().toLowerCase();
+  let lines = treeAllLines;
+  if (q) lines = lines.filter((l) => l.toLowerCase().includes(q));
+  if (slowOnly) {
+    lines = lines.filter((l) => {
+      const m = l.match(/\((\d+(?:\.\d+)?)\s*ms\)|\((\d+\.\d+)\s*s\)/);
+      if (!m) return false;
+      const ms = m[1] ? Number(m[1]) : Number(m[2]) * 1000;
+      return ms >= 100;
+    });
+  }
+  if (errorsOnly && parsed?.issues?.length) {
+    const errorLines = new Set(parsed.issues.filter((i) => i.type === 'error').map((i) => i.line));
+    lines = lines.filter((l) => {
+      for (const ln of errorLines) {
+        if (treeLogLineToRow.get(ln) && l.includes(String(ln))) return true;
+      }
+      return l.toLowerCase().includes('error') || l.includes('✗');
+    });
+  }
+  treeEditor.setValue(lines.join('\n') || '—');
+}
+
 /**
  * @param {import('monaco-editor')} monaco
  * @param {HTMLElement} mount
  * @param {object} parsed
  * @param {boolean} lightTheme
  * @param {(key: string, params?: object) => string} t
+ * @param {HTMLElement | null} [toolbarEl]
  */
-export function renderTreeView(monaco, mount, parsed, lightTheme, t) {
+export function renderTreeView(monaco, mount, parsed, lightTheme, t, toolbarEl) {
   if (!mount || !parsed?.tree) return null;
-  ensurePanelSectionHeading(mount.parentElement, 'tree', t('apexLogViewer.tab.tree'));
+  ensurePanelSectionHeading(mount.parentElement, 'tree', t('apexLogViewer.tab.tree'), t);
   registerSfocApexLogTreeLanguage(monaco);
   ensureTreeFoldingProvider(monaco);
 
   const { lines, foldRanges, logLineToRow } = buildApexLogTreeModel(parsed.tree, t);
   treeFoldRanges = foldRanges;
   treeLogLineToRow = logLineToRow;
+  treeAllLines = lines;
   const text = lines.join('\n') || '—';
+
+  if (toolbarEl) {
+    toolbarEl.innerHTML = `
+      <input type="search" class="apex-log-filter" id="apexLogTreeFilter" placeholder="${escapeHtml(t('apexLogViewer.filter.treePlaceholder'))}" />
+      <label class="apex-log-text-filter-label"><input type="checkbox" id="apexLogTreeSlow" /> ${escapeHtml(t('apexLogViewer.tree.slowOnly'))}</label>
+      <label class="apex-log-text-filter-label"><input type="checkbox" id="apexLogTreeErrors" /> ${escapeHtml(t('apexLogViewer.tree.errorsOnly'))}</label>`;
+  }
 
   if (!treeEditor) {
     treeEditor = createSingleEditor(monaco, mount);
@@ -92,6 +129,16 @@ export function renderTreeView(monaco, mount, parsed, lightTheme, t) {
   }
 
   treeEditor.setValue(text);
+
+  const filterInput = toolbarEl?.querySelector('#apexLogTreeFilter');
+  const slowCb = toolbarEl?.querySelector('#apexLogTreeSlow');
+  const errorsCb = toolbarEl?.querySelector('#apexLogTreeErrors');
+  const runFilter = () =>
+    applyTreeFilter(filterInput?.value, slowCb?.checked, errorsCb?.checked, parsed);
+  filterInput?.addEventListener('input', runFilter);
+  slowCb?.addEventListener('change', runFilter);
+  errorsCb?.addEventListener('change', runFilter);
+
   requestAnimationFrame(() => {
     try {
       treeEditor?.updateOptions({

@@ -1,0 +1,28 @@
+'apexLogViewer.help.modalTitle': 'Log view help',
+    'apexLogViewer.help.navButton': 'View help',
+    'apexLogViewer.help.panelButton': 'What this view does',
+    'apexLogViewer.help.close': 'Close',
+    'apexLogViewer.help.summary':
+      'Recommended entry point: executive summary with KPIs (SOQL, DML, debug, callouts), errors, user, touched records, CC_ components, and slowest operations. Includes the execution chain to jump to any line.',
+    'apexLogViewer.help.timeline':
+      'Gantt-style timeline of timed events. Narrow the time window, expand or collapse sections, export, and sync with tree or text when clicking a bar.',
+    'apexLogViewer.help.text':
+      'Shows the full log in an Apex-highlighted editor. Filter by line type (SOQL, DML, debug, callouts, limits, errors…) or hide noise. Best for inspecting exact line context.',
+    'apexLogViewer.help.tree':
+      'Hierarchical log representation with folding by code units. Text filter, slow-only and error-only modes, and jump to text when selecting a row.',
+    'apexLogViewer.help.debug':
+      'Lists USER_DEBUG lines only: method, level, message, and embedded JSON detection with expand or copy options.',
+    'apexLogViewer.help.soql':
+      'SOQL query table with rows, duration, aggregations, and Apex location. Highlights repeated queries and lets you copy the query or jump to the log line.',
+    'apexLogViewer.help.dml':
+      'DML operations with grouping by operation type or object. Shows affected rows, duration, and link to the log line.',
+    'apexLogViewer.help.limits':
+      'Governor limit usage: peaks reached and progression chart across the execution from LIMIT_USAGE events.',
+    'apexLogViewer.help.callouts':
+      'HTTP callouts with endpoint, status, duration, and request/response pairing. Useful for debugging external integrations.',
+    'apexLogViewer.help.profiling':
+      'CUMULATIVE_PROFILING block from the end of the log: cumulative methods, SOQL, and DML by location. One section at a time to avoid mixing tools.',
+    'apexLogViewer.help.validations':
+      'Validation rules only: name, result, context, and log line. Separated from workflow for clearer analysis.',
+    'apexLogViewer.help.workflow':
+      'Workflow events only: fired rules and field updates. Dedicated view without mixing validations.',

@@ -13,6 +13,9 @@
 .PARAMETER OutputDir
   Carpeta de salida del ZIP (por defecto: dist/ en la raíz del repo).
 
+.PARAMETER SkipMinify
+  Omite la minificacion de JavaScript (util para depurar el paquete de store).
+
 .EXAMPLE
   .\scripts\pack-chrome-store.ps1
 
@@ -22,6 +25,7 @@
 [CmdletBinding()]
 param(
   [switch] $IncludeSourceMaps,
+  [switch] $SkipMinify,
   [string] $OutputDir = ''
 )
 
@@ -145,6 +149,16 @@ try {
     Copy-ExtensionTree -SourcePath $source -DestPath $dest
   }
 
+  if (-not $SkipMinify) {
+    Write-Host 'Minificando JavaScript...' -ForegroundColor Cyan
+    node (Join-Path $repoRoot 'scripts\minify-extension.mjs') $stageRoot
+    if ($LASTEXITCODE -ne 0) {
+      throw 'Minificacion fallida.'
+    }
+  } else {
+    Write-Host 'Minificacion omitida (-SkipMinify).' -ForegroundColor DarkGray
+  }
+
   if (Test-Path $zipPath) {
     Remove-Item $zipPath -Force
   }
@@ -161,6 +175,10 @@ try {
 
   if (-not $IncludeSourceMaps) {
     Write-Host '  (sin ficheros .map)' -ForegroundColor DarkGray
+  }
+
+  if (-not $SkipMinify) {
+    Write-Host '  (JS propio minificado; vendor/ sin cambios)' -ForegroundColor DarkGray
   }
 
   Write-Host ''

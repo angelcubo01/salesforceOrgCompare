@@ -12,7 +12,7 @@ import {
 } from '../ui/orgs.js';
 import { renderSavedItems, removeAllItems } from '../ui/listUi.js';
 import { saveItemsToStorage } from '../core/persistence.js';
-import { downloadAllFiles, copyAllFileNames, copyCompareDeepLink } from '../flows/fileActions.js';
+import { downloadAllFiles, copyAllFileNames } from '../flows/fileActions.js';
 import { getTotalDiffLines, advanceDiffIndex } from '../editor/diffUtils.js';
 import { downloadDiffHtml } from '../editor/exportDiffHtml.js';
 import { copyUnifiedDiffToClipboard } from '../editor/exportUnifiedDiff.js';
@@ -61,7 +61,7 @@ export function wireSelectors() {
     updateAuthIndicators();
     syncTelemetryUserFromOrgState();
     hideSidebarSearchResults();
-    syncCompareUrlFromState(state);
+    syncCompareUrlFromState(state, { method: 'push' });
     renderEditor({ leftChanged: true, rightChanged: false, prevLeftOrgId: prevLeft });
     if (getSelectedArtifactType() === 'GeneratePackageXml') {
       refreshGeneratePackageXmlTypes();
@@ -138,7 +138,7 @@ export function wireSelectors() {
     updateOrgDropdownLayout();
     updateAuthIndicators();
     syncTelemetryUserFromOrgState();
-    syncCompareUrlFromState(state);
+    syncCompareUrlFromState(state, { method: 'push' });
     renderEditor({ leftChanged: false, rightChanged: true, prevRightOrgId: prevRight });
     if (getSelectedArtifactType() === 'FieldDependency') {
       resetFieldDependencyToInitial();
@@ -438,15 +438,6 @@ export function setupCopyAll() {
   if (copyAllBtn) {
     copyAllBtn.addEventListener('click', async () => {
       await copyAllFileNames();
-    });
-  }
-}
-
-export function setupCopyCompareLink() {
-  const btn = document.getElementById('copyCompareLinkBtn');
-  if (btn) {
-    btn.addEventListener('click', () => {
-      void copyCompareDeepLink();
     });
   }
 }

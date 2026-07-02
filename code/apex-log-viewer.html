@@ -30,16 +30,23 @@
     </header>
     <nav id="apexLogTabs" class="apex-log-tabs" role="tablist" data-i18n-aria-label="apexLogViewer.tabListAria"></nav>
     <main class="apex-log-panels">
-      <div class="apex-log-panel is-active" data-panel="text">
+      <div class="apex-log-panel is-active" data-panel="summary">
+        <div id="apexLogSummaryMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="text" hidden>
+        <div id="apexLogTextToolbar" class="apex-log-text-toolbar"></div>
+        <span id="apexLogTextFilterCount" class="apex-log-text-filter-count"></span>
         <div id="apexLogViewerMount" class="apex-log-viewer-editor"></div>
       </div>
       <div class="apex-log-panel" data-panel="tree" hidden>
+        <div id="apexLogTreeToolbar" class="apex-log-panel-toolbar"></div>
         <div id="apexLogTreeMount" class="apex-log-viewer-editor"></div>
       </div>
       <div class="apex-log-panel" data-panel="debug" hidden>
         <div id="apexLogDebugMount" class="apex-log-panel-scroll"></div>
       </div>
       <div class="apex-log-panel" data-panel="timeline" hidden>
+        <div id="apexLogTimelineToolbar" class="apex-log-panel-toolbar"></div>
         <div id="apexLogTimelineMount" class="apex-log-panel-scroll"></div>
       </div>
       <div class="apex-log-panel" data-panel="soql" hidden>
@@ -47,6 +54,21 @@
       </div>
       <div class="apex-log-panel" data-panel="dml" hidden>
         <div id="apexLogDmlMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="limits" hidden>
+        <div id="apexLogLimitsMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="callouts" hidden>
+        <div id="apexLogCalloutsMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="profiling" hidden>
+        <div id="apexLogProfilingMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="validations" hidden>
+        <div id="apexLogValidationsMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="workflow" hidden>
+        <div id="apexLogWorkflowMount" class="apex-log-panel-scroll"></div>
       </div>
     </main>
     <script src="../vendor/monaco-editor/min/vs/loader.js"></script>

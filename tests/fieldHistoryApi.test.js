@@ -7,7 +7,11 @@ import {
   mergeTrackedFieldLists,
   historyQueryableFromDescribeChildRels,
   isValidSalesforceRecordId,
-  toSoqlDateTimeLiteral
+  toSoqlDateTimeLiteral,
+  expandTrackedFieldsForHistorySoql,
+  parseSalesforceDateTime,
+  fieldHistoryDisplayLabel,
+  formatFieldHistoryValue
 } from '../shared/fieldHistoryApi.js';
 
 describe('historySobjectApiName', () => {
@@ -54,10 +58,39 @@ describe('buildFieldHistorySoql', () => {
       recordId: "500'x",
       sinceIso: '2025-01-01T00:00:00.000Z',
       untilIso: '2025-06-03T12:00:00.000Z',
-      fieldNames: ["Status", "Owner"]
+      fieldNames: ['Status', 'Owner']
     });
     expect(soql).toContain("CaseId = '500\\'x'");
     expect(soql).toContain("Field IN ('Status', 'Owner')");
+  });
+
+  it('admite varios tokens por campo en el filtro Field', () => {
+    const soql = buildFieldHistorySoql({
+      historyObject: 'CaseHistory',
+      parentField: 'CaseId',
+      recordId: '500xx0000000001',
+      sinceIso: '2025-01-01T00:00:00.000Z',
+      untilIso: '2025-06-03T12:00:00.000Z',
+      fieldNames: ['Owner', 'OwnerId']
+    });
+    expect(soql).toContain("Field IN ('Owner', 'OwnerId')");
+  });
+});
+
+describe('expandTrackedFieldsForHistorySoql', () => {
+  const tracked = [
+    { apiName: 'OwnerId', label: 'Owner', type: 'reference' },
+    { apiName: 'AV_Cliente__c', label: 'Cliente AV', type: 'boolean' }
+  ];
+
+  it('incluye API name y etiqueta para filtros SOQL', () => {
+    const names = expandTrackedFieldsForHistorySoql(['OwnerId'], tracked);
+    expect(names.sort()).toEqual(['Owner', 'OwnerId']);
+  });
+
+  it('acepta selección por etiqueta', () => {
+    const names = expandTrackedFieldsForHistorySoql(['Owner'], tracked);
+    expect(names.sort()).toEqual(['Owner', 'OwnerId']);
   });
 });
 
@@ -108,5 +141,43 @@ describe('isValidSalesforceRecordId', () => {
 describe('toSoqlDateTimeLiteral', () => {
   it('formatea ISO sin milisegundos', () => {
     expect(toSoqlDateTimeLiteral('2025-01-15T10:30:00.000Z')).toBe('2025-01-15T10:30:00Z');
+  });
+});
+
+describe('parseSalesforceDateTime', () => {
+  it('parsea fechas REST con offset +0000', () => {
+    const d = parseSalesforceDateTime('2026-06-16T07:56:29.000+0000');
+    expect(d).toBeInstanceOf(Date);
+    expect(d?.toISOString()).toBe('2026-06-16T07:56:29.000Z');
+  });
+
+  it('devuelve null para valores vacíos o inválidos', () => {
+    expect(parseSalesforceDateTime('')).toBeNull();
+    expect(parseSalesforceDateTime('not-a-date')).toBeNull();
+  });
+});
+
+describe('fieldHistoryDisplayLabel', () => {
+  const tracked = [
+    { apiName: 'LastName', label: 'Apellidos' },
+    { apiName: 'AV_Cliente__c', label: 'Es cliente' }
+  ];
+
+  it('muestra etiqueta y API cuando difieren', () => {
+    expect(fieldHistoryDisplayLabel('AV_Cliente__c', tracked)).toBe('Es cliente (AV_Cliente__c)');
+  });
+
+  it('resuelve por API name o etiqueta', () => {
+    expect(fieldHistoryDisplayLabel('LastName', tracked)).toBe('Apellidos (LastName)');
+    expect(fieldHistoryDisplayLabel('Unknown__c', tracked)).toBe('Unknown__c');
+  });
+});
+
+describe('formatFieldHistoryValue', () => {
+  it('formatea booleanos y null como en AccountHistory', () => {
+    expect(formatFieldHistoryValue(false)).toBe('false');
+    expect(formatFieldHistoryValue(true)).toBe('true');
+    expect(formatFieldHistoryValue(null)).toBe('');
+    expect(formatFieldHistoryValue('GISELA RUZAFA AMADO')).toBe('GISELA RUZAFA AMADO');
   });
 });

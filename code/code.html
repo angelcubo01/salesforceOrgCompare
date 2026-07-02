@@ -267,20 +267,28 @@
             <div class="app-landing-grid-wrap">
             <div class="app-landing-grid">
               <article class="app-landing-card app-landing-card-accent-1">
-                <h2 class="app-landing-card-title" data-i18n="code.landingModeComparatorTitle"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingModeComparatorText"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingBenefitCompareTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingBenefitCompareText"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-2">
-                <h2 class="app-landing-card-title" data-i18n="code.landingModeDevelopmentTitle"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingModeDevelopmentText"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingBenefitOneWindowTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingBenefitOneWindowText"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-3">
-                <h2 class="app-landing-card-title" data-i18n="code.landingModeMonitoringTitle"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingModeMonitoringText"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingBenefitDeployTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingBenefitDeployText"></p>
               </article>
               <article class="app-landing-card app-landing-card-accent-4">
-                <h2 class="app-landing-card-title" data-i18n="code.landingModeManifestsTitle"></h2>
-                <p class="app-landing-card-text" data-i18n="code.landingModeManifestsText"></p>
+                <h2 class="app-landing-card-title" data-i18n="code.landingBenefitProductionTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingBenefitProductionText"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-5">
+                <h2 class="app-landing-card-title" data-i18n="code.landingBenefitVisibilityTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingBenefitVisibilityText"></p>
+              </article>
+              <article class="app-landing-card app-landing-card-accent-6">
+                <h2 class="app-landing-card-title" data-i18n="code.landingBenefitTimeTitle"></h2>
+                <p class="app-landing-card-text" data-i18n="code.landingBenefitTimeText"></p>
               </article>
             </div>
             </div>
@@ -331,12 +339,6 @@
                 <path d="M3 7h13a4 4 0 1 1 0 8h-4"></path>
                 <polyline points="12 12 9 15 12 18"></polyline>
                 <path d="M3 17h4"></path>
-              </svg>
-            </button>
-            <button id="copyCompareLinkBtn" type="button" class="diff-nav-button" data-i18n-title="code.copyCompareLinkTitle" title="Copiar enlace a esta comparación">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
               </svg>
             </button>
             <button id="copyUnifiedDiffBtn" type="button" class="diff-nav-button" disabled data-i18n-title="code.copyUnifiedDiffTitle" title="Copiar diff unificado (git diff)">
@@ -757,6 +759,20 @@
                 >
                   Perfiles
                 </button>
+                <button
+                  type="button"
+                  id="apexTestsRunnerSettingsBtn"
+                  class="apex-tests-toolbar-btn apex-tests-toolbar-icon-btn"
+                  data-i18n-title="apexTests.runnerSettingsBtn"
+                  data-i18n-aria-label="apexTests.runnerSettingsBtn"
+                  title="Ajustes del runner"
+                  aria-label="Ajustes del runner"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                  </svg>
+                </button>
               </div>
               <div class="apex-tests-runner-toolbar-end">
                 <button
@@ -922,6 +938,65 @@
                 </button>
               </div>
               <div id="apexTestsProfilesModalBody" class="apex-tests-profiles-modal-body"></div>
+            </div>
+          </div>
+
+          <div
+            id="apexTestsRunnerSettingsModal"
+            class="apex-tests-coverage-modal hidden"
+            aria-hidden="true"
+          >
+            <div class="apex-tests-coverage-modal-backdrop" data-apex-runner-settings-close="1" tabindex="-1"></div>
+            <div
+              class="apex-tests-coverage-modal-panel apex-tests-runner-settings-modal-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="apexTestsRunnerSettingsModalTitle"
+            >
+              <header class="apex-tests-coverage-modal-head">
+                <h3 id="apexTestsRunnerSettingsModalTitle" data-i18n="apexTests.runnerSettingsModalTitle">
+                  Ajustes de ejecución
+                </h3>
+                <button
+                  type="button"
+                  id="apexTestsRunnerSettingsModalClose"
+                  class="apex-tests-coverage-modal-close"
+                  data-i18n="apexTests.coverageModalClose"
+                >
+                  Cerrar
+                </button>
+              </header>
+              <div class="apex-tests-runner-settings-body">
+                <div class="apex-tests-runner-settings-field">
+                  <label class="apex-tests-label" for="apexTestsRunnerSettingsClassPatterns" data-i18n="apexTests.runnerSettingsClassPatternsLabel">
+                    Filtro SOQL LIKE para clases de prueba (coma)
+                  </label>
+                  <input
+                    id="apexTestsRunnerSettingsClassPatterns"
+                    type="text"
+                    class="sfoc-query-input apex-tests-runner-settings-input"
+                    autocomplete="off"
+                    spellcheck="false"
+                  />
+                  <p class="apex-tests-runner-settings-hint" data-i18n="apexTests.runnerSettingsClassPatternsHint"></p>
+                </div>
+                <label class="apex-tests-runner-settings-check">
+                  <input type="checkbox" id="apexTestsRunnerSettingsSkipCoverage" />
+                  <span data-i18n="apexTests.skipCodeCoverage.label">Omitir cobertura de código</span>
+                </label>
+                <p class="apex-tests-runner-settings-hint" data-i18n="apexTests.skipCodeCoverage.hint"></p>
+                <div class="apex-tests-runner-settings-actions">
+                  <button
+                    type="button"
+                    id="apexTestsRunnerSettingsSaveBtn"
+                    class="apex-tests-toolbar-btn"
+                    data-i18n="apexTests.runnerSettingsSave"
+                  >
+                    Guardar
+                  </button>
+                  <p id="apexTestsRunnerSettingsStatus" class="apex-tests-runner-settings-status" role="status"></p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1678,7 +1753,7 @@
               </div>
               <div class="permission-diff-field permission-diff-name-field">
                 <label for="permissionDiffCustomPermInput" class="permission-diff-field-label" data-i18n="permDiff.customPermName">Permiso personalizado</label>
-                <input id="permissionDiffCustomPermInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.customPermNamePh" placeholder="Ej.: CC_Mi_Permiso" autocomplete="off" spellcheck="false" />
+                <input id="permissionDiffCustomPermInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.customPermNamePh" placeholder="Ej.: My_Custom_Permission" autocomplete="off" spellcheck="false" />
                 <div id="permissionDiffCustomPermSuggestions" class="permission-diff-suggestions" hidden></div>
               </div>
             </div>
@@ -1978,11 +2053,11 @@
               <div class="debug-log-browser-head-actions">
                 <button
                   type="button"
-                  id="debugLogBrowserAddTraceBtn"
-                  class="debug-log-browser-add-trace-btn"
-                  data-i18n="debugLogs.addTrace"
+                  id="debugLogBrowserViewTracesBtn"
+                  class="debug-log-browser-view-traces-btn"
+                  data-i18n="debugLogs.viewTraces"
                 >
-                  Activar trazas
+                  Ver trazas
                 </button>
                 <button
                   type="button"
@@ -2026,7 +2101,7 @@
               <table class="debug-log-browser-table">
                 <thead>
                   <tr>
-                    <th scope="col">Log Id</th>
+                    <th scope="col" data-i18n="debugLogs.colStatus">Estado</th>
                     <th scope="col" data-i18n="debugLogs.colStart">Inicio</th>
                     <th scope="col" data-i18n="debugLogs.colUser">Usuario</th>
                     <th scope="col" data-i18n="debugLogs.colOperation">Operación</th>
@@ -2131,6 +2206,110 @@
                 >
                   Activar traza
                 </button>
+              </div>
+            </div>
+          </div>
+          <div id="debugLogViewTracesModal" class="debug-log-trace-modal hidden" aria-hidden="true">
+            <div class="debug-log-trace-modal-backdrop" data-debug-log-view-traces-close="1"></div>
+            <div
+              class="debug-log-trace-modal-panel debug-log-view-traces-modal-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="debugLogViewTracesModalTitle"
+            >
+              <header class="debug-log-view-traces-modal-head">
+                <h3 id="debugLogViewTracesModalTitle" data-i18n="debugLogs.viewTracesModalTitle">Trazas de depuración activas</h3>
+                <button
+                  type="button"
+                  id="debugLogViewTracesCloseBtn"
+                  class="debug-log-view-traces-close-btn"
+                  data-i18n="debugLogs.viewTracesClose"
+                >
+                  Cerrar
+                </button>
+              </header>
+              <div class="debug-log-view-traces-toolbar">
+                <label class="debug-log-view-traces-check">
+                  <input type="checkbox" id="debugLogViewTracesShowInactive" />
+                  <span data-i18n="debugLogs.viewTracesShowInactive">Mostrar también inactivas</span>
+                </label>
+                <div class="debug-log-view-traces-toolbar-actions">
+                  <button
+                    type="button"
+                    id="debugLogViewTracesAddTraceBtn"
+                    class="debug-log-browser-add-trace-btn debug-log-view-traces-add-btn"
+                    data-i18n="debugLogs.addTrace"
+                  >
+                    Activar trazas
+                  </button>
+                  <button
+                    type="button"
+                    id="debugLogViewTracesRefreshBtn"
+                    class="debug-log-view-traces-refresh-btn"
+                    data-i18n="debugLogs.viewTracesRefresh"
+                  >
+                    Actualizar
+                  </button>
+                </div>
+              </div>
+              <div class="debug-log-view-traces-table-wrap">
+                <table class="debug-log-view-traces-table">
+                  <thead>
+                    <tr>
+                      <th scope="col" data-i18n="debugLogs.viewTracesColUser">Usuario</th>
+                      <th scope="col" data-i18n="debugLogs.viewTracesColLevel">Nivel</th>
+                      <th scope="col" data-i18n="debugLogs.viewTracesColStart">Inicio</th>
+                      <th scope="col" data-i18n="debugLogs.viewTracesColEnd">Fin</th>
+                      <th scope="col" data-i18n="debugLogs.viewTracesColStatus">Estado</th>
+                      <th scope="col" data-i18n="debugLogs.viewTracesColActions">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="debugLogViewTracesTbody"></tbody>
+                </table>
+                <div id="debugLogViewTracesLoading" class="debug-log-view-traces-loading hidden" role="status" aria-live="polite">
+                  <span class="debug-log-browser-loading-spinner" aria-hidden="true"></span>
+                  <span data-i18n="debugLogs.viewTracesLoading">Cargando trazas…</span>
+                </div>
+                <p id="debugLogViewTracesEmpty" class="debug-log-view-traces-empty hidden" role="status"></p>
+              </div>
+              <div id="debugLogEditTraceModal" class="debug-log-edit-trace-modal hidden" aria-hidden="true">
+                <div class="debug-log-edit-trace-modal-inner" role="dialog" aria-modal="true" aria-labelledby="debugLogEditTraceModalTitle">
+                  <h4 id="debugLogEditTraceModalTitle" data-i18n="debugLogs.viewTracesEditTitle">Editar traza</h4>
+                  <p id="debugLogEditTraceUser" class="debug-log-edit-trace-user"></p>
+                  <div class="debug-log-trace-modal-form">
+                    <div class="debug-log-trace-modal-field">
+                      <label for="debugLogEditTraceLevelSelect" class="debug-log-trace-modal-label" data-i18n="debugLogs.traceLevelLabel"
+                        >Nivel de depuración</label
+                      >
+                      <select id="debugLogEditTraceLevelSelect" class="debug-log-trace-modal-input debug-log-trace-modal-select"></select>
+                    </div>
+                    <div class="debug-log-trace-modal-field">
+                      <label for="debugLogEditTraceStartInput" class="debug-log-trace-modal-label" data-i18n="debugLogs.traceStartLabel"
+                        >Fecha inicio</label
+                      >
+                      <input id="debugLogEditTraceStartInput" type="datetime-local" class="debug-log-trace-modal-input" />
+                    </div>
+                    <div class="debug-log-trace-modal-field">
+                      <label for="debugLogEditTraceEndInput" class="debug-log-trace-modal-label" data-i18n="debugLogs.traceEndLabel"
+                        >Fecha fin</label
+                      >
+                      <input id="debugLogEditTraceEndInput" type="datetime-local" class="debug-log-trace-modal-input" />
+                    </div>
+                  </div>
+                  <div class="debug-log-trace-modal-actions">
+                    <button type="button" id="debugLogEditTraceCancelBtn" class="debug-log-trace-modal-btn" data-i18n="debugLogs.viewTracesEditCancel">
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      id="debugLogEditTraceSaveBtn"
+                      class="debug-log-trace-modal-btn debug-log-trace-modal-btn-primary"
+                      data-i18n="debugLogs.viewTracesEditSave"
+                    >
+                      Guardar
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2381,6 +2560,7 @@
             <p class="field-history-hint" data-i18n="fieldHistory.retentionHint">
               Salesforce conserva el field history un tiempo limitado (habitualmente hasta 18 meses).
             </p>
+            <div class="field-history-results">
             <div class="field-history-pagination field-history-pagination-top">
               <button type="button" id="fieldHistoryPrevPage" class="field-history-open-btn">←</button>
               <span id="fieldHistoryPageLabel" class="field-history-page-label">1/1</span>
@@ -2412,6 +2592,7 @@
                   <option value="100">100</option>
                 </select>
               </div>
+            </div>
             </div>
           </div>
         </div>

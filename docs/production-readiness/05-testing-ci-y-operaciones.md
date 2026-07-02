@@ -191,11 +191,20 @@ jobs:
 ### Empaquetado Chrome Web Store
 
 Script: [`scripts/pack-chrome-store.ps1`](../../scripts/pack-chrome-store.ps1)  
+Minificación: [`scripts/minify-extension.mjs`](../../scripts/minify-extension.mjs) (esbuild, archivo a archivo)  
 npm: `npm run pack:chrome`
 
 **Requisitos:**
 - `shared/telemetryConfig.js` debe existir (gitignored, con clave `phc_*` válida)
 - Incluye: manifest, background, popup, code, shared, vendor, assets, icons
+- `npm install` (dependencia `esbuild` para minificar el JS propio)
+
+**Minificación en el pack:**
+- `pack:chrome` minifica `background.js`, `background/`, `code/`, `popup/` y `shared/` antes de crear el ZIP
+- `vendor/` no se modifica (Monaco, PostHog, etc. ya vienen minificados)
+- Los tests (`vitest`) siguen ejecutándose sobre el código fuente sin minificar
+- Para depurar sin minificar: `.\scripts\pack-chrome-store.ps1 -SkipMinify`
+- Probar minificación local: `node scripts/minify-extension.mjs <carpeta-staging>`
 
 **Desalineación detectada:**
 - [`manifest.json`](../../manifest.json): versión **2.11**

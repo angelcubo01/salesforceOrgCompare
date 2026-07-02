@@ -3,7 +3,14 @@ import { bg } from '../core/bridge.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
-import { isValidSalesforceRecordId } from '../../shared/fieldHistoryApi.js';
+import {
+  isValidSalesforceRecordId,
+  expandTrackedFieldsForHistorySoql,
+  parseSalesforceDateTime,
+  fieldHistoryDisplayLabel,
+  formatFieldHistoryValue
+} from '../../shared/fieldHistoryApi.js';
+import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { getFieldHistoryDefaultRangeDays } from '../../shared/extensionSettings.js';
 
@@ -12,6 +19,8 @@ const MIN_SUGGEST_LEN = 2;
 /** @type {Array<Record<string, unknown>>} */
 let lastRows = [];
 let currentPage = 1;
+let historyLoading = false;
+let filterEventsPaused = false;
 
 /** @type {{ objectApiName: string, historyObject: string, parentField: string, trackedFields: Array<{ apiName: string, label: string, type: string }>, historyEnabled: boolean, historyQueryable: boolean } | null} */
 let historyContext = null;
@@ -43,7 +52,7 @@ function getFilterElements() {
 
 function formatDateTime(value) {
   if (!value) return '—';
-  const d = new Date(value);
+  const d = parseSalesforceDateTime(value) || new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
   const lang = getCurrentLang() === 'en' ? 'en-GB' : 'es-ES';
   return d.toLocaleString(lang, {
@@ -56,13 +65,47 @@ function formatDateTime(value) {
   });
 }
 
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function normalizeSfId(value) {
+  const s = String(value || '').trim();
+  return s.length >= 15 ? s.slice(0, 15) : s;
+}
+
+function fieldDisplayLabel(fieldKey) {
+  return fieldHistoryDisplayLabel(fieldKey, historyContext?.trackedFields || []);
+}
+
+function appendHistoryCell(tr, text, className) {
+  const td = document.createElement('td');
+  if (className) td.className = className;
+  const value = String(text ?? '').trim();
+  if (value) {
+    td.textContent = value;
+    if (className) td.title = value;
+  } else {
+    td.textContent = '—';
+  }
+  tr.appendChild(td);
+}
+
+function appendFieldHistoryRow(tbody, row) {
+  const tr = document.createElement('tr');
+  const userName = String(row?.CreatedBy?.Name || '').trim();
+  const userUsername = String(row?.CreatedBy?.Username || '').trim();
+  const userId = String(row?.CreatedById || '').trim();
+  appendHistoryCell(tr, formatDateTime(row?.CreatedDate));
+  appendHistoryCell(tr, userName || userUsername || userId || '—');
+  appendHistoryCell(tr, row?.Field ? fieldDisplayLabel(row.Field) : '—');
+  appendHistoryCell(
+    tr,
+    formatFieldHistoryValue(row?.OldValue),
+    'field-history-value-cell'
+  );
+  appendHistoryCell(
+    tr,
+    formatFieldHistoryValue(row?.NewValue),
+    'field-history-value-cell'
+  );
+  tbody.appendChild(tr);
 }
 
 function normalizeLower(value) {
@@ -160,8 +203,8 @@ function populateFieldFilterOptions(fields) {
   fieldFilter.innerHTML = '';
   for (const f of fields) {
     const opt = document.createElement('option');
-    /** En history rows, Field suele ser la etiqueta (p. ej. "Account Name"), no el API name. */
-    opt.value = f.label || f.apiName;
+    /** La columna Field en history usa API name o etiqueta según el campo. */
+    opt.value = f.apiName || f.label;
     opt.textContent = f.apiName && f.label !== f.apiName ? `${f.label} (${f.apiName})` : f.label || f.apiName;
     fieldFilter.appendChild(opt);
   }
@@ -184,7 +227,13 @@ function applyClientFilters(rows) {
   return (rows || []).filter((r) => {
     const userId = String(r?.CreatedById || '').trim();
     const userKey = userId || String(r?.CreatedBy?.Username || '').trim() || String(r?.CreatedBy?.Name || '').trim();
-    if (userValue && userKey !== userValue) return false;
+    if (userValue) {
+      const selectedNorm = normalizeSfId(userValue);
+      const rowNorm = normalizeSfId(userKey);
+      const exactMatch = userKey === userValue;
+      const idMatch = selectedNorm && rowNorm && selectedNorm === rowNorm;
+      if (!exactMatch && !idMatch) return false;
+    }
     if (textNeedle) {
       const oldV = normalizeLower(r?.OldValue);
       const newV = normalizeLower(r?.NewValue);
@@ -225,6 +274,7 @@ function populateUserOptions(rows) {
     user.appendChild(opt);
   }
   if ([...user.options].some((o) => o.value === current)) user.value = current;
+  else user.value = '';
 }
 
 function updatePaginationUi(totalFilteredRows) {
@@ -244,38 +294,32 @@ function updatePaginationUi(totalFilteredRows) {
   }
 }
 
-function renderRows() {
+function renderRows(opts = {}) {
   const { tbody, empty, pageSize } = getFilterElements();
   if (!tbody || !empty) return;
+  if (!opts.force && historyLoading) return;
   const rows = applyClientFilters(lastRows);
   const perPage = Math.max(1, Number(pageSize?.value || 25));
-  updatePaginationUi(rows.length);
   const start = (currentPage - 1) * perPage;
   const pageRows = rows.slice(start, start + perPage);
-  tbody.innerHTML = '';
+  tbody.replaceChildren();
   if (!pageRows.length) {
     empty.classList.remove('hidden');
+    updatePaginationUi(rows.length);
     return;
   }
   empty.classList.add('hidden');
   for (const row of pageRows) {
-    const tr = document.createElement('tr');
-    const userName = String(row?.CreatedBy?.Name || '').trim();
-    const userUsername = String(row?.CreatedBy?.Username || '').trim();
-    const userId = String(row?.CreatedById || '').trim();
-    const userCell = escapeHtml(userName || userUsername || userId || '—');
-    const fieldText = row?.Field ? escapeHtml(String(row.Field)) : '—';
-    const oldText = row?.OldValue != null && row.OldValue !== '' ? escapeHtml(String(row.OldValue)) : '—';
-    const newText = row?.NewValue != null && row.NewValue !== '' ? escapeHtml(String(row.NewValue)) : '—';
-    tr.innerHTML = `
-      <td>${formatDateTime(row?.CreatedDate)}</td>
-      <td>${userCell}</td>
-      <td>${fieldText}</td>
-      <td class="field-history-value-cell" title="${oldText}">${oldText}</td>
-      <td class="field-history-value-cell" title="${newText}">${newText}</td>
-    `;
-    tbody.appendChild(tr);
+    try {
+      appendFieldHistoryRow(tbody, row);
+    } catch (e) {
+      console.error('[fieldHistory] row render failed', e, row);
+    }
   }
+  if (!tbody.children.length) {
+    empty.classList.remove('hidden');
+  }
+  updatePaginationUi(rows.length);
 }
 
 function ensureDefaultDateRange() {
@@ -401,8 +445,12 @@ async function loadFieldHistory() {
   }
   if (status) status.textContent = t('fieldHistory.loading');
   if (loadBtn) loadBtn.disabled = true;
+  historyLoading = true;
   showToastWithSpinner(t('fieldHistory.loading'));
   const fieldNames = getSelectedFieldNames();
+  const expandedFieldNames = fieldNames.length
+    ? expandTrackedFieldsForHistorySoql(fieldNames, historyContext.trackedFields)
+    : undefined;
   try {
     const res = await bg({
       type: 'fieldHistory:list',
@@ -413,7 +461,7 @@ async function loadFieldHistory() {
       recordId: rid,
       sinceIso,
       untilIso,
-      fieldNames: fieldNames.length ? fieldNames : undefined
+      fieldNames: expandedFieldNames?.length ? expandedFieldNames : undefined
     });
     if (!res?.ok) {
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('fieldHistory.loadError');
@@ -424,9 +472,16 @@ async function loadFieldHistory() {
     }
     lastRows = Array.isArray(res.rows) ? res.rows : [];
     currentPage = 1;
-    populateUserOptions(lastRows);
-    if (status) status.textContent = '';
-    renderRows();
+    filterEventsPaused = true;
+    try {
+      const { user } = getFilterElements();
+      if (user) user.value = '';
+      populateUserOptions(lastRows);
+      if (status) status.textContent = '';
+      renderRows({ force: true });
+    } finally {
+      filterEventsPaused = false;
+    }
     showToast(t('fieldHistory.loaded'), 'success');
     void logFieldHistoryQuery({
       objectApiName: historyContext.objectApiName,
@@ -434,6 +489,7 @@ async function loadFieldHistory() {
       hasFieldFilter: fieldNames.length > 0
     });
   } finally {
+    historyLoading = false;
     if (loadBtn) loadBtn.disabled = !historyContext?.historyEnabled;
     dismissSpinnerToast();
   }
@@ -485,11 +541,13 @@ export function setupFieldHistoryPanel() {
 
   if (user)
     user.addEventListener('change', () => {
+      if (filterEventsPaused) return;
       currentPage = 1;
       renderRows();
     });
   if (text)
     text.addEventListener('input', () => {
+      if (filterEventsPaused) return;
       currentPage = 1;
       renderRows();
     });

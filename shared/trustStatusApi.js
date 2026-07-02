@@ -62,8 +62,8 @@ export function countActiveIncidents(trustData) {
  */
 export function buildTrustPageUrl(instanceKey) {
   const key = String(instanceKey || '').trim().toUpperCase();
-  if (!key) return 'https://trust.salesforce.com/';
-  return `https://trust.salesforce.com/instances/${encodeURIComponent(key)}`;
+  if (!key) return 'https://status.salesforce.com/';
+  return `https://status.salesforce.com/instances/${encodeURIComponent(key)}`;
 }
 
 /**

@@ -20,29 +20,6 @@ export async function openFileInNewTab(item) {
   }
 }
 
-/** Copia al portapapeles la URL que reproduce la comparación actual. */
-export async function copyCompareDeepLink() {
-  const url = buildComparePageUrl(state);
-  try {
-    await navigator.clipboard.writeText(url);
-    showToast(t('toast.compareLinkCopied'), 'info');
-  } catch {
-    const textArea = document.createElement('textarea');
-    textArea.value = url;
-    textArea.style.position = 'fixed';
-    textArea.style.opacity = '0';
-    document.body.appendChild(textArea);
-    textArea.select();
-    try {
-      document.execCommand('copy');
-      showToast(t('toast.compareLinkCopied'), 'info');
-    } catch {
-      showToast(t('toast.compareLinkCopyFailed'), 'error');
-    }
-    document.body.removeChild(textArea);
-  }
-}
-
 export async function copyFileName(item) {
   const fileName = getDisplayFileName(item);
   try {

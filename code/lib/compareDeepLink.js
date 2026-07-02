@@ -60,6 +60,44 @@ export function operationSelectValueForItemType(itemType) {
 }
 
 /**
+ * Deriva la operación (`op`) a partir de un deep-link parseado.
+ * @param {ReturnType<typeof parseCompareDeepLink>} parsed
+ */
+export function deriveOpFromDeepLink(parsed) {
+  return (
+    parsed.op ||
+    (parsed.itemType && parsed.itemKey ? operationSelectValueForItemType(parsed.itemType) : '')
+  );
+}
+
+let historySyncSuppressDepth = 0;
+let isApplyingHistoryNavigation = false;
+
+/** @returns {boolean} */
+export function isHistorySyncSuppressed() {
+  return historySyncSuppressDepth > 0 || isApplyingHistoryNavigation;
+}
+
+/** @param {boolean} suppressed */
+export function setHistorySyncSuppressed(suppressed) {
+  if (suppressed) {
+    historySyncSuppressDepth++;
+  } else {
+    historySyncSuppressDepth = Math.max(0, historySyncSuppressDepth - 1);
+  }
+}
+
+/** @param {boolean} applying */
+export function setApplyingHistoryNavigation(applying) {
+  isApplyingHistoryNavigation = applying;
+}
+
+/** @returns {boolean} */
+export function getApplyingHistoryNavigation() {
+  return isApplyingHistoryNavigation;
+}
+
+/**
  * @param {string | URLSearchParams} search
  * @returns {{
  *   leftOrgId: string | null,
@@ -176,15 +214,43 @@ export function buildComparePageUrl(appState) {
   return q ? `${base}?${q}` : base;
 }
 
-/** Actualiza la barra de direcciones sin recargar (replaceState). */
-export function syncCompareUrlFromState(appState) {
-  if (typeof window === 'undefined' || !window.history?.replaceState) return;
+/**
+ * @param {import('../core/state.js').state} appState
+ * @returns {string}
+ */
+export function buildUrlFromState(appState) {
   const q = buildCompareSearchParamsFromState(appState).toString();
+  const path = typeof window !== 'undefined' ? window.location.pathname || '' : '';
+  return q ? `${path}?${q}` : path;
+}
+
+/**
+ * @param {string} a
+ * @param {string} b
+ */
+export function urlsEqual(a, b) {
+  return a === b;
+}
+
+/**
+ * Actualiza la barra de direcciones sin recargar.
+ * @param {import('../core/state.js').state} appState
+ * @param {{ method?: 'push' | 'replace' }} [opts]
+ */
+export function syncCompareUrlFromState(appState, opts = {}) {
+  if (typeof window === 'undefined' || !window.history?.replaceState) return;
+  if (isHistorySyncSuppressed()) return;
+
+  const method = opts.method === 'push' ? 'push' : 'replace';
+  const next = buildUrlFromState(appState);
   const path = window.location.pathname || '';
-  const next = q ? `${path}?${q}` : path;
   const current = `${path}${window.location.search || ''}`;
-  if (current !== next) {
-    window.history.replaceState(null, '', next);
+  if (!urlsEqual(current, next)) {
+    if (method === 'push' && window.history.pushState) {
+      window.history.pushState(null, '', next);
+    } else {
+      window.history.replaceState(null, '', next);
+    }
   }
 }
 

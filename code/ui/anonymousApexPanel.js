@@ -5,11 +5,10 @@ import { MonacoWorkbench } from '../editor/monacoWorkbench.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
-import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
+import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
 import { applyArtifactTypeUi } from './artifactTypeUi.js';
 import { navigateToModeAndTool } from './appModeNav.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
-import { randomStagingId } from '../../shared/randomId.js';
 import { guardToolAction } from './featureControlsUi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { renderVscodeTabBar } from './vscodeTabs.js';
@@ -414,66 +413,6 @@ function sanitizeApexViewerDownloadFileName(name) {
     .trim()
     .slice(0, 200);
   return s || 'file';
-}
-
-async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
-  const initialLine =
-    viewerOpts.initialLine != null && Number.isFinite(Number(viewerOpts.initialLine))
-      ? Math.max(1, Math.floor(Number(viewerOpts.initialLine)))
-      : undefined;
-  const downloadFileName =
-    viewerOpts.downloadFileName != null && String(viewerOpts.downloadFileName).trim()
-      ? sanitizeApexViewerDownloadFileName(viewerOpts.downloadFileName)
-      : undefined;
-  const lineQs = initialLine != null ? `&line=${encodeURIComponent(String(initialLine))}` : '';
-  const staged = await bg({
-    type: 'apexViewer:stage',
-    title,
-    content,
-    ...(initialLine != null ? { initialLine } : {}),
-    ...(downloadFileName ? { downloadFileName } : {})
-  });
-  if (staged.ok && staged.id) {
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}${lineQs}`),
-      '_blank'
-    );
-    return true;
-  }
-  const storageKey = randomStagingId('sfoc_aa_');
-  try {
-    await chrome.storage.local.set({
-      [storageKey]: {
-        title,
-        content,
-        ...(initialLine != null ? { initialLine } : {}),
-        ...(downloadFileName ? { downloadFileName } : {})
-      }
-    });
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?k=${encodeURIComponent(storageKey)}${lineQs}`),
-      '_blank'
-    );
-    return true;
-  } catch {
-    /* storage fallback */
-  }
-  try {
-    const idbId = randomStagingId('idb_');
-    await apexViewerIdbPut(idbId, {
-      title,
-      content,
-      ...(initialLine != null ? { initialLine } : {}),
-      ...(downloadFileName ? { downloadFileName } : {})
-    });
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}${lineQs}`),
-      '_blank'
-    );
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function setExecStatus(text, tone = '') {

@@ -23,6 +23,44 @@ export function toSoqlDateTimeLiteral(isoOrDate) {
 }
 
 /**
+ * Normaliza fechas REST de Salesforce (p. ej. `2026-06-16T07:56:29.000+0000`) para `Date`.
+ * @param {unknown} value
+ * @returns {Date | null}
+ */
+export function parseSalesforceDateTime(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  const normalized = raw.replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/**
+ * @param {string} fieldKey
+ * @param {Array<{ apiName: string, label: string }>} trackedFields
+ */
+export function fieldHistoryDisplayLabel(fieldKey, trackedFields) {
+  const key = String(fieldKey || '').trim();
+  if (!key) return '—';
+  const f = (trackedFields || []).find((tf) => tf.apiName === key || tf.label === key);
+  if (!f) return key;
+  if (f.label && f.apiName && f.label !== f.apiName) return `${f.label} (${f.apiName})`;
+  return f.label || f.apiName || key;
+}
+
+/**
+ * Texto mostrable para OldValue/NewValue de field history (boolean, null, texto).
+ * @param {unknown} value
+ * @returns {string} cadena vacía si no hay valor (la UI muestra «—»)
+ */
+export function formatFieldHistoryValue(value) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'boolean') return value ? 'true' : 'false';
+  const text = String(value).trim();
+  return text;
+}
+
+/**
  * API name del objeto history (Account → AccountHistory, Foo__c → Foo__History).
  * @param {string} objectApiName
  */
@@ -160,6 +198,27 @@ export async function probeHistoryObjectQueryable(instanceUrl, sid, apiVersion, 
 export function isValidSalesforceRecordId(recordId) {
   const id = String(recordId || '').trim();
   return /^[a-zA-Z0-9]{15}$|^[a-zA-Z0-9]{18}$/.test(id);
+}
+
+/**
+ * Tokens que aparecen en la columna Field del history (API name y/o etiqueta).
+ * @param {Array<{ apiName: string, label: string }>} trackedFields
+ * @param {string[]} selectedKeys apiName o label seleccionados en UI
+ */
+export function expandTrackedFieldsForHistorySoql(selectedKeys, trackedFields) {
+  const names = new Set();
+  for (const sel of selectedKeys || []) {
+    const key = String(sel || '').trim();
+    if (!key) continue;
+    const tf = (trackedFields || []).find((f) => f.apiName === key || f.label === key);
+    if (tf) {
+      if (tf.apiName) names.add(tf.apiName);
+      if (tf.label) names.add(tf.label);
+    } else {
+      names.add(key);
+    }
+  }
+  return [...names];
 }
 
 /**

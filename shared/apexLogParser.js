@@ -17,6 +17,147 @@ const ENTRY_EXIT = {
   FLOW_BULK_ELEMENT_BEGIN: { exit: 'FLOW_BULK_ELEMENT_END', kind: 'flow', label: 'Flow' }
 };
 
+const SF_ID_RE = /\b([a-zA-Z0-9]{15,18})\b/g;
+
+/** @param {string} event */
+export function classifyLogEvent(event) {
+  const ev = String(event || '');
+  if (ev.includes('SOQL')) return 'soql';
+  if (ev.includes('DML')) return 'dml';
+  if (ev === 'USER_DEBUG') return 'debug';
+  if (ev.startsWith('CALLOUT')) return 'callout';
+  if (ev === 'LIMIT_USAGE' || ev === 'CUMULATIVE_LIMIT_USAGE') return 'limit';
+  if (ev === 'EXCEPTION_THROWN' || ev === 'FATAL_ERROR') return 'error';
+  if (ev.includes('METHOD') || ev.includes('CONSTRUCTOR')) return 'method';
+  if (ev.startsWith('VALIDATION_') || ev.startsWith('WF_')) return 'validation';
+  if (
+    ev === 'HEAP_ALLOCATE' ||
+    ev === 'STATEMENT_EXECUTE' ||
+    ev === 'VARIABLE_ASSIGNMENT' ||
+    ev === 'VARIABLE_SCOPE_BEGIN' ||
+    ev === 'SYSTEM_MODE_ENTER' ||
+    ev === 'SYSTEM_MODE_EXIT'
+  ) {
+    return 'noise';
+  }
+  if (ev.startsWith('CODE_UNIT') || ev.startsWith('EXECUTION_') || ev.startsWith('FLOW_')) return 'unit';
+  return 'other';
+}
+
+/** @param {string} query */
+export function normalizeSoqlForDedup(query) {
+  return String(query || '')
+    .replace(/\s+/g, ' ')
+    .replace(/:tmpVar\d+/gi, ':bind')
+    .trim()
+    .toLowerCase();
+}
+
+/** @param {object[]} soql */
+export function groupDuplicateSoql(soql) {
+  const groups = new Map();
+  for (const row of soql || []) {
+    const key = normalizeSoqlForDedup(row.query);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(row);
+  }
+  return [...groups.entries()]
+    .filter(([, rows]) => rows.length > 1)
+    .map(([key, rows]) => ({
+      key,
+      query: rows[0].query,
+      count: rows.length,
+      totalDurationMs: rows.reduce((s, r) => s + (r.durationMs || 0), 0),
+      rows
+    }))
+    .sort((a, b) => b.count - a.count || b.totalDurationMs - a.totalDurationMs);
+}
+
+function extractRecordIds(text, records) {
+  const matches = String(text || '').matchAll(SF_ID_RE);
+  for (const m of matches) {
+    const id = m[1];
+    const prefix = id.slice(0, 3).toLowerCase();
+    if (prefix === '001') records.accounts.add(id);
+    else if (prefix === '500') records.cases.add(id);
+    else if (prefix === '005') records.users.add(id);
+    else if (prefix === '003') records.contacts.add(id);
+    else if (/^[a-z0-9]{15,18}$/i.test(id)) records.other.add(id);
+  }
+}
+
+function recordsToObject(sets) {
+  return {
+    accounts: [...sets.accounts],
+    cases: [...sets.cases],
+    users: [...sets.users],
+    contacts: [...sets.contacts],
+    other: [...sets.other]
+  };
+}
+
+function parseCumulativeProfiling(text) {
+  const profiling = { soql: [], dml: [], methods: [] };
+  const idx = text.indexOf('CUMULATIVE_PROFILING|');
+  if (idx < 0) return profiling;
+
+  const block = text.slice(idx);
+  const lines = block.split(/\r?\n/);
+  let section = '';
+
+  for (const raw of lines) {
+    if (!raw.trim()) continue;
+    if (raw.includes('CUMULATIVE_PROFILING_END')) break;
+
+    const profMatch = raw.match(/CUMULATIVE_PROFILING\|([^|]+)\|/);
+    if (profMatch) {
+      const label = profMatch[1].trim().toLowerCase();
+      if (label.includes('soql')) section = 'soql';
+      else if (label.includes('dml')) section = 'dml';
+      else if (label.includes('method')) section = 'methods';
+      else section = '';
+      continue;
+    }
+
+    if (!section || raw.includes('CUMULATIVE_PROFILING|')) continue;
+
+    const entryMatch = raw.match(
+      /^(?:Class\.|Trigger\.)?([^:]+):\s*line\s+(\d+),\s*column\s+\d+:\s*(.+?):\s*executed\s+(\d+)\s+time[s]?\s+in\s+(\d+)\s*ms/i
+    );
+    const externalMatch = raw.match(
+      /^External entry point:\s*(.+?):\s*executed\s+(\d+)\s+time[s]?\s+in\s+(\d+)\s*ms/i
+    );
+
+    if (entryMatch) {
+      profiling[section].push({
+        location: entryMatch[1].trim(),
+        apexLine: Number(entryMatch[2]),
+        detail: entryMatch[3].trim(),
+        executions: Number(entryMatch[4]),
+        totalMs: Number(entryMatch[5]),
+        line: 0
+      });
+      continue;
+    }
+
+    if (externalMatch && section === 'methods') {
+      profiling.methods.push({
+        location: externalMatch[1].trim(),
+        apexLine: 0,
+        detail: externalMatch[1].trim(),
+        executions: Number(externalMatch[2]),
+        totalMs: Number(externalMatch[3]),
+        line: 0
+      });
+    }
+  }
+
+  for (const key of ['soql', 'dml', 'methods']) {
+    profiling[key].sort((a, b) => b.totalMs - a.totalMs);
+  }
+  return profiling;
+}
+
 let nextNodeId = 0;
 
 function freshId() {
@@ -156,6 +297,26 @@ export function parseApexDebugLog(rawText) {
   const userDebug = [];
   const soql = [];
   const dml = [];
+  const limits = [];
+  const callouts = [];
+  const validations = [];
+  const workflows = [];
+  const codeUnits = [];
+  const lineEvents = [];
+  const recordSets = {
+    accounts: new Set(),
+    cases: new Set(),
+    users: new Set(),
+    contacts: new Set(),
+    other: new Set()
+  };
+  /** @type {Map<string|number, object>} */
+  const openCallouts = new Map();
+  /** @type {object[]} */
+  const methodStack = [];
+  /** @type {Map<number, object>} */
+  const openCodeUnits = new Map();
+  const limitPeak = {};
   const debugLevels = parseDebugLevels(text);
   let user = null;
 
@@ -187,6 +348,101 @@ export function parseApexDebugLog(rawText) {
     const { timestampNs, event, parts, timeStr } = parsed;
     if (minNs == null || timestampNs < minNs) minNs = timestampNs;
     if (maxNs == null || timestampNs > maxNs) maxNs = timestampNs;
+
+    lineEvents.push({ line: lineNum, event, category: classifyLogEvent(event) });
+    extractRecordIds(lineText, recordSets);
+
+    if (event === 'LIMIT_USAGE') {
+      if (lineText.includes('MAXIMUM DEBUG LOG SIZE REACHED')) {
+        issues.push({
+          summary: 'Log truncado',
+          description: 'Se alcanzó el tamaño máximo del log de depuración.',
+          type: 'warning',
+          line: lineNum
+        });
+      }
+      const apexLine = parseApexLineNumber(parts[1]);
+      const limitType = parts[2] || '';
+      const used = Number(parts[3]) || 0;
+      const max = Number(parts[4]) || 0;
+      limits.push({
+        line: lineNum,
+        timestamp: timeStr,
+        timestampNs,
+        apexLine,
+        type: limitType,
+        used,
+        max
+      });
+      if (!limitPeak[limitType] || used > limitPeak[limitType].used) {
+        limitPeak[limitType] = { used, max, line: lineNum };
+      }
+      continue;
+    }
+
+    if (event === 'CALLOUT_REQUEST') {
+      const apexLine = parseApexLineNumber(parts[1]);
+      const reqText = parts.slice(2).join('|');
+      const endpointM = reqText.match(/Endpoint=([^,\]]+)/);
+      const methodM = reqText.match(/Method=(\w+)/);
+      const rec = {
+        line: lineNum,
+        requestLine: lineNum,
+        responseLine: 0,
+        apexLine: apexLine ?? '',
+        endpoint: endpointM?.[1] || reqText,
+        method: methodM?.[1] || '',
+        statusCode: 0,
+        status: '',
+        durationMs: 0,
+        timestampNs
+      };
+      openCallouts.set(apexLine ?? lineNum, rec);
+      callouts.push(rec);
+      continue;
+    }
+
+    if (event === 'CALLOUT_RESPONSE') {
+      const apexLine = parseApexLineNumber(parts[1]);
+      const respText = parts.slice(2).join('|');
+      const statusM = respText.match(/StatusCode=(\d+)/);
+      const statusTextM = respText.match(/Status=([^,\]]+)/);
+      const rec = openCallouts.get(apexLine) || callouts[callouts.length - 1];
+      if (rec && !rec.responseLine) {
+        rec.responseLine = lineNum;
+        rec.statusCode = Number(statusM?.[1]) || 0;
+        rec.status = statusTextM?.[1] || '';
+        rec.durationMs = Math.round((timestampNs - rec.timestampNs) / 1_000_000);
+      }
+      continue;
+    }
+
+    if (event === 'VALIDATION_RULE') {
+      validations.push({
+        line: lineNum,
+        kind: 'rule',
+        ruleId: parts[1] || '',
+        name: parts[2] || parts.slice(1).join('|'),
+        result: ''
+      });
+      continue;
+    }
+
+    if (event === 'VALIDATION_PASS' || event === 'VALIDATION_FAIL') {
+      validations.push({
+        line: lineNum,
+        kind: event === 'VALIDATION_PASS' ? 'pass' : 'fail',
+        ruleId: '',
+        name: '',
+        result: event === 'VALIDATION_PASS' ? 'pass' : 'fail'
+      });
+      continue;
+    }
+
+    if (event.startsWith('WF_')) {
+      workflows.push({ line: lineNum, event, detail: parts.slice(1).join('|') || '' });
+      continue;
+    }
 
     if (event === 'USER_INFO') {
       if (!user) {
@@ -249,6 +505,7 @@ export function parseApexDebugLog(rawText) {
         label = parts[3] || parts[2] || 'CODE_UNIT';
       } else if (event === 'METHOD_ENTRY' || event === 'CONSTRUCTOR_ENTRY') {
         label = parts[3] || parts[2] || event;
+        methodStack.push({ label, apexLine: apexLine ?? '', line: lineNum });
       } else if (event === 'SYSTEM_METHOD_ENTRY') {
         label = parts[2] || 'SYSTEM';
       } else if (event.startsWith('FLOW_')) {
@@ -268,13 +525,28 @@ export function parseApexDebugLog(rawText) {
       const key = `${entryDef.exit}:${apexLine ?? ''}:${label}`;
       openByKey.set(key, node);
 
+      if (event === 'CODE_UNIT_STARTED') {
+        const cu = {
+          line: lineNum,
+          label,
+          durationMs: 0,
+          timestampNs,
+          exitLine: 0,
+          _nodeId: node.id
+        };
+        codeUnits.push(cu);
+        openCodeUnits.set(node.id, cu);
+      }
+
       if (event === 'SOQL_EXECUTE_BEGIN') {
+        const ctx = methodStack.length ? methodStack[methodStack.length - 1] : null;
         soql.push({
           line: lineNum,
           query: label,
           rows: 0,
           durationMs: 0,
           aggregations,
+          context: ctx ? `${ctx.label}:${ctx.apexLine}` : '',
           _nodeId: node.id
         });
       }
@@ -320,6 +592,17 @@ export function parseApexDebugLog(rawText) {
         continue;
       }
       closeNode(node, timestampNs, rows);
+      if (event === 'METHOD_EXIT' || event === 'CONSTRUCTOR_EXIT') {
+        if (methodStack.length) methodStack.pop();
+      }
+      if (event === 'CODE_UNIT_FINISHED') {
+        const cu = openCodeUnits.get(node.id);
+        if (cu) {
+          cu.durationMs = node.durationMs;
+          cu.exitLine = lineNum;
+          openCodeUnits.delete(node.id);
+        }
+      }
       if (event === 'SOQL_EXECUTE_END') {
         const rec = soql.find((s) => s._nodeId === node.id);
         if (rec) {
@@ -371,6 +654,29 @@ export function parseApexDebugLog(rawText) {
   const timeline = [];
   flattenTimeline(root, 0, timeline);
 
+  for (const c of callouts) {
+    if (c.durationMs > 0) {
+      timeline.push({
+        id: freshId(),
+        label: c.endpoint || 'Callout',
+        type: 'callout',
+        depth: 0,
+        startNs: c.timestampNs,
+        endNs: c.timestampNs + c.durationMs * 1_000_000,
+        durationMs: c.durationMs,
+        rows: 0,
+        line: c.requestLine,
+        hasError: c.statusCode >= 400
+      });
+    }
+  }
+  timeline.sort((a, b) => a.startNs - b.startNs);
+
+  soql.sort((a, b) => (b.durationMs || 0) - (a.durationMs || 0));
+
+  const profiling = parseCumulativeProfiling(text);
+  const records = recordsToObject(recordSets);
+
   for (const s of soql) delete s._nodeId;
   for (const d of dml) delete d._nodeId;
 
@@ -387,6 +693,16 @@ export function parseApexDebugLog(rawText) {
     userDebug,
     soql,
     dml,
+    limits,
+    limitPeak,
+    callouts,
+    validations,
+    workflows,
+    codeUnits,
+    profiling,
+    records,
+    lineEvents,
+    soqlDuplicates: groupDuplicateSoql(soql),
     timeline
   };
 }

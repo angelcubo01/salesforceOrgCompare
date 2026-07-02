@@ -7,7 +7,7 @@ import {
 import { getGroupedToolsForMode } from '../core/toolNavGroups.js';
 import { clearComparisonSelection, handleArtifactTypeSelectChange } from './searchSetup.js';
 import { resetMonacoComparisonView } from '../editor/editorRender.js';
-import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
+import { syncCompareUrlFromState, isHistorySyncSuppressed, setHistorySyncSuppressed } from '../lib/compareDeepLink.js';
 import { COMPARE_TOOLS_COVERED_BY_METADATA } from '../lib/metadataSearch.js';
 import { syncCompareContextTitle } from './compareContextTitle.js';
 import { refreshHelpModalIfOpen } from './appHelp.js';
@@ -448,56 +448,65 @@ function prefsDefaultTool(mode) {
  */
 export async function navigateToModeAndTool(mode, tool, opts = {}) {
   const userInitiated = !!opts.userInitiated;
-  closeAllSubmenus();
-  mode = /** @type {typeof mode} */ (migrateLegacyNavMode(mode));
-  state.appNavMode = mode;
-  rebuildTypeSelectForMode(mode);
-  syncTabSelection();
-  syncSidebarToolRow();
-  refreshHelpModalIfOpen();
+  const wasOuter = !isHistorySyncSuppressed();
+  setHistorySyncSuppressed(true);
 
-  const sel = document.getElementById('typeSelect');
-  if (!sel) return;
+  try {
+    closeAllSubmenus();
+    mode = /** @type {typeof mode} */ (migrateLegacyNavMode(mode));
+    state.appNavMode = mode;
+    rebuildTypeSelectForMode(mode);
+    syncTabSelection();
+    syncSidebarToolRow();
+    refreshHelpModalIfOpen();
 
-  if (mode === APP_NAV_MODE_HOME) {
-    sel.value = '';
-    clearComparisonSelection();
-    await persistModeAndTools('');
-    const { applyArtifactTypeUi } = await import('./artifactTypeUi.js');
-    applyArtifactTypeUi();
-    resetMonacoComparisonView();
-    return;
-  }
+    const sel = document.getElementById('typeSelect');
+    if (!sel) return;
 
-  const config = featureControlsConfig();
-  if (!isModeVisible(config, mode)) {
-    showToast(t('featureControls.modeHidden'), 'warn', { bypassCooldown: true });
-    await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated });
-    return;
-  }
-
-  const tools = getVisibleToolsForMode(mode);
-  let pick = tool && (tools.includes(tool) || (mode === 'comparator' && LEGACY_COMPARE_TOOLS.has(tool)))
-    ? migrateLegacyTool(tool)
-    : prefsDefaultTool(mode);
-  if (mode === 'comparator') {
-    pick = isToolVisible(config, COMPARATOR_TOOL) ? COMPARATOR_TOOL : '';
-  }
-  if (!pick || !isToolVisible(config, pick)) {
-    if (tool && !isToolVisible(config, migrateLegacyTool(tool))) {
-      showToast(t('featureControls.toolRedirect'), 'warn', { bypassCooldown: true });
+    if (mode === APP_NAV_MODE_HOME) {
+      sel.value = '';
+      clearComparisonSelection();
+      await persistModeAndTools('');
+      const { applyArtifactTypeUi } = await import('./artifactTypeUi.js');
+      applyArtifactTypeUi();
+      resetMonacoComparisonView();
+      return;
     }
-    pick = prefsDefaultTool(mode);
-    if (!pick) {
+
+    const config = featureControlsConfig();
+    if (!isModeVisible(config, mode)) {
+      showToast(t('featureControls.modeHidden'), 'warn', { bypassCooldown: true });
       await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated });
       return;
     }
+
+    const tools = getVisibleToolsForMode(mode);
+    let pick = tool && (tools.includes(tool) || (mode === 'comparator' && LEGACY_COMPARE_TOOLS.has(tool)))
+      ? migrateLegacyTool(tool)
+      : prefsDefaultTool(mode);
+    if (mode === 'comparator') {
+      pick = isToolVisible(config, COMPARATOR_TOOL) ? COMPARATOR_TOOL : '';
+    }
+    if (!pick || !isToolVisible(config, pick)) {
+      if (tool && !isToolVisible(config, migrateLegacyTool(tool))) {
+        showToast(t('featureControls.toolRedirect'), 'warn', { bypassCooldown: true });
+      }
+      pick = prefsDefaultTool(mode);
+      if (!pick) {
+        await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated });
+        return;
+      }
+    }
+    sel.value = pick;
+    handleArtifactTypeSelectChange({ isUserChange: userInitiated });
+    const { applyFeatureControlsUi } = await import('./featureControlsUi.js');
+    applyFeatureControlsUi();
+  } finally {
+    setHistorySyncSuppressed(false);
+    if (wasOuter) {
+      syncCompareUrlFromState(state, { method: userInitiated ? 'push' : 'replace' });
+    }
   }
-  sel.value = pick;
-  handleArtifactTypeSelectChange({ isUserChange: userInitiated });
-  syncCompareUrlFromState(state);
-  const { applyFeatureControlsUi } = await import('./featureControlsUi.js');
-  applyFeatureControlsUi();
 }
 
 /**

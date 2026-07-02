@@ -1,6 +1,6 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { formatMs, formatMsPrecise } from '../../../shared/apexLogParser.js';
-import { panelSectionHeading } from './panelSectionHeading.js';
+import { panelSectionHeading, wirePanelHelpButtons } from './panelSectionHeading.js';
 import { highlightPanelRow } from './analysisTableUtils.js';
 import {
   buildTimelineExportRows,
@@ -16,10 +16,11 @@ const TYPE_CLASS = {
   codeUnit: 'apex-log-gantt-bar--unit',
   system: 'apex-log-gantt-bar--system',
   execution: 'apex-log-gantt-bar--execution',
-  flow: 'apex-log-gantt-bar--flow'
+  flow: 'apex-log-gantt-bar--flow',
+  callout: 'apex-log-gantt-bar--callout'
 };
 
-const LEGEND_TYPES = ['codeUnit', 'method', 'flow', 'dml', 'soql', 'system'];
+const LEGEND_TYPES = ['codeUnit', 'method', 'flow', 'dml', 'soql', 'callout', 'system'];
 
 const ROW_HEIGHT = 22;
 const OVERVIEW_HEIGHT = 48;
@@ -314,10 +315,22 @@ function renderTickHtml(viewStartNs, viewEndNs, minStart, span) {
  * @param {object} parsed
  * @param {(line: number) => void} onJump
  * @param {(key: string, params?: object) => string} t
+ * @param {HTMLElement | null} [toolbarEl]
  */
-export function renderTimelineView(mount, parsed, onJump, t) {
+export function renderTimelineView(mount, parsed, onJump, t, toolbarEl) {
   if (!mount) return;
   const forest = buildTimelineForest(parsed?.tree);
+  for (const ev of (parsed?.timeline || []).filter((e) => e.type === 'callout')) {
+    forest.push({ ...ev, children: [] });
+  }
+  forest.sort((a, b) => a.startNs - b.startNs);
+
+  if (toolbarEl) {
+    toolbarEl.innerHTML = `<input type="search" class="apex-log-filter" id="apexLogTimelineFilter" placeholder="${escapeHtml(t('apexLogViewer.filter.timelinePlaceholder'))}" />`;
+  }
+
+  let labelFilter = '';
+
   if (!forest.length) {
     timelineController = null;
     mount.innerHTML = `<p class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.timeline'))}</p>`;
@@ -347,7 +360,7 @@ export function renderTimelineView(mount, parsed, onJump, t) {
   ].join('');
 
   mount.innerHTML = `
-    ${panelSectionHeading('timeline', t('apexLogViewer.tab.timeline'))}
+    ${panelSectionHeading('timeline', t('apexLogViewer.tab.timeline'), t)}
     <div class="apex-log-gantt">
       <div class="apex-log-gantt-top">
         <div class="apex-log-gantt-top-row">
@@ -376,7 +389,6 @@ export function renderTimelineView(mount, parsed, onJump, t) {
       <div class="apex-log-gantt-legend">${legend}</div>
       <div class="apex-log-gantt-tooltip" id="apexLogGanttTooltip" hidden></div>
     </div>`;
-
   const canvas = mount.querySelector('.apex-log-gantt-overview');
   const overviewWrap = mount.querySelector('#apexLogGanttOverviewWrap');
   const brushWindow = mount.querySelector('#apexLogGanttBrushWindow');
@@ -488,6 +500,10 @@ export function renderTimelineView(mount, parsed, onJump, t) {
     visibleEvents = flattenVisibleTimeline(forest, expanded).filter(
       (ev) => ev.endNs > viewStartNs && ev.startNs < viewEndNs
     );
+    if (labelFilter) {
+      const q = labelFilter.toLowerCase();
+      visibleEvents = visibleEvents.filter((ev) => ev.label.toLowerCase().includes(q));
+    }
     if (body) {
       body.innerHTML = visibleEvents
         .map((ev, idx) => renderTimelineRow(ev, idx, expanded.has(ev.id), viewStartNs, viewSpan, t))
@@ -678,4 +694,10 @@ export function renderTimelineView(mount, parsed, onJump, t) {
 
   const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => paintOverviewCanvas()) : null;
   ro?.observe(mount);
+
+  toolbarEl?.querySelector('#apexLogTimelineFilter')?.addEventListener('input', (e) => {
+    labelFilter = String(e.target?.value || '').trim();
+    refresh();
+  });
+  wirePanelHelpButtons(mount, t);
 }

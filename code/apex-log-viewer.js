@@ -12,7 +12,16 @@ import { renderDebugView } from './lib/apexLogViewer/apexDebugView.js';
 import { renderSoqlView } from './lib/apexLogViewer/soqlAnalysisView.js';
 import { renderDmlView } from './lib/apexLogViewer/dmlAnalysisView.js';
 import { renderTimelineView, revealTimelineLogLine } from './lib/apexLogViewer/timelineView.js';
+import { renderSummaryView } from './lib/apexLogViewer/summaryView.js';
+import { renderLimitsView } from './lib/apexLogViewer/limitsView.js';
+import { renderCalloutView } from './lib/apexLogViewer/calloutAnalysisView.js';
+import { renderProfilingView } from './lib/apexLogViewer/profilingView.js';
+import { renderValidationsView } from './lib/apexLogViewer/validationsView.js';
+import { renderWorkflowView } from './lib/apexLogViewer/workflowView.js';
+import { mountTextFilterBar } from './lib/apexLogViewer/textFilterBar.js';
+import { ensurePanelSectionHeading } from './lib/apexLogViewer/panelSectionHeading.js';
 import { highlightPanelRow } from './lib/apexLogViewer/analysisTableUtils.js';
+import { escapeHtml } from '../shared/htmlEscape.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -96,7 +105,7 @@ function renderContextChip(ctxEl, content) {
   const parts = [ctx.logType, ctx.logName, ctx.logMethod !== 'N/A' ? ctx.logMethod : '']
     .filter(Boolean)
     .join(' · ');
-  ctxEl.innerHTML = `<span class="apex-log-chip">${parts}</span>`;
+  ctxEl.innerHTML = `<span class="apex-log-chip">${escapeHtml(parts)}</span>`;
   ctxEl.hidden = false;
 }
 
@@ -131,7 +140,11 @@ async function main() {
         title: res.title ?? '',
         content: res.content ?? '',
         ...(res.initialLine != null ? { initialLine: res.initialLine } : {}),
-        ...(res.downloadFileName ? { downloadFileName: res.downloadFileName } : {})
+        ...(res.downloadFileName ? { downloadFileName: res.downloadFileName } : {}),
+        ...(res.defaultTab ? { defaultTab: res.defaultTab } : {}),
+        ...(res.orgId ? { orgId: res.orgId } : {}),
+        ...(res.instanceUrl ? { instanceUrl: res.instanceUrl } : {}),
+        ...(res.logId ? { logId: res.logId } : {})
       };
     }
   } else if (idb) {
@@ -142,7 +155,11 @@ async function main() {
           title: rec.title ?? '',
           content: rec.content ?? '',
           ...(rec.initialLine != null ? { initialLine: rec.initialLine } : {}),
-          ...(rec.downloadFileName ? { downloadFileName: rec.downloadFileName } : {})
+          ...(rec.downloadFileName ? { downloadFileName: rec.downloadFileName } : {}),
+          ...(rec.defaultTab ? { defaultTab: rec.defaultTab } : {}),
+          ...(rec.orgId ? { orgId: rec.orgId } : {}),
+          ...(rec.instanceUrl ? { instanceUrl: rec.instanceUrl } : {}),
+          ...(rec.logId ? { logId: rec.logId } : {})
         };
     } catch {
       payload = null;
@@ -170,6 +187,11 @@ async function main() {
       ? Math.max(1, Math.floor(Number(payload.initialLine)))
       : 0;
   const initialLine = initialLineFromPayload || lineFromUrl || 0;
+  const viewerContext = {
+    instanceUrl: payload.instanceUrl || '',
+    orgId: payload.orgId || '',
+    logId: payload.logId || ''
+  };
   if (titleEl) titleEl.textContent = title;
   if (downloadBtn) downloadBtn.hidden = false;
 
@@ -182,9 +204,9 @@ async function main() {
   /** @type {ReturnType<typeof parseApexDebugLog> | null} */
   let parsed = null;
   /** @type {Set<string>} */
-  const renderedTabs = new Set(['text']);
+  const renderedTabs = new Set();
   /** @type {import('./lib/apexLogViewer/tabs.js').ApexLogTabId} */
-  let activeTabId = 'text';
+  let activeTabId = payload.defaultTab || 'summary';
   let highlightDecoIds = [];
 
   function getActiveTabId() {
@@ -244,9 +266,28 @@ async function main() {
       case 'dml':
         ok = highlightPanelRow(document.getElementById('apexLogDmlMount'), line);
         break;
+      case 'summary':
+        ok = highlightPanelRow(document.getElementById('apexLogSummaryMount'), line);
+        break;
+      case 'limits':
+        ok = highlightPanelRow(document.getElementById('apexLogLimitsMount'), line);
+        break;
+      case 'callouts':
+        ok = highlightPanelRow(document.getElementById('apexLogCalloutsMount'), line);
+        break;
+      case 'profiling':
+        ok = highlightPanelRow(document.getElementById('apexLogProfilingMount'), line);
+        break;
+      case 'validations':
+        ok = highlightPanelRow(document.getElementById('apexLogValidationsMount'), line);
+        break;
+      case 'workflow':
+        ok = highlightPanelRow(document.getElementById('apexLogWorkflowMount'), line);
+        break;
       default:
         break;
     }
+    if (!ok && tabId !== 'text') jumpToLogLine(line);
   }
 
   function jumpToLogLine(line) {
@@ -266,14 +307,36 @@ async function main() {
     }
     renderedTabs.add(tabId);
     switch (tabId) {
+      case 'summary':
+        renderSummaryView(
+          document.getElementById('apexLogSummaryMount'),
+          parsed,
+          jumpToLogLine,
+          t,
+          viewerContext
+        );
+        break;
       case 'tree':
-        renderTreeView(monaco, document.getElementById('apexLogTreeMount'), parsed, isLightTheme(), t);
+        renderTreeView(
+          monaco,
+          document.getElementById('apexLogTreeMount'),
+          parsed,
+          isLightTheme(),
+          t,
+          document.getElementById('apexLogTreeToolbar')
+        );
         break;
       case 'debug':
         renderDebugView(document.getElementById('apexLogDebugMount'), parsed, jumpToLogLine, t);
         break;
       case 'timeline':
-        renderTimelineView(document.getElementById('apexLogTimelineMount'), parsed, jumpToLogLine, t);
+        renderTimelineView(
+          document.getElementById('apexLogTimelineMount'),
+          parsed,
+          jumpToLogLine,
+          t,
+          document.getElementById('apexLogTimelineToolbar')
+        );
         break;
       case 'soql':
         renderSoqlView(document.getElementById('apexLogSoqlMount'), parsed, jumpToLogLine, t);
@@ -281,6 +344,39 @@ async function main() {
       case 'dml':
         renderDmlView(document.getElementById('apexLogDmlMount'), parsed, jumpToLogLine, t);
         break;
+      case 'limits':
+        renderLimitsView(document.getElementById('apexLogLimitsMount'), parsed, jumpToLogLine, t);
+        break;
+      case 'callouts':
+        renderCalloutView(document.getElementById('apexLogCalloutsMount'), parsed, jumpToLogLine, t);
+        break;
+      case 'profiling':
+        renderProfilingView(document.getElementById('apexLogProfilingMount'), parsed, jumpToLogLine, t);
+        break;
+      case 'validations':
+        renderValidationsView(
+          document.getElementById('apexLogValidationsMount'),
+          parsed,
+          jumpToLogLine,
+          t
+        );
+        break;
+      case 'workflow':
+        renderWorkflowView(
+          document.getElementById('apexLogWorkflowMount'),
+          parsed,
+          jumpToLogLine,
+          t
+        );
+        break;
+      case 'text': {
+        const textPanel = document.querySelector('.apex-log-panel[data-panel="text"]');
+        ensurePanelSectionHeading(textPanel, 'text', t('apexLogViewer.tab.text'), t);
+        if (textEditor && monaco) {
+          mountTextFilterBar(monaco, textEditor, parsed.lineEvents, t);
+        }
+        break;
+      }
       default:
         break;
     }
@@ -296,7 +392,8 @@ async function main() {
     });
   }
 
-  mountApexLogTabs(tabsNav, tabLabel, onTabSelect);
+  mountApexLogTabs(tabsNav, tabLabel, onTabSelect, t);
+  setActiveApexLogTab(activeTabId);
 
   try {
     monaco = await loadMonaco();
@@ -321,6 +418,7 @@ async function main() {
         document.getElementById('apexLogErrorChip')?.addEventListener('click', () => {
           if (firstError?.line) navigateToLineInActiveTab(firstError.line);
         });
+        renderTab(activeTabId);
       } catch {
         parsed = null;
       }

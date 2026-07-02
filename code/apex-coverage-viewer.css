@@ -49,6 +49,26 @@ body {
   white-space: nowrap;
 }
 
+.apex-cov-viewer-help {
+  flex-shrink: 0;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  border-radius: 6px;
+  border: 1px solid var(--acv-border);
+  background: transparent;
+  color: #94a3b8;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.apex-cov-viewer-help:hover {
+  color: #38bdf8;
+  border-color: #38bdf8;
+}
+
 .apex-cov-viewer-legend {
   display: flex;
   align-items: center;
@@ -199,23 +219,31 @@ body.apex-cov-split-active .apex-cov-viewer-legend {
 }
 
 html[data-ui-theme='light'] {
-  --acv-bg: #f8fafc;
-  --acv-border: #cbd5e1;
+  --acv-bg: #d4dce6;
+  --acv-border: #7d8fa3;
   --acv-text: #0f172a;
 }
 
 html[data-ui-theme='light'] .apex-cov-viewer-back {
-  background: #ffffff;
+  background: #f2f5f9;
+  border-color: var(--acv-border);
+}
+
+html[data-ui-theme='light'] .apex-cov-viewer-back:hover {
+  background: #d4dce6;
+  border-color: #0284c7;
+  color: #0284c7;
 }
 
 html[data-ui-theme='light'] .apex-cov-viewer-legend {
-  color: #64748b;
+  color: #475569;
 }
 
 html[data-ui-theme='light'] .apex-cov-split-pane-head {
-  background: rgba(248, 250, 252, 0.92);
+  background: rgba(242, 245, 249, 0.95);
+  border-color: var(--acv-border);
 }
 
 html[data-ui-theme='light'] .apex-cov-split-mini-legend {
-  color: #64748b;
+  color: #475569;
 }

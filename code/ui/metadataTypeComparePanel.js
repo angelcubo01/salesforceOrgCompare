@@ -168,6 +168,32 @@ function ensureMetadataTypeComparePackageInList(metadataType, apiVersion) {
   return parentItem;
 }
 
+async function switchToComparatorWithItem(item) {
+  if (!item) return false;
+  state.selectedItem = item;
+  await ensureModeForTool('Comparator');
+  handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
+  ensureRightOrgDistinctFromLeft();
+  renderSavedItems(true);
+  syncListActiveHighlight();
+  await renderEditor();
+  return true;
+}
+
+function findRestComparableItem(artType, memberName) {
+  const name = String(memberName || '').trim();
+  if (!artType || !name) return null;
+  if (artType === 'LWC' || artType === 'Aura') {
+    const prefix = `${name}/`;
+    return (
+      state.savedItems.find(
+        (s) => s.type === artType && typeof s.key === 'string' && s.key.startsWith(prefix)
+      ) || null
+    );
+  }
+  return state.savedItems.find((s) => s.type === artType && s.key === name) || null;
+}
+
 async function openRetrieveMemberInExplorer(memberName) {
   const metadataType = currentMetadataType;
   if (!metadataType || !memberName) return;
@@ -180,18 +206,22 @@ async function openRetrieveMemberInExplorer(memberName) {
     return;
   }
 
-  await ensureModeForTool('Comparator');
-  handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
-  ensureRightOrgDistinctFromLeft();
-
   const relativePath = memberPrimaryPath.get(memberName);
   const childKey = relativePath ? `${retrieveCacheKey}::${relativePath}` : null;
   const childItem = childKey ? state.savedItems.find((s) => s.key === childKey) : null;
+  const itemToOpen = childItem || parentItem;
 
-  state.selectedItem = childItem || parentItem;
-  renderSavedItems(true);
-  syncListActiveHighlight();
-  await renderEditor();
+  if (childItem) {
+    await switchToComparatorWithItem(itemToOpen);
+    return;
+  }
+
+  if (relativePath) {
+    showToast(t('metadataTypeCompare.memberNotInCache'), 'warn');
+    return;
+  }
+
+  await switchToComparatorWithItem(itemToOpen);
 }
 
 function setProgress(done, total, phaseKey) {
@@ -361,6 +391,10 @@ function renderTable() {
           renderBody(filterInput.value);
         };
         tr.addEventListener('click', selectRow);
+        tr.addEventListener('dblclick', () => {
+          selectedMemberKey = row.key;
+          void openInComparator(row.key);
+        });
         tr.addEventListener('keydown', (ev) => {
           if (ev.key === 'Enter' || ev.key === ' ') {
             ev.preventDefault();
@@ -430,9 +464,12 @@ async function openInComparator(memberName) {
         descriptor: buildFetchDescriptor(artType, memberName)
       });
     }
-    await ensureModeForTool('Comparator');
-    handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
-    ensureRightOrgDistinctFromLeft();
+    const item = findRestComparableItem(artType, memberName);
+    if (!item) {
+      showToast(t('toast.fetchFailed'), 'warn');
+      return;
+    }
+    await switchToComparatorWithItem(item);
     return;
   }
 

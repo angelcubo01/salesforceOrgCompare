@@ -26,7 +26,6 @@ import {
   setupDragAndDrop,
   setupDownloadAll,
   setupCopyAll,
-  setupCopyCompareLink,
   setupClearHistoryButton,
   setupRemoveAll,
   setupModifierKeyTracking,
@@ -43,7 +42,7 @@ import {
   revealAppNavigation
 } from './ui/appModeNav.js';
 import { applyArtifactTypeUi, getSelectedArtifactType } from './ui/artifactTypeUi.js';
-import { setupAppHelp, maybeShowToolOnboarding } from './ui/appHelp.js';
+import { setupAppHelp, maybeShowToolOnboarding, refreshHelpModalIfOpen } from './ui/appHelp.js';
 import { setupAppSupport, refreshAppSupportUi } from './ui/appSupport.js';
 import { setupFeatureControlsUi, applyFeatureControlsUi } from './ui/featureControlsUi.js';
 import {
@@ -76,6 +75,7 @@ import {
 import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryExplorerPanel.js';
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
 import { setupDebugLogTraceModal } from './ui/debugLogTraceModal.js';
+import { setupDebugLogViewTracesModal } from './ui/debugLogViewTracesModal.js';
 import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
 import {
   setupCustomSettingsComparePanel,
@@ -115,6 +115,7 @@ import {
   syncCompareUrlFromState
 } from './lib/compareDeepLink.js';
 import { applyDeepLinkOrgs, applyDeepLinkItemHint } from './lib/compareDeepLinkUi.js';
+import { setupAppHistoryNavigation } from './lib/appHistoryNavigation.js';
 import { buildDiscoverBannerLineHtml } from '../shared/landingDiscoverBanner.js';
 import { ensureExtensionExceptionReporting } from '../shared/posthogClient.js';
 import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.js';
@@ -183,9 +184,10 @@ async function init() {
       : '');
 
   setOnAfterArtifactTypeChange((isUserChange) => {
-    syncCompareUrlFromState(state);
+    syncCompareUrlFromState(state, { method: isUserChange ? 'push' : 'replace' });
     void persistAfterOperationChange(isUserChange);
     void maybeShowToolOnboarding(getSelectedArtifactType());
+    refreshHelpModalIfOpen();
     applyFeatureControlsUi();
   });
 
@@ -276,6 +278,7 @@ async function init() {
   setupQueryExplorerPanel();
   setupDebugLogBrowserPanel();
   setupDebugLogTraceModal();
+  setupDebugLogViewTracesModal();
   setupApexCoverageComparePanel();
   setupCustomSettingsComparePanel();
   setupCustomMetadataComparePanel();
@@ -311,7 +314,6 @@ async function init() {
   setupDragAndDrop();
   setupDownloadAll();
   setupCopyAll();
-  setupCopyCompareLink();
   setupRemoveAll();
   setupClearHistoryButton();
   setupModifierKeyTracking();
@@ -320,6 +322,7 @@ async function init() {
   updateOrgDropdownLayout();
   updateDocumentTitle();
   updateOrgSelectorsLockedState();
+  setupAppHistoryNavigation();
   syncCompareUrlFromState(state);
   setupPersistSavedItemsOnPageClose();
   setupClearApexTestJobsOnPageClose();

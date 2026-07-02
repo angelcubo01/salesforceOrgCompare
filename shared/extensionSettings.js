@@ -42,8 +42,7 @@ export const EXTENSION_ADVANCED_LEGACY_KEYS = [
   'maxAlignedBufferChars',
   'apexTestsPollIntervalMs',
   'apexTestsExpandedMethodsPollIntervalMs',
-  'apexTestsMaxTrackedJobs',
-  'apexTestsClassNameLikePatterns'
+  'apexTestsMaxTrackedJobs'
 ];
 
 export const EXTENSION_ADVANCED_METADATA_KEYS = [
@@ -107,6 +106,14 @@ export function normalizeMonacoThemeId(raw) {
   return MONACO_THEME_IDS.includes(s) ? s : 'sfoc-editor-dark';
 }
 
+/**
+ * Tema Monaco SFOC acoplado a la apariencia de la aplicación.
+ * @param {'dark' | 'light'} uiTheme
+ */
+export function defaultMonacoThemeForUiTheme(uiTheme) {
+  return normalizeUiTheme(uiTheme) === 'light' ? 'sfoc-editor-light' : 'sfoc-editor-dark';
+}
+
 const DEFAULTS = {
   /** Interfaz principal: oscuro (predeterminado) o claro. */
   uiTheme: /** @type {'dark' | 'light'} */ ('dark'),
@@ -125,6 +132,8 @@ const DEFAULTS = {
   orgLimitsWarningPercent: 85,
   /** Patrones LIKE para SOQL (coma): qué ApexClass se consideran “de prueba” al listar. */
   apexTestsClassNameLikePatterns: '%test%',
+  /** Si true, ejecuta tests sin calcular cobertura (más rápido; oculta botón Cobertura en el hub). */
+  apexTestsSkipCodeCoverage: false,
   /** DeveloperName del registro DebugLevel al activar trazas USER_DEBUG antes de ejecutar tests Apex. */
   apexTestsTraceDebugLevel: 'SFDC_DevConsole',
   /** Telemetría anónima de uso (PostHog). Desactivar en Ajustes. */
@@ -210,6 +219,10 @@ function normalizeConfig(partial) {
     }
     if (k === 'codeEditorPersistEnabled') {
       next[k] = src[k] !== false;
+      continue;
+    }
+    if (k === 'apexTestsSkipCodeCoverage') {
+      next[k] = src[k] === true;
       continue;
     }
     if (src[k] != null) next[k] = clampField(k, src[k]);
@@ -329,6 +342,11 @@ export function getApexTestsClassNameLikePatterns() {
     .split(',')
     .map((x) => x.trim())
     .filter(Boolean);
+}
+
+/** @returns {boolean} Omitir cálculo de cobertura al ejecutar tests desde el runner. */
+export function getApexTestsSkipCodeCoverage() {
+  return cache.apexTestsSkipCodeCoverage === true;
 }
 
 /**

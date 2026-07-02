@@ -6,7 +6,6 @@ import { applyArtifactTypeUi, isComparatorMode, isFullScreenToolMode } from './a
 import { renderEditor, resetMonacoComparisonView } from '../editor/editorRender.js';
 import { syncListActiveHighlight } from './listUi.js';
 import { updateDocumentTitle } from './documentMeta.js';
-import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { refreshGeneratePackageXmlTypes } from './generatePackageXmlPanel.js';
 import { refreshMetadataTypeComparePanel } from './metadataTypeComparePanel.js';
 import { refreshFieldDependencyPanel } from './fieldDependencyPanel.js';
@@ -70,7 +69,6 @@ export function clearComparisonSelection() {
   hideSidebarSearchResults();
   syncListActiveHighlight();
   updateDocumentTitle();
-  syncCompareUrlFromState(state);
 }
 
 /**

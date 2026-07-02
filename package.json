@@ -28,9 +28,11 @@
     "posthog:popup-controls-flag:reset": "node scripts/createPosthogPopupControlsFlag.mjs --update --reset",
     "posthog:error-tracking": "node scripts/createPosthogErrorTrackingSetup.mjs",
     "posthog:error-tracking:update": "node scripts/createPosthogErrorTrackingSetup.mjs --update",
+    "minify:extension": "node scripts/minify-extension.mjs",
     "pack:chrome": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-chrome-store.ps1"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "posthog-js": "^1.379.0",
     "vitest": "^3.1.4"
   }

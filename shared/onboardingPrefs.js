@@ -1,26 +1,9 @@
+import { ALL_ONBOARDING_TOOLS } from './helpToolIds.js';
+
 /** Persistencia de banners de primera visita por herramienta. */
 export const ONBOARDING_PREFS_KEY = 'sfocOnboardingSeen';
 
-/** Todas las herramientas con banner de onboarding (alineado con MODE_TOOLS + Comparator). */
-export const ALL_ONBOARDING_TOOLS = Object.freeze([
-  'Comparator',
-  'ApexTests',
-  'QuickEdit',
-  'LightningQuickEdit',
-  'AnonymousApex',
-  'QueryExplorer',
-  'DebugLogBrowser',
-  'ApexCoverageCompare',
-  'EnvironmentStatus',
-  'OrgLimits',
-  'DeployStatus',
-  'SetupAuditTrail',
-  'FieldHistory',
-  'FieldDependency',
-  'DependencyExplorer',
-  'PermissionDiff',
-  'GeneratePackageXml'
-]);
+export { ALL_ONBOARDING_TOOLS };
 
 /**
  * @param {unknown} raw

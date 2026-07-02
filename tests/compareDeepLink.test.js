@@ -1,10 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   parseCompareDeepLink,
   buildCompareSearchParamsFromState,
+  buildUrlFromState,
   operationSelectValueForItemType,
   resolveItemFromDeepLink,
-  normalizeLegacyNavAndOp
+  normalizeLegacyNavAndOp,
+  deriveOpFromDeepLink,
+  syncCompareUrlFromState,
+  setHistorySyncSuppressed,
+  setApplyingHistoryNavigation,
+  urlsEqual
 } from '../code/lib/compareDeepLink.js';
 
 describe('parseCompareDeepLink', () => {
@@ -104,5 +110,147 @@ describe('resolveItemFromDeepLink', () => {
     );
     expect(added).toBe(true);
     expect(appState.selectedItem).toBeNull();
+  });
+});
+
+describe('deriveOpFromDeepLink', () => {
+  it('usa op explícita si está presente', () => {
+    expect(deriveOpFromDeepLink({ op: 'ApexTests', itemType: 'ApexClass', itemKey: 'Foo' })).toBe(
+      'ApexTests'
+    );
+  });
+
+  it('deriva op del tipo de ítem si no hay op', () => {
+    expect(deriveOpFromDeepLink({ op: null, itemType: 'ApexClass', itemKey: 'Foo' })).toBe('Apex');
+  });
+
+  it('devuelve cadena vacía sin op ni ítem', () => {
+    expect(deriveOpFromDeepLink({ op: null, itemType: null, itemKey: null })).toBe('');
+  });
+});
+
+describe('urlsEqual', () => {
+  it('compara URLs de forma estable', () => {
+    expect(urlsEqual('/code.html?nav=comparator', '/code.html?nav=comparator')).toBe(true);
+    expect(urlsEqual('/code.html?nav=comparator', '/code.html?nav=home')).toBe(false);
+  });
+});
+
+describe('syncCompareUrlFromState', () => {
+  /** @type {ReturnType<typeof vi.fn>[]} */
+  let pushState;
+  /** @type {ReturnType<typeof vi.fn>[]} */
+  let replaceState;
+
+  beforeEach(() => {
+    pushState = vi.fn();
+    replaceState = vi.fn();
+    globalThis.window = /** @type {Window} */ ({
+      location: { pathname: '/code/code.html', search: '' },
+      history: { pushState, replaceState }
+    });
+    globalThis.document = /** @type {Document} */ ({
+      getElementById: () => null
+    });
+    setHistorySyncSuppressed(false);
+    setApplyingHistoryNavigation(false);
+  });
+
+  afterEach(() => {
+    setHistorySyncSuppressed(false);
+    setApplyingHistoryNavigation(false);
+  });
+
+  it('usa replaceState por defecto', () => {
+    const appState = {
+      leftOrgId: 'L1',
+      rightOrgId: null,
+      appNavMode: 'development',
+      selectedArtifactType: 'ApexTests',
+      selectedItem: null
+    };
+    syncCompareUrlFromState(appState);
+    expect(replaceState).toHaveBeenCalledOnce();
+    expect(pushState).not.toHaveBeenCalled();
+    expect(replaceState.mock.calls[0][2]).toBe('/code/code.html?left=L1&op=ApexTests&nav=development');
+  });
+
+  it('usa pushState cuando method es push', () => {
+    const appState = {
+      leftOrgId: 'L1',
+      rightOrgId: null,
+      appNavMode: 'comparator',
+      selectedArtifactType: 'Comparator',
+      selectedItem: null
+    };
+    syncCompareUrlFromState(appState, { method: 'push' });
+    expect(pushState).toHaveBeenCalledOnce();
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('no modifica historial si la URL no cambia', () => {
+    globalThis.window.location.search = '?left=L1&op=Comparator&nav=comparator';
+    const appState = {
+      leftOrgId: 'L1',
+      rightOrgId: null,
+      appNavMode: 'comparator',
+      selectedArtifactType: 'Comparator',
+      selectedItem: null
+    };
+    syncCompareUrlFromState(appState, { method: 'push' });
+    expect(pushState).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
+  });
+
+  it('no modifica historial cuando el sync está suprimido', () => {
+    setHistorySyncSuppressed(true);
+    const appState = {
+      leftOrgId: 'L1',
+      rightOrgId: null,
+      appNavMode: 'comparator',
+      selectedArtifactType: 'Comparator',
+      selectedItem: null
+    };
+    syncCompareUrlFromState(appState, { method: 'push' });
+    expect(pushState).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
+    setHistorySyncSuppressed(false);
+  });
+
+  it('no modifica historial durante restauración popstate', () => {
+    setApplyingHistoryNavigation(true);
+    const appState = {
+      leftOrgId: 'L1',
+      rightOrgId: null,
+      appNavMode: 'comparator',
+      selectedArtifactType: 'Comparator',
+      selectedItem: null
+    };
+    syncCompareUrlFromState(appState, { method: 'push' });
+    expect(pushState).not.toHaveBeenCalled();
+    expect(replaceState).not.toHaveBeenCalled();
+    setApplyingHistoryNavigation(false);
+  });
+});
+
+describe('buildUrlFromState', () => {
+  beforeEach(() => {
+    globalThis.window = /** @type {Window} */ ({
+      location: { pathname: '/code/code.html', search: '' }
+    });
+    globalThis.document = /** @type {Document} */ ({
+      getElementById: () => null
+    });
+  });
+
+  it('construye path con query string', () => {
+    const url = buildUrlFromState({
+      leftOrgId: 'A',
+      rightOrgId: 'B',
+      appNavMode: 'home',
+      selectedArtifactType: '',
+      selectedItem: null
+    });
+    expect(url).toBe('/code/code.html?left=A&right=B');
   });
 });
