@@ -7777,11 +7777,25 @@ body.artifact-query-explorer-compare .query-explorer-split {
   word-break: break-word;
 }
 
-.debug-log-view-traces-modal-panel {
-  position: relative;
-  max-width: min(96vw, 720px);
+#debugLogViewTracesModal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  box-sizing: border-box;
 }
 
+.debug-log-view-traces-modal-panel {
+  position: relative;
+  width: min(96vw, 720px);
+  max-width: min(96vw, 720px);
+  max-height: min(85vh, 720px);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
 
 .debug-log-view-traces-modal-head {
   display: flex;
@@ -7789,6 +7803,7 @@ body.artifact-query-explorer-compare .query-explorer-split {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .debug-log-view-traces-modal-head h3 {
@@ -7817,6 +7832,7 @@ body.artifact-query-explorer-compare .query-explorer-split {
   gap: 12px;
   margin-bottom: 10px;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .debug-log-view-traces-toolbar-actions {
@@ -7852,13 +7868,17 @@ body.artifact-query-explorer-compare .query-explorer-split {
 
 .debug-log-view-traces-table-wrap {
   position: relative;
-  min-height: 120px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .debug-log-view-traces-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
+  min-width: 560px;
 }
 
 .debug-log-view-traces-table th,
@@ -7872,6 +7892,41 @@ body.artifact-query-explorer-compare .query-explorer-split {
 .debug-log-view-traces-table th {
   color: #94a3b8;
   font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #0f172a;
+}
+
+.debug-log-view-traces-table td:first-child {
+  max-width: 220px;
+  word-break: break-word;
+}
+
+.debug-log-view-traces-table td:nth-child(3),
+.debug-log-view-traces-table td:nth-child(4) {
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  #debugLogViewTracesModal {
+    padding: 8px;
+  }
+
+  .debug-log-view-traces-modal-panel {
+    width: 100%;
+    max-width: 100%;
+    max-height: min(92vh, 720px);
+  }
+
+  .debug-log-view-traces-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .debug-log-view-traces-toolbar-actions {
+    justify-content: flex-end;
+  }
 }
 
 .debug-log-view-traces-status {
