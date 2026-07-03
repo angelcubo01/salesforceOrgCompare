@@ -6,6 +6,11 @@ import { updateDocumentTitle } from './documentMeta.js';
 import { t } from '../../shared/i18n.js';
 import { hideSidebarSearchResults } from './searchSetup.js';
 import { syncCompareListToolbarVisibility } from './listUi.js';
+import {
+  isCompareDockActive,
+  mountCompareDock,
+  unmountCompareDock
+} from './compareDockLayout.js';
 
 export function getSelectedArtifactType() {
   const el = document.getElementById('typeSelect');
@@ -135,6 +140,7 @@ function syncHomeLayoutChrome() {
   const hideSidebar =
     home || mode === 'analysis' || mode === 'monitoring' || mode === 'manifests' || hideForDevTools;
   document.body.classList.toggle('app-mode-home', home);
+  if (isCompareDockActive()) return;
   document.querySelector('.content .sidebar')?.classList.toggle('hidden', hideSidebar);
 }
 
@@ -962,6 +968,14 @@ export function applyArtifactTypeUi() {
 
   syncComparatorActionButtons();
   syncSearchInputState();
+
+  const useCompareDock =
+    state.appNavMode === 'comparator' && getSelectedArtifactType() === 'Comparator';
+  if (useCompareDock) {
+    void mountCompareDock();
+  } else if (isCompareDockActive()) {
+    unmountCompareDock();
+  }
 
   if (isEnvironmentStatus) {
     orgDropdowns?.classList.add('hidden');

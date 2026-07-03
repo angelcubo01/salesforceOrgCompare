@@ -45,5 +45,9 @@ export const state = {
   recordCompareCompareMode: false,
   orgsList: [],
   /** Contexto de retorno desde Deploy Status a Quick Edit / Lightning Quick Edit. */
-  quickEditDeployReturn: null
+  quickEditDeployReturn: null,
+  /** Pestañas abiertas en el comparador (modo Dockview). */
+  compareTabs: [],
+  /** Id de pestaña activa en el comparador Dockview. */
+  activeCompareTabId: null
 };

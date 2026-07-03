@@ -10,7 +10,9 @@
       }
     </style>
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
+    <link rel="stylesheet" href="../vendor/dockview-core/dockview.css" />
     <link rel="stylesheet" href="./code.css" />
+    <link rel="stylesheet" href="./code-dockview.css" />
     <link rel="stylesheet" href="./code-theme-light.css" />
   </head>
   <body class="app-nav-booting">
@@ -389,6 +391,7 @@
             Siguiente →
           </button>
         </div>
+        <div id="compareDockRoot" class="compare-dock-root hidden" aria-hidden="true"></div>
         <div id="monacoContainer" class="monaco-container ph-no-capture">
           <div id="noOrgMessage" class="no-org-message hidden">
           <div class="no-org-content">

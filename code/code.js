@@ -32,6 +32,7 @@ import {
   setupDiffNavigation,
   setupSidebarToggle
 } from './setup/setupListeners.js';
+import { setupCompareDockToggle } from './ui/compareDockLayout.js';
 import { setupSearch, setOnAfterArtifactTypeChange } from './ui/searchSetup.js';
 import { setupQuickOpen } from './ui/quickOpen.js';
 import {
@@ -319,6 +320,7 @@ async function init() {
   setupModifierKeyTracking();
   setupDiffNavigation();
   setupSidebarToggle();
+  setupCompareDockToggle();
   updateOrgDropdownLayout();
   updateDocumentTitle();
   updateOrgSelectorsLockedState();

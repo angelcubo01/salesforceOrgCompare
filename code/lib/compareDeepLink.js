@@ -196,6 +196,20 @@ export function buildCompareSearchParamsFromState(appState) {
     p.set('nav', appState.appNavMode);
   }
 
+  if (Array.isArray(appState.compareTabs) && appState.compareTabs.length > 1) {
+    try {
+      const compact = appState.compareTabs.map((tab) => ({
+        tabId: tab.tabId,
+        type: tab.item?.type,
+        key: tab.item?.key,
+        fileName: tab.item?.fileName || ''
+      }));
+      p.set('tabs', JSON.stringify(compact));
+    } catch {
+      /* ignore */
+    }
+  }
+
   return p;
 }
 

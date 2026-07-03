@@ -1,0 +1,216 @@
+
+/* --- Comparador Dockview (modo IDE) --- */
+.compare-dock-root {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body.comparator-dock-active .content {
+  flex-direction: column;
+}
+
+body.comparator-dock-active .content > .sidebar {
+  display: none;
+}
+
+body.comparator-dock-active #editorContainer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body.comparator-dock-active #standardComparePanel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.comparator-dock-active #standardComparePanel #compareDockRoot {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+body.comparator-dock-active #standardComparePanel .compare-viewer-chrome,
+body.comparator-dock-active #standardComparePanel #viewerChunkBar {
+  flex-shrink: 0;
+}
+
+body.comparator-dock-active #standardComparePanel > .compare-viewer-chrome,
+body.comparator-dock-active #standardComparePanel > #viewerChunkBar {
+  display: none;
+}
+
+body.comparator-dock-active #monacoContainer.hidden {
+  display: none !important;
+}
+
+.compare-history-host {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.compare-history-host > .sidebar {
+  position: relative;
+  width: 100% !important;
+  min-width: 0;
+  max-width: none;
+  height: 100%;
+  border-right: none;
+  z-index: 1;
+}
+
+.compare-diff-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+.compare-diff-mount {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+}
+
+/* Toolbar y chunk bar bajo pestañas, encima del editor (estilo VS Code) */
+.compare-dock-root .dv-groupview:not(.dv-groupview-edge) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.compare-dock-root .dv-groupview:not(.dv-groupview-edge) > .compare-viewer-chrome,
+.compare-dock-root .dv-groupview:not(.dv-groupview-edge) > #viewerChunkBar {
+  flex-shrink: 0;
+}
+
+.compare-dock-root .dv-groupview:not(.dv-groupview-edge) > .dv-content-container {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.compare-dock-root.sfoc-dockview {
+  --dv-tabs-and-actions-container-background-color: #252526;
+  --dv-activegroup-visiblepanel-tab-background-color: #1e1e1e;
+  --dv-activegroup-hiddenpanel-tab-background-color: #2d2d2d;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #2d2d2d;
+  --dv-tab-divider-color: #2b2b2b;
+  --dv-separator-border: #2b2b2b;
+  --dv-group-view-background-color: #1e1e1e;
+  --dv-paneview-header-background-color: #252526;
+  --dv-tabs-and-actions-container-height: 36px;
+  --dv-tab-font-size: 13px;
+}
+
+/* Pestañas IDE arriba del área de diff (no del historial lateral) */
+.compare-dock-root .dv-groupview:not(.dv-groupview-edge) > .dv-tabs-and-actions-container {
+  border-bottom: 1px solid #2b2b2b;
+  min-height: 36px;
+}
+
+.compare-dock-root .dv-groupview-edge > .dv-tabs-and-actions-container {
+  display: none;
+}
+
+.sfoc-dock-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 220px;
+  height: 100%;
+  padding: 0 10px 0 8px;
+  box-sizing: border-box;
+}
+
+.sfoc-dock-tab__icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.sfoc-dock-tab__icon .list-tree-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 8px;
+  line-height: 16px;
+}
+
+.sfoc-dock-tab__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.sfoc-dock-tab__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-right: -4px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+.sfoc-dock-tab__close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.compare-dock-root .dv-tab.dv-active-tab .sfoc-dock-tab {
+  color: #e8e8e8;
+}
+
+.compare-dock-root .dv-tab.dv-inactive-tab .sfoc-dock-tab {
+  color: #969696;
+}
+
+.compare-dock-root .dv-tab.dv-active-tab {
+  border-top: 1px solid #0078d4;
+}
+
+body.app-theme-light .compare-dock-root .dv-groupview:not(.dv-groupview-edge) > .dv-tabs-and-actions-container {
+  border-bottom-color: #e0e0e0;
+}
+
+body.app-theme-light .compare-dock-root .dv-tab.dv-active-tab .sfoc-dock-tab {
+  color: #1e1e1e;
+}
+
+body.app-theme-light .compare-dock-root .dv-tab.dv-inactive-tab .sfoc-dock-tab {
+  color: #616161;
+}
+
+body.app-theme-light .sfoc-dock-tab__close:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+body.app-theme-light .compare-dock-root.sfoc-dockview {
+  --dv-tabs-and-actions-container-background-color: #f3f3f3;
+  --dv-activegroup-visiblepanel-tab-background-color: #ffffff;
+  --dv-activegroup-hiddenpanel-tab-background-color: #ececec;
+  --dv-inactivegroup-visiblepanel-tab-background-color: #ececec;
+  --dv-separator-border: #e0e0e0;
+  --dv-group-view-background-color: #ffffff;
+  --dv-paneview-header-background-color: #f3f3f3;
+}

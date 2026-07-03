@@ -4,11 +4,17 @@ import { updateOrgSelectorsLockedState } from './viewerChrome.js';
 import { saveScrollPosition } from './scrollRestore.js';
 import { updateDocumentTitle } from './documentMeta.js';
 import { getFileExtension } from '../lib/itemLabels.js';
+import {
+  createCompareItemIcon,
+  treeIconKindFromExtension,
+  treeIconKindFromItemType
+} from '../lib/compareItemIcons.js';
 import { downloadFile } from '../flows/fileActions.js';
 import { showToast } from './toast.js';
 import { renderEditor } from '../editor/editorRender.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { t } from '../../shared/i18n.js';
+import { isCompareDockActive, openCompareTab } from './compareDockLayout.js';
 
 let listFilterQuery = '';
 
@@ -70,6 +76,27 @@ function getListFilterQuery() {
   return listFilterQuery.trim().toLowerCase();
 }
 
+/**
+ * @param {import('../core/state.js').state.savedItems[0]} item
+ * @param {MouseEvent} [event]
+ */
+async function selectCompareItem(item, event) {
+  if (state.selectedItem) {
+    saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
+  }
+  if (isCompareDockActive()) {
+    const forceNew = !!(event?.ctrlKey || event?.metaKey);
+    await openCompareTab(item, { forceNew });
+    syncListActiveHighlight();
+    return;
+  }
+  state.selectedItem = item;
+  syncListActiveHighlight();
+  updateDocumentTitle();
+  syncCompareUrlFromState(state, { method: 'push' });
+  renderEditor();
+}
+
 /** @param {import('../core/state.js').state.savedItems[0]} item */
 function itemSearchHaystack(item) {
   const parts = [item.type, item.key, item.fileName || ''];
@@ -113,41 +140,9 @@ function createChevronSpacer() {
   return span;
 }
 
-/** Mapea extensión de fichero LWC/Aura al tipo de icono del árbol. */
-function treeIconKindFromExtension(ext) {
-  const e = String(ext || '').toLowerCase();
-  if (e === 'auradoc') return 'auradoc';
-  if (['js', 'html', 'css', 'cmp', 'xml', 'cls', 'trigger', 'page', 'component'].includes(e)) return e;
-  return 'file';
-}
-
 /** Icono de árbol estilo VS Code (Seti-like). */
 function createTreeIcon(kind) {
-  const span = document.createElement('span');
-  span.className = `list-tree-icon list-tree-icon--${String(kind || 'file').toLowerCase()}`;
-  span.setAttribute('aria-hidden', 'true');
-  return span;
-}
-
-function treeIconKindFromItemType(type) {
-  switch (type) {
-    case 'ApexClass':
-      return 'cls';
-    case 'ApexTrigger':
-      return 'trigger';
-    case 'ApexPage':
-      return 'page';
-    case 'ApexComponent':
-      return 'component';
-    case 'PermissionSet':
-      return 'permset';
-    case 'Profile':
-      return 'profile';
-    case 'FlexiPage':
-      return 'flexipage';
-    default:
-      return 'file';
-  }
+  return createCompareItemIcon(kind);
 }
 
 function getCompareListElements() {
@@ -619,7 +614,9 @@ export function syncListActiveHighlight() {
       el.classList.remove('active');
     }
   }
-  const sel = state.selectedItem;
+  const sel = isCompareDockActive()
+    ? state.compareTabs.find((tab) => tab.tabId === state.activeCompareTabId)?.item || state.selectedItem
+    : state.selectedItem;
   if (!sel) return;
 
   if (
@@ -789,14 +786,7 @@ export function renderSavedItems(preserveOrder = true) {
           renderSavedItems(true);
         },
         onSelect: () => {
-          if (state.selectedItem) {
-            saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
-          }
-          state.selectedItem = item;
-          syncListActiveHighlight();
-          updateDocumentTitle();
-          syncCompareUrlFromState(state, { method: 'push' });
-          renderEditor();
+          void selectCompareItem(item);
         }
       });
       list.appendChild(hdr);
@@ -939,15 +929,8 @@ export function createListItem(item, displayIndex) {
   li.setAttribute('data-key', item.key);
   if (item.fileName) li.setAttribute('data-file-name', item.fileName);
 
-  li.addEventListener('click', () => {
-    if (state.selectedItem) {
-      saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
-    }
-    state.selectedItem = item;
-    syncListActiveHighlight();
-    updateDocumentTitle();
-    syncCompareUrlFromState(state, { method: 'push' });
-    renderEditor();
+  li.addEventListener('click', (event) => {
+    void selectCompareItem(item, event);
   });
 
   return li;

@@ -27,6 +27,7 @@ import { updateDocumentTitle, updateFileMeta } from '../ui/documentMeta.js';
 import { refreshAuthStatuses, updateOrgDropdownLayout } from '../ui/orgs.js';
 import { isFullScreenToolMode } from '../ui/artifactTypeUi.js';
 import { descriptorForFetchSource } from '../lib/sourceDescriptor.js';
+import { compareDiffWorkbench, isCompareDockActive } from '../ui/compareDockLayout.js';
 
 /** LRU: diff alineado pesado (prepareDiffForViewer) si org+fichero y versiones no cambian. */
 const diffPreparedLru = new Map();
@@ -145,8 +146,48 @@ export async function renderEditor(opts = {}) {
     return;
   }
 
-  const container = document.getElementById('monacoContainer');
-  const noOrgMessage = document.getElementById('noOrgMessage');
+  const compareTabId =
+    opts.compareTabId !== undefined
+      ? opts.compareTabId
+      : isCompareDockActive()
+        ? state.activeCompareTabId
+        : null;
+
+  if (isCompareDockActive() && compareTabId === null && opts.compareTabId === null) {
+    resetMonacoComparisonView();
+    return;
+  }
+
+  let container = document.getElementById('monacoContainer');
+  let noOrgMessage = document.getElementById('noOrgMessage');
+  if (isCompareDockActive() && compareTabId) {
+    const mount = compareDiffWorkbench.tabs.get(compareTabId)?.mountEl;
+    if (!mount) return;
+    container = mount;
+    noOrgMessage =
+      mount.querySelector('.no-org-message') || document.getElementById('noOrgMessage');
+    const tabItem = compareDiffWorkbench.getItem(compareTabId);
+    if (tabItem) state.selectedItem = tabItem;
+  }
+
+  if (isCompareDockActive() && container && state.diffEditor) {
+    try {
+      const currentMount = state.diffEditor.getContainerDomNode()?.parentElement;
+      if (currentMount && currentMount !== container) {
+        if (state.diffListenerDisposable) {
+          try {
+            state.diffListenerDisposable.dispose();
+          } catch {}
+          state.diffListenerDisposable = null;
+        }
+        state.diffEditor.dispose();
+        state.diffEditor = null;
+      }
+    } catch {
+      state.diffEditor = null;
+    }
+  }
+
   const leftOrgId = state.leftOrgId;
   const rightOrgId = state.rightOrgId;
   const item = state.selectedItem;
