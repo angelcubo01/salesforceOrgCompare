@@ -180,7 +180,7 @@ Scripts de administración documentados en [SFOC_DEV_ADMIN_TOOLS.md](../SFOC_DEV
 
 | Recurso | URL / Archivo |
 |---------|---------------|
-| Política de privacidad | `https://salesforceorgcompare.web.app/privacy-polity.html` |
+| Política de privacidad | `https://salesforceorgcompare.com/privacy-polity.html` |
 | Constante en código | [`PRIVACY_POLICY_URL`](../../code/core/constants.js) |
 | Página desinstalación | [`UNINSTALL_FEEDBACK_URL`](../../code/core/constants.js) |
 | Proyecto PostHog | EU, proyecto "Salesforce Org Compare" |

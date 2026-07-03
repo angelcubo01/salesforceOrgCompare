@@ -209,7 +209,7 @@ Ring buffer de los últimos 50 `usage:log` en `chrome.storage.local`:
 
 - Detectar `extension_updated` (ya en lifecycle)
 - Mostrar modal/banner en Compare con changelog
-- Fuente: payload de flag PostHog o JSON en Firebase Hosting (`salesforceorgcompare.web.app`)
+- Fuente: payload de flag PostHog o JSON en Firebase Hosting (`salesforceorgcompare.com`)
 - Enlazar con onboarding existente ([`onboardingPrefs.js`](../shared/onboardingPrefs.js))
 
 ### 4.4 Centro de privacidad ampliado `[In-app]` — P1, esfuerzo S
@@ -260,7 +260,7 @@ Este documento (`SFOC_DEV_ADMIN_TOOLS.md`) cubre el inventario y roadmap; los ru
 
 ### 5.3 Página de desinstalación `[Repo/ops]` — P2, esfuerzo S
 
-[`UNINSTALL_FEEDBACK_URL`](../code/core/constants.js) → `https://salesforceorgcompare.web.app/uninstall-feedback.html`
+[`UNINSTALL_FEEDBACK_URL`](../code/core/constants.js) → `https://salesforceorgcompare.com/uninstall-feedback.html`
 
 - Configurada en [`extensionLifecycleTelemetry.js`](../background/extensionLifecycleTelemetry.js) vía `chrome.runtime.setUninstallURL`
 - Documentar evento esperado `extension_uninstalled` en la página externa (código no en este repo)

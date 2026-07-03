@@ -660,7 +660,7 @@ Banner bajo la barra de modos para todos los usuarios.
       "en": "Scheduled maintenance today 22:00–23:00 UTC. Some features may be unavailable.",
       "severity": "warn",
       "blocking": false,
-      "url": "https://salesforceorgcompare.web.app/"
+      "url": "https://salesforceorgcompare.com/"
     }
   }
 }

@@ -218,7 +218,7 @@ Definidos en [`manifest.json`](../../manifest.json):
 | `alarms` | Heartbeat telemetría, limpieza trace flags |
 | `notifications` | Notificación al completar tests Apex |
 
-**Host permissions:** dominios Salesforce (`*.salesforce.com`, `*.force.com`, etc.), PostHog EU, `api.status.salesforce.com`, web pública `salesforceorgcompare.web.app`.
+**Host permissions:** dominios Salesforce (`*.salesforce.com`, `*.force.com`, etc.), PostHog EU, `api.status.salesforce.com`, web pública `salesforceorgcompare.com`.
 
 ---
 
