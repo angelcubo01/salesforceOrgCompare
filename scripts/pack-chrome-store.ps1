@@ -54,6 +54,67 @@ Crea el archivo localmente antes de empaquetar.
 "@
 }
 
+# Chrome solo admite estos tamaños en manifest.icons (16, 19, 32, 38, 48, 128).
+$chromeIconSizes = @(16, 19, 32, 38, 48, 128)
+
+function Test-ManifestIcons {
+  param(
+    [object] $Manifest,
+    [string] $Root
+  )
+
+  $iconsDir = Join-Path $Root 'icons'
+  if (-not (Test-Path $iconsDir)) {
+    throw @"
+No se encontro la carpeta icons/.
+Los PNG deben estar versionados en el repo. Restaura con:
+  git checkout -- icons/
+"@
+  }
+
+  if (-not $Manifest.icons) {
+    throw 'manifest.json no define la seccion icons.'
+  }
+
+  $missing = @()
+  $invalidSizes = @()
+
+  foreach ($prop in $Manifest.icons.PSObject.Properties) {
+    $size = 0
+    if (-not [int]::TryParse([string] $prop.Name, [ref] $size)) {
+      $invalidSizes += $prop.Name
+      continue
+    }
+    if ($chromeIconSizes -notcontains $size) {
+      $invalidSizes += $prop.Name
+    }
+
+    $rel = [string] $prop.Value
+    $full = Join-Path $Root ($rel -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path $full)) {
+      $missing += $rel
+    }
+  }
+
+  if ($invalidSizes.Count -gt 0) {
+    throw @"
+manifest.json declara tamanos de icono no validos para Chrome: $($invalidSizes -join ', ').
+Tamanos permitidos: $($chromeIconSizes -join ', ').
+Quita del manifest los iconos 256/512 (pueden quedarse en icons/ para otros usos).
+"@
+  }
+
+  if ($missing.Count -gt 0) {
+    throw @"
+Faltan iconos referenciados en manifest.json:
+$($missing -join "`n")
+Comprueba que la carpeta icons/ esta completa (git checkout -- icons/).
+"@
+  }
+}
+
+Test-ManifestIcons -Manifest $manifest -Root $repoRoot
+
 $includeRoots = @(
   'manifest.json',
   'background.js',
@@ -111,6 +172,13 @@ function Copy-ExtensionTree {
   )
 
   if (-not (Test-Path $SourcePath)) {
+    $name = Split-Path $SourcePath -Leaf
+    if ($name -eq 'icons') {
+      throw @"
+No se encontro la carpeta icons en: $SourcePath
+Restaura los iconos con: git checkout -- icons/
+"@
+    }
     throw "No se encontro: $SourcePath"
   }
 
