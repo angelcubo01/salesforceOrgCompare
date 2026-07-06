@@ -1,4 +1,4 @@
-import { buildApexLogTreeModel } from '../../../shared/apexLogParser.js';
+import { buildApexLogTreeModel, collectTreeErrorVisibleRows } from '../../../shared/apexLogParser.js';
 import { createSingleEditor } from '../../editor/monaco.js';
 import { registerSfocApexLogTreeLanguage, resolveTreeThemeId } from './registerTreelogLanguage.js';
 import { ensurePanelSectionHeading } from './panelSectionHeading.js';
@@ -62,10 +62,25 @@ export function revealTreeLogLine(line) {
   return true;
 }
 
+/** @type {{ hasError: boolean, parentRow: number }[]} */
+let treeRowMeta = [];
+/** @type {number[][]} */
+let treeChildrenOf = [];
+
 function applyTreeFilter(query, slowOnly, errorsOnly, parsed) {
   if (!treeEditor) return;
   const q = String(query || '').trim().toLowerCase();
-  let lines = treeAllLines;
+  let indices = treeAllLines.map((_, i) => i);
+  if (errorsOnly) {
+    const visible = collectTreeErrorVisibleRows(
+      treeRowMeta,
+      treeChildrenOf,
+      treeLogLineToRow,
+      parsed?.issues || []
+    );
+    indices = indices.filter((i) => visible.has(i + 1));
+  }
+  let lines = indices.map((i) => treeAllLines[i]);
   if (q) lines = lines.filter((l) => l.toLowerCase().includes(q));
   if (slowOnly) {
     lines = lines.filter((l) => {
@@ -73,15 +88,6 @@ function applyTreeFilter(query, slowOnly, errorsOnly, parsed) {
       if (!m) return false;
       const ms = m[1] ? Number(m[1]) : Number(m[2]) * 1000;
       return ms >= 100;
-    });
-  }
-  if (errorsOnly && parsed?.issues?.length) {
-    const errorLines = new Set(parsed.issues.filter((i) => i.type === 'error').map((i) => i.line));
-    lines = lines.filter((l) => {
-      for (const ln of errorLines) {
-        if (treeLogLineToRow.get(ln) && l.includes(String(ln))) return true;
-      }
-      return l.toLowerCase().includes('error') || l.includes('✗');
     });
   }
   treeEditor.setValue(lines.join('\n') || '—');
@@ -101,9 +107,11 @@ export function renderTreeView(monaco, mount, parsed, lightTheme, t, toolbarEl) 
   registerSfocApexLogTreeLanguage(monaco);
   ensureTreeFoldingProvider(monaco);
 
-  const { lines, foldRanges, logLineToRow } = buildApexLogTreeModel(parsed.tree, t);
+  const { lines, foldRanges, logLineToRow, rowMeta, childrenOf } = buildApexLogTreeModel(parsed.tree, t);
   treeFoldRanges = foldRanges;
   treeLogLineToRow = logLineToRow;
+  treeRowMeta = rowMeta;
+  treeChildrenOf = childrenOf;
   treeAllLines = lines;
   const text = lines.join('\n') || '—';
 

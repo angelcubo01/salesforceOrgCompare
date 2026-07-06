@@ -53,6 +53,65 @@ export function normalizeSoqlForDedup(query) {
     .toLowerCase();
 }
 
+const SOQL_FROM_OBJECT_RE = /\bFROM\s+([a-zA-Z0-9_.]+)\b/i;
+
+/** @param {string} query */
+export function extractSoqlFromObject(query) {
+  const m = String(query || '').match(SOQL_FROM_OBJECT_RE);
+  return m ? m[1] : '';
+}
+
+/** Consultas contra Custom Metadata (`__mdt`) no cuentan para el límite de 100 SOQL en Apex. */
+export function isCustomMetadataSoql(query) {
+  return extractSoqlFromObject(query).endsWith('__mdt');
+}
+
+/**
+ * Determina si una consulta del log cuenta para el límite SOQL (100/200) según deltas de LIMIT_USAGE.
+ * @param {string} query
+ * @param {number} soqlDelta incremento del contador SOQL entre BEGIN y END
+ * @param {number} aggsDelta incremento del contador AGGS (subconsultas padre-hijo)
+ * @param {boolean} [limitsKnown] si el log incluye eventos LIMIT_USAGE
+ */
+export function classifySoqlGovernorImpact(query, soqlDelta, aggsDelta, limitsKnown = true) {
+  if (soqlDelta > 0) {
+    return { countsTowardSoqlLimit: true, exemptReason: null };
+  }
+  if (limitsKnown) {
+    if (aggsDelta > 0) {
+      return { countsTowardSoqlLimit: false, exemptReason: 'aggregateSubquery' };
+    }
+    if (isCustomMetadataSoql(query)) {
+      return { countsTowardSoqlLimit: false, exemptReason: 'customMetadata' };
+    }
+    return { countsTowardSoqlLimit: false, exemptReason: 'exemptOther' };
+  }
+  if (isCustomMetadataSoql(query)) {
+    return { countsTowardSoqlLimit: false, exemptReason: 'customMetadata' };
+  }
+  return { countsTowardSoqlLimit: true, exemptReason: null };
+}
+
+/** @param {object[]} soql */
+export function buildSoqlGovernorSummary(soql, limitPeak = {}) {
+  const counted = soql.filter((s) => s.countsTowardSoqlLimit);
+  const exempt = soql.filter((s) => !s.countsTowardSoqlLimit);
+  const byReason = { customMetadata: 0, aggregateSubquery: 0, exemptOther: 0 };
+  for (const row of exempt) {
+    const key = row.exemptReason || 'exemptOther';
+    if (key in byReason) byReason[key] += 1;
+    else byReason.exemptOther += 1;
+  }
+  return {
+    counted: counted.length,
+    exempt: exempt.length,
+    total: soql.length,
+    peakUsed: limitPeak.SOQL?.used ?? null,
+    peakMax: limitPeak.SOQL?.max ?? null,
+    byReason
+  };
+}
+
 /** @param {object[]} soql */
 export function groupDuplicateSoql(soql) {
   const groups = new Map();
@@ -317,6 +376,9 @@ export function parseApexDebugLog(rawText) {
   /** @type {Map<number, object>} */
   const openCodeUnits = new Map();
   const limitPeak = {};
+  let lastSoqlLimitUsed = 0;
+  let lastAggsLimitUsed = 0;
+  let hasLimitUsageEvents = false;
   const debugLevels = parseDebugLevels(text);
   let user = null;
 
@@ -377,6 +439,9 @@ export function parseApexDebugLog(rawText) {
       if (!limitPeak[limitType] || used > limitPeak[limitType].used) {
         limitPeak[limitType] = { used, max, line: lineNum };
       }
+      hasLimitUsageEvents = true;
+      if (limitType === 'SOQL') lastSoqlLimitUsed = used;
+      if (limitType === 'AGGS') lastAggsLimitUsed = used;
       continue;
     }
 
@@ -547,6 +612,8 @@ export function parseApexDebugLog(rawText) {
           durationMs: 0,
           aggregations,
           context: ctx ? `${ctx.label}:${ctx.apexLine}` : '',
+          _soqlLimitAtBegin: lastSoqlLimitUsed,
+          _aggsLimitAtBegin: lastAggsLimitUsed,
           _nodeId: node.id
         });
       }
@@ -608,6 +675,12 @@ export function parseApexDebugLog(rawText) {
         if (rec) {
           rec.rows = rows;
           rec.durationMs = node.durationMs;
+          const soqlDelta = lastSoqlLimitUsed - (rec._soqlLimitAtBegin ?? lastSoqlLimitUsed);
+          const aggsDelta = lastAggsLimitUsed - (rec._aggsLimitAtBegin ?? lastAggsLimitUsed);
+          Object.assign(
+            rec,
+            classifySoqlGovernorImpact(rec.query, soqlDelta, aggsDelta, hasLimitUsageEvents)
+          );
         }
       }
       if (event === 'DML_END') {
@@ -677,8 +750,14 @@ export function parseApexDebugLog(rawText) {
   const profiling = parseCumulativeProfiling(text);
   const records = recordsToObject(recordSets);
 
-  for (const s of soql) delete s._nodeId;
+  for (const s of soql) {
+    delete s._nodeId;
+    delete s._soqlLimitAtBegin;
+    delete s._aggsLimitAtBegin;
+  }
   for (const d of dml) delete d._nodeId;
+
+  const soqlGovernor = buildSoqlGovernorSummary(soql, limitPeak);
 
   return {
     meta: {
@@ -702,7 +781,8 @@ export function parseApexDebugLog(rawText) {
     profiling,
     records,
     lineEvents,
-    soqlDuplicates: groupDuplicateSoql(soql),
+    soqlGovernor,
+    soqlDuplicates: groupDuplicateSoql(soql.filter((s) => s.countsTowardSoqlLimit)),
     timeline
   };
 }
@@ -712,7 +792,7 @@ export function parseApexDebugLog(rawText) {
  * @param {(key: string, params?: object) => string} [t]
  * @param {string} [prefix]
  * @param {boolean} [isLast]
- * @returns {{ lines: string[], foldRanges: { start: number, end: number }[], logLineToRow: Map<number, number> }}
+ * @returns {{ lines: string[], foldRanges: { start: number, end: number }[], logLineToRow: Map<number, number>, rowMeta: { hasError: boolean, parentRow: number }[], childrenOf: number[][] }}
  */
 export function buildApexLogTreeModel(node, t, prefix = '', isLast = true) {
   const tr = typeof t === 'function' ? t : (k) => k;
@@ -720,12 +800,16 @@ export function buildApexLogTreeModel(node, t, prefix = '', isLast = true) {
   const foldRanges = [];
   /** @type {Map<number, number>} */
   const logLineToRow = new Map();
+  /** @type {{ hasError: boolean, parentRow: number }[]} */
+  const rowMeta = [];
+  /** @type {number[][]} */
+  const childrenOf = [];
 
-  function walk(n, pfx, last) {
+  function walk(n, pfx, last, parentRow = 0) {
     if (!n || n.kind === 'root') {
       const children = n?.children || [];
       for (let i = 0; i < children.length; i++) {
-        walk(children[i], '', i === children.length - 1);
+        walk(children[i], '', i === children.length - 1, 0);
       }
       return;
     }
@@ -736,11 +820,17 @@ export function buildApexLogTreeModel(node, t, prefix = '', isLast = true) {
     const rows =
       n.rows > 0 ? ` — ${tr('apexLogViewer.tree.rows', { n: n.rows })}` : '';
     lines.push(`${branch}[${kindTag}] ${n.label}${dur}${rows}`);
-    if (n.line) logLineToRow.set(n.line, lines.length);
+    const currentRow = lines.length;
+    rowMeta[currentRow] = { hasError: Boolean(n.hasError), parentRow };
+    if (parentRow > 0) {
+      if (!childrenOf[parentRow]) childrenOf[parentRow] = [];
+      childrenOf[parentRow].push(currentRow);
+    }
+    if (n.line) logLineToRow.set(n.line, currentRow);
     const childPrefix = pfx + (last ? '   ' : '│  ');
     const children = n.children || [];
     for (let i = 0; i < children.length; i++) {
-      walk(children[i], childPrefix, i === children.length - 1);
+      walk(children[i], childPrefix, i === children.length - 1, currentRow);
     }
     const endLine = lines.length;
     if (children.length > 0 && endLine > startLine) {
@@ -749,7 +839,62 @@ export function buildApexLogTreeModel(node, t, prefix = '', isLast = true) {
   }
 
   walk(node, prefix, isLast);
-  return { lines, foldRanges, logLineToRow };
+  return { lines, foldRanges, logLineToRow, rowMeta, childrenOf };
+}
+
+/**
+ * Filas del árbol (1-based) visibles con «solo errores»: nodos con error, ancestros y descendientes.
+ * @param {{ hasError: boolean, parentRow: number }[]} rowMeta
+ * @param {number[][]} childrenOf
+ * @param {Map<number, number>} logLineToRow
+ * @param {{ line?: number, type?: string }[]} [issues]
+ */
+export function collectTreeErrorVisibleRows(rowMeta, childrenOf, logLineToRow, issues = []) {
+  const lineCount = rowMeta.length - 1;
+  if (lineCount <= 0) return new Set();
+
+  const errorRoots = new Set();
+  for (let r = 1; r <= lineCount; r++) {
+    if (rowMeta[r]?.hasError) errorRoots.add(r);
+  }
+
+  for (const issue of issues) {
+    if (issue.type !== 'error' || !issue.line) continue;
+    const direct = logLineToRow.get(issue.line);
+    if (direct) {
+      errorRoots.add(direct);
+      continue;
+    }
+    let bestLine = 0;
+    let bestRow = 0;
+    for (const [logLine, treeRow] of logLineToRow) {
+      if (logLine <= issue.line && logLine > bestLine) {
+        bestLine = logLine;
+        bestRow = treeRow;
+      }
+    }
+    if (bestRow) errorRoots.add(bestRow);
+  }
+
+  const visible = new Set();
+  function addDescendants(row) {
+    for (const child of childrenOf[row] || []) {
+      if (visible.has(child)) continue;
+      visible.add(child);
+      addDescendants(child);
+    }
+  }
+
+  for (const root of errorRoots) {
+    let r = root;
+    while (r > 0) {
+      visible.add(r);
+      r = rowMeta[r]?.parentRow ?? 0;
+    }
+    addDescendants(root);
+  }
+
+  return visible;
 }
 
 /**

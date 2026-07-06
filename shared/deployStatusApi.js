@@ -5,11 +5,13 @@ const DEPLOY_FIELDS = `
   Id, Status, CheckOnly, Type, TestLevel, RunTestsEnabled, RollbackOnError,
   NumberComponentsDeployed, NumberComponentsTotal, NumberComponentErrors,
   NumberTestsCompleted, NumberTestsTotal, NumberTestErrors,
-  NumberFiles, ZipSize, StartDate, CompletedDate,
+  NumberFiles, ZipSize, StartDate, CompletedDate, CreatedDate,
   CreatedById, CreatedBy.Name, ErrorMessage, ErrorStatusCode
 `.replace(/\s+/g, ' ').trim();
 
-const ACTIVE_STATUSES = ['Pending', 'InProgress'];
+const IN_PROGRESS_STATUS = 'InProgress';
+const PENDING_STATUS = 'Pending';
+const ACTIVE_STATUSES = [PENDING_STATUS, IN_PROGRESS_STATUS];
 const FAILED_STATUSES = ['Failed'];
 const SUCCEEDED_STATUSES = ['Succeeded'];
 
@@ -41,6 +43,7 @@ export function normalizeDeployRow(rec) {
     zipSize: toNum(rec.ZipSize),
     startDate: rec.StartDate || null,
     completedDate: rec.CompletedDate || null,
+    createdDate: rec.CreatedDate || null,
     createdById: rec.CreatedById || null,
     createdByName: createdBy?.Name ? String(createdBy.Name) : '',
     errorMessage: rec.ErrorMessage ? String(rec.ErrorMessage) : '',
@@ -53,15 +56,116 @@ export function isDeployInProgress(status) {
   return ACTIVE_STATUSES.includes(s);
 }
 
+/**
+ * Setup usa checkDeployStatus para saber si un deploy ya arrancó (aunque DeployRequest siga en Pending).
+ * @param {Record<string, unknown> | null | undefined} soap
+ */
+export function isSoapActivelyRunning(soap) {
+  if (!soap || soap.done) return false;
+  const status = String(soap.status || '')
+    .trim()
+    .toLowerCase();
+  if (status === 'inprogress' || status === 'in progress') return true;
+  if (toNum(soap.numberComponentsTotal) > 0) return true;
+  if (toNum(soap.numberComponentsDeployed) > 0) return true;
+  if (toNum(soap.numberTestsTotal) > 0) return true;
+  if (toNum(soap.numberTestsCompleted) > 0) return true;
+  if (Array.isArray(soap.componentSuccesses) && soap.componentSuccesses.length > 0) return true;
+  if (Array.isArray(soap.componentFailures) && soap.componentFailures.length > 0) return true;
+  return false;
+}
+
+/**
+ * Deploy realmente en ejecución (no solo encolado en Pending sin arrancar).
+ * @param {ReturnType<typeof normalizeDeployRow> | null | undefined} row
+ * @param {Record<string, unknown> | null | undefined} soap
+ */
+export function isDeployActivelyRunning(row, soap) {
+  if (isSoapActivelyRunning(soap)) return true;
+  return String(row?.status || '') === IN_PROGRESS_STATUS;
+}
+
+function deployProgressScore(entry) {
+  const soap = entry?.soap;
+  if (!soap) return 0;
+  return (
+    toNum(soap.numberComponentsDeployed) * 1000 +
+    toNum(soap.numberTestsCompleted) * 10 +
+    toNum(soap.numberComponentsTotal)
+  );
+}
+
+/**
+ * Separa el deploy en ejecución de la cola, como Setup → Deployment Status.
+ * @param {Array<{ row: ReturnType<typeof normalizeDeployRow>, soap: Record<string, unknown> | null }>} entries
+ */
+export function resolveActiveAndPendingDeploys(entries) {
+  const list = Array.isArray(entries) ? entries : [];
+  const incomplete = list.filter(({ soap, row }) => {
+    if (soap) return !soap.done;
+    return isDeployInProgress(row?.status);
+  });
+
+  const running = incomplete.filter(({ soap }) => isSoapActivelyRunning(soap));
+  let active = null;
+
+  if (running.length === 1) {
+    active = running[0];
+  } else if (running.length > 1) {
+    active = [...running].sort((a, b) => deployProgressScore(b) - deployProgressScore(a))[0];
+  } else {
+    const inProgressRow = incomplete.find(({ row }) => row?.status === IN_PROGRESS_STATUS);
+    if (inProgressRow) {
+      active = inProgressRow;
+    }
+  }
+
+  const activeId = String(active?.row?.asyncId || '');
+  const pending = list.filter(({ row, soap }) => {
+    const id = String(row?.asyncId || '');
+    if (!id || id === activeId) return false;
+    if (soap?.done) return false;
+    if (soap) return !isSoapActivelyRunning(soap);
+    return row?.status === PENDING_STATUS;
+  });
+
+  return { active, pending };
+}
+
+/**
+ * Enriquece la fila Tooling con progreso/fechas del SOAP (más fiable que DeployRequest en cola).
+ * @param {ReturnType<typeof normalizeDeployRow>} row
+ * @param {Record<string, unknown> | null | undefined} soap
+ */
+export function enrichActiveRowFromSoap(row, soap) {
+  if (!row) return row;
+  const next = { ...row };
+  if (soap) {
+    if (!next.startDate && soap.startDate) next.startDate = soap.startDate;
+    if (!next.startDate && soap.createdDate) next.startDate = soap.createdDate;
+    if (toNum(soap.numberComponentsTotal) > 0) next.componentsTotal = toNum(soap.numberComponentsTotal);
+    if (toNum(soap.numberComponentsDeployed) > 0 || toNum(soap.numberComponentsTotal) > 0) {
+      next.componentsDeployed = toNum(soap.numberComponentsDeployed);
+    }
+    if (toNum(soap.numberTestsTotal) > 0) next.testsTotal = toNum(soap.numberTestsTotal);
+    if (toNum(soap.numberTestsCompleted) > 0 || toNum(soap.numberTestsTotal) > 0) {
+      next.testsCompleted = toNum(soap.numberTestsCompleted);
+    }
+    if (soap.status && isSoapActivelyRunning(soap)) next.status = IN_PROGRESS_STATUS;
+  }
+  if (!next.startDate && next.createdDate) next.startDate = next.createdDate;
+  return next;
+}
+
 function statusInList(statuses) {
   return statuses.map((s) => `'${s}'`).join(', ');
 }
 
-async function queryDeployPage(instanceUrl, sid, apiVersion, whereClause, limit, offset) {
+async function queryDeployPage(instanceUrl, sid, apiVersion, whereClause, limit, offset, orderBy = 'StartDate DESC') {
   const soql =
     `SELECT ${DEPLOY_FIELDS} FROM DeployRequest` +
     ` WHERE ${whereClause}` +
-    ` ORDER BY StartDate DESC` +
+    ` ORDER BY ${orderBy}` +
     ` LIMIT ${limit} OFFSET ${offset}`;
   return toolingSoqlQueryPage(instanceUrl, sid, apiVersion, soql);
 }
@@ -73,19 +177,63 @@ async function countDeploys(instanceUrl, sid, apiVersion, whereClause) {
 }
 
 /**
- * @returns {Promise<import('./deployStatusApi.js').NormalizedDeployRow | null>}
+ * Consulta cola + SOAP para distinguir ejecución real vs encolado (como Setup).
  */
-export async function fetchActiveDeploy(instanceUrl, sid, apiVersion) {
+export async function fetchActiveDeployQueueState(instanceUrl, sid, apiVersion, opts = {}) {
+  const limit = Math.min(50, Math.max(1, Number(opts.limit) || 20));
   const page = await queryDeployPage(
     instanceUrl,
     sid,
     apiVersion,
     `Status IN (${statusInList(ACTIVE_STATUSES)})`,
-    1,
-    0
+    limit,
+    0,
+    'CreatedDate ASC'
   );
-  const rec = page.records?.[0];
-  return rec ? normalizeDeployRow(rec) : null;
+  const rows = (page.records || []).map(normalizeDeployRow);
+  const soaps = await Promise.all(
+    rows.map((row) => checkDeployStatus(instanceUrl, sid, apiVersion, row.asyncId).catch(() => null))
+  );
+  const entries = rows.map((row, index) => ({ row, soap: soaps[index] }));
+  const { active: activeEntry, pending } = resolveActiveAndPendingDeploys(entries);
+
+  const activeRow = activeEntry?.row
+    ? enrichActiveRowFromSoap(activeEntry.row, activeEntry.soap)
+    : null;
+  const pendingRecords = pending.map(({ row }) => row);
+  const totalSize = typeof page.totalSize === 'number' ? page.totalSize : rows.length;
+  const pendingTotal = Math.max(pendingRecords.length, totalSize - (activeRow ? 1 : 0));
+
+  return {
+    active: activeRow,
+    activeSoap: activeEntry?.soap || null,
+    pendingQueue: {
+      records: pendingRecords,
+      totalCount: pendingTotal
+    }
+  };
+}
+
+/**
+ * Deploy que Salesforce está ejecutando ahora (Status = InProgress en Tooling).
+ * @returns {Promise<import('./deployStatusApi.js').NormalizedDeployRow | null>}
+ */
+export async function fetchInProgressDeploy(instanceUrl, sid, apiVersion) {
+  const state = await fetchActiveDeployQueueState(instanceUrl, sid, apiVersion, { limit: 20 });
+  return state.active;
+}
+
+/** @deprecated Usa fetchInProgressDeploy; mantiene compatibilidad con llamadas antiguas. */
+export async function fetchActiveDeploy(instanceUrl, sid, apiVersion) {
+  return fetchInProgressDeploy(instanceUrl, sid, apiVersion);
+}
+
+/**
+ * Cola de deploys pendientes (Status = Pending en Tooling, sin progreso SOAP).
+ */
+export async function fetchPendingDeployQueue(instanceUrl, sid, apiVersion, opts = {}) {
+  const state = await fetchActiveDeployQueueState(instanceUrl, sid, apiVersion, opts);
+  return state.pendingQueue;
 }
 
 /**
@@ -97,8 +245,10 @@ export async function fetchDeployHistory(instanceUrl, sid, apiVersion, opts = {}
   const offset = page * pageSize;
 
   let whereClause;
+  let orderBy = 'StartDate DESC';
   if (opts.bucket === 'pending') {
-    whereClause = `Status IN (${statusInList(ACTIVE_STATUSES)})`;
+    whereClause = `Status = '${PENDING_STATUS}'`;
+    orderBy = 'CreatedDate ASC';
   } else if (opts.bucket === 'failed') {
     whereClause = `Status IN (${statusInList(FAILED_STATUSES)})`;
   } else {
@@ -106,7 +256,7 @@ export async function fetchDeployHistory(instanceUrl, sid, apiVersion, opts = {}
   }
 
   const [listPage, totalCount] = await Promise.all([
-    queryDeployPage(instanceUrl, sid, apiVersion, whereClause, pageSize, offset),
+    queryDeployPage(instanceUrl, sid, apiVersion, whereClause, pageSize, offset, orderBy),
     countDeploys(instanceUrl, sid, apiVersion, whereClause)
   ]);
 
@@ -159,6 +309,7 @@ export async function fetchDeployDetail(instanceUrl, sid, apiVersion, asyncId) {
       zipSize: 0,
       startDate: null,
       completedDate: null,
+      createdDate: null,
       createdById: null,
       createdByName: '',
       errorMessage: soap?.errorMessage || '',
@@ -195,25 +346,28 @@ export async function pollDeployStatus(instanceUrl, sid, apiVersion, opts = {}) 
     (Array.isArray(opts.knownCoverageHintIds) ? opts.knownCoverageHintIds : []).map(String)
   );
 
-  const [active, pendingHistory, failedHistory, succeededHistory] = await Promise.all([
-    fetchActiveDeploy(instanceUrl, sid, apiVersion),
-    fetchDeployHistory(instanceUrl, sid, apiVersion, { bucket: 'pending', page: 0, pageSize: 10 }),
+  const [queueState, failedHistory, succeededHistory] = await Promise.all([
+    fetchActiveDeployQueueState(instanceUrl, sid, apiVersion, { limit: 20 }),
     fetchDeployHistory(instanceUrl, sid, apiVersion, { bucket: 'failed', page: failedPage, pageSize }),
     fetchDeployHistory(instanceUrl, sid, apiVersion, { bucket: 'succeeded', page: succeededPage, pageSize })
   ]);
+
+  let active = queueState.active;
+  let activeSoap = queueState.activeSoap;
+  const pendingQueue = queueState.pendingQueue;
 
   const detail = fetchDetail
     ? await fetchDeployDetail(instanceUrl, sid, apiVersion, selectedAsyncId)
     : null;
 
-  let activeSoap = null;
   const activeId = active?.asyncId ? String(active.asyncId) : '';
   if (activeId) {
     if (detail?.row?.asyncId === activeId && detail?.soap) {
       activeSoap = detail.soap;
-    } else {
+    } else if (!activeSoap) {
       activeSoap = await checkDeployStatus(instanceUrl, sid, apiVersion, activeId).catch(() => null);
     }
+    active = enrichActiveRowFromSoap(active, activeSoap);
   }
 
   const failedCoverageHints = await resolveFailedHistoryCoverageHints(
@@ -227,7 +381,9 @@ export async function pollDeployStatus(instanceUrl, sid, apiVersion, opts = {}) 
   return {
     active,
     activeSoap,
-    pendingHistory,
+    pendingQueue,
+    /** @deprecated Usa pendingQueue */
+    pendingHistory: pendingQueue,
     failedHistory,
     succeededHistory,
     failedCoverageHints,
@@ -242,6 +398,18 @@ export async function cancelDeployRequest(instanceUrl, sid, apiVersion, asyncId)
 
 /** Umbral alineado con Setup → Deployment Status (tests ≥ 10 s). */
 export const DEPLOY_SLOW_TEST_THRESHOLD_MS = 10000;
+
+/**
+ * Test en ejecución durante el deploy (DeployResult.stateDetail del SOAP).
+ * @param {Record<string, unknown> | null | undefined} soap
+ */
+export function resolveDeployRunningTest(soap) {
+  if (!soap || soap.done) return '';
+  const detail = String(soap.stateDetail || '').trim();
+  if (!detail) return '';
+  const m = detail.match(/^Running Test:\s*(.+)$/i);
+  return m ? m[1].trim() : detail;
+}
 
 /**
  * @param {{ failures?: Array<{ className?: string, methodName?: string, time?: string }>, successes?: Array<{ className?: string, methodName?: string, time?: string }> } | null | undefined} runTestResult

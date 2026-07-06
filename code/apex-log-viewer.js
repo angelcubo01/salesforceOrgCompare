@@ -313,7 +313,7 @@ async function main() {
           parsed,
           jumpToLogLine,
           t,
-          viewerContext
+          { ...viewerContext, onTabSwitch: onTabSelect }
         );
         break;
       case 'tree':

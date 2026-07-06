@@ -20,11 +20,11 @@ export const apexLogViewerTabHelpEs = {
   'apexLogViewer.help.summary.purpose':
     "Vista de entrada recomendada al abrir un log. Ofrece una foto global de la ejecución antes de profundizar en otras pestañas.",
   'apexLogViewer.help.summary.shows':
-    "Tarjetas KPI: consultas SOQL, operaciones DML, mensajes debug, callouts y errores||Usuario y contexto de la ejecución (tipo de log, clase, método)||IDs de registros tocados (Account, Case, Contact, User…) con enlace a la org si está disponible||Ranking de operaciones más lentas||Cadena de unidades de código ejecutadas (métodos, flows, triggers)",
+    "Tarjetas KPI: duración, tamaño, SOQL (límite), DML, callouts y errores||Barra de contexto: usuario, punto de entrada, mensajes debug y registros tocados||Panel Estado: errores, avisos o log truncado||Panel Gobernadores: límites por encima del 50 %||Destacados: operación más lenta, SOQL duplicados o exentos||Accesos rápidos a otras pestañas",
   'apexLogViewer.help.summary.actions':
-    "Haz clic en una operación lenta o en un eslabón de la cadena de ejecución para saltar a esa línea||El chip «Log con errores» en la barra superior también navega al primer error||Desde los KPIs puedes decidir qué pestaña abrir a continuación",
+    "Usa los botones «Ir a» para saltar a SOQL, Límites, Cronología, etc.||Clic en la operación más lenta o en «Ver línea» para ir al log||Los registros tocados enlazan a la org cuando hay URL disponible",
   'apexLogViewer.help.summary.tips':
-    "Empieza aquí si no sabes por dónde investigar||Si los KPIs muestran muchos callouts o SOQL, abre directamente esas pestañas||Compara el tiempo total con las operaciones más lentas del ranking",
+    "Los KPI de arriba son la foto rápida; el resto te dice si hay algo urgente||Si el panel Gobernadores está vacío, el consumo es bajo||Para el detalle completo usa las pestañas enlazadas abajo",
   'apexLogViewer.help.timeline.purpose':
     "Visualiza cuándo ocurre cada evento y cuánto dura, en un diagrama tipo Gantt interactivo.",
   'apexLogViewer.help.timeline.shows':
@@ -60,11 +60,11 @@ export const apexLogViewerTabHelpEs = {
   'apexLogViewer.help.soql.purpose':
     "Analiza todas las consultas SOQL del log, priorizando rendimiento y duplicados.",
   'apexLogViewer.help.soql.shows':
-    "Tabla ordenada por duración (más lentas primero)||Columnas: línea, duración, filas devueltas, contexto Apex (clase:línea), agregaciones y texto de la query||Bloque «Consultas repetidas»: misma query ejecutada N veces, con total y media de ms||Chips de resumen (conteo, filas, duración total/media, grupos duplicados)",
+    "Sección «Cuentan para el límite SOQL»: consultas que incrementan el contador (100/200)||Sección «No cuentan»: Custom Metadata (__mdt), subconsultas padre-hijo (AGGS) y otras exentas||Columnas: línea, duración, filas, contexto Apex, agregaciones y query||Bloque «Consultas repetidas» solo entre las que sí cuentan||Chips: cuentan límite, exentas, total en log, filas y duración",
   'apexLogViewer.help.soql.actions':
-    "Busca en el texto de las consultas||Clic en una fila para ir a la línea del log||Copia la query con el botón de la fila||Clic en una consulta repetida para filtrar la tabla con esa query",
+    "Busca en el texto de las consultas (ambas secciones)||Clic en una fila para ir a la línea del log||Copia la query con el botón de la fila||Clic en una consulta repetida para filtrar la tabla con esa query",
   'apexLogViewer.help.soql.tips':
-    "Las consultas repetidas son candidatas a bulkificar, cachear o mover fuera de bucles||Mira contexto (clase:línea) para localizar el origen en el código||Compara con Profiling (acumulado) y con Límites (SOQL queries) para una visión completa",
+    "Las consultas __mdt no consumen el límite de 100 SOQL en Apex (sí cuentan filas hacia 50k)||Las subconsultas padre-hijo usan el límite AGGS, no el de SOQL principal||Compara «Cuentan límite» con Límites → SOQL queries y con Profiling acumulado",
   'apexLogViewer.help.dml.purpose':
     "Revisa inserciones, actualizaciones, eliminaciones y upserts registrados en el log.",
   'apexLogViewer.help.dml.shows':
@@ -135,11 +135,11 @@ export const apexLogViewerTabHelpEn = {
   'apexLogViewer.help.summary.purpose':
     "Recommended entry point when opening a log. Gives you a global picture of the execution before diving into other tabs.",
   'apexLogViewer.help.summary.shows':
-    "KPI cards: SOQL queries, DML operations, debug messages, callouts, and errors||User and execution context (log type, class, method)||Touched record IDs (Account, Case, Contact, User…) with org link when available||Ranking of slowest operations||Chain of executed code units (methods, flows, triggers)",
+    "KPI cards: duration, size, SOQL (limit), DML, callouts, and errors||Context bar: user, entry point, debug messages, and touched records||Status panel: errors, warnings, or truncated log||Governor limits panel: limits above 50%||Highlights: slowest operation, duplicate or exempt SOQL||Quick links to other tabs",
   'apexLogViewer.help.summary.actions':
-    "Click a slow operation or execution-chain item to jump to that line||The «Log with errors» chip in the top bar also navigates to the first error||Use KPIs to decide which tab to open next",
+    "Use «Go to» buttons to jump to SOQL, Limits, Timeline, etc.||Click the slowest operation or «View line» to open the log||Touched records link to the org when a URL is available",
   'apexLogViewer.help.summary.tips':
-    "Start here if you are unsure where to investigate||If KPIs show many callouts or SOQL, open those tabs directly||Compare total time with the slowest operations in the ranking",
+    "Top KPIs are the quick snapshot; below shows if anything needs attention||An empty Governor limits panel means low consumption||Use linked tabs below for full detail",
   'apexLogViewer.help.timeline.purpose':
     "Visualizes when each event happens and how long it takes, in an interactive Gantt-style chart.",
   'apexLogViewer.help.timeline.shows':
@@ -175,11 +175,11 @@ export const apexLogViewerTabHelpEn = {
   'apexLogViewer.help.soql.purpose':
     "Analyzes all SOQL queries in the log, prioritizing performance and duplicates.",
   'apexLogViewer.help.soql.shows':
-    "Table sorted by duration (slowest first)||Columns: line, duration, rows returned, Apex context (class:line), aggregations, and query text||«Repeated queries» block: same query run N times with total and average ms||Summary chips (count, rows, total/average duration, duplicate groups)",
+    "«Counts toward SOQL limit» section: queries that increment the counter (100/200)||«Exempt from SOQL limit» section: Custom Metadata (__mdt), parent-child subqueries (AGGS), and other exemptions||Columns: line, duration, rows, Apex context, aggregations, and query||«Repeated queries» block only among queries that count||Chips: counts toward limit, exempt, total in log, rows, and duration",
   'apexLogViewer.help.soql.actions':
-    "Search query text||Click a row to jump to the log line||Copy the query with the row button||Click a repeated query to filter the table",
+    "Search query text (both sections)||Click a row to jump to the log line||Copy the query with the row button||Click a repeated query to filter the table",
   'apexLogViewer.help.soql.tips':
-    "Repeated queries are candidates to bulkify, cache, or move out of loops||Check context (class:line) to locate the source in code||Compare with Profiling (cumulative) and Limits (SOQL queries) for the full picture",
+    "__mdt queries do not consume the 100 SOQL limit in Apex (rows still count toward 50k)||Parent-child subqueries use the AGGS limit, not the main SOQL limit||Compare «Counts toward limit» with Limits → SOQL queries and cumulative Profiling",
   'apexLogViewer.help.dml.purpose':
     "Reviews inserts, updates, deletes, and upserts recorded in the log.",
   'apexLogViewer.help.dml.shows':

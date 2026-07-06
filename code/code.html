@@ -1858,8 +1858,25 @@
 
             <div id="deployStatusSummaryView" class="deploy-status-summary-view">
               <section id="deployStatusActiveSection" class="deploy-status-active-section hidden">
-                <h3 class="deploy-status-section-title" data-i18n="deployStatus.activeSection">En curso</h3>
+                <h3 class="deploy-status-section-title" data-i18n="deployStatus.activeSection">Despliegue en curso</h3>
                 <article id="deployStatusActiveCard" class="deploy-status-active-card"></article>
+              </section>
+
+              <section id="deployStatusPendingSection" class="deploy-status-history-section hidden">
+                <h3 class="deploy-status-history-title" data-i18n="deployStatus.pendingSection">Despliegues en cola</h3>
+                <div class="deploy-status-table-wrap">
+                  <table class="deploy-status-table deploy-status-history-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="deployStatus.colAction">Acción</th>
+                        <th data-i18n="deployStatus.colName">Nombre</th>
+                        <th data-i18n="deployStatus.colType">Tipo</th>
+                        <th data-i18n="deployStatus.colSubmittedBy">Enviado por</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deployStatusPendingTbody"></tbody>
+                  </table>
+                </div>
               </section>
 
               <section class="deploy-status-history-section">
@@ -1904,6 +1921,7 @@
               <div class="deploy-status-detail-toolbar">
                 <button type="button" id="deployStatusBackBtn" class="deploy-status-back-btn" data-i18n="deployStatus.backToSummary">← Volver al resumen</button>
                 <button type="button" id="deployStatusBackToEditorBtn" class="deploy-status-back-to-editor-btn hidden" data-i18n="deployStatus.backToApexEditor">Volver al editor</button>
+                <button type="button" id="deployStatusCoverageBtn" class="deploy-status-primary-btn hidden" data-i18n="deployStatus.viewCoverage">Ver cobertura</button>
                 <button type="button" id="deployStatusCancelBtn" class="deploy-status-cancel-btn hidden" data-i18n="deployStatus.cancelDeploy">Cancelar despliegue</button>
               </div>
 
@@ -1914,26 +1932,29 @@
                   <div id="deployStatusDetailViewMeta" class="deploy-status-detail-meta"></div>
                 </div>
                 <div class="deploy-status-charts deploy-status-detail-charts">
-                  <div class="deploy-status-chart-block">
-                    <div class="deploy-status-chart-header">
-                      <span class="deploy-status-chart-num">1</span>
-                      <span data-i18n="deployStatus.chartComponents">Desplegar componentes</span>
+                  <div class="deploy-status-charts-row">
+                    <div class="deploy-status-chart-block">
+                      <div class="deploy-status-chart-header">
+                        <span class="deploy-status-chart-num">1</span>
+                        <span data-i18n="deployStatus.chartComponents">Desplegar componentes</span>
+                      </div>
+                      <div class="deploy-status-chart-wrap">
+                        <div id="deployStatusComponentChart" class="deploy-status-chart-slot"></div>
+                        <div id="deployStatusComponentLabel" class="deploy-status-chart-label"></div>
+                      </div>
                     </div>
-                    <div class="deploy-status-chart-wrap">
-                      <div id="deployStatusComponentChart" class="deploy-status-chart-slot"></div>
-                      <div id="deployStatusComponentLabel" class="deploy-status-chart-label"></div>
+                    <div class="deploy-status-chart-block">
+                      <div class="deploy-status-chart-header">
+                        <span class="deploy-status-chart-num">2</span>
+                        <span data-i18n="deployStatus.chartTests">Ejecutar tests Apex</span>
+                      </div>
+                      <div class="deploy-status-chart-wrap">
+                        <div id="deployStatusTestsChart" class="deploy-status-chart-slot"></div>
+                        <div id="deployStatusTestsLabel" class="deploy-status-chart-label"></div>
+                      </div>
                     </div>
                   </div>
-                  <div class="deploy-status-chart-block">
-                    <div class="deploy-status-chart-header">
-                      <span class="deploy-status-chart-num">2</span>
-                      <span data-i18n="deployStatus.chartTests">Ejecutar tests Apex</span>
-                    </div>
-                    <div class="deploy-status-chart-wrap">
-                      <div id="deployStatusTestsChart" class="deploy-status-chart-slot"></div>
-                      <div id="deployStatusTestsLabel" class="deploy-status-chart-label"></div>
-                    </div>
-                  </div>
+                  <p id="deployStatusRunningTest" class="deploy-status-running-test hidden" role="status" aria-live="polite"></p>
                 </div>
               </div>
 
@@ -2034,6 +2055,33 @@
                     <tbody id="deployStatusComponentsTbody"></tbody>
                   </table>
                 </div>
+              </div>
+            </div>
+
+            <div
+              id="deployStatusCoverageModal"
+              class="apex-tests-coverage-modal hidden"
+              aria-hidden="true"
+            >
+              <div class="apex-tests-coverage-modal-backdrop" data-deploy-coverage-close="1" tabindex="-1"></div>
+              <div
+                class="apex-tests-coverage-modal-panel deploy-status-coverage-modal-panel"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="deployStatusCoverageModalTitle"
+              >
+                <header class="apex-tests-coverage-modal-head">
+                  <h3 id="deployStatusCoverageModalTitle" data-i18n="deployStatus.coverageModalTitle">Cobertura del deployment</h3>
+                  <button
+                    type="button"
+                    id="deployStatusCoverageModalClose"
+                    class="apex-tests-coverage-modal-close"
+                    data-i18n="deployStatus.coverageModalClose"
+                  >
+                    Cerrar
+                  </button>
+                </header>
+                <div id="deployStatusCoverageModalBody" class="apex-tests-coverage-modal-body"></div>
               </div>
             </div>
 

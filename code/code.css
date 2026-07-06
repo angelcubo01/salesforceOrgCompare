@@ -6596,10 +6596,25 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 }
 
 .deploy-status-detail-charts {
-  justify-content: flex-end;
-  align-items: stretch;
+  flex-direction: column;
+  align-items: flex-end;
   flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.deploy-status-charts-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: flex-start;
   gap: 20px;
+}
+
+.deploy-status-charts-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
 }
 
 .deploy-status-detail-charts .deploy-status-chart-block {
@@ -6901,6 +6916,42 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   justify-content: flex-end;
 }
 
+.deploy-status-running-test {
+  margin: 10px 0 0;
+  padding: 0 8px;
+  width: 100%;
+  max-width: 360px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.deploy-status-running-test:not(.hidden) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #cbd5e1;
+}
+
+.deploy-status-running-test-label,
+.deploy-status-running-test-name {
+  display: block;
+}
+
+.deploy-status-running-test-name {
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.deploy-status-detail-charts .deploy-status-running-test {
+  margin-top: 4px;
+  align-self: center;
+  max-width: 440px;
+}
+
+.deploy-status-charts-stack .deploy-status-running-test {
+  align-self: center;
+}
+
 .deploy-status-active-charts .deploy-status-chart-header {
   width: 100%;
   justify-content: center;
@@ -7143,6 +7194,32 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   text-decoration: underline;
 }
 
+.deploy-status-cancel-link {
+  margin-right: 10px;
+}
+
+.deploy-status-coverage-modal-panel {
+  max-width: min(920px, 96vw);
+}
+
+.deploy-status-coverage-subtitle {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.deploy-status-coverage-tests-scroll {
+  overflow: auto;
+  max-height: min(22vh, 180px);
+  margin-bottom: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+}
+
+.deploy-status-coverage-tests-table {
+  margin: 0;
+}
+
 .deploy-status-page-nav {
   display: flex;
   align-items: center;
@@ -7178,6 +7255,10 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   }
 
   .deploy-status-detail-charts {
+    align-items: center;
+  }
+
+  .deploy-status-charts-row {
     justify-content: center;
     flex-wrap: wrap;
   }

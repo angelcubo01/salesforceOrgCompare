@@ -1006,6 +1006,9 @@ export async function checkDeployStatus(instanceUrl, sid, apiVersion, asyncId) {
   const status = extractTagValue(statusResponseXml, 'status') || 'Unknown';
   const errorMessage = extractTagValue(statusResponseXml, 'errorMessage') || '';
   const errorStatusCode = extractTagValue(statusResponseXml, 'errorStatusCode') || '';
+  const createdDate = extractTagValue(statusResponseXml, 'createdDate') || '';
+  const startDate = extractTagValue(statusResponseXml, 'startDate') || '';
+  const stateDetail = extractTagValue(statusResponseXml, 'stateDetail') || '';
 
   const componentFailures = parseComponentFailures(statusResponseXml);
   const componentSuccesses = parseComponentSuccesses(statusResponseXml);
@@ -1022,6 +1025,9 @@ export async function checkDeployStatus(instanceUrl, sid, apiVersion, asyncId) {
     success,
     status,
     errorMessage: errorMessage || errorStatusCode,
+    createdDate: createdDate || null,
+    startDate: startDate || null,
+    stateDetail: stateDetail || '',
     numberComponentsDeployed: num('numberComponentsDeployed'),
     numberComponentsTotal: num('numberComponentsTotal'),
     numberComponentErrors: num('numberComponentErrors'),
@@ -1067,7 +1073,8 @@ function parseRunTestResult(xml) {
       methodName: extractTagValue(f, 'methodName'),
       message: extractTagValue(f, 'message'),
       stackTrace: extractTagValue(f, 'stackTrace'),
-      time: extractTagValue(f, 'time')
+      time: extractTagValue(f, 'time'),
+      id: extractTagValue(f, 'id')
     });
   }
 
@@ -1095,6 +1102,8 @@ function parseRunTestResult(xml) {
     });
   }
 
+  const codeCoverage = parseCodeCoverageBlocks(block);
+
   const numFailures = Number(extractTagValue(block, 'numFailures'));
   const numTestsRun = Number(extractTagValue(block, 'numTestsRun'));
   const totalTime = extractTagValue(block, 'totalTime');
@@ -1104,8 +1113,39 @@ function parseRunTestResult(xml) {
     totalTime: totalTime || '',
     failures,
     successes,
-    codeCoverageWarnings
+    codeCoverageWarnings,
+    codeCoverage
   };
+}
+
+function parseCodeCoverageBlocks(xml) {
+  const blocks = [];
+  const re = /<codeCoverage[^>]*>([\s\S]*?)<\/codeCoverage>/gi;
+  let m;
+  while ((m = re.exec(xml))) {
+    const block = m[1];
+    const uncoveredLines = [];
+    const locRe = /<locationsNotCovered[^>]*>([\s\S]*?)<\/locationsNotCovered>/gi;
+    let lm;
+    while ((lm = locRe.exec(block))) {
+      const ln = Number(extractTagValue(lm[1], 'line'));
+      if (Number.isFinite(ln) && ln >= 1) uncoveredLines.push(ln);
+    }
+    const numLocations = Number(extractTagValue(block, 'numLocations'));
+    const numLocationsNotCovered = Number(extractTagValue(block, 'numLocationsNotCovered'));
+    blocks.push({
+      id: extractTagValue(block, 'id'),
+      name: extractTagValue(block, 'name'),
+      namespace: extractTagValue(block, 'namespace'),
+      type: extractTagValue(block, 'type'),
+      numLocations: Number.isFinite(numLocations) ? numLocations : 0,
+      numLocationsNotCovered: Number.isFinite(numLocationsNotCovered)
+        ? numLocationsNotCovered
+        : uncoveredLines.length,
+      uncoveredLines: [...new Set(uncoveredLines)].sort((a, b) => a - b)
+    });
+  }
+  return blocks;
 }
 
 function parseComponentFailures(xml) {

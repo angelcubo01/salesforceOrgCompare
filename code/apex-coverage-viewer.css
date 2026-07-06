@@ -247,3 +247,101 @@ html[data-ui-theme='light'] .apex-cov-split-pane-head {
 html[data-ui-theme='light'] .apex-cov-split-mini-legend {
   color: #475569;
 }
+
+/* Help modal (standaloneToolHelpModal) */
+.apex-log-help-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.apex-log-help-modal[hidden] {
+  display: none !important;
+}
+
+.apex-log-help-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  cursor: pointer;
+}
+
+.apex-log-help-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(640px, 100%);
+  max-height: min(80vh, 720px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid var(--acv-border);
+  background: #1e293b;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+
+.apex-log-help-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--acv-border);
+  flex-shrink: 0;
+}
+
+.apex-log-help-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  flex: 1;
+  color: var(--acv-text);
+}
+
+.apex-log-help-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--acv-border);
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.apex-log-help-close:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.apex-log-help-body {
+  padding: 16px;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #cbd5e1;
+}
+
+.apex-log-help-paragraph {
+  margin: 0 0 12px;
+}
+
+.apex-log-help-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+html[data-ui-theme='light'] .apex-log-help-dialog {
+  background: #f8fafc;
+}
+
+html[data-ui-theme='light'] .apex-log-help-body {
+  color: #334155;
+}

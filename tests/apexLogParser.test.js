@@ -7,7 +7,11 @@ import {
   formatLogSize,
   classifyLogEvent,
   normalizeSoqlForDedup,
-  groupDuplicateSoql
+  groupDuplicateSoql,
+  isCustomMetadataSoql,
+  classifySoqlGovernorImpact,
+  buildSoqlGovernorSummary,
+  collectTreeErrorVisibleRows
 } from '../shared/apexLogParser.js';
 
 const SAMPLE_LOG = `65.0 APEX_CODE,FINEST;APEX_PROFILING,INFO;CALLOUT,INFO;DATA_ACCESS,INFO;DB,INFO;NBA,INFO;SYSTEM,DEBUG;VALIDATION,INFO;VISUALFORCE,INFO;WAVE,INFO;WORKFLOW,INFO
@@ -39,6 +43,18 @@ External entry point: public static void testMethod(): executed 1 time in 100 ms
 10:26:04.0 (100000000)|CUMULATIVE_PROFILING_END
 `;
 
+const ERROR_LOG = `65.0 APEX_CODE,FINEST;APEX_PROFILING,INFO;CALLOUT,INFO;DATA_ACCESS,INFO;DB,INFO;NBA,INFO;SYSTEM,DEBUG;VALIDATION,INFO;VISUALFORCE,INFO;WAVE,INFO;WORKFLOW,INFO
+10:26:03.0 (14450000)|EXECUTION_STARTED
+10:26:03.0 (15000000)|CODE_UNIT_STARTED|[EXTERNAL]|01pxx|MyClass.testMethod
+10:26:03.0 (16000000)|METHOD_ENTRY|[5]|01pxx|MyClass.doWork()
+10:26:03.0 (18000000)|SOQL_EXECUTE_BEGIN|[10]|Aggregations:0|SELECT Id FROM Account LIMIT 10
+10:26:03.0 (25000000)|SOQL_EXECUTE_END|[10]|Rows:10
+10:26:03.0 (26000000)|EXCEPTION_THROWN|[12]|System.NullPointerException: null
+10:26:03.0 (27000000)|METHOD_EXIT|[5]|01pxx|MyClass.doWork()
+10:26:03.0 (28000000)|CODE_UNIT_FINISHED|MyClass.testMethod
+10:26:03.0 (29000000)|EXECUTION_FINISHED
+`;
+
 describe('parseApexDebugLog', () => {
   it('extrae userDebug, soql y dml', () => {
     const p = parseApexDebugLog(SAMPLE_LOG);
@@ -51,6 +67,9 @@ describe('parseApexDebugLog', () => {
     expect(p.soql[0].rows).toBe(10);
     expect(p.soql[0].durationMs).toBeGreaterThan(0);
     expect(p.soql[0].context).toContain('MyClass.doWork');
+    expect(p.soql[0].countsTowardSoqlLimit).toBe(true);
+    expect(p.soqlGovernor.counted).toBe(1);
+    expect(p.soqlGovernor.exempt).toBe(0);
 
     expect(p.dml).toHaveLength(1);
     expect(p.dml[0].operation).toBe('Op:Insert');
@@ -128,6 +147,19 @@ describe('parseApexDebugLog', () => {
       expect(p.soql[0].durationMs).toBeGreaterThanOrEqual(p.soql[1].durationMs);
     }
   });
+
+  it('marca custom metadata como exenta del límite SOQL', () => {
+    const mdtLog = `${SAMPLE_LOG}
+10:26:03.0 (42000000)|SOQL_EXECUTE_BEGIN|[30]|Aggregations:0|SELECT DeveloperName, Value__c FROM CC_Config__mdt
+10:26:03.0 (43000000)|SOQL_EXECUTE_END|[30]|Rows:3`;
+    const p = parseApexDebugLog(mdtLog);
+    const mdt = p.soql.find((s) => s.query.includes('CC_Config__mdt'));
+    expect(mdt).toBeTruthy();
+    expect(mdt.countsTowardSoqlLimit).toBe(false);
+    expect(mdt.exemptReason).toBe('customMetadata');
+    expect(p.soqlGovernor.counted).toBe(1);
+    expect(p.soqlGovernor.exempt).toBe(1);
+  });
 });
 
 describe('classifyLogEvent / groupDuplicateSoql', () => {
@@ -135,6 +167,38 @@ describe('classifyLogEvent / groupDuplicateSoql', () => {
     expect(classifyLogEvent('SOQL_EXECUTE_BEGIN')).toBe('soql');
     expect(classifyLogEvent('CALLOUT_REQUEST')).toBe('callout');
     expect(classifyLogEvent('HEAP_ALLOCATE')).toBe('noise');
+  });
+
+  it('detecta custom metadata en texto SOQL', () => {
+    expect(isCustomMetadataSoql('SELECT Id FROM My_Config__mdt')).toBe(true);
+    expect(isCustomMetadataSoql('SELECT Id FROM Account')).toBe(false);
+  });
+
+  it('clasifica impacto en gobernador SOQL', () => {
+    expect(classifySoqlGovernorImpact('SELECT Id FROM Account', 1, 0, true).countsTowardSoqlLimit).toBe(
+      true
+    );
+    expect(
+      classifySoqlGovernorImpact('SELECT Id FROM My__mdt', 0, 0, true).exemptReason
+    ).toBe('customMetadata');
+    expect(
+      classifySoqlGovernorImpact('SELECT Id, (SELECT Id FROM Contacts) FROM Account', 0, 1, true)
+        .exemptReason
+    ).toBe('aggregateSubquery');
+  });
+
+  it('resume contadores SOQL del gobernador', () => {
+    const summary = buildSoqlGovernorSummary(
+      [
+        { countsTowardSoqlLimit: true },
+        { countsTowardSoqlLimit: false, exemptReason: 'customMetadata' }
+      ],
+      { SOQL: { used: 1, max: 100 } }
+    );
+    expect(summary.counted).toBe(1);
+    expect(summary.exempt).toBe(1);
+    expect(summary.peakUsed).toBe(1);
+    expect(summary.byReason.customMetadata).toBe(1);
   });
 
   it('agrupa soql duplicados', () => {
@@ -169,6 +233,18 @@ describe('renderApexLogTreeLines', () => {
     expect(joined).toMatch(/[├└│]/);
     expect(joined).not.toContain('··');
     expect(foldRanges.length).toBeGreaterThan(0);
+  });
+
+  it('collectTreeErrorVisibleRows incluye método con excepción y su contexto', () => {
+    const p = parseApexDebugLog(ERROR_LOG);
+    const t = (key) => (key === 'apexLogViewer.kind.method' ? 'Method' : key === 'apexLogViewer.kind.soql' ? 'SOQL' : key);
+    const { lines, rowMeta, childrenOf, logLineToRow } = buildApexLogTreeModel(p.tree, t);
+    const visible = collectTreeErrorVisibleRows(rowMeta, childrenOf, logLineToRow, p.issues);
+    expect(visible.size).toBeGreaterThan(0);
+    const joined = [...visible].map((r) => lines[r - 1]).join('\n');
+    expect(joined).toContain('MyClass.doWork');
+    expect(joined).toContain('SELECT Id FROM Account');
+    expect(p.issues.some((i) => i.type === 'error')).toBe(true);
   });
 });
 

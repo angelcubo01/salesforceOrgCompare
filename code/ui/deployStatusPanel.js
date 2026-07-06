@@ -3,7 +3,14 @@ import { bg } from '../core/bridge.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { renderDonutChart } from '../lib/orgLimitsCharts.js';
-import { buildSetupDeployDetailsUrl, isDeployInProgress, collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS, hasCoverageFailureInRow, hasCoverageFailureInSoap } from '../../shared/deployStatusApi.js';
+import { buildSetupDeployDetailsUrl, isDeployInProgress, isDeployActivelyRunning, isSoapActivelyRunning, collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS, hasCoverageFailureInRow, hasCoverageFailureInSoap, resolveDeployRunningTest } from '../../shared/deployStatusApi.js';
+import {
+  buildDeployCoverageRows,
+  canShowDeployCoverage,
+  formatDeployCoveragePercent
+} from '../../shared/deployCoverage.js';
+import { randomStagingId } from '../../shared/randomId.js';
+import { showToast } from './toast.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { getReturnContext, returnToQuickEditEditor } from '../lib/quickEditDeployContext.js';
 
@@ -42,8 +49,9 @@ function setPanelLoading(loading) {
 function resolveDeployStatus(row, soap = {}) {
   const rowStatus = String(row?.status || '').trim();
   const soapStatus = String(soap?.status || '').trim();
-  const inProgress = isDeployInProgress(rowStatus) || isDeployInProgress(soapStatus);
-  if (inProgress) return soapStatus || rowStatus;
+  if (isSoapActivelyRunning(soap)) return 'InProgress';
+  if (rowStatus === 'InProgress') return rowStatus;
+  if (soapStatus === 'InProgress' || soapStatus === 'In Progress') return soapStatus;
   if (rowStatus) return rowStatus;
   return soapStatus;
 }
@@ -67,8 +75,24 @@ function coalesceDetailSoap(row, soap) {
     numberTestErrors: row?.testErrors ?? 0,
     componentFailures: [],
     componentSuccesses: [],
-    runTestResult: null
+    runTestResult: null,
+    stateDetail: ''
   };
+}
+
+function renderRunningTestHint(elementId, soap) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const test = resolveDeployRunningTest(soap);
+  if (!test) {
+    el.classList.add('hidden');
+    el.innerHTML = '';
+    el.removeAttribute('title');
+    return;
+  }
+  el.classList.remove('hidden');
+  el.innerHTML = `<span class="deploy-status-running-test-label">${escapeHtml(t('deployStatus.runningTestLabel'))}</span><span class="deploy-status-running-test-name">${escapeHtml(test)}</span>`;
+  el.title = test;
 }
 
 function getStatusTitle(row, soap) {
@@ -356,6 +380,7 @@ function applyViewMode() {
 function emptySummaryPollData() {
   return {
     active: null,
+    pendingQueue: { records: [], totalCount: 0 },
     failedHistory: { records: [], totalCount: 0, page: 0, pageSize: PAGE_SIZE },
     succeededHistory: { records: [], totalCount: 0, page: 0, pageSize: PAGE_SIZE }
   };
@@ -408,7 +433,7 @@ function findRowByAsyncId(data, asyncId) {
   const id = String(asyncId || '');
   if (!id || !data) return null;
   if (data.active?.asyncId === id) return data.active;
-  for (const bucket of [data.failedHistory, data.succeededHistory, data.pendingHistory]) {
+  for (const bucket of [data.failedHistory, data.succeededHistory, data.pendingQueue, data.pendingHistory]) {
     const hit = bucket?.records?.find((r) => r.asyncId === id);
     if (hit) return hit;
   }
@@ -483,6 +508,16 @@ function closeDeployDetail() {
   handleDeployDetailBack();
 }
 
+function buildDeployTypeLabel(row) {
+  return row?.checkOnly ? t('deployStatus.pendingTypeValidation') : t('deployStatus.pendingTypeDeploy');
+}
+
+function formatSubmittedByLine(row) {
+  const who = String(row?.createdByName || '').trim() || '—';
+  const when = formatDateTime(row?.createdDate || row?.startDate);
+  return when === '—' ? who : `${who}, ${when}`;
+}
+
 function buildMetaListHtml(row) {
   const modeLabel = row.checkOnly ? t('deployStatus.modeValidate') : t('deployStatus.modeDeploy');
   return `
@@ -504,28 +539,31 @@ function buildMetaListHtml(row) {
 
 function buildActiveChartsHtml() {
   return `
-    <div class="deploy-status-pipeline deploy-status-active-charts" aria-label="${escapeHtml(t('deployStatus.progressLabel'))}">
-      <div class="deploy-status-pipeline-step is-active">
-        <div class="deploy-status-chart-header">
-          <span class="deploy-status-chart-num">1</span>
-          <span class="deploy-status-chart-title">${escapeHtml(t('deployStatus.chartComponents'))}</span>
+    <div class="deploy-status-charts-stack">
+      <div class="deploy-status-pipeline deploy-status-active-charts" aria-label="${escapeHtml(t('deployStatus.progressLabel'))}">
+        <div class="deploy-status-pipeline-step is-active">
+          <div class="deploy-status-chart-header">
+            <span class="deploy-status-chart-num">1</span>
+            <span class="deploy-status-chart-title">${escapeHtml(t('deployStatus.chartComponents'))}</span>
+          </div>
+          <div class="deploy-status-chart-wrap deploy-status-chart-wrap--compact">
+            <div id="deployStatusActiveComponentChart" class="deploy-status-chart-slot"></div>
+            <div id="deployStatusActiveComponentLabel" class="deploy-status-chart-label"></div>
+          </div>
         </div>
-        <div class="deploy-status-chart-wrap deploy-status-chart-wrap--compact">
-          <div id="deployStatusActiveComponentChart" class="deploy-status-chart-slot"></div>
-          <div id="deployStatusActiveComponentLabel" class="deploy-status-chart-label"></div>
+        <div class="deploy-status-pipeline-connector" aria-hidden="true"></div>
+        <div class="deploy-status-pipeline-step">
+          <div class="deploy-status-chart-header">
+            <span class="deploy-status-chart-num">2</span>
+            <span class="deploy-status-chart-title">${escapeHtml(t('deployStatus.chartTests'))}</span>
+          </div>
+          <div class="deploy-status-chart-wrap deploy-status-chart-wrap--compact">
+            <div id="deployStatusActiveTestsChart" class="deploy-status-chart-slot"></div>
+            <div id="deployStatusActiveTestsLabel" class="deploy-status-chart-label"></div>
+          </div>
         </div>
       </div>
-      <div class="deploy-status-pipeline-connector" aria-hidden="true"></div>
-      <div class="deploy-status-pipeline-step">
-        <div class="deploy-status-chart-header">
-          <span class="deploy-status-chart-num">2</span>
-          <span class="deploy-status-chart-title">${escapeHtml(t('deployStatus.chartTests'))}</span>
-        </div>
-        <div class="deploy-status-chart-wrap deploy-status-chart-wrap--compact">
-          <div id="deployStatusActiveTestsChart" class="deploy-status-chart-slot"></div>
-          <div id="deployStatusActiveTestsLabel" class="deploy-status-chart-label"></div>
-        </div>
-      </div>
+      <p id="deployStatusActiveRunningTest" class="deploy-status-running-test hidden" role="status" aria-live="polite"></p>
     </div>
   `;
 }
@@ -551,13 +589,22 @@ function renderDonutsForRow(row, soap, chartIds = {}, donutSize = DONUT_SIZE) {
     viewSoap,
     donutSize
   );
+  const runningTestId = chartIds.runningTest;
+  if (runningTestId) {
+    renderRunningTestHint(runningTestId, soap || viewSoap);
+  }
 }
 
 const ACTIVE_DEPLOY_CHART_IDS = {
   componentChart: 'deployStatusActiveComponentChart',
   componentLabel: 'deployStatusActiveComponentLabel',
   testsChart: 'deployStatusActiveTestsChart',
-  testsLabel: 'deployStatusActiveTestsLabel'
+  testsLabel: 'deployStatusActiveTestsLabel',
+  runningTest: 'deployStatusActiveRunningTest'
+};
+
+const DETAIL_DEPLOY_CHART_IDS = {
+  runningTest: 'deployStatusRunningTest'
 };
 
 function renderStackTraceCell(stackTrace) {
@@ -626,13 +673,44 @@ function renderHistoryTable(history, bucket) {
   `;
 }
 
+function renderPendingQueueTable(pendingQueue, activeAsyncId = '') {
+  const section = document.getElementById('deployStatusPendingSection');
+  const tbody = document.getElementById('deployStatusPendingTbody');
+  if (!section || !tbody) return;
+
+  const activeId = String(activeAsyncId || '');
+  const records = (pendingQueue?.records || []).filter((row) => String(row?.asyncId || '') !== activeId);
+  section.classList.toggle('hidden', !records.length);
+  tbody.innerHTML = '';
+
+  if (!records.length) return;
+
+  for (const row of records) {
+    const tr = document.createElement('tr');
+    tr.classList.toggle('deploy-status-row-selected', row.asyncId === selectedAsyncId);
+    tr.dataset.asyncId = String(row.asyncId || '');
+    tr.innerHTML = `
+      <td>
+        <button type="button" class="deploy-status-link-btn deploy-status-cancel-link" data-cancel-deploy="${escapeHtml(row.asyncId)}">${escapeHtml(t('deployStatus.cancelDeploy'))}</button>
+        <button type="button" class="deploy-status-link-btn" data-view-deploy="${escapeHtml(row.asyncId)}">${escapeHtml(t('deployStatus.viewDetails'))}</button>
+      </td>
+      <td class="deploy-status-mono">${escapeHtml(row.asyncId)}</td>
+      <td>${escapeHtml(buildDeployTypeLabel(row))}</td>
+      <td>${escapeHtml(formatSubmittedByLine(row))}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
 function renderActiveCard(data) {
   const section = document.getElementById('deployStatusActiveSection');
   const card = document.getElementById('deployStatusActiveCard');
   if (!section || !card) return;
 
   const active = data?.active;
-  if (!active) {
+  const activeSoap = data?.activeSoap || null;
+  const running = !!active && isDeployActivelyRunning(active, activeSoap);
+  if (!running) {
     section.classList.add('hidden');
     section.classList.remove('deploy-status-active-section--has-card');
     card.classList.add('hidden');
@@ -643,19 +721,24 @@ function renderActiveCard(data) {
   section.classList.remove('hidden');
   card.classList.remove('hidden');
 
-  const inProgress = isDeployInProgress(active.status);
+  const inProgress = running;
   section.classList.toggle('deploy-status-active-section--has-card', true);
   card.className = `deploy-status-active-card${inProgress ? ' is-in-progress' : ''}`;
+  const activeStartDate =
+    active.startDate ||
+    active.createdDate ||
+    activeSoap?.startDate ||
+    activeSoap?.createdDate;
 
   card.innerHTML = `
     <div class="deploy-status-active-top">
       <div class="deploy-status-active-head">
-        ${buildStatusBadgeHtml(active, data?.activeSoap || {}, { useLongTitle: true })}
+        ${buildStatusBadgeHtml(active, activeSoap, { useLongTitle: true })}
         ${
           inProgress
             ? `<span class="deploy-status-active-live-chip" title="${escapeHtml(t('deployStatus.live'))}">
             <span class="deploy-status-active-live-dot" aria-hidden="true"></span>
-            <span class="deploy-status-active-live-text">${escapeHtml(formatElapsed(active.startDate, active.completedDate))}</span>
+            <span class="deploy-status-active-live-text">${escapeHtml(formatElapsed(activeStartDate, active.completedDate))}</span>
           </span>`
             : ''
         }
@@ -673,7 +756,7 @@ function renderActiveCard(data) {
       </div>
       <div class="deploy-status-active-meta-item">
         <dt>${escapeHtml(t('deployStatus.metaStart'))}</dt>
-        <dd>${escapeHtml(formatDateTime(active.startDate))}</dd>
+        <dd>${escapeHtml(formatDateTime(activeStartDate))}</dd>
       </div>
       ${
         !inProgress
@@ -693,7 +776,7 @@ function renderActiveCard(data) {
       }
     </div>
   `;
-  renderDonutsForRow(active, data?.activeSoap || {}, ACTIVE_DEPLOY_CHART_IDS, ACTIVE_DONUT_SIZE);
+  renderDonutsForRow(active, activeSoap || {}, ACTIVE_DEPLOY_CHART_IDS, ACTIVE_DONUT_SIZE);
 }
 
 function matchesComponentSearch(component, query) {
@@ -873,6 +956,181 @@ function updateCancelButton(row, soap) {
   btn.dataset.cancelDeploy = inProgress ? String(row?.asyncId || '') : '';
 }
 
+function updateDeployCoverageButton(row, soap) {
+  const btn = document.getElementById('deployStatusCoverageBtn');
+  if (!btn) return;
+  const show = canShowDeployCoverage(soap, row);
+  btn.classList.toggle('hidden', !show);
+  btn.disabled = !show;
+}
+
+function closeDeployCoverageModal() {
+  const modal = document.getElementById('deployStatusCoverageModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  const body = document.getElementById('deployStatusCoverageModalBody');
+  if (body) body.innerHTML = '';
+}
+
+async function openDeployCoverageLineViewer(orgId, asyncId, classOrTriggerId, classLabel, uncoveredLines) {
+  const res = await bg({
+    type: 'deployStatus:getCoverageLineView',
+    orgId,
+    asyncId,
+    classOrTriggerId,
+    className: classLabel || '',
+    uncoveredLines: uncoveredLines || []
+  });
+  if (!res?.ok) {
+    showToast(
+      res?.reason === 'NO_SID' ? t('deployStatus.noSession') : res?.error || t('deployStatus.coverageLinesError'),
+      'warn'
+    );
+    return;
+  }
+  const key = randomStagingId('sfoc_cv_');
+  try {
+    await chrome.storage.local.set({
+      [key]: {
+        title: `${classLabel || res.name || classOrTriggerId} · ${t('docTitle.apexCoverage')}`,
+        body: res.body != null ? String(res.body) : '',
+        coveredLines: Array.isArray(res.coveredLines) ? res.coveredLines : [],
+        uncoveredLines: Array.isArray(res.uncoveredLines) ? res.uncoveredLines : []
+      }
+    });
+  } catch {
+    showToast(t('deployStatus.coverageLinesStorageError'), 'warn');
+    return;
+  }
+  const url = chrome.runtime.getURL(`code/apex-coverage-viewer.html?k=${encodeURIComponent(key)}`);
+  window.open(url, '_blank');
+}
+
+function renderDeployCoverageModalBody(soap, asyncId) {
+  const body = document.getElementById('deployStatusCoverageModalBody');
+  if (!body) return;
+
+  const classes = buildDeployCoverageRows(soap?.runTestResult?.codeCoverage, 0);
+
+  body.innerHTML = '';
+
+  if (!classes.length) {
+    const empty = document.createElement('p');
+    empty.className = 'apex-tests-coverage-empty';
+    empty.textContent = t('deployStatus.coverageEmpty');
+    body.appendChild(empty);
+    return;
+  }
+
+  const filterRow = document.createElement('div');
+  filterRow.className = 'apex-tests-coverage-filter-row';
+  const filterInput = document.createElement('input');
+  filterInput.type = 'search';
+  filterInput.className = 'apex-tests-coverage-filter-input';
+  filterInput.setAttribute('aria-label', t('deployStatus.coverageFilterAria'));
+  filterInput.placeholder = t('deployStatus.coverageFilterPh');
+  filterRow.appendChild(filterInput);
+  body.appendChild(filterRow);
+
+  const scroll = document.createElement('div');
+  scroll.className = 'apex-tests-coverage-table-scroll';
+  const tbl = document.createElement('table');
+  tbl.className = 'apex-tests-coverage-table';
+  tbl.innerHTML = `<thead><tr>
+    <th>${escapeHtml(t('deployStatus.coverageColClass'))}</th>
+    <th>${escapeHtml(t('deployStatus.coverageColPercent'))}</th>
+    <th>${escapeHtml(t('deployStatus.coverageColLines'))}</th>
+    <th scope="col" class="apex-tests-coverage-th-editor">${escapeHtml(t('deployStatus.coverageColEditor'))}</th>
+  </tr></thead>`;
+  const tb = document.createElement('tbody');
+  const orgId = state.leftOrgId;
+  for (const row of classes) {
+    const rtr = document.createElement('tr');
+    const c1 = document.createElement('td');
+    c1.textContent = row.name || row.id || '—';
+    const c2 = document.createElement('td');
+    c2.className = 'apex-tests-coverage-pct';
+    c2.textContent = formatDeployCoveragePercent(row.percent);
+    const c3 = document.createElement('td');
+    c3.className = 'apex-tests-coverage-pct';
+    c3.textContent = `${row.covered} / ${row.total}`;
+    const c4 = document.createElement('td');
+    c4.className = 'apex-tests-coverage-td-editor';
+    const btnEd = document.createElement('button');
+    btnEd.type = 'button';
+    btnEd.className = 'apex-tests-coverage-view-btn';
+    btnEd.textContent = t('deployStatus.coverageOpenEditor');
+    btnEd.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void openDeployCoverageLineViewer(orgId, asyncId, row.id, row.name || '', row.uncoveredLines);
+    });
+    c4.appendChild(btnEd);
+    rtr.appendChild(c1);
+    rtr.appendChild(c2);
+    rtr.appendChild(c3);
+    rtr.appendChild(c4);
+    tb.appendChild(rtr);
+  }
+  tbl.appendChild(tb);
+  scroll.appendChild(tbl);
+  body.appendChild(scroll);
+
+  filterInput.addEventListener('input', () => {
+    const q = filterInput.value.trim().toLowerCase();
+    for (const rtr of tb.querySelectorAll('tr')) {
+      const nameCell = rtr.cells[0];
+      const hay = (nameCell?.textContent || '').toLowerCase();
+      rtr.style.display = !q || hay.includes(q) ? '' : 'none';
+    }
+  });
+}
+
+async function openDeployCoverageModal() {
+  const detail = lastPollData?.detail;
+  const row = detail?.row;
+  const soap = detail?.soap;
+  const asyncId = String(row?.asyncId || selectedAsyncId || '').trim();
+  if (!asyncId || !state.leftOrgId) return;
+
+  const modal = document.getElementById('deployStatusCoverageModal');
+  const body = document.getElementById('deployStatusCoverageModalBody');
+  if (!modal || !body) return;
+
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+
+  const titleEl = document.getElementById('deployStatusCoverageModalTitle');
+  if (titleEl) {
+    titleEl.textContent = t('deployStatus.coverageModalTitle');
+  }
+
+  body.innerHTML = `<p class="apex-tests-coverage-loading">${escapeHtml(t('deployStatus.coverageLoading'))}</p>`;
+
+  let viewSoap = soap && isSoapDetailReady(soap) ? soap : null;
+  if (!viewSoap || !viewSoap.runTestResult?.codeCoverage?.length) {
+    const res = await bg({
+      type: 'deployStatus:detail',
+      orgId: state.leftOrgId,
+      asyncId
+    });
+    if (!res?.ok) {
+      body.innerHTML = `<p class="apex-tests-coverage-error">${escapeHtml(
+        res?.reason === 'NO_SID' ? t('deployStatus.noSession') : res?.error || t('deployStatus.coverageLoadError')
+      )}</p>`;
+      return;
+    }
+    viewSoap = res.detail?.soap || null;
+  }
+
+  if (!viewSoap) {
+    body.innerHTML = `<p class="apex-tests-coverage-error">${escapeHtml(t('deployStatus.coverageLoadError'))}</p>`;
+    return;
+  }
+
+  renderDeployCoverageModalBody(viewSoap, asyncId);
+}
+
 function renderDetailView(data) {
   const detail = data?.detail;
   if (!detail?.row) return;
@@ -899,7 +1157,7 @@ function renderDetailView(data) {
     setupEl.innerHTML = `<a href="${escapeHtml(setupUrl)}" target="_blank" rel="noopener noreferrer" class="deploy-status-setup-link">${escapeHtml(t('deployStatus.openInSetup'))}</a>`;
   }
 
-  renderDonutsForRow(row, rawSoap);
+  renderDonutsForRow(row, rawSoap, DETAIL_DEPLOY_CHART_IDS);
 
   if (soapReady) {
     cacheDeployRowHintsFromSoap(row.asyncId, rawSoap);
@@ -921,6 +1179,7 @@ function renderDetailView(data) {
   }
 
   updateCancelButton(row, viewSoap);
+  updateDeployCoverageButton(row, soapReady ? rawSoap : viewSoap);
 }
 
 function renderSummaryView(data) {
@@ -932,6 +1191,7 @@ function renderSummaryView(data) {
     cacheDeployRowHintsFromSoap(data.detail.row.asyncId, data.detail.soap);
   }
   renderActiveCard(data);
+  renderPendingQueueTable(data?.pendingQueue || data?.pendingHistory, data?.active?.asyncId);
   renderHistoryTable(data?.failedHistory, 'failed');
   renderHistoryTable(data?.succeededHistory, 'succeeded');
 }
@@ -951,11 +1211,15 @@ function updateStatusBar(data, isLive) {
 }
 
 function hasInFlightDeploy(data) {
-  if (viewMode === 'summary' && data?.active) return true;
+  const activeRunning = !!data?.active && isDeployActivelyRunning(data.active, data?.activeSoap);
+  const pendingCount =
+    Number(data?.pendingQueue?.totalCount ?? data?.pendingQueue?.records?.length ?? data?.pendingHistory?.totalCount ?? 0) ||
+    0;
+  if (viewMode === 'summary' && (activeRunning || pendingCount > 0)) return true;
   if (viewMode !== 'detail') return false;
   const detail = data?.detail;
   if (!detail?.row) return false;
-  return isDeployInProgress(detail.soap?.status || detail.row.status);
+  return isDeployActivelyRunning(detail.row, detail.soap);
 }
 
 function computePollDelayMs(data) {
@@ -1113,6 +1377,19 @@ export function setupDeployStatusPanel() {
     void handleCancelDeploy(asyncId);
   });
 
+  document.getElementById('deployStatusCoverageBtn')?.addEventListener('click', () => {
+    void openDeployCoverageModal();
+  });
+
+  document.getElementById('deployStatusCoverageModalClose')?.addEventListener('click', () => {
+    closeDeployCoverageModal();
+  });
+
+  document.getElementById('deployStatusCoverageModal')?.addEventListener('click', (ev) => {
+    const target = /** @type {HTMLElement} */ (ev.target);
+    if (target.closest('[data-deploy-coverage-close]')) closeDeployCoverageModal();
+  });
+
   document.getElementById('deployStatusComponentsSearch')?.addEventListener('input', (ev) => {
     componentSearchQuery = /** @type {HTMLInputElement} */ (ev.target).value;
     if (lastPollData?.detail?.soap) renderComponentsSection(lastPollData.detail.soap);
@@ -1150,6 +1427,12 @@ export function setupDeployStatusPanel() {
   document.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Escape') return;
     if (getSelectedArtifactType() !== 'DeployStatus') return;
+    const covModal = document.getElementById('deployStatusCoverageModal');
+    if (covModal && !covModal.classList.contains('hidden')) {
+      ev.preventDefault();
+      closeDeployCoverageModal();
+      return;
+    }
     if (viewMode !== 'detail') return;
     ev.preventDefault();
     handleDeployDetailBack();

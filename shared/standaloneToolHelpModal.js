@@ -1,5 +1,4 @@
-import { escapeHtml } from '../../../shared/htmlEscape.js';
-import { helpToolTitleKey, helpToolBodyKeys } from '../../../shared/helpToolIds.js';
+import { helpToolTitleKey, helpToolBodyKeys } from './helpToolIds.js';
 
 let modalEl = null;
 

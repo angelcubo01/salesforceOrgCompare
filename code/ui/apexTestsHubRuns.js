@@ -1082,7 +1082,6 @@ function scheduleHubPollLoop() {
     void tickApexTestsHubRuns();
     if (expandedRunKey) {
       void refreshExpandedJobStatusInPlace();
-      void refreshExpandedMethodsInPlace();
     }
     scheduleHubPollLoop();
   }, computeHubPollDelayMs());
@@ -1597,6 +1596,131 @@ function clearRunDetailCaches(orgId, jobId) {
   failuresCache.delete(ck);
 }
 
+function removeDetailLoading(host) {
+  host?.querySelector('.apex-tests-runs-detail-loading')?.remove();
+}
+
+function getRunDetailInnerScrollEl(host) {
+  if (!host) return null;
+  if (host.classList.contains('apex-tests-runs-detail-inner')) return host;
+  return host.querySelector('.apex-tests-runs-detail-inner');
+}
+
+function restoreElementScroll(el, scrollTop) {
+  if (!el) return;
+  el.scrollTop = scrollTop;
+  requestAnimationFrame(() => {
+    el.scrollTop = scrollTop;
+  });
+}
+
+function readDetailFilterPrefs(host) {
+  const bar = host?.querySelector('.apex-tests-detail-filter-bar');
+  if (!bar) return { failOnly: false, q: '' };
+  return {
+    failOnly: !!bar.querySelector('.apex-tests-detail-filter-fail-cb')?.checked,
+    q: (bar.querySelector('.apex-tests-detail-filter-search')?.value || '').trim().toLowerCase()
+  };
+}
+
+function isDetailFilterPrefsActive(prefs) {
+  return !!(prefs.failOnly || prefs.q);
+}
+
+function syncAllMethodRowsVisibility(host, tb) {
+  const prefs = readDetailFilterPrefs(host);
+  /** @type {Map<string, object>} */
+  const rowsByKey = new Map();
+  try {
+    for (const row of JSON.parse(tb.dataset.allRowsJson || '[]')) {
+      rowsByKey.set(methodIdentityKey(row), row);
+    }
+  } catch {
+    /* ignore */
+  }
+  for (const tr of tb.querySelectorAll('tr')) {
+    const key = tr.dataset.methodKey || '';
+    const row = rowsByKey.get(key);
+    tr.hidden = row ? !rowMatchesDetailFilter(row, prefs.failOnly, prefs.q) : false;
+  }
+}
+
+function getScrollAnchorKey(scrollEl, tb) {
+  if (!scrollEl || !tb) return '';
+  const target = scrollEl.scrollTop + 2;
+  let anchor = '';
+  for (const tr of tb.querySelectorAll('tr')) {
+    if (tr.hidden) continue;
+    if (tr.offsetTop <= target) anchor = tr.dataset.methodKey || anchor;
+    else break;
+  }
+  return anchor;
+}
+
+function scrollToMethodAnchor(scrollEl, tb, anchorKey) {
+  if (!scrollEl || !tb || !anchorKey) return;
+  const tr = tb.querySelector(`tr[data-method-key="${CSS.escape(anchorKey)}"]`);
+  if (!tr || tr.hidden) return;
+  restoreElementScroll(scrollEl, Math.max(0, tr.offsetTop - 1));
+}
+
+function readDetailFilterState(host) {
+  if (!host) return null;
+  const bar = host.querySelector('.apex-tests-detail-filter-bar');
+  if (!bar) return { failOnly: false, search: '' };
+  return {
+    failOnly: !!bar.querySelector('.apex-tests-detail-filter-fail-cb')?.checked,
+    search: String(bar.querySelector('.apex-tests-detail-filter-search')?.value || '')
+  };
+}
+
+function applyDetailFilterState(host, state) {
+  if (!host || !state) return;
+  const bar = host.querySelector('.apex-tests-detail-filter-bar');
+  if (!bar) return;
+  const cb = bar.querySelector('.apex-tests-detail-filter-fail-cb');
+  const search = bar.querySelector('.apex-tests-detail-filter-search');
+  if (cb) cb.checked = !!state.failOnly;
+  if (search) search.value = state.search || '';
+}
+
+function applyDetailFilterToTbody(host, orgId) {
+  void orgId;
+  const tbl = host.querySelector('.apex-tests-runs-failures-table');
+  const tb = tbl?.querySelector('tbody');
+  if (!tb) return;
+  const scrollEl = getMethodsTableScrollEl(host, tbl);
+  const prefs = readDetailFilterPrefs(host);
+  const nowFiltered = isDetailFilterPrefsActive(prefs);
+  const wasFiltered = host.dataset.detailFilterActive === '1';
+
+  if (!wasFiltered && nowFiltered && scrollEl) {
+    host.dataset.unfilteredScrollTop = String(scrollEl.scrollTop);
+  }
+
+  syncAllMethodRowsVisibility(host, tb);
+
+  if (wasFiltered && !nowFiltered && scrollEl) {
+    const saved = Number(host.dataset.unfilteredScrollTop);
+    if (Number.isFinite(saved)) restoreElementScroll(scrollEl, saved);
+  }
+
+  host.dataset.detailFilterActive = nowFiltered ? '1' : '';
+}
+
+function ensureDetailFilterToolbar(host, orgId, savedState = null) {
+  let bar = host.querySelector('.apex-tests-detail-filter-bar');
+  if (!bar) {
+    bar = buildDetailFilterToolbar(host);
+    const tbl = host.querySelector('.apex-tests-runs-failures-table');
+    if (tbl) host.insertBefore(bar, tbl);
+    else host.appendChild(bar);
+    wireDetailFilterToolbar(host, orgId);
+  }
+  if (savedState) applyDetailFilterState(host, savedState);
+  return bar;
+}
+
 function buildMethodsDetailTableHeadRow() {
   const tr = document.createElement('tr');
   tr.innerHTML = `<th>${t('apexTests.runsColClass')}</th>
@@ -1607,52 +1731,139 @@ function buildMethodsDetailTableHeadRow() {
   return tr;
 }
 
-function fillMethodsTbody(tb, rows, orgId) {
-  tb.innerHTML = '';
-  for (const row of rows) {
-    const rtr = document.createElement('tr');
-    const c1 = document.createElement('td');
-    c1.textContent = apexClassNameFromResult(row);
-    const c2 = document.createElement('td');
-    const methodName = row?.MethodName != null ? String(row.MethodName).trim() : '';
-    if (methodName) {
-      const a = document.createElement('a');
-      a.href = '#';
-      a.className = 'apex-tests-runs-method-link';
-      a.textContent = methodName;
-      a.title = t('apexTests.methodOpenCtrlClickHint');
-      a.addEventListener('click', (e) => {
-        e.preventDefault();
-        void openApexMethodFromRunRow(orgId, row);
-      });
-      a.title = t('apexTests.methodOpenClickHint');
-      c2.appendChild(a);
-    } else {
-      c2.textContent = '—';
-    }
-    const c3 = document.createElement('td');
-    c3.textContent = formatApexTestOutcome(row.Outcome);
-    const c4 = document.createElement('td');
-    c4.className = 'apex-tests-runs-msg-cell';
-    const msgText = row.Message != null ? String(row.Message).trim() : '';
-    c4.textContent = msgText || '—';
-    const c5 = document.createElement('td');
-    c5.className = 'apex-tests-runs-stack-cell';
-    const stackText = row?.StackTrace != null ? String(row.StackTrace).trim() : '';
-    if (isFailedApexTestOutcome(row.Outcome) && stackText) {
-      const pre = buildStackTracePreWithCtrlLinks(stackText, orgId);
-      pre.title = t('apexTests.methodOpenCtrlClickHint');
-      c5.appendChild(pre);
-    } else {
-      c5.textContent = '—';
-    }
-    rtr.appendChild(c1);
-    rtr.appendChild(c2);
-    rtr.appendChild(c3);
-    rtr.appendChild(c4);
-    rtr.appendChild(c5);
-    tb.appendChild(rtr);
+function findExpandedDetailRow(exKey) {
+  const inner = document.querySelector(
+    `.apex-tests-runs-detail-inner[data-expand-key="${CSS.escape(exKey)}"]`
+  );
+  return inner?.closest('.apex-tests-runs-detail-row, .apex-tests-other-runs-detail-row') || null;
+}
+
+function methodIdentityKey(row) {
+  const cls = apexClassNameFromResult(row);
+  const m = row?.MethodName != null ? String(row.MethodName).trim() : '';
+  return `${cls}::${m}`;
+}
+
+function methodsIdentitySignature(rows) {
+  if (!Array.isArray(rows) || !rows.length) return 'empty';
+  return rows.map(methodIdentityKey).join('\n');
+}
+
+function rowMatchesDetailFilter(row, failOnly, q) {
+  if (failOnly && !isFailedApexTestOutcome(row.Outcome)) return false;
+  if (!q) return true;
+  const cls = apexClassNameFromResult(row).toLowerCase();
+  const m = row?.MethodName != null ? String(row.MethodName).trim().toLowerCase() : '';
+  return cls.includes(q) || m.includes(q);
+}
+
+function appendMethodRow(tb, row, orgId) {
+  const rtr = document.createElement('tr');
+  const c1 = document.createElement('td');
+  c1.textContent = apexClassNameFromResult(row);
+  const c2 = document.createElement('td');
+  const methodName = row?.MethodName != null ? String(row.MethodName).trim() : '';
+  if (methodName) {
+    const a = document.createElement('a');
+    a.href = '#';
+    a.className = 'apex-tests-runs-method-link';
+    a.textContent = methodName;
+    a.title = t('apexTests.methodOpenClickHint');
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      void openApexMethodFromRunRow(orgId, row);
+    });
+    c2.appendChild(a);
+  } else {
+    c2.textContent = '—';
   }
+  const c3 = document.createElement('td');
+  c3.textContent = formatApexTestOutcome(row.Outcome);
+  const c4 = document.createElement('td');
+  c4.className = 'apex-tests-runs-msg-cell';
+  const msgText = row.Message != null ? String(row.Message).trim() : '';
+  c4.textContent = msgText || '—';
+  const c5 = document.createElement('td');
+  c5.className = 'apex-tests-runs-stack-cell';
+  const stackText = row?.StackTrace != null ? String(row.StackTrace).trim() : '';
+  if (isFailedApexTestOutcome(row.Outcome) && stackText) {
+    const pre = buildStackTracePreWithCtrlLinks(stackText, orgId);
+    pre.title = t('apexTests.methodOpenCtrlClickHint');
+    c5.appendChild(pre);
+  } else {
+    c5.textContent = '—';
+  }
+  rtr.appendChild(c1);
+  rtr.appendChild(c2);
+  rtr.appendChild(c3);
+  rtr.appendChild(c4);
+  rtr.appendChild(c5);
+  rtr.dataset.methodKey = methodIdentityKey(row);
+  tb.appendChild(rtr);
+  return rtr;
+}
+
+function fillMethodsTbody(tb, rows, orgId, host = null) {
+  const tbl = tb.closest('table');
+  const scrollEl = host ? getMethodsTableScrollEl(host, tbl) : null;
+  const anchorKey = scrollEl ? getScrollAnchorKey(scrollEl, tb) : '';
+  const savedScroll = scrollEl?.scrollTop ?? 0;
+  const prefs = host ? readDetailFilterPrefs(host) : { failOnly: false, q: '' };
+
+  tb.innerHTML = '';
+  const keys = [];
+  for (const row of rows) {
+    const tr = appendMethodRow(tb, row, orgId);
+    if (host) {
+      tr.hidden = !rowMatchesDetailFilter(row, prefs.failOnly, prefs.q);
+    }
+    keys.push(methodIdentityKey(row));
+  }
+  tb.dataset.renderedKeys = keys.join('\n');
+  tb.dataset.identitySig = methodsIdentitySignature(rows);
+
+  if (scrollEl) {
+    if (anchorKey) scrollToMethodAnchor(scrollEl, tb, anchorKey);
+    else restoreElementScroll(scrollEl, savedScroll);
+  }
+}
+
+function getMethodsTableScrollEl(host, tbl) {
+  const inner = getRunDetailInnerScrollEl(host);
+  if (inner) return inner;
+  return (
+    tbl?.closest('.apex-tests-runs-table-scroll') ||
+    tbl?.parentElement ||
+    host
+  );
+}
+
+/**
+ * @returns {boolean} true si bastó añadir filas nuevas sin reemplazar la tabla
+ */
+function tryAppendNewMethodRows(host, tb, methodRows, orgId) {
+  const prevIdentity = tb.dataset.identitySig || '';
+  const nextIdentity = methodsIdentitySignature(methodRows);
+  if (!prevIdentity || prevIdentity === 'empty') return false;
+  if (nextIdentity === prevIdentity) return true;
+  if (!nextIdentity.startsWith(`${prevIdentity}\n`)) return false;
+
+  const prefs = readDetailFilterPrefs(host);
+  const rendered = new Set(String(tb.dataset.renderedKeys || '').split('\n').filter(Boolean));
+  const scrollEl = getMethodsTableScrollEl(host, tb.closest('table'));
+  const scrollTop = scrollEl?.scrollTop ?? 0;
+
+  for (const row of methodRows) {
+    const key = methodIdentityKey(row);
+    if (rendered.has(key)) continue;
+    const tr = appendMethodRow(tb, row, orgId);
+    tr.hidden = !rowMatchesDetailFilter(row, prefs.failOnly, prefs.q);
+    rendered.add(key);
+  }
+  tb.dataset.renderedKeys = [...rendered].join('\n');
+  tb.dataset.identitySig = nextIdentity;
+  restoreElementScroll(scrollEl, scrollTop);
+  return true;
 }
 
 function methodsRowsSignature(rows) {
@@ -1697,8 +1908,9 @@ async function refreshExpandedMethodsInPlace() {
     });
   }
   if (!Array.isArray(methodRows) || !methodRows.length) {
+    host.querySelector('.apex-tests-runs-failures-table')?.remove();
     if (!host.querySelector('.apex-tests-runs-detail-empty')) {
-      host.innerHTML = '';
+      removeDetailLoading(host);
       const p = document.createElement('p');
       p.className = 'apex-tests-runs-detail-empty';
       p.textContent = t('apexTests.runsNoMethods');
@@ -1706,6 +1918,9 @@ async function refreshExpandedMethodsInPlace() {
     }
     return;
   }
+  host.querySelector('.apex-tests-runs-detail-empty')?.remove();
+  removeDetailLoading(host);
+  ensureDetailFilterToolbar(host, parsed.orgId);
   let tbl = host.querySelector('.apex-tests-runs-failures-table');
   if (!tbl) {
     tbl = document.createElement('table');
@@ -1714,16 +1929,28 @@ async function refreshExpandedMethodsInPlace() {
     thead.appendChild(buildMethodsDetailTableHeadRow());
     tbl.appendChild(thead);
     tbl.appendChild(document.createElement('tbody'));
-    host.innerHTML = '';
     host.appendChild(tbl);
   }
   const tb = tbl.querySelector('tbody');
   if (!tb) return;
+  tb.dataset.allRowsJson = JSON.stringify(methodRows);
   const nextSig = methodsRowsSignature(methodRows);
   const prevSig = tb.dataset.rowsSig || '';
-  if (nextSig === prevSig) return;
-  fillMethodsTbody(tb, methodRows, parsed.orgId);
+  const nextIdentity = methodsIdentitySignature(methodRows);
+  const prevIdentity = tb.dataset.identitySig || '';
+
+  if (nextSig === prevSig && nextIdentity === prevIdentity) return;
+
+  if (tryAppendNewMethodRows(host, tb, methodRows, parsed.orgId)) {
+    tb.dataset.rowsSig = nextSig;
+    return;
+  }
+
   tb.dataset.rowsSig = nextSig;
+  fillMethodsTbody(tb, methodRows, parsed.orgId, host);
+  host.dataset.detailFilterActive = isDetailFilterPrefsActive(readDetailFilterPrefs(host))
+    ? '1'
+    : '';
 }
 
 async function refreshExpandedJobStatusInPlace() {
@@ -1998,8 +2225,9 @@ async function populateRunDetailInner(inner, orgId, jobId, opts = {}) {
   tbl.appendChild(thead);
   const tb = document.createElement('tbody');
   tb.dataset.allRowsJson = JSON.stringify(methodRows);
-  fillMethodsTbody(tb, methodRows, orgId);
+  fillMethodsTbody(tb, methodRows, orgId, inner);
   tb.dataset.rowsSig = methodsRowsSignature(methodRows);
+  tb.dataset.identitySig = methodsIdentitySignature(methodRows);
   tbl.appendChild(tb);
   if (toolbar) inner.appendChild(toolbar);
   inner.appendChild(tbl);
@@ -2029,26 +2257,20 @@ function wireDetailFilterToolbar(innerHost, orgId) {
   const bar = innerHost.querySelector('.apex-tests-detail-filter-bar');
   const tb = innerHost.querySelector('.apex-tests-runs-failures-table tbody');
   if (!bar || !tb) return;
-  const apply = () => {
-    let rows = [];
-    try {
-      rows = JSON.parse(tb.dataset.allRowsJson || '[]');
-    } catch {
-      rows = [];
-    }
-    const q = (bar.querySelector('.apex-tests-detail-filter-search')?.value || '')
-      .trim()
-      .toLowerCase();
-    const failOnly = !!bar.querySelector('.apex-tests-detail-filter-fail-cb')?.checked;
-    const filtered = rows.filter((row) => {
-      if (failOnly && !isFailedApexTestOutcome(row.Outcome)) return false;
-      if (!q) return true;
-      const cls = apexClassNameFromResult(row).toLowerCase();
-      const m = row?.MethodName != null ? String(row.MethodName).toLowerCase() : '';
-      return cls.includes(q) || m.includes(q);
-    });
-    fillMethodsTbody(tb, filtered, orgId);
-  };
+  const scrollEl = getRunDetailInnerScrollEl(innerHost);
+  if (scrollEl && bar.dataset.scrollTrackWired !== '1') {
+    bar.dataset.scrollTrackWired = '1';
+    scrollEl.addEventListener(
+      'scroll',
+      () => {
+        if (innerHost.dataset.detailFilterActive !== '1') {
+          innerHost.dataset.unfilteredScrollTop = String(scrollEl.scrollTop);
+        }
+      },
+      { passive: true }
+    );
+  }
+  const apply = () => applyDetailFilterToTbody(innerHost, orgId);
   bar.querySelector('.apex-tests-detail-filter-fail-cb')?.addEventListener('change', apply);
   bar.querySelector('.apex-tests-detail-filter-search')?.addEventListener('input', apply);
 }
@@ -2092,6 +2314,17 @@ async function openHubRunDetail(exKey, ctx) {
   if (terminal) {
     void populateRunDetailInner(inner, ctx.orgId, ctx.jobId, { terminal: true, refresh: true });
   }
+}
+
+/**
+ * Reabre el detalle solo si se perdió al refrescar la tabla (fallback).
+ */
+async function reopenHubRunDetailAfterRefresh(exKey, ctx, savedFilter = null) {
+  expandedRunKey = exKey;
+  syncAllExpandButtonStates();
+  const inner = insertRunDetailRowAfter(ctx.anchorTr, exKey, ctx.colSpan);
+  if (savedFilter) ensureDetailFilterToolbar(inner, ctx.orgId, savedFilter);
+  await refreshExpandedMethodsInPlace();
 }
 
 /**
@@ -2723,6 +2956,18 @@ async function renderHubRunsTable(opts = {}) {
 
   const runsForStop = [];
   const reopenKey = expandedRunKey;
+  let savedExpandFilter = null;
+  let detachedDetailRow = null;
+  let savedDetailScroll = 0;
+  const tableWrap = document.getElementById('apexTestsRunsTableWrap');
+  const savedWrapScroll = tableWrap?.scrollTop ?? 0;
+  if (reopenKey) {
+    detachedDetailRow = findExpandedDetailRow(reopenKey);
+    savedExpandFilter = readDetailFilterState(detachedDetailRow?.querySelector('.apex-tests-runs-detail-inner'));
+    savedDetailScroll =
+      detachedDetailRow?.querySelector('.apex-tests-runs-detail-inner')?.scrollTop ?? 0;
+    detachedDetailRow?.remove();
+  }
   tbody.innerHTML = '';
 
   for (let idx = 0; idx < enriched.length; idx++) {
@@ -2986,21 +3231,34 @@ async function renderHubRunsTable(opts = {}) {
     const anchor = tbody.querySelector(`tr[data-row-key="${CSS.escape(reopenKey)}"]`);
     const parsed = parseRunExpandKey(reopenKey);
     if (anchor && parsed) {
-      const poll = pollsByOrgId[parsed.orgId];
-      const run = pickRunForStoredJob(poll, parsed.jobId);
-      const term =
-        run.job && ['Completed', 'Failed', 'Aborted', 'Error'].includes(run.job.Status);
-      void openHubRunDetail(reopenKey, {
-        orgId: parsed.orgId,
-        jobId: run.job?.Id || run.canonicalJobId || parsed.jobId,
-        anchorTr: anchor,
-        colSpan: 6,
-        terminal: term
-      });
+      if (detachedDetailRow) {
+        anchor.insertAdjacentElement('afterend', detachedDetailRow);
+        const detailInner = detachedDetailRow.querySelector('.apex-tests-runs-detail-inner');
+        restoreElementScroll(detailInner, savedDetailScroll);
+        syncAllExpandButtonStates();
+      } else {
+        const poll = pollsByOrgId[parsed.orgId];
+        const run = pickRunForStoredJob(poll, parsed.jobId);
+        const term =
+          run.job && ['Completed', 'Failed', 'Aborted', 'Error'].includes(run.job.Status);
+        void reopenHubRunDetailAfterRefresh(
+          reopenKey,
+          {
+            orgId: parsed.orgId,
+            jobId: run.job?.Id || run.canonicalJobId || parsed.jobId,
+            anchorTr: anchor,
+            colSpan: 6,
+            terminal: term
+          },
+          savedExpandFilter
+        );
+      }
     }
   }
 
   await refreshOtherOrgQueuePanel(list, enriched);
+
+  restoreElementScroll(tableWrap, savedWrapScroll);
 
   if (pollValues.length && !allFailed) {
     if (shouldStopPollingAfterRuns(runsForStop, list)) {

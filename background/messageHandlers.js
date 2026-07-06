@@ -48,6 +48,7 @@ import {
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
 import { fetchAllEnvironmentStatusRows } from './environmentStatus.js';
 import { pollDeployStatus, fetchDeployDetail, cancelDeployRequest } from '../shared/deployStatusApi.js';
+import { resolveDeployCoverageLineSets } from '../shared/apexCoverageLines.js';
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
 function queryExplorerCatchErrorPayload(e) {
@@ -72,7 +73,8 @@ import {
   createBundleDeployZipBase64,
   artifactTypeToMetadataType,
   deployZipBase64,
-  deployAndWait
+  deployAndWait,
+  checkDeployStatus
 } from '../shared/metadataRetrieve.js';
 import {
   fetchPermissionContainerData,
@@ -1708,6 +1710,97 @@ export function installMessageHandlers() {
             try {
               const result = await cancelDeployRequest(org.instanceUrl, sid, org.apiVersion, asyncId);
               reply({ ok: true, ...result });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'deployStatus:getCoverageLineView': {
+            const { orgId, asyncId, classOrTriggerId, className, uncoveredLines: uncoveredLinesHint } = message;
+            if (!classOrTriggerId) {
+              reply({ ok: false, error: 'Missing classOrTriggerId' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const tid = escapeSoqlLiteral(String(classOrTriggerId));
+              let soap = null;
+              if (asyncId) {
+                soap = await checkDeployStatus(org.instanceUrl, sid, org.apiVersion, asyncId);
+              }
+              let coveredLines = [];
+              let uncoveredLines = (Array.isArray(uncoveredLinesHint) ? uncoveredLinesHint : [])
+                .map((n) => Number(n))
+                .filter((n) => Number.isFinite(n) && n >= 1);
+
+              let body = '';
+              let name = className ? String(className) : '';
+              try {
+                const clsRows = await restQuery(
+                  org.instanceUrl,
+                  sid,
+                  org.apiVersion,
+                  `SELECT Name, Body FROM ApexClass WHERE Id = '${tid}' LIMIT 1`
+                );
+                const row = clsRows?.[0];
+                if (row) {
+                  body = row.Body || '';
+                  if (!name) name = row.Name || '';
+                }
+              } catch {
+                /* trigger */
+              }
+              if (!body) {
+                try {
+                  const trRows = await restQuery(
+                    org.instanceUrl,
+                    sid,
+                    org.apiVersion,
+                    `SELECT Name, Body FROM ApexTrigger WHERE Id = '${tid}' LIMIT 1`
+                  );
+                  const row = trRows?.[0];
+                  if (row) {
+                    body = row.Body || '';
+                    if (!name) name = row.Name || '';
+                  }
+                } catch {
+                  /* sin cuerpo */
+                }
+              }
+              if (!body) {
+                reply({ ok: false, error: 'NO_CLASS_BODY' });
+                break;
+              }
+
+              const lineSets = await resolveDeployCoverageLineSets({
+                instanceUrl: org.instanceUrl,
+                sid,
+                apiVersion: org.apiVersion,
+                classOrTriggerId,
+                runTestResult: soap?.runTestResult,
+                uncoveredLinesHint: uncoveredLines,
+                body
+              });
+              coveredLines = lineSets.coveredLines;
+              uncoveredLines = lineSets.uncoveredLines;
+
+              reply({
+                ok: true,
+                name,
+                body,
+                coveredLines,
+                uncoveredLines
+              });
             } catch (e) {
               replyHandlerError(reply, e);
             }
