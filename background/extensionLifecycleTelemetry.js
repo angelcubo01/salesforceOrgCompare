@@ -3,6 +3,11 @@
  */
 import { UNINSTALL_FEEDBACK_URL } from '../code/core/constants.js';
 import { loadExtensionSettings } from '../shared/extensionSettings.js';
+import {
+  ONBOARDING_PREFS_KEY,
+  normalizeOnboardingPrefs,
+  markFirstInstallWelcomeDismissedInPrefs
+} from '../shared/onboardingPrefs.js';
 import { getOrCreateTelemetryInstallId } from '../shared/telemetryInstallId.js';
 import { sendPosthogLifecycleEvent } from './posthogTelemetry.js';
 
@@ -70,6 +75,15 @@ export async function handleExtensionInstalled(details) {
   }
 
   if (reason === 'update') {
+    try {
+      const r = await chrome.storage.local.get(ONBOARDING_PREFS_KEY);
+      const prefs = markFirstInstallWelcomeDismissedInPrefs(
+        normalizeOnboardingPrefs(r[ONBOARDING_PREFS_KEY])
+      );
+      await chrome.storage.local.set({ [ONBOARDING_PREFS_KEY]: prefs });
+    } catch {
+      /* ignore */
+    }
     const previous = String(details?.previousVersion || '').slice(0, 32);
     await sendPosthogLifecycleEvent('extension_updated', {
       install_reason: 'update',

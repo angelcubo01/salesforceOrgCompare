@@ -8,7 +8,10 @@ import {
   hasSeenTelemetryNotice,
   markTelemetryNoticeDismissedInPrefs,
   hasDismissedPopupNotice,
-  markPopupNoticeDismissedInPrefs
+  markPopupNoticeDismissedInPrefs,
+  hasSeenFirstInstallWelcome,
+  markFirstInstallWelcomeDismissedInPrefs,
+  shouldShowFirstInstallWelcome
 } from '../shared/onboardingPrefs.js';
 import {
   HELP_HOME_ID,
@@ -24,13 +27,15 @@ describe('onboardingPrefs', () => {
       tools: {},
       helpOpened: false,
       telemetryNoticeDismissed: false,
-      popupNoticeDismissedFingerprint: null
+      popupNoticeDismissedFingerprint: null,
+      firstInstallWelcomeDismissed: false
     });
     expect(normalizeOnboardingPrefs(undefined)).toEqual({
       tools: {},
       helpOpened: false,
       telemetryNoticeDismissed: false,
-      popupNoticeDismissedFingerprint: null
+      popupNoticeDismissedFingerprint: null,
+      firstInstallWelcomeDismissed: false
     });
   });
 
@@ -79,6 +84,24 @@ describe('onboardingPrefs', () => {
     expect(hasDismissedPopupNotice(prefs, 'pn_other')).toBe(false);
   });
 
+  it('modal de bienvenida solo la primera instalación', () => {
+    let prefs = normalizeOnboardingPrefs(null);
+    expect(hasSeenFirstInstallWelcome(prefs)).toBe(false);
+    prefs = markFirstInstallWelcomeDismissedInPrefs(prefs);
+    prefs = markFirstInstallWelcomeDismissedInPrefs(prefs);
+    expect(hasSeenFirstInstallWelcome(prefs)).toBe(true);
+    expect(prefs.firstInstallWelcomeDismissed).toBe(true);
+  });
+
+  it('no muestra bienvenida si ya hay entornos guardados', () => {
+    const prefs = normalizeOnboardingPrefs(null);
+    expect(shouldShowFirstInstallWelcome(prefs, 0)).toBe(true);
+    expect(shouldShowFirstInstallWelcome(prefs, 1)).toBe(false);
+    expect(shouldShowFirstInstallWelcome(prefs, 3)).toBe(false);
+    const dismissed = markFirstInstallWelcomeDismissedInPrefs(prefs);
+    expect(shouldShowFirstInstallWelcome(dismissed, 0)).toBe(false);
+  });
+
   it('lista de herramientas alineada con onboarding (21)', () => {
     expect(ALL_ONBOARDING_TOOLS).toHaveLength(21);
     expect(ALL_ONBOARDING_TOOLS).toContain('Comparator');
@@ -101,6 +124,16 @@ describe('popup help i18n keys', () => {
       expect(t('popup.help.title')).not.toBe('popup.help.title');
       expect(t('popup.help.body1')).not.toBe('popup.help.body1');
       expect(t('popup.help.body6')).not.toBe('popup.help.body6');
+    });
+
+    it(`claves popup.welcome.* en ${lang}`, () => {
+      setLang(lang);
+      expect(t('popup.welcome.title')).not.toBe('popup.welcome.title');
+      expect(t('popup.welcome.subtitle')).not.toBe('popup.welcome.subtitle');
+      expect(t('popup.welcome.step1.title')).not.toBe('popup.welcome.step1.title');
+      expect(t('popup.welcome.step3.text')).not.toBe('popup.welcome.step3.text');
+      expect(t('popup.welcome.sessionWarning.text')).not.toBe('popup.welcome.sessionWarning.text');
+      expect(t('popup.welcome.cta')).not.toBe('popup.welcome.cta');
     });
 
     it(`claves popup.telemetryNotice.* en ${lang}`, () => {

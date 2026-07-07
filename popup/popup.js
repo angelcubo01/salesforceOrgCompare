@@ -1,5 +1,5 @@
 import '../shared/installEarlyExceptionCapture.js';
-import { t, loadLang, getCurrentLang } from '../shared/i18n.js';
+import { t, loadLang, getCurrentLang, setLang, getAvailableLanguages } from '../shared/i18n.js';
 import { sameGroupKey, isOrgAlreadySaved } from '../shared/orgPrefs.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 import {
@@ -7,7 +7,7 @@ import {
   normalizeOnboardingPrefs,
   markPopupNoticeDismissedInPrefs
 } from '../shared/onboardingPrefs.js';
-import { initPosthogClient, getPosthogClient } from '../shared/posthogClient.js';
+import { initPosthogClient, getPosthogClient, syncPosthogAppLanguage } from '../shared/posthogClient.js';
 import { loadPopupControlsFromPosthog } from '../shared/posthogPopupControlsFlag.js';
 import {
   buildNoticeFingerprint,
@@ -18,7 +18,8 @@ import {
   resolveOpenAppTooltip,
   shouldShowRemoteNotice
 } from '../shared/popupControls.js';
-import { setupPopupHelp } from './popupHelp.js';
+import { setupPopupHelp, refreshPopupHelpModalContent } from './popupHelp.js';
+import { setupPopupWelcome, maybeShowPopupWelcome, refreshPopupWelcomeContent } from './popupWelcome.js';
 
 async function bg(message) {
   return await chrome.runtime.sendMessage(message);
@@ -81,6 +82,35 @@ function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n-aria-label]').forEach((elem) => {
     elem.setAttribute('aria-label', t(elem.getAttribute('data-i18n-aria-label')));
   });
+}
+
+function setupPopupLanguageSelect() {
+  const sel = document.getElementById('popupLangSelect');
+  if (!sel) return;
+  sel.innerHTML = '';
+  for (const { code, label } of getAvailableLanguages()) {
+    const o = document.createElement('option');
+    o.value = code;
+    o.textContent = label;
+    sel.appendChild(o);
+  }
+  sel.value = getCurrentLang();
+  sel.addEventListener('change', () => {
+    void applyPopupLangChange(sel.value);
+  });
+}
+
+async function applyPopupLangChange(lang) {
+  setLang(lang);
+  document.documentElement.lang = lang === 'en' ? 'en' : 'es';
+  syncPosthogAppLanguage();
+  applyStaticTranslations();
+  refreshPopupWelcomeContent();
+  refreshPopupHelpModalContent();
+  const sel = document.getElementById('popupLangSelect');
+  if (sel) sel.value = getCurrentLang();
+  await refresh();
+  await setupPopupControls();
 }
 
 function rowGroupKey(li) {
@@ -507,12 +537,15 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   await loadExtensionSettings();
   applyUiThemeToDocument(document);
   await loadLang();
+  document.documentElement.lang = getCurrentLang() === 'en' ? 'en' : 'es';
+  setupPopupLanguageSelect();
   applyStaticTranslations();
   setupPopupHelp();
+  setupPopupWelcome();
   await initPosthogClient();
   await setupPopupControls();
-
-  refresh();
+  await refresh();
+  await maybeShowPopupWelcome((window.__savedOrgs || []).length);
 })();
 
 function deriveLabelFromHost(host) {

@@ -21,6 +21,43 @@ html[data-ui-theme="light"] body {
   box-shadow: var(--sfoc-light-shadow);
 }
 
+html[data-ui-theme="light"] .popup-lang-label {
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .popup-lang-select {
+  background: var(--sfoc-light-bg-elevated);
+  border-color: var(--sfoc-light-border);
+  color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme="light"] .popup-lang-select:hover {
+  background: var(--sfoc-light-bg-hover);
+  border-color: var(--sfoc-light-border);
+}
+
+html[data-ui-theme="light"] .popup-lang-select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+html[data-ui-theme="light"] .popup-welcome-close {
+  background: var(--sfoc-light-bg-elevated);
+  border-color: var(--sfoc-light-border);
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme="light"] .popup-welcome-close:hover {
+  background: var(--sfoc-light-bg-hover);
+  border-color: var(--sfoc-light-border);
+  color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme="light"] .popup-welcome-panel {
+  background: var(--sfoc-light-bg-elevated);
+  border-color: var(--sfoc-light-border);
+}
+
 html[data-ui-theme="light"] .topbar {
   border-bottom: 1px solid var(--sfoc-light-border);
   background: linear-gradient(135deg, var(--sfoc-light-bg-elevated) 0%, var(--sfoc-light-bg-surface) 100%);
@@ -73,6 +110,45 @@ html[data-ui-theme="light"] .popup-help-modal-close {
 
 html[data-ui-theme="light"] .popup-help-modal-body p {
   color: #475569;
+}
+
+html[data-ui-theme="light"] .popup-welcome-head {
+  background: linear-gradient(135deg, var(--sfoc-light-bg-elevated) 0%, var(--sfoc-light-bg-surface) 100%);
+  border-bottom-color: var(--sfoc-light-border);
+}
+
+html[data-ui-theme="light"] .popup-welcome-title {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .popup-welcome-subtitle {
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .popup-welcome-logo {
+  border-color: var(--sfoc-light-border);
+}
+
+html[data-ui-theme="light"] .popup-welcome-step {
+  border-bottom-color: var(--sfoc-light-border-subtle);
+}
+
+html[data-ui-theme="light"] .popup-welcome-step-icon {
+  background: var(--sfoc-light-bg-elevated);
+  border-color: var(--sfoc-light-border);
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme="light"] .popup-welcome-step-title {
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .popup-welcome-step-text {
+  color: #64748b;
+}
+
+html[data-ui-theme="light"] .popup-welcome-foot {
+  border-top-color: var(--sfoc-light-border-subtle);
 }
 
 html[data-ui-theme="light"] button {

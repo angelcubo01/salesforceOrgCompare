@@ -78,6 +78,91 @@
       <div id="detectedRow" class="row muted" data-i18n="popup.noDetected">No se ha detectado ningún entorno Salesforce</div>
     </section>
 
+    <div id="popupWelcomeModal" class="popup-welcome-modal hidden" aria-hidden="true">
+      <div class="popup-welcome-backdrop" data-popup-welcome-backdrop="1"></div>
+      <div
+        class="popup-welcome-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="popupWelcomeTitle"
+      >
+        <div class="popup-welcome-top">
+          <div class="popup-welcome-lang">
+            <label for="popupLangSelect" class="popup-lang-label" data-i18n="popup.language">Idioma</label>
+            <select
+              id="popupLangSelect"
+              class="popup-lang-select"
+              data-i18n-aria-label="popup.language"
+            ></select>
+          </div>
+          <button
+            type="button"
+            id="popupWelcomeCloseBtn"
+            class="popup-welcome-close"
+            data-i18n-title="popup.help.close"
+            data-i18n-aria-label="popup.help.close"
+          >
+            <span aria-hidden="true">×</span>
+          </button>
+        </div>
+        <header class="popup-welcome-head">
+          <img id="popupWelcomeLogo" class="popup-welcome-logo" width="32" height="32" alt="" />
+          <div class="popup-welcome-head-text">
+            <h2 id="popupWelcomeTitle" class="popup-welcome-title"></h2>
+            <p id="popupWelcomeSubtitle" class="popup-welcome-subtitle"></p>
+          </div>
+        </header>
+        <ol class="popup-welcome-steps">
+          <li class="popup-welcome-step">
+            <span class="popup-welcome-step-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+            </span>
+            <div class="popup-welcome-step-body">
+              <strong id="popupWelcomeStep1Title" class="popup-welcome-step-title"></strong>
+              <p id="popupWelcomeStep1Text" class="popup-welcome-step-text"></p>
+            </div>
+          </li>
+          <li class="popup-welcome-step">
+            <span class="popup-welcome-step-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+                <line x1="8" y1="12" x2="16" y2="12"></line>
+              </svg>
+            </span>
+            <div class="popup-welcome-step-body">
+              <strong id="popupWelcomeStep2Title" class="popup-welcome-step-title"></strong>
+              <p id="popupWelcomeStep2Text" class="popup-welcome-step-text"></p>
+            </div>
+          </li>
+          <li class="popup-welcome-step">
+            <span class="popup-welcome-step-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+            </span>
+            <div class="popup-welcome-step-body">
+              <strong id="popupWelcomeStep3Title" class="popup-welcome-step-title"></strong>
+              <p id="popupWelcomeStep3Text" class="popup-welcome-step-text"></p>
+            </div>
+          </li>
+        </ol>
+        <aside class="popup-welcome-warning popup-telemetry-notice popup-telemetry-notice--warn" role="note">
+          <p id="popupWelcomeWarningText" class="popup-welcome-warning-text popup-telemetry-notice-text"></p>
+        </aside>
+        <footer class="popup-welcome-foot">
+          <button type="button" id="popupWelcomePrimaryBtn" class="popup-welcome-primary"></button>
+        </footer>
+      </div>
+    </div>
+
     <div id="popupHelpModal" class="popup-help-modal hidden" aria-hidden="true">
       <div class="popup-help-modal-backdrop" data-popup-help-backdrop="1"></div>
       <div

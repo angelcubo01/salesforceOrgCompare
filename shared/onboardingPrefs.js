@@ -7,7 +7,7 @@ export { ALL_ONBOARDING_TOOLS };
 
 /**
  * @param {unknown} raw
- * @returns {{ tools: Record<string, boolean>, helpOpened: boolean, telemetryNoticeDismissed: boolean, popupNoticeDismissedFingerprint: string | null }}
+ * @returns {{ tools: Record<string, boolean>, helpOpened: boolean, telemetryNoticeDismissed: boolean, popupNoticeDismissedFingerprint: string | null, firstInstallWelcomeDismissed: boolean }}
  */
 export function normalizeOnboardingPrefs(raw) {
   const p = raw && typeof raw === 'object' ? /** @type {Record<string, unknown>} */ (raw) : {};
@@ -24,7 +24,8 @@ export function normalizeOnboardingPrefs(raw) {
     tools,
     helpOpened: !!p.helpOpened,
     telemetryNoticeDismissed: !!p.telemetryNoticeDismissed,
-    popupNoticeDismissedFingerprint
+    popupNoticeDismissedFingerprint,
+    firstInstallWelcomeDismissed: !!p.firstInstallWelcomeDismissed
   };
 }
 
@@ -86,4 +87,28 @@ export function hasDismissedPopupNotice(prefs, fingerprint) {
 export function markPopupNoticeDismissedInPrefs(prefs, fingerprint) {
   if (!fingerprint) return prefs;
   return { ...prefs, popupNoticeDismissedFingerprint: fingerprint };
+}
+
+/**
+ * @param {{ firstInstallWelcomeDismissed?: boolean }} prefs
+ */
+export function hasSeenFirstInstallWelcome(prefs) {
+  return !!prefs.firstInstallWelcomeDismissed;
+}
+
+/**
+ * @param {{ firstInstallWelcomeDismissed?: boolean }} prefs
+ * @param {number} savedOrgCount
+ */
+export function shouldShowFirstInstallWelcome(prefs, savedOrgCount) {
+  if (hasSeenFirstInstallWelcome(prefs)) return false;
+  if (savedOrgCount > 0) return false;
+  return true;
+}
+
+/**
+ * @param {{ tools: Record<string, boolean>, helpOpened?: boolean, telemetryNoticeDismissed?: boolean, popupNoticeDismissedFingerprint?: string | null, firstInstallWelcomeDismissed?: boolean }} prefs
+ */
+export function markFirstInstallWelcomeDismissedInPrefs(prefs) {
+  return { ...prefs, firstInstallWelcomeDismissed: true };
 }

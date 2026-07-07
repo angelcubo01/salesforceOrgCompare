@@ -77,6 +77,22 @@ const translations = {
     'popup.help.body4': 'Tus entornos guardados se usan en los desplegables de Salesforce Org Compare. Arrastra el asa ⋮⋮ solo dentro del mismo grupo para ordenar cómo aparecen en esos desplegables.',
     'popup.help.body5': 'Si una sesión caduca, usa Reautenticar en el menú del entorno. También puedes eliminar un entorno que ya no necesites.',
     'popup.help.body6': 'La rueda de ajustes abre idioma, apariencia, copias de seguridad de entornos y otras preferencias. Desde ahí puedes exportar o importar tu lista de entornos.',
+    'popup.welcome.title': '¡Bienvenido a Salesforce Org Compare!',
+    'popup.welcome.subtitle':
+      'Tres pasos para conectar tus entornos Salesforce y empezar a trabajar.',
+    'popup.welcome.step1.title': 'Abre Salesforce en el navegador',
+    'popup.welcome.step1.text':
+      'Inicia sesión en producción, sandbox u otra org en una pestaña de Chrome.',
+    'popup.welcome.step2.title': 'Añade el entorno en este popup',
+    'popup.welcome.step2.text':
+      'Detectamos la org de esa pestaña. En «Entorno en esta pestaña», pulsa Añadir.',
+    'popup.welcome.step3.title': 'Abre la aplicación principal',
+    'popup.welcome.step3.text':
+      'Pulsa Abrir arriba. Tus orgs quedarán listas en los desplegables de la app.',
+    'popup.welcome.sessionWarning.title': 'Importante sobre la sesión',
+    'popup.welcome.sessionWarning.text':
+      'Usa la sesión de tu navegador. Si cierras sesión en Salesforce, aquí también te desconectarás.',
+    'popup.welcome.cta': 'Entendido, ¡empecemos!',
     'popup.telemetryNotice.text':
       'Esta extensión puede recoger estadísticas anónimas de uso (qué herramientas utilizas y tu entorno de referencia). Nunca se envían credenciales, código ni datos de tus orgs. Puedes desactivarlo en Ajustes en cualquier momento.',
     'popup.telemetryNotice.dismiss': 'Entendido',
@@ -2002,6 +2018,22 @@ const translations = {
       'If a session expires, use Re-authenticate from the org menu. You can also remove an org you no longer need.',
     'popup.help.body6':
       'The settings gear opens language, appearance, org backup, and other preferences. From there you can export or import your environment list.',
+    'popup.welcome.title': 'Welcome to Salesforce Org Compare!',
+    'popup.welcome.subtitle':
+      'Three steps to connect your Salesforce environments and get started.',
+    'popup.welcome.step1.title': 'Open Salesforce in your browser',
+    'popup.welcome.step1.text':
+      'Sign in to production, sandbox, or another org in a Chrome tab.',
+    'popup.welcome.step2.title': 'Add the environment in this popup',
+    'popup.welcome.step2.text':
+      'We detect the org in that tab. In “Org detected in this tab”, press Add.',
+    'popup.welcome.step3.title': 'Open the main application',
+    'popup.welcome.step3.text':
+      'Press Open at the top. Your orgs will be ready in the app dropdowns.',
+    'popup.welcome.sessionWarning.title': 'About your session',
+    'popup.welcome.sessionWarning.text':
+      'We use your browser session. If you sign out of Salesforce, you will be disconnected here too.',
+    'popup.welcome.cta': "Got it, let's get started!",
     'popup.telemetryNotice.text':
       'This extension may collect anonymous usage statistics (which tools you use and your reference org). Your credentials, code, and org data are never sent. You can turn this off anytime in Settings.',
     'popup.telemetryNotice.dismiss': 'Got it',
