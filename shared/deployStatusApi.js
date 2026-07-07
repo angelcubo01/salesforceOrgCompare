@@ -400,15 +400,65 @@ export async function cancelDeployRequest(instanceUrl, sid, apiVersion, asyncId)
 export const DEPLOY_SLOW_TEST_THRESHOLD_MS = 10000;
 
 /**
- * Test en ejecución durante el deploy (DeployResult.stateDetail del SOAP).
+ * Fase de componentes completada (primer donut).
+ * @param {Record<string, unknown> | null | undefined} row
  * @param {Record<string, unknown> | null | undefined} soap
  */
-export function resolveDeployRunningTest(soap) {
-  if (!soap || soap.done) return '';
+export function areDeployComponentsComplete(row, soap) {
+  const total = toNum(soap?.numberComponentsTotal ?? row?.componentsTotal);
+  const deployed = toNum(soap?.numberComponentsDeployed ?? row?.componentsDeployed);
+  if (total > 0) return deployed >= total;
+  const testsTotal = toNum(soap?.numberTestsTotal ?? row?.testsTotal);
+  const testsCompleted = toNum(soap?.numberTestsCompleted ?? row?.testsCompleted);
+  return testsTotal > 0 || testsCompleted > 0;
+}
+
+/**
+ * Deploy en fase de tests (segundo donut), con componentes ya terminados.
+ * @param {Record<string, unknown> | null | undefined} row
+ * @param {Record<string, unknown> | null | undefined} soap
+ */
+export function isDeployInTestExecutionPhase(row, soap) {
+  if (!soap || soap.done) return false;
+  if (!areDeployComponentsComplete(row, soap)) return false;
+  const testsTotal = toNum(soap?.numberTestsTotal ?? row?.testsTotal);
+  const runTests = !!row?.runTestsEnabled || testsTotal > 0;
+  if (!runTests && testsTotal === 0) return false;
+  return isSoapActivelyRunning(soap) || isDeployInProgress(String(row?.status || ''));
+}
+
+/**
+ * Texto de progreso bajo los donuts durante un deploy en curso.
+ * @returns {{ showRunningTestLabel: boolean, text: string }}
+ */
+export function resolveDeployProgressDetail(row, soap) {
+  if (!soap || soap.done) return { showRunningTestLabel: false, text: '' };
   const detail = String(soap.stateDetail || '').trim();
-  if (!detail) return '';
-  const m = detail.match(/^Running Test:\s*(.+)$/i);
-  return m ? m[1].trim() : detail;
+  if (!detail) return { showRunningTestLabel: false, text: '' };
+
+  const inTestPhase = isDeployInTestExecutionPhase(row, soap);
+  const runningTestMatch = detail.match(/^Running Test:\s*(.+)$/i);
+  if (inTestPhase && runningTestMatch) {
+    return { showRunningTestLabel: true, text: runningTestMatch[1].trim() };
+  }
+  return { showRunningTestLabel: false, text: detail };
+}
+
+/**
+ * Test en ejecución durante el deploy (DeployResult.stateDetail del SOAP).
+ * @param {Record<string, unknown> | null | undefined} soap
+ * @param {Record<string, unknown> | null | undefined} [row]
+ */
+export function resolveDeployRunningTest(soap, row = null) {
+  if (!row) {
+    if (!soap || soap.done) return '';
+    const detail = String(soap.stateDetail || '').trim();
+    if (!detail) return '';
+    const m = detail.match(/^Running Test:\s*(.+)$/i);
+    return m ? m[1].trim() : '';
+  }
+  const progress = resolveDeployProgressDetail(row, soap);
+  return progress.showRunningTestLabel ? progress.text : '';
 }
 
 /**

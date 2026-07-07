@@ -6933,12 +6933,17 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 }
 
 .deploy-status-running-test-label,
-.deploy-status-running-test-name {
+.deploy-status-running-test-name,
+.deploy-status-running-test-detail {
   display: block;
 }
 
 .deploy-status-running-test-name {
   margin-top: 2px;
+  word-break: break-word;
+}
+
+.deploy-status-running-test-detail {
   word-break: break-word;
 }
 

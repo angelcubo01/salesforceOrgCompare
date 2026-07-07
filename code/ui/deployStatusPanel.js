@@ -3,7 +3,7 @@ import { bg } from '../core/bridge.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { renderDonutChart } from '../lib/orgLimitsCharts.js';
-import { buildSetupDeployDetailsUrl, isDeployInProgress, isDeployActivelyRunning, isSoapActivelyRunning, collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS, hasCoverageFailureInRow, hasCoverageFailureInSoap, resolveDeployRunningTest } from '../../shared/deployStatusApi.js';
+import { buildSetupDeployDetailsUrl, isDeployInProgress, isDeployActivelyRunning, isSoapActivelyRunning, collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS, hasCoverageFailureInRow, hasCoverageFailureInSoap, resolveDeployProgressDetail } from '../../shared/deployStatusApi.js';
 import {
   buildDeployCoverageRows,
   canShowDeployCoverage,
@@ -27,6 +27,12 @@ const COLOR_NEUTRAL = '#64748b';
 
 /** @type {ReturnType<typeof setTimeout> | null} */
 let pollTimeout = null;
+/** @type {ReturnType<typeof setInterval> | null} */
+let elapsedTickTimer = null;
+/** @type {number | null} */
+let liveElapsedStartMs = null;
+/** @type {number | null} */
+let liveElapsedEndMs = null;
 let lastFetchedAt = 0;
 let selectedAsyncId = '';
 let failedPage = 0;
@@ -80,19 +86,23 @@ function coalesceDetailSoap(row, soap) {
   };
 }
 
-function renderRunningTestHint(elementId, soap) {
+function renderRunningTestHint(elementId, row, soap) {
   const el = document.getElementById(elementId);
   if (!el) return;
-  const test = resolveDeployRunningTest(soap);
-  if (!test) {
+  const display = resolveDeployProgressDetail(row, soap);
+  if (!display.text) {
     el.classList.add('hidden');
     el.innerHTML = '';
     el.removeAttribute('title');
     return;
   }
   el.classList.remove('hidden');
-  el.innerHTML = `<span class="deploy-status-running-test-label">${escapeHtml(t('deployStatus.runningTestLabel'))}</span><span class="deploy-status-running-test-name">${escapeHtml(test)}</span>`;
-  el.title = test;
+  if (display.showRunningTestLabel) {
+    el.innerHTML = `<span class="deploy-status-running-test-label">${escapeHtml(t('deployStatus.runningTestLabel'))}</span><span class="deploy-status-running-test-name">${escapeHtml(display.text)}</span>`;
+  } else {
+    el.innerHTML = `<span class="deploy-status-running-test-detail">${escapeHtml(display.text)}</span>`;
+  }
+  el.title = display.text;
 }
 
 function getStatusTitle(row, soap) {
@@ -160,16 +170,93 @@ function formatBytes(n) {
   return `${num.toLocaleString(getCurrentLang() === 'en' ? 'en-GB' : 'es-ES')} bytes`;
 }
 
-function formatElapsed(startDate, endDate) {
-  if (!startDate) return '—';
-  const start = new Date(startDate).getTime();
-  const end = endDate ? new Date(endDate).getTime() : Date.now();
-  if (!Number.isFinite(start) || !Number.isFinite(end)) return '—';
-  const sec = Math.max(0, Math.floor((end - start) / 1000));
+function parseDeployDateMs(value) {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function formatElapsedSeconds(totalSec) {
+  const sec = Math.max(0, Math.floor(totalSec));
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+function formatElapsedFromMs(startMs, endMs = Date.now()) {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) return '—';
+  return formatElapsedSeconds((endMs - startMs) / 1000);
+}
+
+function formatElapsed(startDate, endDate) {
+  const startMs = parseDeployDateMs(startDate);
+  if (!Number.isFinite(startMs)) return '—';
+  const endMs = endDate ? parseDeployDateMs(endDate) : Date.now();
+  return formatElapsedFromMs(startMs, endMs);
+}
+
+function resolveLiveElapsedStartMs(row, soap = {}) {
+  return (
+    parseDeployDateMs(row?.startDate) ??
+    parseDeployDateMs(row?.createdDate) ??
+    parseDeployDateMs(soap?.startDate) ??
+    parseDeployDateMs(soap?.createdDate)
+  );
+}
+
+function updateLiveElapsedDom() {
+  if (!Number.isFinite(liveElapsedStartMs)) return;
+  const text = formatElapsedFromMs(liveElapsedStartMs, liveElapsedEndMs ?? Date.now());
+  for (const el of document.querySelectorAll('[data-deploy-live-elapsed]')) {
+    el.textContent = text;
+  }
+}
+
+function stopDeployElapsedTicker() {
+  if (elapsedTickTimer) {
+    clearInterval(elapsedTickTimer);
+    elapsedTickTimer = null;
+  }
+  liveElapsedStartMs = null;
+  liveElapsedEndMs = null;
+}
+
+function syncDeployElapsedTicker(data) {
+  let row = null;
+  let soap = null;
+  if (viewMode === 'detail' && data?.detail?.row) {
+    row = data.detail.row;
+    soap = data.detail.soap;
+  } else if (data?.active && isDeployActivelyRunning(data.active, data?.activeSoap)) {
+    row = data.active;
+    soap = data.activeSoap;
+  }
+
+  if (!row || !isDeployActivelyRunning(row, soap)) {
+    stopDeployElapsedTicker();
+    return;
+  }
+
+  const startMs = resolveLiveElapsedStartMs(row, soap);
+  if (!Number.isFinite(startMs)) {
+    stopDeployElapsedTicker();
+    return;
+  }
+
+  liveElapsedStartMs = startMs;
+  liveElapsedEndMs = null;
+  updateLiveElapsedDom();
+
+  if (!elapsedTickTimer) {
+    elapsedTickTimer = window.setInterval(() => {
+      if (!Number.isFinite(liveElapsedStartMs)) {
+        stopDeployElapsedTicker();
+        return;
+      }
+      updateLiveElapsedDom();
+    }, 1000);
+  }
 }
 
 function getBadgeIconChar(outcome) {
@@ -518,8 +605,14 @@ function formatSubmittedByLine(row) {
   return when === '—' ? who : `${who}, ${when}`;
 }
 
-function buildMetaListHtml(row) {
+function buildMetaListHtml(row, soap = {}) {
   const modeLabel = row.checkOnly ? t('deployStatus.modeValidate') : t('deployStatus.modeDeploy');
+  const inProgress = isDeployActivelyRunning(row, soap);
+  const elapsedHtml = inProgress
+    ? `<span data-deploy-live-elapsed>${escapeHtml(
+        formatElapsedFromMs(resolveLiveElapsedStartMs(row, soap) ?? NaN)
+      )}</span>`
+    : escapeHtml(formatElapsed(row.startDate, row.completedDate));
   return `
     <ul class="deploy-status-meta-list">
       <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaName'))}</span> <span class="deploy-status-mono">${escapeHtml(row.asyncId)}</span></li>
@@ -527,7 +620,7 @@ function buildMetaListHtml(row) {
       <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaDeployedBy'))}</span> ${escapeHtml(row.createdByName || '—')}</li>
       <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaStart'))}</span> ${escapeHtml(formatDateTime(row.startDate))}</li>
       <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaEnd'))}</span> ${escapeHtml(formatDateTime(row.completedDate))}</li>
-      <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaElapsed'))}</span> ${escapeHtml(formatElapsed(row.startDate, row.completedDate))}</li>
+      <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaElapsed'))}</span> ${elapsedHtml}</li>
       <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaFiles'))}</span> ${escapeHtml(String(row.numberFiles || 0))}</li>
       <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaZipSize'))}</span> ${escapeHtml(formatBytes(row.zipSize))}</li>
       <li><span class="deploy-status-meta-label">${escapeHtml(t('deployStatus.metaMode'))}</span> ${escapeHtml(modeLabel)}</li>
@@ -591,7 +684,7 @@ function renderDonutsForRow(row, soap, chartIds = {}, donutSize = DONUT_SIZE) {
   );
   const runningTestId = chartIds.runningTest;
   if (runningTestId) {
-    renderRunningTestHint(runningTestId, soap || viewSoap);
+    renderRunningTestHint(runningTestId, row, soap || viewSoap);
   }
 }
 
@@ -738,7 +831,7 @@ function renderActiveCard(data) {
           inProgress
             ? `<span class="deploy-status-active-live-chip" title="${escapeHtml(t('deployStatus.live'))}">
             <span class="deploy-status-active-live-dot" aria-hidden="true"></span>
-            <span class="deploy-status-active-live-text">${escapeHtml(formatElapsed(activeStartDate, active.completedDate))}</span>
+            <span class="deploy-status-active-live-text" data-deploy-live-elapsed>${escapeHtml(formatElapsed(activeStartDate, active.completedDate))}</span>
           </span>`
             : ''
         }
@@ -1150,7 +1243,7 @@ function renderDetailView(data) {
   if (idEl) idEl.textContent = row.asyncId || '';
 
   const metaEl = document.getElementById('deployStatusDetailViewMeta');
-  if (metaEl) metaEl.innerHTML = buildMetaListHtml(row);
+  if (metaEl) metaEl.innerHTML = buildMetaListHtml(row, viewSoap);
 
   const setupEl = document.getElementById('deployStatusDetailViewSetup');
   if (setupEl) {
@@ -1203,6 +1296,7 @@ function renderPanel(data) {
   } else {
     renderSummaryView(data);
   }
+  syncDeployElapsedTicker(data);
 }
 
 function updateStatusBar(data, isLive) {
@@ -1231,6 +1325,7 @@ export function stopDeployStatusPolling() {
     clearTimeout(pollTimeout);
     pollTimeout = null;
   }
+  stopDeployElapsedTicker();
 }
 
 function scheduleDeployPollLoop() {

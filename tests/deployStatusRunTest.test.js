@@ -10,6 +10,9 @@ import {
   isSoapActivelyRunning,
   normalizeDeployRow,
   resolveActiveAndPendingDeploys,
+  areDeployComponentsComplete,
+  isDeployInTestExecutionPhase,
+  resolveDeployProgressDetail,
   resolveDeployRunningTest
 } from '../shared/deployStatusApi.js';
 
@@ -63,15 +66,68 @@ describe('deployStatus run test helpers', () => {
     expect(isDeployInProgress('Succeeded')).toBe(false);
   });
 
-  it('resolveDeployRunningTest extrae el test del stateDetail SOAP', () => {
-    expect(
-      resolveDeployRunningTest({
-        done: false,
-        stateDetail: 'Running Test: AV_GptSchPreparacionEntrevista_Test.myUnitTest'
-      })
-    ).toBe('AV_GptSchPreparacionEntrevista_Test.myUnitTest');
-    expect(resolveDeployRunningTest({ done: true, stateDetail: 'Running Test: X.y' })).toBe('');
-    expect(resolveDeployRunningTest({ done: false, stateDetail: '' })).toBe('');
+  it('resolveDeployRunningTest extrae el test del stateDetail SOAP en fase de tests', () => {
+    const row = { status: 'InProgress', testsTotal: 5, testsCompleted: 1 };
+    const soap = {
+      done: false,
+      numberComponentsTotal: 8,
+      numberComponentsDeployed: 8,
+      numberTestsTotal: 5,
+      numberTestsCompleted: 1,
+      stateDetail: 'Running Test: AV_GptSchPreparacionEntrevista_Test.myUnitTest'
+    };
+    expect(resolveDeployRunningTest(soap, row)).toBe('AV_GptSchPreparacionEntrevista_Test.myUnitTest');
+    expect(resolveDeployProgressDetail(row, soap)).toEqual({
+      showRunningTestLabel: true,
+      text: 'AV_GptSchPreparacionEntrevista_Test.myUnitTest'
+    });
+    expect(resolveDeployRunningTest({ done: true, stateDetail: 'Running Test: X.y' }, row)).toBe('');
+    expect(resolveDeployRunningTest({ done: false, stateDetail: '' }, row)).toBe('');
+  });
+
+  it('resolveDeployProgressDetail muestra stateDetail sin etiqueta durante componentes', () => {
+    const row = {
+      status: 'InProgress',
+      componentsTotal: 12,
+      componentsDeployed: 6,
+      testsTotal: 20
+    };
+    const soap = {
+      done: false,
+      numberComponentsTotal: 12,
+      numberComponentsDeployed: 6,
+      numberTestsTotal: 20,
+      numberTestsCompleted: 0,
+      stateDetail: 'Deploying Apex Class: MyClass'
+    };
+    expect(areDeployComponentsComplete(row, soap)).toBe(false);
+    expect(isDeployInTestExecutionPhase(row, soap)).toBe(false);
+    expect(resolveDeployProgressDetail(row, soap)).toEqual({
+      showRunningTestLabel: false,
+      text: 'Deploying Apex Class: MyClass'
+    });
+    expect(resolveDeployRunningTest(soap, row)).toBe('');
+  });
+
+  it('resolveDeployProgressDetail usa etiqueta running test solo con componentes completos', () => {
+    const row = {
+      status: 'InProgress',
+      componentsTotal: 8,
+      componentsDeployed: 8,
+      testsTotal: 5,
+      testsCompleted: 2
+    };
+    const soap = {
+      done: false,
+      numberComponentsTotal: 8,
+      numberComponentsDeployed: 8,
+      numberTestsTotal: 5,
+      numberTestsCompleted: 2,
+      stateDetail: 'Running Test: Foo_Test.bar'
+    };
+    expect(areDeployComponentsComplete(row, soap)).toBe(true);
+    expect(isDeployInTestExecutionPhase(row, soap)).toBe(true);
+    expect(resolveDeployProgressDetail(row, soap).showRunningTestLabel).toBe(true);
   });
 
   it('normalizeDeployRow expone CreatedDate para la cola FIFO', () => {
