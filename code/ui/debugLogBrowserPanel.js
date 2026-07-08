@@ -529,7 +529,7 @@ async function refreshLogsNow() {
     return;
   }
   ensureDefaultDateRange();
-  if (until) until.value = toDateTimeLocalInputValue(new Date());
+  if (until) until.value = toDateTimeLocalInputValue(new Date(Date.now() + 60 * 1000));
   lastLoadSignature = '';
   await refreshDebugLogBrowserPanel();
 }

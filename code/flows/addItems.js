@@ -1,5 +1,5 @@
 import { state } from '../core/state.js';
-import { saveItemsToStorage } from '../core/persistence.js';
+import { saveItemsToStorage, isPinned } from '../core/persistence.js';
 import { saveScrollPosition } from '../ui/scrollRestore.js';
 import { updateDocumentTitle } from '../ui/documentMeta.js';
 import { renderEditor } from '../editor/editorRender.js';
@@ -10,6 +10,7 @@ import { t } from '../../shared/i18n.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 
 export function addSelected(item) {
+  if (!item) return;
   // Save scroll position of currently selected item before switching
   if (state.selectedItem) {
     saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
@@ -19,17 +20,19 @@ export function addSelected(item) {
   const existingIndex = state.savedItems.findIndex(saved => 
     saved.type === item.type && saved.key === item.key
   );
-  
-  let selected = null;
-  if (existingIndex === -1) {
-    // Add new item
-    state.savedItems.push(item);
-    saveItemsToStorage();
-    selected = item;
+
+  const selected = existingIndex === -1 ? item : state.savedItems[existingIndex];
+
+  // Coloca el elemento buscado/abierto arriba (recientes primero).
+  // Los fijados conservan su posición en su sección.
+  if (isPinned(selected)) {
+    if (existingIndex === -1) state.savedItems.push(selected);
   } else {
-    selected = state.savedItems[existingIndex];
+    if (existingIndex !== -1) state.savedItems.splice(existingIndex, 1);
+    state.savedItems.unshift(selected);
   }
-  
+  saveItemsToStorage();
+
   renderSavedItems();
   state.selectedItem = selected;
   syncListActiveHighlight();
@@ -69,7 +72,7 @@ export async function addBundleFiles(type, bundleItem) {
     }
   }
 
-  // Reposition the entire bundle to the bottom to ensure grouping at end
+  // Reposition the entire bundle to the top (recientes primero), keeping it grouped
   try {
     const prefix = `${bundleItem.developerName}/`;
     const current = state.savedItems;
@@ -113,7 +116,7 @@ export async function addBundleFiles(type, bundleItem) {
       // Append any bundle items not present in latest files list (edge cases)
       for (const [, it] of bundleSet) ordered.push(it);
 
-      state.savedItems = [...remaining, ...ordered];
+      state.savedItems = [...ordered, ...remaining];
     }
   } catch {}
 

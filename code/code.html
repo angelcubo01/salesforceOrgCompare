@@ -42,33 +42,49 @@
                   </svg>
                 </button>
                 <input type="file" id="packageXmlFileInput" accept=".xml,application/xml,text/xml" tabindex="-1" hidden />
-                <button id="clearHistoryButton" type="button" class="clear-history-button sidebar-action-btn" data-i18n-title="code.clearSavedFiles">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
-                    <path d="M10 11v6"></path>
-                    <path d="M14 11v6"></path>
-                    <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
-                  </svg>
-                </button>
               </div>
             </div>
             <div id="searchResults" class="results sfoc-autocomplete-panel sidebar-search-results ph-no-capture" role="listbox" hidden></div>
           </div>
         </div>
-        <div id="compareListToolbar" class="compare-list-toolbar hidden" data-i18n-aria-label="code.ariaCompareList">
-          <input
-            id="compareListFilter"
-            class="sfoc-query-input compare-list-filter"
-            type="search"
-            autocomplete="off"
-            spellcheck="false"
-            data-i18n-placeholder="list.filterPlaceholder"
-            placeholder="Filtrar lista…"
-          />
-        </div>
         <div id="compareListBody" class="compare-list-body ph-no-capture">
+          <div
+            id="compareListPinnedTitle"
+            class="compare-list-section-title hidden"
+            data-i18n="list.pinnedTitle"
+          >
+            Fijados
+          </div>
           <ul id="leftListPinned" class="list compare-list-pinned hidden" data-i18n-aria-label="code.ariaPinned"></ul>
+          <div
+            id="compareListUnpinnedTitle"
+            class="compare-list-section-title hidden"
+            data-i18n="list.unpinnedTitle"
+          >
+            Recientemente vistos
+          </div>
+          <div id="compareListToolbar" class="compare-list-toolbar hidden" data-i18n-aria-label="code.ariaCompareList">
+            <div class="compare-list-toolbar-row">
+              <input
+                id="compareListFilter"
+                class="sfoc-query-input compare-list-filter"
+                type="search"
+                autocomplete="off"
+                spellcheck="false"
+                data-i18n-placeholder="list.filterPlaceholder"
+                placeholder="Filtrar lista…"
+              />
+              <button id="clearHistoryButton" type="button" class="clear-history-button sidebar-action-btn" data-i18n-title="code.clearSavedFiles">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                  <path d="M10 11v6"></path>
+                  <path d="M14 11v6"></path>
+                  <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
           <div id="compareListScrollHost" class="compare-list-scroll-host">
             <ul id="leftList" class="list compare-tree" data-i18n-aria-label="code.ariaCompareList"></ul>
           </div>

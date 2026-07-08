@@ -8,6 +8,7 @@ import { saveScrollPosition } from './scrollRestore.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { showToast } from './toast.js';
 import { syncPosthogSfUserContext } from '../../shared/posthogClient.js';
+import { refreshOrgUserDropdowns } from './orgUserDropdown.js';
 
 /** Evita sincronizaciones duplicadas al abrir el desplegable (focus + mousedown). */
 let syncOrgsInFlight = null;
@@ -144,6 +145,7 @@ function populateOrgSelects(orgs, aliases, groups) {
 
   ensureRightOrgDistinctFromLeft();
   syncTelemetryUserFromOrgState();
+  refreshOrgUserDropdowns();
 }
 
 /**
@@ -548,6 +550,7 @@ export function updateAuthIndicators() {
     rightReauth.classList.add('hidden');
   }
   updateOrgSwapButtonState();
+  refreshOrgUserDropdowns();
   if (authRecovered) {
     void import('../lib/codeEditorOrgAuth.js').then((m) =>
       m.retryCodeEditorAuthPendingLoads(prevAuthSnapshot)

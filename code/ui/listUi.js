@@ -153,6 +153,8 @@ function treeIconKindFromItemType(type) {
 function getCompareListElements() {
   return {
     pinned: document.getElementById('leftListPinned'),
+    pinnedTitle: document.getElementById('compareListPinnedTitle'),
+    unpinnedTitle: document.getElementById('compareListUnpinnedTitle'),
     scroll: document.getElementById('leftList'),
     body: document.getElementById('compareListBody')
   };
@@ -646,7 +648,12 @@ export function syncListActiveHighlight() {
 }
 
 export function renderSavedItems(preserveOrder = true) {
-  const { pinned: pinnedList, scroll: list } = getCompareListElements();
+  const {
+    pinned: pinnedList,
+    pinnedTitle,
+    unpinnedTitle,
+    scroll: list
+  } = getCompareListElements();
   if (!list) return;
   list.classList.add('compare-tree');
   list.innerHTML = '';
@@ -689,14 +696,13 @@ export function renderSavedItems(preserveOrder = true) {
     pinnedList.classList.add('compare-tree');
     let anyPinnedVisible = false;
 
+    // El filtro NO se aplica a los fijados: siempre se muestran.
     for (const item of pinnedStandalone) {
-      if (!itemMatchesFilter(item, query)) continue;
       anyPinnedVisible = true;
       const li = createListItem(item, savedItemIndex(item));
       setTreeDepth(li, 0);
       li.classList.add('pinned-item');
       pinnedList.appendChild(li);
-      visibleCount++;
     }
 
     for (const [bundleKey, bundleItems] of pinnedBundles) {
@@ -705,24 +711,30 @@ export function renderSavedItems(preserveOrder = true) {
         bundleKey,
         bundleItems,
         bundleCollapsed,
-        query,
+        '',
         { markPinnedLeaves: true, collapseScope: 'pinned' }
       );
       if (added > 0) {
         anyPinnedVisible = true;
-        visibleCount += added;
       }
     }
 
     pinnedList.classList.toggle('hidden', !anyPinnedVisible);
+    if (pinnedTitle) pinnedTitle.classList.toggle('hidden', !anyPinnedVisible);
   } else if (pinnedList) {
     pinnedList.classList.add('hidden');
+    if (pinnedTitle) pinnedTitle.classList.add('hidden');
   }
 
   itemsToRender = unpinnedItems;
+  if (unpinnedTitle) unpinnedTitle.classList.toggle('hidden', unpinnedItems.length === 0);
 
+  // Unidades de render en el ORDEN del array (recientes primero):
+  // los bundles LWC/Aura se colocan en la posición de su primera aparición,
+  // intercalados con los elementos sueltos y árboles package.xml.
   const bundles = new Map();
-  const nonBundleItems = [];
+  const orderedUnits = [];
+  const seenBundle = new Set();
 
   itemsToRender.forEach((item) => {
     if (
@@ -735,12 +747,30 @@ export function renderSavedItems(preserveOrder = true) {
     if (lwcAuraBundleKey) {
       if (!bundles.has(lwcAuraBundleKey)) bundles.set(lwcAuraBundleKey, []);
       bundles.get(lwcAuraBundleKey).push({ item });
+      if (!seenBundle.has(lwcAuraBundleKey)) {
+        seenBundle.add(lwcAuraBundleKey);
+        orderedUnits.push({ kind: 'bundle', bundleKey: lwcAuraBundleKey });
+      }
     } else {
-      nonBundleItems.push({ item });
+      orderedUnits.push({ kind: 'item', item });
     }
   });
 
-  for (const { item } of nonBundleItems) {
+  for (const unit of orderedUnits) {
+    if (unit.kind === 'bundle') {
+      const bundleItems = bundles.get(unit.bundleKey).map(({ item }) => item);
+      visibleCount += appendLwcAuraBundleToList(
+        list,
+        unit.bundleKey,
+        bundleItems,
+        bundleCollapsed,
+        query,
+        { collapseScope: 'scroll' }
+      );
+      continue;
+    }
+
+    const item = unit.item;
     if (
       item.type === 'PackageXml' &&
       item.descriptor?.source === 'localFile' &&
@@ -796,10 +826,12 @@ export function renderSavedItems(preserveOrder = true) {
             saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
           }
           state.selectedItem = item;
+          const reordered = promoteRecentlyViewed(item);
           syncListActiveHighlight();
           updateDocumentTitle();
           syncCompareUrlFromState(state, { method: 'push' });
           renderEditor();
+          if (reordered) renderSavedItems(true);
         }
       });
       list.appendChild(hdr);
@@ -833,14 +865,7 @@ export function renderSavedItems(preserveOrder = true) {
     }
   }
 
-  for (const [bundleKey, entries] of bundles.entries()) {
-    const bundleItems = entries.map(({ item }) => item);
-    visibleCount += appendLwcAuraBundleToList(list, bundleKey, bundleItems, bundleCollapsed, query, {
-      collapseScope: 'scroll'
-    });
-  }
-
-  if (query && visibleCount === 0 && (state.savedItems || []).length > 0) {
+  if (query && visibleCount === 0 && unpinnedItems.length > 0) {
     appendFilterEmptyState(list);
   }
 
@@ -965,13 +990,43 @@ export function createListItem(item, displayIndex) {
       saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
     }
     state.selectedItem = item;
+    const reordered = promoteRecentlyViewed(item);
     syncListActiveHighlight();
     updateDocumentTitle();
     syncCompareUrlFromState(state, { method: 'push' });
     renderEditor();
+    if (reordered) renderSavedItems(true);
   });
 
   return li;
+}
+
+/**
+ * Mueve un elemento no fijado al principio de la lista para que los
+ * «Recientemente vistos» queden siempre arriba. Los fijados no se reordenan.
+ * @param {import('../core/state.js').state.savedItems[0]} item
+ * @returns {boolean} true si el orden ha cambiado (requiere re-render)
+ */
+function promoteRecentlyViewed(item) {
+  if (!item) return false;
+  // Para los hijos de un package.xml (retrieveZip) se promociona el padre,
+  // de modo que todo el árbol suba al principio de los recientes.
+  let target = item;
+  const src = item.descriptor?.source;
+  if (src === 'retrieveZipFile' || src === 'retrieveZipSummary') {
+    const parentKey = item.descriptor?.parentKey;
+    const parent = state.savedItems.find((s) => s.type === 'PackageXml' && s.key === parentKey);
+    if (parent) target = parent;
+  }
+  if (isPinned(target)) return false;
+  const idx = state.savedItems.indexOf(target);
+  if (idx < 0) return false;
+  const firstUnpinned = state.savedItems.findIndex((it) => !isPinned(it));
+  if (idx === firstUnpinned) return false;
+  state.savedItems.splice(idx, 1);
+  state.savedItems.unshift(target);
+  saveItemsToStorage();
+  return true;
 }
 
 /** @param {string} bundleKey — `LWC:nombre`, `Aura:nombre`, `PackageXmlRZ:…` o subcarpeta `…:dir:…` */

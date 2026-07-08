@@ -22,6 +22,7 @@ import { mountTextFilterBar } from './lib/apexLogViewer/textFilterBar.js';
 import { ensurePanelSectionHeading } from './lib/apexLogViewer/panelSectionHeading.js';
 import { highlightPanelRow } from './lib/apexLogViewer/analysisTableUtils.js';
 import { escapeHtml } from '../shared/htmlEscape.js';
+import { renderConnectedUserBadge } from './lib/renderConnectedUserBadge.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -192,8 +193,27 @@ async function main() {
     orgId: payload.orgId || '',
     logId: payload.logId || ''
   };
+  /**
+   * Resuelve nombres de registros (Account, Case, Contact, User) a partir de sus IDs.
+   * @param {string[]} ids
+   * @returns {Promise<Record<string, { name?: string, type?: string }>>}
+   */
+  async function resolveRecords(ids) {
+    if (!viewerContext.orgId || !Array.isArray(ids) || !ids.length) return {};
+    try {
+      const res = await bg({ type: 'apexViewer:resolveRecords', orgId: viewerContext.orgId, ids });
+      if (res?.ok && res.recordsById && typeof res.recordsById === 'object') return res.recordsById;
+    } catch {
+      /* devuelve vacío: los items caen al fallback de ID */
+    }
+    return {};
+  }
   if (titleEl) titleEl.textContent = title;
   if (downloadBtn) downloadBtn.hidden = false;
+  void renderConnectedUserBadge(
+    document.getElementById('apexLogViewerUser'),
+    viewerContext.orgId
+  );
 
   if (!mount) return;
 
@@ -313,7 +333,7 @@ async function main() {
           parsed,
           jumpToLogLine,
           t,
-          { ...viewerContext, onTabSwitch: onTabSelect }
+          { ...viewerContext, onTabSwitch: onTabSelect, resolveRecords }
         );
         break;
       case 'tree':

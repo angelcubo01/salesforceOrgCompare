@@ -672,7 +672,8 @@ async function openCoverageLineViewer(orgId, jobId, classOrTriggerId, classLabel
         title: `${classLabel || res.name || classOrTriggerId} · ${t('docTitle.apexCoverage')}`,
         body: res.body != null ? String(res.body) : '',
         coveredLines: Array.isArray(res.coveredLines) ? res.coveredLines : [],
-        uncoveredLines: Array.isArray(res.uncoveredLines) ? res.uncoveredLines : []
+        uncoveredLines: Array.isArray(res.uncoveredLines) ? res.uncoveredLines : [],
+        orgId
       }
     });
   } catch {

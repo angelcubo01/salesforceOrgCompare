@@ -181,12 +181,14 @@ async function openSplitLineCoverageViewer(
           title,
           left: {
             orgLabel: leftLabel,
+            orgId: leftOrgId,
             body: leftBody,
             coveredLines: leftCovered,
             uncoveredLines: leftUncovered
           },
           right: {
             orgLabel: rightLabel,
+            orgId: rightOrgId,
             body: rightBody,
             coveredLines: rightCovered,
             uncoveredLines: rightUncovered
@@ -248,7 +250,7 @@ async function openLineCoverageViewer(orgId, apexClassOrTriggerId, classLabel) {
     const uncoveredLines = Array.isArray(res.uncoveredLines) ? res.uncoveredLines : [];
     try {
       await chrome.storage.local.set({
-        [key]: { title, body, coveredLines, uncoveredLines }
+        [key]: { title, body, coveredLines, uncoveredLines, orgId }
       });
     } catch {
       showToast(t('apexTests.coverageLinesStorageError'), 'warn');

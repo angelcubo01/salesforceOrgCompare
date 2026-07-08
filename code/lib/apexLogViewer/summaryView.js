@@ -229,13 +229,23 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
 
   const recordPills = [];
   for (const { label, ids, prefix } of ctx.recordCounts) {
-    const id = ids[0];
-    const url = recordUrl(instanceUrl, id, prefix);
-    const more = ids.length > 1 ? ` +${ids.length - 1}` : '';
+    const count = ids.length;
+    const countBadge = count > 1 ? `<span class="apex-log-summary-record-count">${count}</span>` : '';
+    const items = ids
+      .map((id) => {
+        const url = recordUrl(instanceUrl, id, prefix);
+        const idText = escapeHtml(id);
+        const inner = `<span class="apex-log-summary-record-item-name" data-role="name">${idText}</span><span class="apex-log-summary-record-item-id">${idText}</span>`;
+        return url
+          ? `<a class="apex-log-summary-record-item" role="menuitem" href="${escapeHtml(url)}" target="_blank" rel="noopener" data-record-id="${idText}">${inner}</a>`
+          : `<span class="apex-log-summary-record-item" role="menuitem" data-record-id="${idText}">${inner}</span>`;
+      })
+      .join('');
     recordPills.push(
-      url
-        ? `<a class="apex-log-summary-record-pill" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}${more}</a>`
-        : `<span class="apex-log-summary-record-pill">${escapeHtml(label)}${more}</span>`
+      `<div class="apex-log-summary-record-dd" data-prefix="${escapeHtml(prefix)}">
+        <button type="button" class="apex-log-summary-record-pill" aria-haspopup="true" aria-expanded="false">${escapeHtml(label)}${countBadge}<span class="apex-log-summary-record-caret" aria-hidden="true">▾</span></button>
+        <div class="apex-log-summary-record-menu" role="menu" hidden>${items}</div>
+      </div>`
     );
   }
 
@@ -308,5 +318,91 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
       if (tabId && onTabSwitch) onTabSwitch(tabId);
     });
   });
+  setupRecordDropdowns(mount, opts.resolveRecords, t);
   wirePanelHelpButtons(mount, t);
+}
+
+/**
+ * Convierte los pills de registros relacionados en desplegables que se abren
+ * al pasar el ratón, con foco o clic, y resuelve los nombres de los registros
+ * de forma diferida la primera vez que se abren.
+ * @param {HTMLElement} mount
+ * @param {((ids: string[]) => Promise<Record<string, { name?: string, type?: string }>>) | undefined} resolveRecords
+ * @param {(key: string, params?: object) => string} t
+ */
+function setupRecordDropdowns(mount, resolveRecords, t) {
+  const dropdowns = mount.querySelectorAll('.apex-log-summary-record-dd');
+  dropdowns.forEach((dd) => {
+    const pill = dd.querySelector('.apex-log-summary-record-pill');
+    const menu = dd.querySelector('.apex-log-summary-record-menu');
+    if (!pill || !menu) return;
+    let closeTimer = 0;
+    let namesLoaded = false;
+
+    const loadNames = async () => {
+      if (namesLoaded || typeof resolveRecords !== 'function') return;
+      namesLoaded = true;
+      const items = [...menu.querySelectorAll('.apex-log-summary-record-item')];
+      const ids = items.map((el) => el.getAttribute('data-record-id')).filter(Boolean);
+      if (!ids.length) return;
+      for (const el of items) {
+        const nameEl = el.querySelector('[data-role="name"]');
+        if (nameEl) nameEl.textContent = t('apexLogViewer.summary.recordLoading');
+      }
+      let recordsById = {};
+      try {
+        recordsById = (await resolveRecords(ids)) || {};
+      } catch {
+        recordsById = {};
+      }
+      for (const el of items) {
+        const id = el.getAttribute('data-record-id') || '';
+        const nameEl = el.querySelector('[data-role="name"]');
+        if (!nameEl) continue;
+        const info = recordsById[id];
+        nameEl.textContent = info && info.name ? info.name : id;
+      }
+    };
+
+    const open = () => {
+      window.clearTimeout(closeTimer);
+      for (const other of dropdowns) {
+        if (other !== dd) closeDropdown(other);
+      }
+      menu.hidden = false;
+      pill.setAttribute('aria-expanded', 'true');
+      void loadNames();
+    };
+    const close = () => {
+      menu.hidden = true;
+      pill.setAttribute('aria-expanded', 'false');
+    };
+
+    dd.addEventListener('mouseenter', open);
+    dd.addEventListener('mouseleave', () => {
+      closeTimer = window.setTimeout(close, 150);
+    });
+    pill.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (menu.hidden) open();
+      else close();
+    });
+    pill.addEventListener('focus', open);
+    dd.addEventListener('focusout', (e) => {
+      if (!dd.contains(e.relatedTarget)) close();
+    });
+    dd.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        close();
+        pill.focus();
+      }
+    });
+  });
+}
+
+function closeDropdown(dd) {
+  const pill = dd.querySelector('.apex-log-summary-record-pill');
+  const menu = dd.querySelector('.apex-log-summary-record-menu');
+  if (menu) menu.hidden = true;
+  if (pill) pill.setAttribute('aria-expanded', 'false');
 }

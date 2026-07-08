@@ -3,6 +3,7 @@ import { loadMonaco, createSingleEditor } from './editor/monaco.js';
 import { loadLang, t } from '../shared/i18n.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 import { openStandaloneToolHelpModal } from '../shared/standaloneToolHelpModal.js';
+import { renderConnectedUserBadge, applyConnectedUserTitle } from './lib/renderConnectedUserBadge.js';
 
 function getStorageKey() {
   const q = new URLSearchParams(window.location.search || '');
@@ -169,9 +170,11 @@ async function main() {
     const refreshSplitBadges = () => {
       if (splitLeftBadge) {
         splitLeftBadge.textContent = orgBadgeLabel(splitSides.left, t('coverageCompare.viewLeft'));
+        void applyConnectedUserTitle(splitLeftBadge, splitSides.left?.orgId);
       }
       if (splitRightBadge) {
         splitRightBadge.textContent = orgBadgeLabel(splitSides.right, t('coverageCompare.viewRight'));
+        void applyConnectedUserTitle(splitRightBadge, splitSides.right?.orgId);
       }
     };
     refreshSplitBadges();
@@ -217,6 +220,10 @@ async function main() {
   const coveredLines = payload?.coveredLines;
   const uncoveredLines = payload?.uncoveredLines;
   if (titleEl) titleEl.textContent = title;
+  void renderConnectedUserBadge(
+    document.getElementById('apexCovViewerUser'),
+    payload?.orgId
+  );
 
   if (!singleMount) return;
 

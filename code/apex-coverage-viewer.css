@@ -49,6 +49,24 @@ body {
   white-space: nowrap;
 }
 
+.apex-cov-viewer-user {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: #94a3b8;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+}
+
 .apex-cov-viewer-help {
   flex-shrink: 0;
   cursor: pointer;

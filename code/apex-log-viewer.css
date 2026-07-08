@@ -77,6 +77,24 @@ body {
   white-space: nowrap;
 }
 
+.apex-log-viewer-user {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: var(--alb-muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  cursor: default;
+}
+
 .apex-log-chip--warning {
   border-color: rgba(251, 113, 133, 0.5);
   color: var(--alb-warning);
@@ -1058,6 +1076,96 @@ html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
   border: 1px solid var(--alb-border);
   color: var(--alb-accent);
   text-decoration: none;
+}
+
+.apex-log-summary-record-dd {
+  position: relative;
+  display: inline-flex;
+}
+
+.apex-log-summary-record-dd .apex-log-summary-record-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.apex-log-summary-record-dd .apex-log-summary-record-pill:hover,
+.apex-log-summary-record-dd .apex-log-summary-record-pill[aria-expanded='true'] {
+  border-color: var(--alb-accent);
+}
+
+.apex-log-summary-record-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--alb-accent);
+  color: var(--alb-bg);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.apex-log-summary-record-caret {
+  font-size: 8px;
+  opacity: 0.7;
+}
+
+.apex-log-summary-record-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  min-width: 220px;
+  max-width: 360px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--alb-bg);
+  border: 1px solid var(--alb-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.apex-log-summary-record-menu[hidden] {
+  display: none;
+}
+
+.apex-log-summary-record-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--alb-text);
+}
+
+.apex-log-summary-record-item:hover {
+  background: var(--alb-border);
+}
+
+.apex-log-summary-record-item-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--alb-text);
+  word-break: break-word;
+}
+
+.apex-log-summary-record-item-id {
+  font-size: 10px;
+  font-family: var(--alb-mono, monospace);
+  color: var(--alb-muted);
 }
 
 .apex-log-summary-panels {

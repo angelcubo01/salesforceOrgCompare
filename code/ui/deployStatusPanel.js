@@ -1089,7 +1089,8 @@ async function openDeployCoverageLineViewer(orgId, asyncId, classOrTriggerId, cl
         title: `${classLabel || res.name || classOrTriggerId} · ${t('docTitle.apexCoverage')}`,
         body: res.body != null ? String(res.body) : '',
         coveredLines: Array.isArray(res.coveredLines) ? res.coveredLines : [],
-        uncoveredLines: Array.isArray(res.uncoveredLines) ? res.uncoveredLines : []
+        uncoveredLines: Array.isArray(res.uncoveredLines) ? res.uncoveredLines : [],
+        orgId
       }
     });
   } catch {

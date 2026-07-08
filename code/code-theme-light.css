@@ -193,6 +193,11 @@ html[data-ui-theme="light"] .compare-list-body {
   background: var(--sfoc-light-bg-surface);
 }
 
+html[data-ui-theme="light"] .compare-list-section-title {
+  color: var(--sfoc-light-text-muted, #6b6b6b);
+  background: var(--sfoc-light-bg-surface);
+}
+
 html[data-ui-theme="light"] .compare-list-pinned:not(.hidden) + .compare-list-scroll-host {
   border-top-color: var(--sfoc-light-border-subtle);
 }
@@ -664,6 +669,66 @@ html[data-ui-theme="light"] .org-dropdown-right select.auth-expired {
   background-position: left 9px center;
   background-size: 8px 5px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 0 0 1px rgba(220, 38, 38, 0.22);
+}
+
+/* Desplegable personalizado de org (tema claro) */
+html[data-ui-theme="light"] .org-cd-trigger {
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  background-color: #ffffff;
+  background-image: var(--sfoc-select-chevron), linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+}
+html[data-ui-theme="light"] .org-cd-trigger.auth-active {
+  border-color: #16a34a;
+  color: #166534;
+  background-color: #ecfdf5;
+  background-image: var(--sfoc-select-chevron);
+}
+html[data-ui-theme="light"] .org-cd-trigger.auth-expired {
+  border-color: #dc2626;
+  color: #991b1b;
+  background-color: #fef2f2;
+  background-image: var(--sfoc-select-chevron);
+}
+html[data-ui-theme="light"] .org-cd-badge {
+  color: #64748b;
+}
+html[data-ui-theme="light"] .org-cd-popup {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: var(--sfoc-light-shadow);
+}
+html[data-ui-theme="light"] .org-cd-row {
+  color: #0f172a;
+}
+html[data-ui-theme="light"] .org-cd-row:hover {
+  background: #f1f5f9;
+}
+html[data-ui-theme="light"] .org-cd-row.is-selected {
+  background: #e2e8f0;
+}
+html[data-ui-theme="light"] .org-cd-row.is-connected .org-cd-row-label {
+  color: #166534;
+}
+html[data-ui-theme="light"] .org-cd-row.is-disconnected .org-cd-row-label {
+  color: #991b1b;
+  opacity: 0.9;
+}
+html[data-ui-theme="light"] .org-cd-row-info {
+  color: #64748b;
+}
+html[data-ui-theme="light"] .org-cd-tooltip {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #334155;
+  box-shadow: var(--sfoc-light-shadow);
+}
+html[data-ui-theme="light"] .org-cd-tt-label {
+  color: #64748b;
+}
+html[data-ui-theme="light"] .org-cd-tt-value {
+  color: #0f172a;
 }
 
 html[data-ui-theme="light"] .app-landing-panel {

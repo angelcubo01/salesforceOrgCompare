@@ -16,6 +16,7 @@ import {
   updateAuthIndicators,
   ensureRightOrgDistinctFromLeft
 } from './ui/orgs.js';
+import { initOrgUserDropdowns } from './ui/orgUserDropdown.js';
 import { renderSavedItems, setupCompareListToolbar } from './ui/listUi.js';
 import { updateDocumentTitle } from './ui/documentMeta.js';
 import { renderEditor } from './editor/editorRender.js';
@@ -262,6 +263,7 @@ async function init() {
   
   wireSelectors();
   setupOrgSelectorAutoSync();
+  initOrgUserDropdowns();
   setupSearch();
   setupQuickOpen();
   setupAppModeTabHandlers();

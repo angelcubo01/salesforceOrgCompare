@@ -140,6 +140,7 @@ import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, esca
 import { sendPosthogException, sendPosthogOperationalFailure, maybeSendFirstOrgConnectedTelemetry } from './posthogTelemetry.js';
 import { classifyError, toError } from '../shared/errorTelemetryPolicy.js';
 import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
+import { resolveOrgConnectedUser, resolveOrgConnectedUsers } from './orgConnectedUser.js';
 
 const apexLogContextCache = new Map();
 
@@ -647,6 +648,20 @@ export function installMessageHandlers() {
             const entries = await Promise.all(orgs.map(async (org) => [org.id, await checkOrgAuthStatus(org, force)]));
             const statuses = Object.fromEntries(entries);
             reply({ ok: true, statuses });
+            break;
+          }
+          case 'getOrgConnectedUser': {
+            const user = await resolveOrgConnectedUser(message.orgId, {
+              force: !!message.force
+            });
+            reply({ ok: true, user: user || null });
+            break;
+          }
+          case 'getOrgConnectedUsers': {
+            const users = await resolveOrgConnectedUsers(message.orgIds, {
+              force: !!message.force
+            });
+            reply({ ok: true, users });
             break;
           }
           case 'auth:reauth': {
@@ -2574,6 +2589,81 @@ export function installMessageHandlers() {
                 }
               }
               reply({ ok: true, namesById });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'apexViewer:resolveRecords': {
+            const { orgId, ids } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const cleanIds = [
+                ...new Set(
+                  (Array.isArray(ids) ? ids : [])
+                    .map((x) => String(x || '').replace(/[^a-zA-Z0-9]/g, ''))
+                    .filter((x) => /^[a-zA-Z0-9]{15,18}$/.test(x))
+                )
+              ];
+              /** Config por prefijo de Id: objeto SObject y campos de visualización. */
+              const OBJECT_BY_PREFIX = {
+                '001': { object: 'Account', fields: ['Name'] },
+                '003': { object: 'Contact', fields: ['Name'] },
+                '005': { object: 'User', fields: ['Name'] },
+                '500': { object: 'Case', fields: ['CaseNumber', 'Subject'] }
+              };
+              const buildName = (prefix, row) => {
+                if (prefix === '500') {
+                  const num = String(row?.CaseNumber || '').trim();
+                  const subj = String(row?.Subject || '').trim();
+                  return [num, subj].filter(Boolean).join(' · ');
+                }
+                return String(row?.Name || '').trim();
+              };
+              const recordsById = {};
+              const byPrefix = new Map();
+              for (const id of cleanIds) {
+                const prefix = id.slice(0, 3).toLowerCase();
+                if (!OBJECT_BY_PREFIX[prefix]) continue;
+                if (!byPrefix.has(prefix)) byPrefix.set(prefix, []);
+                byPrefix.get(prefix).push(id);
+              }
+              for (const [prefix, prefixIds] of byPrefix.entries()) {
+                const cfg = OBJECT_BY_PREFIX[prefix];
+                const selectFields = ['Id', ...cfg.fields].join(', ');
+                for (let i = 0; i < prefixIds.length; i += 100) {
+                  const chunk = prefixIds.slice(i, i + 100);
+                  const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
+                  const soql = `SELECT ${selectFields} FROM ${cfg.object} WHERE Id IN (${inList})`;
+                  let rows = [];
+                  try {
+                    rows = (await restQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                  } catch {
+                    try {
+                      rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+                    } catch {
+                      rows = [];
+                    }
+                  }
+                  for (const row of rows) {
+                    const id = String(row?.Id || '').trim();
+                    if (!id) continue;
+                    const name = buildName(prefix, row);
+                    recordsById[id] = { name, type: cfg.object };
+                  }
+                }
+              }
+              reply({ ok: true, recordsById });
             } catch (e) {
               replyHandlerError(reply, e);
             }

@@ -157,6 +157,7 @@ export function updateOrgSelectorsLockedState() {
   if (editor) editor.classList.toggle('org-selectors-locked', locked);
   } finally {
     updateOrgSwapButtonState();
+    void import('./orgUserDropdown.js').then((m) => m.refreshOrgUserDropdowns());
   }
 }
 
