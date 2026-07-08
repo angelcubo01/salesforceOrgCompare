@@ -2,6 +2,7 @@ import { buildUnifiedDiffPatch } from '../../shared/unifiedDiffCore.js';
 import { getDisplayFileName } from '../lib/itemLabels.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from '../ui/toast.js';
+import { splitSummaryByFile } from '../../shared/packageDiffSummary.js';
 
 function getOrgLabel(selectId) {
   try {
@@ -80,11 +81,48 @@ export async function copyUnifiedDiffToClipboard(state) {
   const leftOrg = sanitizePathSegment(getOrgLabel('leftOrg')) || 'left';
   const rightOrg = sanitizePathSegment(getOrgLabel('rightOrg')) || 'right';
 
-  const patch = buildUnifiedDiffPatch(leftText, rightText, {
-    oldPath: `${leftOrg}/${baseName}`,
-    newPath: `${rightOrg}/${baseName}`,
-    context: 3
-  });
+  const isSummary =
+    state.selectedItem?.type === 'PackageXml' &&
+    state.selectedItem?.descriptor?.source === 'retrieveZipSummary';
+
+  let patch;
+  if (isSummary) {
+    // El resumen ya es un extracto de diferencias: copiamos TODO el texto,
+    // dividido por fichero (un bloque `diff --git` por cada uno), como el resumen.
+    const files = splitSummaryByFile(leftText, rightText, t('packageDiffSummary.fileHeader'));
+    if (files.length) {
+      patch = files
+        .map((f) => {
+          const context = Math.max(
+            f.leftText.split(/\r\n|\r|\n/).length,
+            f.rightText.split(/\r\n|\r|\n/).length
+          );
+          return buildUnifiedDiffPatch(f.leftText, f.rightText, {
+            oldPath: `${leftOrg}/${f.path}`,
+            newPath: `${rightOrg}/${f.path}`,
+            context
+          });
+        })
+        .filter((p) => p.trim())
+        .join('\n');
+    } else {
+      const context = Math.max(
+        leftText.split(/\r\n|\r|\n/).length,
+        rightText.split(/\r\n|\r|\n/).length
+      );
+      patch = buildUnifiedDiffPatch(leftText, rightText, {
+        oldPath: `${leftOrg}/${baseName}`,
+        newPath: `${rightOrg}/${baseName}`,
+        context
+      });
+    }
+  } else {
+    patch = buildUnifiedDiffPatch(leftText, rightText, {
+      oldPath: `${leftOrg}/${baseName}`,
+      newPath: `${rightOrg}/${baseName}`,
+      context: 3
+    });
+  }
 
   if (!patch.trim()) {
     showToast(t('code.copyUnifiedDiffNoDiff'), 'warn');

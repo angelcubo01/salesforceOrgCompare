@@ -96,6 +96,7 @@ function getFilterElements() {
     panelInner: document.querySelector('.debug-log-browser-panel-inner'),
     status: document.getElementById('debugLogBrowserStatus'),
     loading: document.getElementById('debugLogBrowserLoading'),
+    refreshBtn: document.getElementById('debugLogBrowserRefreshBtn'),
     deleteAllBtn: document.getElementById('debugLogBrowserDeleteAllBtn'),
     user: document.getElementById('debugLogBrowserUserFilter'),
     operation: document.getElementById('debugLogBrowserOperationFilter'),
@@ -125,7 +126,7 @@ function renderLoadingSkeleton() {
 
 function setLoadingState(loading) {
   isLoading = loading;
-  const { panelInner, loading: loadingEl, empty, status, deleteAllBtn, user, operation, since, until, pageSize, prevPage, nextPage } =
+  const { panelInner, loading: loadingEl, empty, status, refreshBtn, deleteAllBtn, user, operation, since, until, pageSize, prevPage, nextPage } =
     getFilterElements();
   panelInner?.classList.toggle('is-loading', loading);
   loadingEl?.classList.toggle('hidden', !loading);
@@ -135,7 +136,7 @@ function setLoadingState(loading) {
     renderLoadingSkeleton();
   }
   updateContextLoadingUi();
-  for (const el of [deleteAllBtn, user, operation, since, until, pageSize, prevPage, nextPage]) {
+  for (const el of [refreshBtn, deleteAllBtn, user, operation, since, until, pageSize, prevPage, nextPage]) {
     if (el) el.disabled = !!loading;
   }
 }
@@ -504,6 +505,11 @@ async function loadLogs() {
   }
 }
 
+function toDateTimeLocalInputValue(d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 function ensureDefaultDateRange() {
   const { since, until } = getFilterElements();
   if (!since || !until) return;
@@ -511,13 +517,21 @@ function ensureDefaultDateRange() {
     const now = new Date();
     const hours = getDebugLogsDefaultRangeHours();
     const prev = new Date(now.getTime() - hours * 60 * 60 * 1000);
-    const toInputValue = (d) => {
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    if (!since.value) since.value = toInputValue(prev);
-    if (!until.value) until.value = toInputValue(now);
+    if (!since.value) since.value = toDateTimeLocalInputValue(prev);
+    if (!until.value) until.value = toDateTimeLocalInputValue(now);
   }
+}
+
+async function refreshLogsNow() {
+  const { until } = getFilterElements();
+  if (!state.leftOrgId) {
+    showToast(t('debugLogs.selectOrg'), 'error');
+    return;
+  }
+  ensureDefaultDateRange();
+  if (until) until.value = toDateTimeLocalInputValue(new Date());
+  lastLoadSignature = '';
+  await refreshDebugLogBrowserPanel();
 }
 
 export async function refreshDebugLogBrowserPanel() {
@@ -553,6 +567,8 @@ export function setupDebugLogBrowserPanel() {
       cancelPageEnrichment();
       renderRowsAndEnrich();
     });
+  const refreshBtn = document.getElementById('debugLogBrowserRefreshBtn');
+  if (refreshBtn) refreshBtn.addEventListener('click', () => void refreshLogsNow());
   const triggerReload = () => {
     lastLoadSignature = '';
     void refreshDebugLogBrowserPanel();

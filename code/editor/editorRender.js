@@ -294,10 +294,16 @@ export async function renderEditor(opts = {}) {
   const isLocalPackageXml = item?.type === 'PackageXml' && item.descriptor?.source === 'localFile';
   const isRetrieveZipFile =
     item?.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile';
+  const isRetrieveZipSummary =
+    item?.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipSummary';
+  const summaryFileName = item?.fileName || t('packageDiffSummary.fileName');
 
   let left = [];
   if (leftOrgId) {
-    if (isRetrieveZipFile) {
+    if (isRetrieveZipSummary) {
+      const cache = state.packageRetrieveZipCache[item.descriptor.parentKey];
+      left = [{ fileName: summaryFileName, content: cache?.summaryLeft ?? '' }];
+    } else if (isRetrieveZipFile) {
       const cache = state.packageRetrieveZipCache[item.descriptor.parentKey];
       const path = item.descriptor.relativePath;
       if (cache && path) {
@@ -333,7 +339,10 @@ export async function renderEditor(opts = {}) {
 
   let right = [];
   if (rightOrgId) {
-    if (isRetrieveZipFile) {
+    if (isRetrieveZipSummary) {
+      const cache = state.packageRetrieveZipCache[item.descriptor.parentKey];
+      right = [{ fileName: summaryFileName, content: cache?.summaryRight ?? '' }];
+    } else if (isRetrieveZipFile) {
       const cache = state.packageRetrieveZipCache[item.descriptor.parentKey];
       const path = item.descriptor.relativePath;
       if (cache && path) {

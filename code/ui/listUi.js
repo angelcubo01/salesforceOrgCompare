@@ -725,7 +725,10 @@ export function renderSavedItems(preserveOrder = true) {
   const nonBundleItems = [];
 
   itemsToRender.forEach((item) => {
-    if (item.descriptor?.source === 'retrieveZipFile') {
+    if (
+      item.descriptor?.source === 'retrieveZipFile' ||
+      item.descriptor?.source === 'retrieveZipSummary'
+    ) {
       return;
     }
     const lwcAuraBundleKey = getLwcAuraBundleKey(item);
@@ -803,6 +806,19 @@ export function renderSavedItems(preserveOrder = true) {
       visibleCount++;
 
       if (!collapsed) {
+        const summaryChild = state.savedItems.find(
+          (s) =>
+            s.descriptor?.source === 'retrieveZipSummary' && s.descriptor?.parentKey === item.key
+        );
+        if (summaryChild && (!query || itemMatchesFilter(summaryChild, query))) {
+          const sli = createListItem(summaryChild, savedItemIndex(summaryChild));
+          sli.setAttribute('data-bundle-key', bundleKey);
+          sli.classList.add('package-rz-summary');
+          setTreeDepth(sli, 1);
+          list.appendChild(sli);
+          visibleCount++;
+        }
+
         const tree = buildPackageRetrieveTree(children);
         visibleCount += appendPackageRetrieveTreeToList(
           list,
@@ -841,7 +857,12 @@ export function createListItem(item, displayIndex) {
   const textSpan = document.createElement('span');
   textSpan.className = 'list-item-name';
 
-  if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile' && item.descriptor?.relativePath) {
+  if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipSummary') {
+    const name = item.fileName || t('packageDiffSummary.fileName');
+    textSpan.textContent = name;
+    textSpan.title = t('packageDiffSummary.tooltip');
+    li.appendChild(createTreeIcon('diff'));
+  } else if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile' && item.descriptor?.relativePath) {
     const rp = item.descriptor.relativePath;
     const filename = rp.includes('/') ? rp.split('/').pop() : rp;
     textSpan.textContent = filename;
@@ -983,7 +1004,11 @@ export function removeBundleFromList(bundleKey) {
       state.savedItems = state.savedItems.filter(
         (s) =>
           !(s.type === 'PackageXml' && s.key === parentKey) &&
-          !(s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.parentKey === parentKey)
+          !(
+            (s.descriptor?.source === 'retrieveZipFile' ||
+              s.descriptor?.source === 'retrieveZipSummary') &&
+            s.descriptor?.parentKey === parentKey
+          )
       );
     }
   } else {
@@ -1039,7 +1064,12 @@ export function removeItemFromList(item) {
     }
     const pk = item.key;
     state.savedItems = state.savedItems.filter(
-      (s) => !(s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.parentKey === pk)
+      (s) =>
+        !(
+          (s.descriptor?.source === 'retrieveZipFile' ||
+            s.descriptor?.source === 'retrieveZipSummary') &&
+          s.descriptor?.parentKey === pk
+        )
     );
   }
 

@@ -16,6 +16,7 @@ import { saveItemsToStorage } from '../core/persistence.js';
 import { reportBug } from '../../shared/posthogClient.js';
 import { usageDescriptorFromItem } from '../../shared/usageLogEntry.js';
 import { t } from '../../shared/i18n.js';
+import { buildPackageDiffSummary } from '../../shared/packageDiffSummary.js';
 import {
   beginCompareRetrieveSession,
   cancelCompareRetrieve,
@@ -217,10 +218,40 @@ export async function retrieveAndLoadFromZip(item) {
         return;
       }
 
-      state.packageRetrieveZipCache[item.key] = { leftByPath, rightByPath, paths };
+      const diffLinesFn =
+        typeof Diff !== 'undefined' && Diff && typeof Diff.diffLines === 'function'
+          ? Diff.diffLines.bind(Diff)
+          : null;
+      const summary = buildPackageDiffSummary(leftByPath, rightByPath, paths, {
+        diffLines: diffLinesFn,
+        contextLines: 3,
+        header: (p) => t('packageDiffSummary.fileHeader', { path: p })
+      });
+
+      state.packageRetrieveZipCache[item.key] = {
+        leftByPath,
+        rightByPath,
+        paths,
+        summaryLeft: summary.summaryLeft,
+        summaryRight: summary.summaryRight,
+        summaryChangedCount: summary.changedFileCount
+      };
       state.savedItems = state.savedItems.filter(
-        (s) => !(s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.parentKey === item.key)
+        (s) =>
+          !(
+            (s.descriptor?.source === 'retrieveZipFile' ||
+              s.descriptor?.source === 'retrieveZipSummary') &&
+            s.descriptor?.parentKey === item.key
+          )
       );
+      if (summary.changedFileCount > 0) {
+        state.savedItems.push({
+          type: 'PackageXml',
+          key: `${item.key}::__sfoc_summary__`,
+          descriptor: { source: 'retrieveZipSummary', parentKey: item.key },
+          fileName: t('packageDiffSummary.fileName')
+        });
+      }
       for (const p of paths) {
         state.savedItems.push({
           type: 'PackageXml',

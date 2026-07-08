@@ -101,6 +101,42 @@ export async function downloadFile(item) {
     return;
   }
 
+  if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipSummary') {
+    const cache = state.packageRetrieveZipCache[item.descriptor.parentKey];
+    if (!cache || (cache.summaryLeft == null && cache.summaryRight == null)) {
+      showToast(t('toast.noCacheContent'), 'warn');
+      return;
+    }
+    const baseName = item.fileName || t('packageDiffSummary.fileName');
+    const leftSelect = document.getElementById('leftOrg');
+    const rightSelect = document.getElementById('rightOrg');
+    const leftName = leftSelect?.options?.[leftSelect.selectedIndex]?.textContent || 'OrgIzquierda';
+    const rightName = rightSelect?.options?.[rightSelect.selectedIndex]?.textContent || 'OrgDerecha';
+    const sides = [
+      { name: leftName, content: cache.summaryLeft ?? '' },
+      { name: rightName, content: cache.summaryRight ?? '' }
+    ];
+    try {
+      for (const side of sides) {
+        const fileName = `${side.name}_${baseName}.txt`;
+        const blob = new Blob([side.content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        URL.revokeObjectURL(url);
+      }
+      showToast(t('toast.downloaded', { name: baseName }), 'info');
+    } catch {
+      showToast(t('toast.downloadError'), 'error');
+    }
+    return;
+  }
+
   if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile') {
     const cache = state.packageRetrieveZipCache[item.descriptor.parentKey];
     const path = item.descriptor.relativePath;
@@ -286,6 +322,35 @@ export async function downloadAllFiles() {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
+          successCount++;
+          continue;
+        }
+        if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipSummary') {
+          const cache = state.packageRetrieveZipCache[item.descriptor.parentKey];
+          if (!cache || (cache.summaryLeft == null && cache.summaryRight == null)) {
+            failCount++;
+            continue;
+          }
+          const baseName = item.fileName || t('packageDiffSummary.fileName');
+          const rightSelect = document.getElementById('rightOrg');
+          const rightName =
+            rightSelect?.options?.[rightSelect.selectedIndex]?.textContent || 'OrgDerecha';
+          const sides = [
+            { name: orgName, content: cache.summaryLeft ?? '' },
+            { name: rightName, content: cache.summaryRight ?? '' }
+          ];
+          for (const side of sides) {
+            const blob = new Blob([side.content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${side.name}_${baseName}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            URL.revokeObjectURL(url);
+          }
           successCount++;
           continue;
         }

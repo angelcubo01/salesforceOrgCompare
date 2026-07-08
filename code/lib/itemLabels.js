@@ -1,3 +1,5 @@
+import { t } from '../../shared/i18n.js';
+
 export function getFileExtension(filename) {
   const ext = filename.split('.').pop().toLowerCase();
   return ext;
@@ -49,6 +51,8 @@ export function getDisplayFileName(item) {
     return `${item.key}.component`;
   } else if (item.type === 'PermissionSet') {
     return `${item.key}.permissionset-meta.xml`;
+  } else if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipSummary') {
+    return item.fileName || t('packageDiffSummary.fileName');
   } else if (item.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipFile') {
     return item.descriptor?.relativePath || item.key;
   } else if (item.type === 'PackageXml') {

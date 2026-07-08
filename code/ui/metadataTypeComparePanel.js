@@ -91,7 +91,9 @@ function clearRetrieveCompareCache() {
       (s) =>
         s.key !== retrieveCacheKey &&
         !(
-          s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.parentKey === retrieveCacheKey
+          (s.descriptor?.source === 'retrieveZipFile' ||
+            s.descriptor?.source === 'retrieveZipSummary') &&
+          s.descriptor?.parentKey === retrieveCacheKey
         )
     );
     delete state.packageXmlLocalContent[retrieveCacheKey];
@@ -135,7 +137,9 @@ function ensureMetadataTypeComparePackageInList(metadataType, apiVersion) {
       (s) =>
         s.key !== retrieveCacheKey &&
         !(
-          s.descriptor?.source === 'retrieveZipFile' && s.descriptor?.parentKey === retrieveCacheKey
+          (s.descriptor?.source === 'retrieveZipFile' ||
+            s.descriptor?.source === 'retrieveZipSummary') &&
+          s.descriptor?.parentKey === retrieveCacheKey
         )
     );
 

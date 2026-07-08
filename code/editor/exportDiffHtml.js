@@ -1,6 +1,8 @@
 import { getDisplayFileName } from '../lib/itemLabels.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast } from '../ui/toast.js';
+import { diffLines } from '../../vendor/jsdiff/diffLines.mjs';
+import { splitSummaryByFile } from '../../shared/packageDiffSummary.js';
 
 /** Líneas de contexto sobre y bajo cada hunk (coincide con el plan). */
 const CONTEXT_LINES = 3;
@@ -176,6 +178,75 @@ function buildDiffExportHtml({
   const metaLeft = [escapeHtml(leftOrgLabel), escapeHtml(leftFileLabel)].filter(Boolean).join(' · ');
   const metaRight = [escapeHtml(rightOrgLabel), escapeHtml(rightFileLabel)].filter(Boolean).join(' · ');
 
+  return wrapDiffExportHtml({ title, metaLeft, metaRight, exportedAt, body });
+}
+
+/** Fila de tabla de diff (izq/der) para la vista completa. */
+function fullDiffRow(lnL, textL, clsL, lnR, textR, clsR) {
+  return (
+    '<tr>' +
+    `<td class="ln ${clsL}">${lnL || ''}</td>` +
+    `<td class="lc ${clsL}"><pre>${escapeHtml(textL)}</pre></td>` +
+    `<td class="ln ${clsR}">${lnR || ''}</td>` +
+    `<td class="lc ${clsR}"><pre>${escapeHtml(textR)}</pre></td>` +
+    '</tr>'
+  );
+}
+
+/** Filas alineadas (izq/der) de un texto vs otro, mostrando TODAS las líneas. */
+function buildFullDiffRows(leftText, rightText) {
+  const parts = diffLines(String(leftText ?? ''), String(rightText ?? ''));
+  let lineL = 1;
+  let lineR = 1;
+  let rows = '';
+  for (const part of parts || []) {
+    const raw = String(part.value ?? '').split('\n');
+    const count = raw[raw.length - 1] === '' ? raw.length - 1 : raw.length;
+    for (let i = 0; i < count; i++) {
+      const text = raw[i];
+      if (part.added) {
+        rows += fullDiffRow('', '', 'empty', lineR, text, 'add');
+        lineR++;
+      } else if (part.removed) {
+        rows += fullDiffRow(lineL, text, 'rem', '', '', 'empty');
+        lineL++;
+      } else {
+        rows += fullDiffRow(lineL, text, 'ctx', lineR, text, 'ctx');
+        lineL++;
+        lineR++;
+      }
+    }
+  }
+  return rows;
+}
+
+/** Tabla de diff (con cabecera de fichero opcional). */
+function buildFullDiffTable(rows, fileHeader) {
+  const header = fileHeader ? `<div class="hunk-header">${escapeHtml(fileHeader)}</div>` : '';
+  return (
+    `<section class="hunk">${header}<table class="diff-table"><thead><tr>` +
+    '<th class="ln">L</th><th class="lc">Original</th><th class="ln">R</th><th class="lc">Modified</th>' +
+    `</tr></thead><tbody>${rows}</tbody></table></section>`
+  );
+}
+
+/**
+ * Cuerpo del export en modo "texto completo": muestra TODAS las líneas (sin
+ * recortar a hunks) y, para el resumen de diferencias, lo divide en una sección
+ * por fichero (igual que el propio resumen).
+ */
+function buildFullDiffBody(leftText, rightText) {
+  const files = splitSummaryByFile(leftText, rightText, t('packageDiffSummary.fileHeader'));
+  if (files.length) {
+    return files
+      .map((f) => buildFullDiffTable(buildFullDiffRows(f.leftText, f.rightText), f.path))
+      .join('');
+  }
+  return buildFullDiffTable(buildFullDiffRows(leftText, rightText), '');
+}
+
+/** Envuelve el cuerpo del diff en el documento HTML con estilos. */
+function wrapDiffExportHtml({ title, metaLeft, metaRight, exportedAt, body }) {
   const lang = getCurrentLang() === 'es' ? 'es' : 'en';
   return `<!DOCTYPE html>
 <html lang="${lang}">
@@ -333,13 +404,9 @@ export function downloadDiffHtml(state) {
   const nLeft = leftLines.length;
   const nRight = rightLines.length;
 
-  const segments = expandHunksWithContext(changes, nLeft, nRight, CONTEXT_LINES);
-  if (!segments.length) {
-    showToast(t('code.exportDiffHtmlNoDiff'), 'warn');
-    return;
-  }
-
   const item = state.selectedItem;
+  const isSummary = item?.type === 'PackageXml' && item.descriptor?.source === 'retrieveZipSummary';
+
   const baseName = getDisplayFileName(item) || 'export';
   const leftFileLabel = baseName;
   const rightFileLabel = baseName;
@@ -347,18 +414,39 @@ export function downloadDiffHtml(state) {
   const leftOrgLabel = getOrgLabel('leftOrg');
   const rightOrgLabel = getOrgLabel('rightOrg');
   const exportedAt = new Date().toISOString();
+  const exportedAtLabel = `${t('code.exportDiffHtmlExportedAt')}: ${exportedAt}`;
 
-  const html = buildDiffExportHtml({
-    leftLines,
-    rightLines,
-    segments,
-    rawChanges: changes,
-    leftFileLabel: String(leftFileLabel),
-    rightFileLabel: String(rightFileLabel),
-    leftOrgLabel,
-    rightOrgLabel,
-    exportedAt: `${t('code.exportDiffHtmlExportedAt')}: ${exportedAt}`
-  });
+  let html;
+  if (isSummary) {
+    // El resumen ya es un extracto de diferencias: exportamos TODO el texto.
+    const body = buildFullDiffBody(leftText, rightText);
+    const metaLeft = [escapeHtml(leftOrgLabel), escapeHtml(leftFileLabel)].filter(Boolean).join(' · ');
+    const metaRight = [escapeHtml(rightOrgLabel), escapeHtml(rightFileLabel)].filter(Boolean).join(' · ');
+    html = wrapDiffExportHtml({
+      title: escapeHtml(leftFileLabel || 'diff'),
+      metaLeft,
+      metaRight,
+      exportedAt: exportedAtLabel,
+      body
+    });
+  } else {
+    const segments = expandHunksWithContext(changes, nLeft, nRight, CONTEXT_LINES);
+    if (!segments.length) {
+      showToast(t('code.exportDiffHtmlNoDiff'), 'warn');
+      return;
+    }
+    html = buildDiffExportHtml({
+      leftLines,
+      rightLines,
+      segments,
+      rawChanges: changes,
+      leftFileLabel: String(leftFileLabel),
+      rightFileLabel: String(rightFileLabel),
+      leftOrgLabel,
+      rightOrgLabel,
+      exportedAt: exportedAtLabel
+    });
+  }
 
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
