@@ -19,7 +19,7 @@ export function isEphemeralPackageXmlPinKey(pinKeyStr) {
 
 /** Al restaurar sesión: ningún package.xml ni fijado de package.xml. */
 export function restoreSessionWithoutEphemeralPackageXml() {
-  state.savedItems = state.savedItems.filter((i) => !isEphemeralPackageXmlItem(i));
+  state.savedItems = state.savedItems.filter((i) => i && !isEphemeralPackageXmlItem(i));
   state.packageXmlLocalContent = {};
   state.packageRetrieveZipCache = {};
 
@@ -36,14 +36,16 @@ export function restoreSessionWithoutEphemeralPackageXml() {
 }
 
 export function saveItemsToStorage() {
-  const storable = state.savedItems.filter((i) => !isEphemeralPackageXmlItem(i));
+  const storable = state.savedItems.filter((i) => i && !isEphemeralPackageXmlItem(i));
   chrome.storage.local.set({ savedCodeItems: storable });
 }
 
 export function loadItemsFromStorage() {
   return new Promise((resolve) => {
     chrome.storage.local.get(['savedCodeItems'], (result) => {
-      state.savedItems = (result.savedCodeItems || []).filter((i) => !isEphemeralPackageXmlItem(i));
+      state.savedItems = (result.savedCodeItems || []).filter(
+        (i) => i && !isEphemeralPackageXmlItem(i)
+      );
       restoreSessionWithoutEphemeralPackageXml();
       saveItemsToStorage();
       resolve(state.savedItems);
@@ -72,7 +74,7 @@ export function setupPersistSavedItemsOnPageClose() {
 
 /** Elimina entradas de `pinnedKeys` que no tienen ítem en la lista cargada (p. ej. no persistibles). */
 export function prunePinnedKeysToSavedItems() {
-  const keysInItems = new Set(state.savedItems.map((i) => pinKey(i)));
+  const keysInItems = new Set(state.savedItems.filter(Boolean).map((i) => pinKey(i)));
   const next = state.pinnedKeys.filter((pk) => keysInItems.has(pk));
   if (next.length !== state.pinnedKeys.length) {
     state.pinnedKeys = next;
@@ -83,6 +85,7 @@ export function prunePinnedKeysToSavedItems() {
 const MAX_PINNED = 5;
 
 export function pinKey(item) {
+  if (!item) return '';
   return `${item.type}:${item.key}`;
 }
 
