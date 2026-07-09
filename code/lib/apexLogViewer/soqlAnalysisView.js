@@ -1,9 +1,12 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { formatMs } from '../../../shared/apexLogParser.js';
 import {
+  APEX_LOG_PREVIEW,
   avgDurationMs,
-  bindLogTableRowNavigation,
+  createPreviewController,
   filterRowsByQuery,
+  mountPreviewTable,
+  mountShowMoreFooter,
   renderSummaryChips,
   wireSearchFilter
 } from './analysisTableUtils.js';
@@ -30,63 +33,6 @@ function renderDuplicateItem(d, t) {
   </button>`;
 }
 
-function renderSoqlTableBody(tbody, list, onJump, t, emptyKey) {
-  if (!tbody) return;
-  if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="apex-log-empty">${escapeHtml(t(emptyKey))}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = list
-    .map(
-      (r) => `<tr data-line="${r.line}" tabindex="0" role="button">
-          <td>${r.line}</td>
-          <td>${escapeHtml(formatMs(r.durationMs || 0))}</td>
-          <td>${r.rows ?? 0}</td>
-          <td class="apex-log-cell-context">${escapeHtml(r.context || '—')}</td>
-          <td>${r.aggregations ?? 0}</td>
-          <td class="apex-log-cell-query">${escapeHtml(r.query)}</td>
-          <td><button type="button" class="apex-log-copy-btn" data-query="${escapeHtml(r.query)}">${escapeHtml(t('apexLogViewer.soql.copy'))}</button></td>
-        </tr>`
-    )
-    .join('');
-  bindLogTableRowNavigation(tbody.querySelectorAll('tr[data-line]'), onJump);
-  tbody.querySelectorAll('.apex-log-copy-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      navigator.clipboard?.writeText(btn.getAttribute('data-query') || '').catch(() => {});
-    });
-  });
-}
-
-function renderExemptTableBody(tbody, list, onJump, t) {
-  if (!tbody) return;
-  if (!list.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.soqlExempt'))}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = list
-    .map((r) => {
-      const reasonKey = `apexLogViewer.soql.exemptReason.${r.exemptReason || 'exemptOther'}`;
-      return `<tr data-line="${r.line}" tabindex="0" role="button">
-          <td>${r.line}</td>
-          <td>${escapeHtml(formatMs(r.durationMs || 0))}</td>
-          <td>${r.rows ?? 0}</td>
-          <td class="apex-log-cell-context">${escapeHtml(r.context || '—')}</td>
-          <td>${escapeHtml(t(reasonKey))}</td>
-          <td class="apex-log-cell-query">${escapeHtml(r.query)}</td>
-          <td><button type="button" class="apex-log-copy-btn" data-query="${escapeHtml(r.query)}">${escapeHtml(t('apexLogViewer.soql.copy'))}</button></td>
-        </tr>`;
-    })
-    .join('');
-  bindLogTableRowNavigation(tbody.querySelectorAll('tr[data-line]'), onJump);
-  tbody.querySelectorAll('.apex-log-copy-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      navigator.clipboard?.writeText(btn.getAttribute('data-query') || '').catch(() => {});
-    });
-  });
-}
-
 /**
  * @param {HTMLElement} mount
  * @param {object} parsed
@@ -101,6 +47,7 @@ export function renderSoqlView(mount, parsed, onJump, t) {
   const duplicates = parsed?.soqlDuplicates || [];
   const governor = parsed?.soqlGovernor || {};
   const peakMax = governor.peakMax ?? parsed?.limitPeak?.SOQL?.max;
+  const dupeCtrl = createPreviewController(APEX_LOG_PREVIEW.soqlDuplicates);
 
   mount.innerHTML = `
     ${panelSectionHeading('soql', t('apexLogViewer.tab.soql'), t)}
@@ -114,16 +61,14 @@ export function renderSoqlView(mount, parsed, onJump, t) {
         ? `<div class="apex-log-soql-dupes" id="apexLogSoqlDupes">
         <h3>${escapeHtml(t('apexLogViewer.soql.duplicates'))}</h3>
         <p class="apex-log-soql-dupes-hint">${escapeHtml(t('apexLogViewer.soql.duplicatesHint'))}</p>
-        <div class="apex-log-soql-dupes-list">
-        ${duplicates.slice(0, 5).map((d) => renderDuplicateItem(d, t)).join('')}
-        </div>
+        <div class="apex-log-soql-dupes-list" id="apexLogSoqlDupesList"></div>
       </div>`
         : ''
     }
     <div class="apex-log-summary-section">
       <h3>${escapeHtml(t('apexLogViewer.soql.countedSection'))}</h3>
       <p class="apex-log-soql-section-hint">${escapeHtml(t('apexLogViewer.soql.countedHint'))}</p>
-      <div class="apex-log-table-wrap">
+      <div class="apex-log-table-wrap" id="apexLogSoqlCountedWrap">
         <table class="apex-log-data-table">
           <thead>
             <tr>
@@ -143,7 +88,7 @@ export function renderSoqlView(mount, parsed, onJump, t) {
     <div class="apex-log-summary-section apex-log-soql-exempt-section">
       <h3>${escapeHtml(t('apexLogViewer.soql.exemptSection'))}</h3>
       <p class="apex-log-soql-section-hint">${escapeHtml(t('apexLogViewer.soql.exemptHint'))}</p>
-      <div class="apex-log-table-wrap">
+      <div class="apex-log-table-wrap" id="apexLogSoqlExemptWrap">
         <table class="apex-log-data-table">
           <thead>
             <tr>
@@ -162,8 +107,41 @@ export function renderSoqlView(mount, parsed, onJump, t) {
     </div>`;
   const tbody = mount.querySelector('#apexLogSoqlBody');
   const exemptTbody = mount.querySelector('#apexLogSoqlExemptBody');
+  const countedWrap = mount.querySelector('#apexLogSoqlCountedWrap');
+  const exemptWrap = mount.querySelector('#apexLogSoqlExemptWrap');
   const filter = mount.querySelector('#apexLogSoqlFilter');
   const summary = mount.querySelector('#apexLogSoqlSummary');
+  const dupeSection = mount.querySelector('#apexLogSoqlDupes');
+  const dupeList = mount.querySelector('#apexLogSoqlDupesList');
+
+  /** @type {ReturnType<typeof mountPreviewTable> | null} */
+  let countedPreview = null;
+  /** @type {ReturnType<typeof mountPreviewTable> | null} */
+  let exemptPreview = null;
+
+  function paintDuplicates() {
+    if (!dupeList || !dupeSection) return;
+    const visible = dupeCtrl.slice(duplicates);
+    dupeList.innerHTML = visible.map((d) => renderDuplicateItem(d, t)).join('');
+    dupeList.querySelectorAll('.apex-log-soql-dupe-item').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-dupe-key');
+        const dupe = duplicates.find((d) => d.key === key);
+        if (!dupe || !filter) return;
+        filter.value = truncateQuery(dupe.query, 120);
+        applyFilter();
+        filter.focus();
+      });
+    });
+    mountShowMoreFooter(
+      dupeSection,
+      dupeCtrl,
+      duplicates.length,
+      APEX_LOG_PREVIEW.soqlDuplicates,
+      t,
+      paintDuplicates
+    );
+  }
 
   function updateSummary(countedList, exemptList) {
     const totalRows = countedList.reduce((s, r) => s + (r.rows || 0), 0);
@@ -184,6 +162,74 @@ export function renderSoqlView(mount, parsed, onJump, t) {
     ]);
   }
 
+  function paintCountedTable(list) {
+    if (!tbody) return;
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.soql'))}</td></tr>`;
+      countedWrap?.querySelector('.apex-log-show-more-wrap')?.remove();
+      return;
+    }
+    if (!countedPreview) {
+      countedPreview = mountPreviewTable(tbody, countedWrap, list, APEX_LOG_PREVIEW.tableRows, {
+        rowHtmlFn: (r) => `<tr data-line="${r.line}" tabindex="0" role="button">
+          <td>${r.line}</td>
+          <td>${escapeHtml(formatMs(r.durationMs || 0))}</td>
+          <td>${r.rows ?? 0}</td>
+          <td class="apex-log-cell-context">${escapeHtml(r.context || '—')}</td>
+          <td>${r.aggregations ?? 0}</td>
+          <td class="apex-log-cell-query">${escapeHtml(r.query)}</td>
+          <td><button type="button" class="apex-log-copy-btn" data-query="${escapeHtml(r.query)}">${escapeHtml(t('apexLogViewer.soql.copy'))}</button></td>
+        </tr>`,
+        emptyHtml: `<tr><td colspan="7" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.soql'))}</td></tr>`,
+        t,
+        onJump
+      });
+    } else {
+      countedPreview.setRows(list);
+    }
+    wireCopyButtons(countedWrap);
+  }
+
+  function paintExemptTable(list) {
+    if (!exemptTbody) return;
+    if (!list.length) {
+      exemptTbody.innerHTML = `<tr><td colspan="7" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.soqlExempt'))}</td></tr>`;
+      exemptWrap?.querySelector('.apex-log-show-more-wrap')?.remove();
+      return;
+    }
+    if (!exemptPreview) {
+      exemptPreview = mountPreviewTable(exemptTbody, exemptWrap, list, APEX_LOG_PREVIEW.tableRows, {
+        rowHtmlFn: (r) => {
+          const reasonKey = `apexLogViewer.soql.exemptReason.${r.exemptReason || 'exemptOther'}`;
+          return `<tr data-line="${r.line}" tabindex="0" role="button">
+          <td>${r.line}</td>
+          <td>${escapeHtml(formatMs(r.durationMs || 0))}</td>
+          <td>${r.rows ?? 0}</td>
+          <td class="apex-log-cell-context">${escapeHtml(r.context || '—')}</td>
+          <td>${escapeHtml(t(reasonKey))}</td>
+          <td class="apex-log-cell-query">${escapeHtml(r.query)}</td>
+          <td><button type="button" class="apex-log-copy-btn" data-query="${escapeHtml(r.query)}">${escapeHtml(t('apexLogViewer.soql.copy'))}</button></td>
+        </tr>`;
+        },
+        emptyHtml: `<tr><td colspan="7" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.soqlExempt'))}</td></tr>`,
+        t,
+        onJump
+      });
+    } else {
+      exemptPreview.setRows(list);
+    }
+    wireCopyButtons(exemptWrap);
+  }
+
+  function wireCopyButtons(root) {
+    root?.querySelectorAll('.apex-log-copy-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigator.clipboard?.writeText(btn.getAttribute('data-query') || '').catch(() => {});
+      });
+    });
+  }
+
   function applyFilter() {
     const needle = filter?.value;
     const filteredCounted = filterRowsByQuery(
@@ -197,21 +243,12 @@ export function renderSoqlView(mount, parsed, onJump, t) {
       (r) => `${r.line} ${r.query} ${r.rows} ${r.durationMs} ${r.context} ${r.exemptReason}`
     );
     updateSummary(filteredCounted, filteredExempt);
-    renderSoqlTableBody(tbody, filteredCounted, onJump, t, 'apexLogViewer.empty.soql');
-    renderExemptTableBody(exemptTbody, filteredExempt, onJump, t);
+    paintCountedTable(filteredCounted);
+    paintExemptTable(filteredExempt);
   }
 
+  if (duplicates.length) paintDuplicates();
   wireSearchFilter(filter, applyFilter);
-  mount.querySelectorAll('.apex-log-soql-dupe-item').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const key = btn.getAttribute('data-dupe-key');
-      const dupe = duplicates.find((d) => d.key === key);
-      if (!dupe || !filter) return;
-      filter.value = truncateQuery(dupe.query, 120);
-      applyFilter();
-      filter.focus();
-    });
-  });
   applyFilter();
   wirePanelHelpButtons(mount, t);
 }

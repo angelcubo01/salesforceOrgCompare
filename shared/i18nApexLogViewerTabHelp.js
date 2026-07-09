@@ -25,6 +25,14 @@ export const apexLogViewerTabHelpEs = {
     "Usa los botones «Ir a» para saltar a SOQL, Límites, Cronología, etc.||Clic en la operación más lenta o en «Ver línea» para ir al log||Los registros tocados enlazan a la org cuando hay URL disponible",
   'apexLogViewer.help.summary.tips':
     "Los KPI de arriba son la foto rápida; el resto te dice si hay algo urgente||Si el panel Gobernadores está vacío, el consumo es bajo||Para el detalle completo usa las pestañas enlazadas abajo",
+  'apexLogViewer.help.errors.purpose':
+    "Vista centralizada de todos los errores detectados en el log: excepciones Apex, respuestas HTTP fallidas y validaciones que no pasan.",
+  'apexLogViewer.help.errors.shows':
+    "Errores de ejecución con descripción completa||Callouts HTTP con código de estado ≥ 400||Reglas de validación con resultado fail||Contador y filtro de búsqueda global",
+  'apexLogViewer.help.errors.actions':
+    "Usa «Ver línea» o haz clic en una fila para saltar al texto del log||Filtra por mensaje, endpoint o nombre de regla||El chip «Log con errores» en la barra superior abre esta pestaña",
+  'apexLogViewer.help.errors.tips':
+    "Si no hay errores de ejecución pero sí HTTP o validaciones, revisa esas secciones||Los avisos del parser (log truncado, etc.) aparecen en Resumen, no aquí",
   'apexLogViewer.help.timeline.purpose':
     "Visualiza cuándo ocurre cada evento y cuánto dura, en un diagrama tipo Gantt interactivo.",
   'apexLogViewer.help.timeline.shows':
@@ -113,6 +121,38 @@ export const apexLogViewerTabHelpEs = {
     "Busca por nombre de regla o acción||Clic en una fila para ir al log",
   'apexLogViewer.help.workflow.tips':
     "En orgs migradas a Flow puede haber poco workflow clásico||Los field updates pueden explicar DML en objetos relacionados: cruza con la pestaña DML||Usa Cronología para ver si el workflow ocurre al final de la transacción",
+  'apexLogViewer.help.database.purpose':
+    "Vista unificada de acceso a datos: consultas SOQL, operaciones DML y límites de gobernador.",
+  'apexLogViewer.help.database.shows':
+    "Segmentos SOQL, DML y Límites con las mismas tablas y filtros que antes||Duplicados SOQL, consultas exentas y picos de límites",
+  'apexLogViewer.help.database.actions':
+    "Cambia de segmento con los botones superiores||Filtra y ordena en cada tabla||Clic en fila para ir al log",
+  'apexLogViewer.help.database.tips':
+    "Empieza por SOQL si sospechas de rendimiento||Revisa Límites si la transacción falla por gobernadores",
+  'apexLogViewer.help.analysis.purpose':
+    "Analiza la estructura de llamadas y el coste acumulado de métodos.",
+  'apexLogViewer.help.analysis.shows':
+    "Árbol jerárquico plegable||Bloque CUMULATIVE_PROFILING||Tabla agregada por método con tiempo total",
+  'apexLogViewer.help.analysis.actions':
+    "Usa el árbol para navegar por triggers y métodos||Ordena mentalmente la tabla agregada por tiempo total",
+  'apexLogViewer.help.analysis.tips':
+    "El árbol es mejor para entender el flujo; profiling para coste acumulado",
+  'apexLogViewer.help.network.purpose':
+    "Integraciones HTTP y mensajes de depuración del desarrollador.",
+  'apexLogViewer.help.network.shows':
+    "Callouts emparejados request/response||Mensajes USER_DEBUG con expansión JSON",
+  'apexLogViewer.help.network.actions':
+    "Cambia entre Callouts y Depuración||Filtra y salta a línea",
+  'apexLogViewer.help.network.tips':
+    "Los callouts con status ≥ 400 también aparecen en Errores",
+  'apexLogViewer.help.platform.purpose':
+    "Eventos de plataforma: reglas de validación y workflow clásico.",
+  'apexLogViewer.help.platform.shows':
+    "Validaciones PASS/FAIL||Eventos WF_* y field updates",
+  'apexLogViewer.help.platform.actions':
+    "Cambia entre Validaciones y Workflow||Busca por nombre de regla",
+  'apexLogViewer.help.platform.tips':
+    "Los fallos de validación también se listan en Errores",
 };
 
 export const apexLogViewerTabHelpEn = {
@@ -140,6 +180,14 @@ export const apexLogViewerTabHelpEn = {
     "Use «Go to» buttons to jump to SOQL, Limits, Timeline, etc.||Click the slowest operation or «View line» to open the log||Touched records link to the org when a URL is available",
   'apexLogViewer.help.summary.tips':
     "Top KPIs are the quick snapshot; below shows if anything needs attention||An empty Governor limits panel means low consumption||Use linked tabs below for full detail",
+  'apexLogViewer.help.errors.purpose':
+    "Centralized view of all errors detected in the log: Apex exceptions, failed HTTP responses, and validation failures.",
+  'apexLogViewer.help.errors.shows':
+    "Execution errors with full description||HTTP callouts with status code ≥ 400||Validation rules with fail result||Counter and global search filter",
+  'apexLogViewer.help.errors.actions':
+    "Use «View line» or click a row to jump to the log text||Filter by message, endpoint, or rule name||The «Log with errors» chip in the toolbar opens this tab",
+  'apexLogViewer.help.errors.tips':
+    "If there are no execution errors but HTTP or validations fail, check those sections||Parser warnings (truncated log, etc.) appear in Summary, not here",
   'apexLogViewer.help.timeline.purpose':
     "Visualizes when each event happens and how long it takes, in an interactive Gantt-style chart.",
   'apexLogViewer.help.timeline.shows':
@@ -228,4 +276,36 @@ export const apexLogViewerTabHelpEn = {
     "Search by rule or action name||Click a row to jump to the log",
   'apexLogViewer.help.workflow.tips':
     "In orgs migrated to Flow there may be little classic workflow||Field updates may explain DML on related objects: cross-check the DML tab||Use Timeline to see if workflow runs at the end of the transaction",
+  'apexLogViewer.help.database.purpose':
+    "Unified data access view: SOQL queries, DML operations, and governor limits.",
+  'apexLogViewer.help.database.shows':
+    "SOQL, DML, and Limits segments with the same tables and filters as before||SOQL duplicates, exempt queries, and limit peaks",
+  'apexLogViewer.help.database.actions':
+    "Switch segments with the top buttons||Filter and sort each table||Click a row to jump to the log",
+  'apexLogViewer.help.database.tips':
+    "Start with SOQL if you suspect performance issues||Check Limits if the transaction failed on governors",
+  'apexLogViewer.help.analysis.purpose':
+    "Analyze call structure and cumulative method cost.",
+  'apexLogViewer.help.analysis.shows':
+    "Foldable hierarchical tree||CUMULATIVE_PROFILING block||Aggregated method table with total time",
+  'apexLogViewer.help.analysis.actions':
+    "Use the tree to navigate triggers and methods||Use the aggregated table for total cost by method",
+  'apexLogViewer.help.analysis.tips':
+    "Tree is best for flow; profiling for cumulative cost",
+  'apexLogViewer.help.network.purpose':
+    "HTTP integrations and developer debug messages.",
+  'apexLogViewer.help.network.shows':
+    "Paired callout request/response||USER_DEBUG messages with JSON expansion",
+  'apexLogViewer.help.network.actions':
+    "Switch between Callouts and Debug||Filter and jump to line",
+  'apexLogViewer.help.network.tips':
+    "Callouts with status ≥ 400 also appear in Errors",
+  'apexLogViewer.help.platform.purpose':
+    "Platform events: validation rules and classic workflow.",
+  'apexLogViewer.help.platform.shows':
+    "PASS/FAIL validations||WF_* events and field updates",
+  'apexLogViewer.help.platform.actions':
+    "Switch between Validations and Workflow||Search by rule name",
+  'apexLogViewer.help.platform.tips':
+    "Validation failures are also listed in Errors",
 };

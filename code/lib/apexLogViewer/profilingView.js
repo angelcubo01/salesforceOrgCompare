@@ -1,18 +1,39 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { formatMs } from '../../../shared/apexLogParser.js';
-import { bindLogTableRowNavigation, mountSegmentControl } from './analysisTableUtils.js';
+import {
+  APEX_LOG_PREVIEW,
+  bindLogTableRowNavigation,
+  createPreviewController,
+  mountSegmentControl,
+  mountShowMoreFooter
+} from './analysisTableUtils.js';
 import { panelSectionHeading, wirePanelHelpButtons } from './panelSectionHeading.js';
 
 /**
  * @param {string} section
  * @param {object[]} rows
+ * @param {ReturnType<typeof createPreviewController>} ctrl
  * @param {(key: string) => string} t
+ * @param {(line: number) => void} onJump
+ * @param {HTMLElement | null} tableWrap
  */
-function renderProfilingTable(section, rows, t) {
+function renderProfilingTable(section, rows, ctrl, t, onJump, tableWrap) {
   if (!rows?.length) {
     return `<p class="apex-log-empty">${escapeHtml(t(`apexLogViewer.empty.profiling${section}`))}</p>`;
   }
-  return `<div class="apex-log-table-wrap apex-log-panel-content">
+  const visible = ctrl.slice(rows);
+  const rowsHtml = visible
+    .map(
+      (r) => `<tr data-line="${r.line || 0}" tabindex="0" role="button">
+          <td>${escapeHtml(r.location)}</td>
+          <td>${r.apexLine || '—'}</td>
+          <td>${r.executions}</td>
+          <td>${escapeHtml(formatMs(r.totalMs))}</td>
+          <td class="apex-log-cell-query">${escapeHtml(r.detail)}</td>
+        </tr>`
+    )
+    .join('');
+  return `<div class="apex-log-table-wrap apex-log-panel-content" id="apexLogProfilingTableWrap">
     <table class="apex-log-data-table">
       <thead><tr>
         <th>${escapeHtml(t('apexLogViewer.col.location'))}</th>
@@ -21,18 +42,7 @@ function renderProfilingTable(section, rows, t) {
         <th>${escapeHtml(t('apexLogViewer.col.duration'))}</th>
         <th>${escapeHtml(t('apexLogViewer.col.detail'))}</th>
       </tr></thead>
-      <tbody>${rows
-        .slice(0, 50)
-        .map(
-          (r) => `<tr data-line="${r.line || 0}" tabindex="0" role="button">
-          <td>${escapeHtml(r.location)}</td>
-          <td>${r.apexLine || '—'}</td>
-          <td>${r.executions}</td>
-          <td>${escapeHtml(formatMs(r.totalMs))}</td>
-          <td class="apex-log-cell-query">${escapeHtml(r.detail)}</td>
-        </tr>`
-        )
-        .join('')}</tbody>
+      <tbody>${rowsHtml}</tbody>
     </table>
   </div>`;
 }
@@ -48,6 +58,7 @@ export function renderProfilingView(mount, parsed, onJump, t) {
   const profiling = parsed?.profiling || { soql: [], dml: [], methods: [] };
   const hasAny =
     profiling.soql.length + profiling.dml.length + profiling.methods.length > 0;
+  const previewCtrl = createPreviewController(APEX_LOG_PREVIEW.profilingRows);
 
   mount.innerHTML = `
     ${panelSectionHeading('profiling', t('apexLogViewer.tab.profiling'), t)}
@@ -74,14 +85,20 @@ export function renderProfilingView(mount, parsed, onJump, t) {
   if (!sections.length) return;
   activeSection = sections[0].id;
 
-  function paintSection(sectionId) {
+  function paintSection(sectionId, repaint = false) {
     if (!contentEl) return;
+    if (!repaint) previewCtrl.reset();
     const sec = sections.find((s) => s.id === sectionId) || sections[0];
-    contentEl.innerHTML = renderProfilingTable(sec.id, sec.rows, t);
-    contentEl.querySelectorAll('tr[data-line]').forEach((tr) => {
+    contentEl.innerHTML = renderProfilingTable(sec.id, sec.rows, previewCtrl, t, onJump, null);
+    const tableWrap = contentEl.querySelector('#apexLogProfilingTableWrap');
+    const tbody = tableWrap?.querySelector('tbody');
+    tbody?.querySelectorAll('tr[data-line]').forEach((tr) => {
       const line = Number(tr.dataset.line);
       if (line > 0) bindLogTableRowNavigation([tr], onJump);
     });
+    mountShowMoreFooter(contentEl, previewCtrl, sec.rows.length, APEX_LOG_PREVIEW.profilingRows, t, () =>
+      paintSection(sectionId, true)
+    );
   }
 
   mountSegmentControl(

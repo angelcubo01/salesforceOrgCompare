@@ -9,6 +9,7 @@ import { logApexTestRunUsage } from './apexTestUsageLog.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { exportApexTestRun } from './apexTestsExport.js';
 import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
+import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
 import {
   getApexTestsPollIntervalMs,
   getExtensionSettingsSnapshot,
@@ -490,7 +491,7 @@ async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
       ? Math.max(1, Math.floor(Number(opts.initialLine)))
       : undefined;
   const downloadFileName = `${sanitizeApexViewerDownloadFileName(name.replace(/\.cls$/i, ''))}.cls`;
-  const ok = await openApexLogViewerWithPayload(
+  const ok = await openApexSourceViewerWithPayload(
     `${name}.cls · ${t('docTitle.apexTestClass')}`,
     res.body != null ? String(res.body) : '',
     {

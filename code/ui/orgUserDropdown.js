@@ -24,10 +24,15 @@ const userCache = new Map();
 /** @type {Set<string>} orgIds con petición en curso. */
 const inFlight = new Set();
 
-/** @type {Record<string, { wrapper: HTMLElement, select: HTMLSelectElement, trigger: HTMLElement, label: HTMLElement, badge: HTMLElement, popup: HTMLElement }>} */
+/** @type {Record<string, { wrapper: HTMLElement, container: HTMLElement, select: HTMLSelectElement, trigger: HTMLElement, label: HTMLElement, badge: HTMLElement, popup: HTMLElement, highlightIndex: number }>} */
 const ui = {};
 
 let outsideHandler = null;
+let popupKeydownAttached = false;
+let popupRepositionHandler = null;
+let suppressTriggerClick = false;
+
+const POPUP_FLOAT_CLASS = 'org-cd-popup--floating';
 
 /** @type {HTMLElement | null} Cuadro de tooltip flotante único (bonito), compartido por barra y filas. */
 let floatingTip = null;
@@ -140,6 +145,125 @@ function selectedOptionLabel(select) {
   return opt ? opt.textContent || '' : '';
 }
 
+function getPopupRows(entry) {
+  return Array.from(entry.popup.querySelectorAll('.org-cd-row'));
+}
+
+function getRowIndexForValue(entry, value) {
+  return getPopupRows(entry).findIndex((row) => row.dataset.value === value);
+}
+
+function setPopupHighlight(entry, index) {
+  const rows = getPopupRows(entry);
+  if (!rows.length) return;
+  const clamped = ((index % rows.length) + rows.length) % rows.length;
+  entry.highlightIndex = clamped;
+  rows.forEach((row, i) => {
+    row.classList.toggle('is-keyboard-active', i === clamped);
+  });
+  rows[clamped].scrollIntoView({ block: 'nearest' });
+}
+
+function getOpenPopupSide() {
+  return Object.keys(ui).find((side) => {
+    const entry = ui[side];
+    return entry && !entry.popup.hidden;
+  });
+}
+
+function confirmPopupSelection(side) {
+  const entry = ui[side];
+  if (!entry || entry.popup.hidden) return;
+  const rows = getPopupRows(entry);
+  const row = rows[entry.highlightIndex ?? 0];
+  if (row) chooseOrg(side, row.dataset.value || '');
+}
+
+function onPopupKeydown(ev) {
+  const openSide = getOpenPopupSide();
+  if (!openSide) return;
+  const entry = ui[openSide];
+  const rows = getPopupRows(entry);
+  if (!rows.length) return;
+
+  switch (ev.key) {
+    case 'ArrowDown':
+      ev.preventDefault();
+      setPopupHighlight(entry, (entry.highlightIndex ?? 0) + 1);
+      break;
+    case 'ArrowUp':
+      ev.preventDefault();
+      setPopupHighlight(entry, (entry.highlightIndex ?? 0) - 1);
+      break;
+    case 'Home':
+      ev.preventDefault();
+      setPopupHighlight(entry, 0);
+      break;
+    case 'End':
+      ev.preventDefault();
+      setPopupHighlight(entry, rows.length - 1);
+      break;
+    case 'Enter':
+    case ' ':
+      ev.preventDefault();
+      ev.stopPropagation();
+      hideTooltip();
+      confirmPopupSelection(openSide);
+      break;
+    case 'Escape':
+      ev.preventDefault();
+      closeAllPopups();
+      entry.trigger.focus();
+      break;
+    case 'Tab':
+      closeAllPopups();
+      break;
+    default:
+      break;
+  }
+}
+
+function positionFloatingPopup(entry) {
+  const { trigger, popup } = entry;
+  const rect = trigger.getBoundingClientRect();
+  popup.classList.add(POPUP_FLOAT_CLASS);
+  if (popup.parentElement !== document.body) {
+    document.body.appendChild(popup);
+  }
+  popup.style.top = `${Math.round(rect.bottom + 4)}px`;
+  popup.style.left = `${Math.round(rect.left)}px`;
+  popup.style.width = `${Math.round(rect.width)}px`;
+}
+
+function dockPopup(entry) {
+  const { container, popup } = entry;
+  popup.classList.remove(POPUP_FLOAT_CLASS);
+  popup.style.top = '';
+  popup.style.left = '';
+  popup.style.width = '';
+  if (popup.parentElement !== container) {
+    container.appendChild(popup);
+  }
+}
+
+function attachPopupReposition() {
+  if (popupRepositionHandler) return;
+  popupRepositionHandler = () => {
+    const openSide = getOpenPopupSide();
+    if (!openSide) return;
+    positionFloatingPopup(ui[openSide]);
+  };
+  window.addEventListener('resize', popupRepositionHandler);
+  window.addEventListener('scroll', popupRepositionHandler, true);
+}
+
+function detachPopupReposition() {
+  if (!popupRepositionHandler) return;
+  window.removeEventListener('resize', popupRepositionHandler);
+  window.removeEventListener('scroll', popupRepositionHandler, true);
+  popupRepositionHandler = null;
+}
+
 function closeAllPopups() {
   hideTooltip();
   for (const side of Object.keys(ui)) {
@@ -147,20 +271,22 @@ function closeAllPopups() {
     if (entry && !entry.popup.hidden) {
       entry.popup.hidden = true;
       entry.trigger.setAttribute('aria-expanded', 'false');
+      entry.container.classList.remove('is-open');
+      dockPopup(entry);
     }
   }
+  detachPopupReposition();
   if (outsideHandler) {
     document.removeEventListener('mousedown', outsideHandler, true);
-    document.removeEventListener('keydown', escHandler, true);
     outsideHandler = null;
+  }
+  if (popupKeydownAttached) {
+    document.removeEventListener('keydown', onPopupKeydown, true);
+    popupKeydownAttached = false;
   }
 }
 
-function escHandler(ev) {
-  if (ev.key === 'Escape') closeAllPopups();
-}
-
-function openPopup(side) {
+function openPopup(side, { initialHighlightIndex } = {}) {
   const entry = ui[side];
   if (!entry || entry.trigger.getAttribute('aria-disabled') === 'true') return;
   // Cierra otros y prepara cierre por click fuera.
@@ -168,6 +294,18 @@ function openPopup(side) {
   renderPopupRows(side);
   entry.popup.hidden = false;
   entry.trigger.setAttribute('aria-expanded', 'true');
+  entry.container.classList.add('is-open');
+
+  const selectedIdx = getRowIndexForValue(entry, entry.select.value);
+  const highlightIdx =
+    typeof initialHighlightIndex === 'number' && initialHighlightIndex >= 0
+      ? initialHighlightIndex
+      : selectedIdx >= 0
+        ? selectedIdx
+        : 0;
+  setPopupHighlight(entry, highlightIdx);
+  positionFloatingPopup(entry);
+  attachPopupReposition();
 
   // Detectar org de la pestaña activa (equivalente al focus/mousedown del select nativo).
   void syncOrgsWhenOpeningSelector();
@@ -181,29 +319,41 @@ function openPopup(side) {
     }
   };
   document.addEventListener('mousedown', outsideHandler, true);
-  document.addEventListener('keydown', escHandler, true);
+  document.addEventListener('keydown', onPopupKeydown, true);
+  popupKeydownAttached = true;
 }
 
 function chooseOrg(side, orgId) {
   const entry = ui[side];
   if (!entry) return;
+  suppressTriggerClick = true;
   if (entry.select.value === orgId) {
     closeAllPopups();
+    entry.trigger.focus();
+    queueMicrotask(() => {
+      suppressTriggerClick = false;
+    });
     return;
   }
   entry.select.value = orgId;
   entry.select.dispatchEvent(new Event('change', { bubbles: true }));
   closeAllPopups();
   refreshOrgUserDropdowns();
+  entry.trigger.focus();
+  queueMicrotask(() => {
+    suppressTriggerClick = false;
+  });
 }
 
-function renderPopupRows(side) {
+function renderPopupRows(side, { preserveHighlight = false } = {}) {
   const entry = ui[side];
   if (!entry) return;
   const popup = entry.popup;
+  const options = Array.from(entry.select.options);
+  const prevHighlight = preserveHighlight ? entry.highlightIndex : undefined;
   popup.textContent = '';
   const selectedValue = entry.select.value;
-  for (const opt of Array.from(entry.select.options)) {
+  for (const opt of options) {
     const row = document.createElement('button');
     row.type = 'button';
     row.className = 'org-cd-row';
@@ -235,15 +385,27 @@ function renderPopupRows(side) {
     }
 
     row.addEventListener('click', () => chooseOrg(side, opt.value));
+    row.addEventListener('mouseenter', () => {
+      const rows = getPopupRows(entry);
+      const idx = rows.indexOf(row);
+      if (idx >= 0) setPopupHighlight(entry, idx);
+    });
     popup.appendChild(row);
   }
+
+  let highlightIndex = prevHighlight;
+  if (highlightIndex == null || highlightIndex < 0 || highlightIndex >= options.length) {
+    highlightIndex = options.findIndex((opt) => opt.value === selectedValue);
+    if (highlightIndex < 0) highlightIndex = 0;
+  }
+  setPopupHighlight(entry, highlightIndex);
 }
 
 /** Si hay un popup abierto, reconstruye sus filas (p. ej. tras llegar datos de usuario). */
 function updateOpenPopupRows() {
   for (const side of Object.keys(ui)) {
     const entry = ui[side];
-    if (entry && !entry.popup.hidden) renderPopupRows(side);
+    if (entry && !entry.popup.hidden) renderPopupRows(side, { preserveHighlight: true });
   }
 }
 
@@ -320,10 +482,35 @@ function buildSideUi(side, selectId, wrapperSel) {
 
   trigger.addEventListener('click', (ev) => {
     ev.preventDefault();
+    if (suppressTriggerClick) {
+      suppressTriggerClick = false;
+      return;
+    }
     if (!popup.hidden) {
       closeAllPopups();
     } else {
       openPopup(side);
+    }
+  });
+  trigger.addEventListener('keydown', (ev) => {
+    if (trigger.getAttribute('aria-disabled') === 'true') return;
+
+    if (!popup.hidden) {
+      if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        confirmPopupSelection(side);
+      }
+      return;
+    }
+
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp' || ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      const selectedIdx = Array.from(select.options).findIndex((opt) => opt.value === select.value);
+      let initialHighlightIndex = selectedIdx >= 0 ? selectedIdx : 0;
+      if (ev.key === 'ArrowDown') initialHighlightIndex = initialHighlightIndex + 1;
+      else if (ev.key === 'ArrowUp') initialHighlightIndex = initialHighlightIndex - 1;
+      openPopup(side, { initialHighlightIndex });
     }
   });
   // El tooltip (bonito) solo aparece al pasar cerca de la "i", no por toda la barra.
@@ -333,7 +520,7 @@ function buildSideUi(side, selectId, wrapperSel) {
   badge.addEventListener('mouseleave', hideTooltip);
 
   wrapper.dataset.orgCdReady = '1';
-  ui[side] = { wrapper, select, trigger, label, badge, popup };
+  ui[side] = { wrapper, container, select, trigger, label, badge, popup, highlightIndex: 0 };
 }
 
 /** Inicializa los desplegables personalizados y hace el primer refresco. */

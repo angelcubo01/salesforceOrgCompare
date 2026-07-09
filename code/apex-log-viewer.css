@@ -7,6 +7,7 @@
   --alb-chip-bg: rgba(56, 189, 248, 0.1);
   --alb-warning: #fb7185;
   --alb-gantt-grid: rgba(148, 163, 184, 0.22);
+  --alb-page-pad-x: 16px;
 }
 
 html,
@@ -23,17 +24,52 @@ body {
 
 .apex-log-viewer-toolbar {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
   border-bottom: 1px solid var(--alb-border);
   flex-shrink: 0;
-  flex-wrap: wrap;
+  position: relative;
+  z-index: 100;
 }
 
-.apex-log-viewer-toolbar .apex-log-viewer-title {
+.apex-log-viewer-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px var(--alb-page-pad-x);
+  min-height: 38px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.apex-log-viewer-toolbar-row--primary {
+  border-bottom: 1px solid rgba(51, 65, 85, 0.55);
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.apex-log-viewer-toolbar-row--secondary {
+  padding-top: 8px;
+  padding-bottom: 10px;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+}
+
+.apex-log-viewer-toolbar-row--secondary .apex-log-viewer-toolbar-spacer {
   flex: 1;
-  min-width: 120px;
+  min-width: 12px;
+}
+
+.apex-log-viewer-toolbar-spacer {
+  flex: 1;
+  min-width: 8px;
+}
+
+.apex-log-viewer-toolbar-row--primary .apex-log-viewer-title {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .apex-log-viewer-back {
@@ -57,6 +93,23 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 0 1 auto;
+  max-width: min(420px, 42vw);
+}
+
+.apex-log-viewer-name {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  flex: 1 1 120px;
+}
+
+.apex-log-chip--name {
+  max-width: min(480px, 38vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .apex-log-viewer-meta,
@@ -65,6 +118,14 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  min-width: 0;
+}
+
+.apex-log-chip--context {
+  max-width: min(420px, 55vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .apex-log-chip {
@@ -82,17 +143,17 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  border: 1px solid currentColor;
-  color: var(--alb-muted);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 10px;
-  font-style: italic;
-  font-weight: 700;
-  line-height: 1;
-  cursor: default;
+  border: 1px solid var(--alb-border);
+  color: var(--alb-accent);
+  background: rgba(56, 189, 248, 0.08);
+  cursor: help;
+}
+
+.apex-log-viewer-user svg {
+  display: block;
 }
 
 .apex-log-chip--warning {
@@ -135,7 +196,6 @@ body {
   background: rgba(56, 189, 248, 0.12);
   color: var(--alb-accent);
   font-size: 13px;
-  margin-left: 8px;
 }
 
 .apex-log-viewer-download:hover {
@@ -163,9 +223,10 @@ body {
   display: flex;
   align-items: stretch;
   gap: 4px;
-  padding: 6px 8px 6px 12px;
+  padding: 6px var(--alb-page-pad-x);
   overflow-x: auto;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .apex-log-tab-group {
@@ -189,7 +250,7 @@ body {
   align-items: center;
   justify-content: center;
   width: 36px;
-  margin: 6px 10px 6px 0;
+  margin: 6px var(--alb-page-pad-x) 6px 0;
   padding: 0;
   border-radius: 6px;
   border: 1px solid var(--alb-border);
@@ -1022,6 +1083,52 @@ html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
   margin-bottom: 16px;
 }
 
+.apex-log-summary-lead {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--alb-border);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.apex-log-summary-lead-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.apex-log-summary-lead-row {
+  display: grid;
+  grid-template-columns: minmax(88px, auto) 1fr;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.apex-log-summary-lead-k {
+  color: var(--alb-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.apex-log-summary-lead-v {
+  color: var(--alb-text);
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+.apex-log-summary-lead-records {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--alb-border);
+}
+
 .apex-log-summary-card {
   padding: 10px 12px;
   border: 1px solid var(--alb-border);
@@ -1121,7 +1228,8 @@ html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
 .apex-log-summary-record-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  left: 0;
+  right: auto;
   z-index: 30;
   min-width: 220px;
   max-width: 360px;
@@ -1369,8 +1477,50 @@ html[data-ui-theme='light'] .apex-log-summary-context {
   background: rgba(248, 250, 252, 0.9);
 }
 
+html[data-ui-theme='light'] .apex-log-summary-lead {
+  background: rgba(248, 250, 252, 0.9);
+}
+
 html[data-ui-theme='light'] .apex-log-summary-panel {
   background: rgba(248, 250, 252, 0.9);
+}
+
+html[data-ui-theme='light'] .apex-log-viewer-toolbar-row--primary {
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-ui-theme='light'] .apex-log-execution-mount {
+  background: #f1f5f9;
+}
+
+html[data-ui-theme='light'] .apex-log-execution-select {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+  color-scheme: light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23475569' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+}
+
+html[data-ui-theme='light'] .apex-log-execution-select option {
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+html[data-ui-theme='light'] .apex-log-find-input {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+html[data-ui-theme='light'] .apex-log-find-input:focus {
+  background: #ffffff;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+html[data-ui-theme='light'] .apex-log-find-results {
+  background: #ffffff;
+  border-color: #cbd5e1;
 }
 
 .apex-log-summary-section {
@@ -1871,4 +2021,581 @@ html[data-ui-theme='light'] .apex-log-help-dialog {
 
 html[data-ui-theme='light'] .apex-log-help-item {
   background: #f8fafc;
+}
+
+.apex-log-summary-status-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fda4af;
+  margin-bottom: 8px;
+}
+
+.apex-log-viewer-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.82);
+  backdrop-filter: blur(2px);
+}
+
+.apex-log-viewer-loading[hidden] {
+  display: none !important;
+}
+
+.apex-log-viewer-loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--alb-text);
+  font-size: 14px;
+}
+
+.apex-log-viewer-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(148, 163, 184, 0.35);
+  border-top-color: var(--alb-accent);
+  border-radius: 50%;
+  animation: apex-log-viewer-spin 0.7s linear infinite;
+}
+
+@keyframes apex-log-viewer-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.apex-log-show-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0 4px;
+}
+
+.apex-log-show-more {
+  cursor: pointer;
+}
+
+.apex-log-error-card {
+  border: 1px solid rgba(244, 114, 182, 0.45);
+  border-radius: 8px;
+  background: rgba(244, 114, 182, 0.08);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.apex-log-error-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.apex-log-error-card-title {
+  font-weight: 600;
+  color: #fda4af;
+}
+
+.apex-log-error-card-line {
+  font-size: 12px;
+  color: var(--alb-muted);
+}
+
+.apex-log-error-card-desc {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.apex-log-errors-section {
+  margin-bottom: 20px;
+}
+
+.apex-log-errors-section h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+html[data-ui-theme='light'] .apex-log-viewer-loading {
+  background: rgba(248, 250, 252, 0.88);
+}
+
+html[data-ui-theme='light'] .apex-log-error-card {
+  background: rgba(244, 114, 182, 0.06);
+}
+
+.apex-log-viewer-toolbar-row--secondary .apex-log-find-mount {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 420px;
+  max-width: none;
+}
+
+.apex-log-find-mount {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.apex-log-find-bar {
+  position: relative;
+  width: 100%;
+}
+
+.apex-log-find-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 11px;
+  border: 1px solid var(--alb-border);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.65);
+  color: var(--alb-text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.apex-log-find-input::placeholder {
+  color: var(--alb-muted);
+  opacity: 0.9;
+}
+
+.apex-log-find-input:focus {
+  outline: none;
+  border-color: var(--alb-accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.18);
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.apex-log-find-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  min-width: 100%;
+  box-sizing: border-box;
+  z-index: 200;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--alb-border);
+  border-radius: 8px;
+  background: var(--alb-bg);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.apex-log-find-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--alb-border);
+  background: transparent;
+  color: var(--alb-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.apex-log-find-hit:hover {
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.apex-log-find-hit-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alb-accent);
+}
+
+.apex-log-find-hit-detail {
+  font-size: 11px;
+  color: var(--alb-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.apex-log-execution-mount {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 12px var(--alb-page-pad-x);
+  border-bottom: 1px solid var(--alb-border);
+  background: #1e293b;
+  box-sizing: border-box;
+}
+
+.apex-log-execution-mount[hidden] {
+  display: none !important;
+}
+
+.apex-log-execution-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 16px 24px;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.apex-log-execution-selector {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.apex-log-execution-selector-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  width: 5.5rem;
+  height: 34px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--alb-muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1;
+  text-align: right;
+}
+
+.apex-log-execution-select {
+  min-width: 240px;
+  max-width: min(640px, 78vw);
+  height: 34px;
+  padding: 0 32px 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--alb-border);
+  background-color: #0f172a;
+  color: var(--alb-text);
+  font-size: 12px;
+  line-height: 34px;
+  color-scheme: dark;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.apex-log-execution-select:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.apex-log-execution-select:focus {
+  outline: none;
+  border-color: var(--alb-accent);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+.apex-log-execution-select option {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+.apex-log-execution-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.apex-log-execution-status--ok {
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.apex-log-execution-status--fail {
+  color: #fda4af;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.apex-log-execution-active {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  min-width: 0;
+  padding: 0;
+  flex: 0 1 auto;
+}
+
+.apex-log-execution-active-label {
+  color: var(--alb-muted);
+  white-space: nowrap;
+}
+
+.apex-log-execution-active-value {
+  color: var(--alb-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: min(520px, 55vw);
+}
+
+.apex-log-execution-active-badge {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--alb-border);
+}
+
+.apex-log-execution-active-badge--fail {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fda4af;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.apex-log-chip--execution {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: var(--alb-accent);
+}
+
+.apex-log-summary-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  border: 1px solid var(--alb-border);
+}
+
+.apex-log-summary-hero--ok {
+  background: rgba(52, 211, 153, 0.08);
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.apex-log-summary-hero--error {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.apex-log-summary-hero--warn {
+  background: rgba(251, 191, 36, 0.1);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.apex-log-summary-hero-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.apex-log-summary-hero--ok .apex-log-summary-hero-icon {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+}
+
+.apex-log-summary-hero--error .apex-log-summary-hero-icon {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.apex-log-summary-hero--warn .apex-log-summary-hero-icon {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+.apex-log-summary-hero-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.apex-log-summary-hero-cta {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fda4af;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.apex-log-summary-gauges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.apex-log-summary-gauge-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  min-width: 72px;
+  border-radius: 8px;
+  border: 1px solid var(--alb-border);
+  background: rgba(30, 41, 59, 0.35);
+}
+
+.apex-log-summary-gauge-ring {
+  position: relative;
+  width: 48px;
+  height: 48px;
+}
+
+.apex-log-summary-gauge-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.apex-log-summary-gauge-bg {
+  fill: none;
+  stroke: rgba(148, 163, 184, 0.2);
+  stroke-width: 3;
+}
+
+.apex-log-summary-gauge-fill {
+  fill: none;
+  stroke: #34d399;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.apex-log-summary-gauge-card--warn .apex-log-summary-gauge-fill {
+  stroke: #fbbf24;
+}
+
+.apex-log-summary-gauge-card--danger .apex-log-summary-gauge-fill {
+  stroke: #f87171;
+}
+
+.apex-log-summary-gauge-val {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.apex-log-summary-gauge-key {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.apex-log-summary-gauge-meta {
+  font-size: 9px;
+  color: var(--alb-muted);
+}
+
+.apex-log-summary-flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.apex-log-summary-flow-dot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--alb-border);
+  background: var(--alb-chip-bg);
+  cursor: pointer;
+  max-width: 200px;
+}
+
+.apex-log-summary-flow-dot--error {
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.apex-log-summary-flow-type {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: var(--alb-muted);
+}
+
+.apex-log-summary-flow-label {
+  font-size: 11px;
+  color: var(--alb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.apex-log-summary-limit-fill--ok {
+  background: #34d399;
+}
+
+.apex-log-summary-limit-fill--warn {
+  background: #fbbf24;
+}
+
+.apex-log-summary-limit-fill--danger {
+  background: #f87171;
+}
+
+.apex-log-summary-limit-row--caution .apex-log-summary-limit-fill {
+  background: #fbbf24;
+}
+
+.apex-log-summary-status-apex {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--alb-accent);
+  font-family: ui-monospace, monospace;
+}
+
+.apex-log-summary-highlight--nav {
+  cursor: pointer;
+  text-align: left;
+}
+
+.apex-log-viewer-editor--nested {
+  min-height: 360px;
+  height: 50vh;
+}
+
+.apex-log-panel-scroll--analysis {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }

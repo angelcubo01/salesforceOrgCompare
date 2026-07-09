@@ -11,7 +11,11 @@ import {
   isCustomMetadataSoql,
   classifySoqlGovernorImpact,
   buildSoqlGovernorSummary,
-  collectTreeErrorVisibleRows
+  collectTreeErrorVisibleRows,
+  computeLogLineOffset,
+  deduplicateIssues,
+  parseSoqlExplain,
+  sliceParsedForExecution
 } from '../shared/apexLogParser.js';
 
 const SAMPLE_LOG = `65.0 APEX_CODE,FINEST;APEX_PROFILING,INFO;CALLOUT,INFO;DATA_ACCESS,INFO;DB,INFO;NBA,INFO;SYSTEM,DEBUG;VALIDATION,INFO;VISUALFORCE,INFO;WAVE,INFO;WORKFLOW,INFO
@@ -54,6 +58,19 @@ const ERROR_LOG = `65.0 APEX_CODE,FINEST;APEX_PROFILING,INFO;CALLOUT,INFO;DATA_A
 10:26:03.0 (28000000)|CODE_UNIT_FINISHED|MyClass.testMethod
 10:26:03.0 (29000000)|EXECUTION_FINISHED
 `;
+
+const DUP_ERROR_LOG = `65.0 APEX_CODE,FINEST;APEX_PROFILING,INFO;CALLOUT,INFO;DATA_ACCESS,INFO;DB,INFO;NBA,INFO;SYSTEM,DEBUG;VALIDATION,INFO;VISUALFORCE,INFO;WAVE,INFO;WORKFLOW,INFO
+10:26:03.0 (14450000)|EXECUTION_STARTED
+10:26:03.0 (15000000)|CODE_UNIT_STARTED|[EXTERNAL]|01pxx|MyTest.testFail()
+10:26:03.0 (16000000)|FATAL_ERROR|System.AssertException: Assertion Failed
+Class.MyTest.testFail: line 10, column 1
+10:26:03.0 (17000000)|FATAL_ERROR|System.AssertException: Assertion Failed
+Class.MyTest.testFail: line 10, column 1
+10:26:03.0 (18000000)|EXECUTION_FINISHED
+`;
+
+const EXPLAIN_LOG = `${SAMPLE_LOG}
+10:26:03.0 (18500000)|SOQL_EXECUTE_EXPLAIN|[10]|TableScan on Profile : [], cardinality: 1, sobjectCardinality: 113, relativeCost 0.717`;
 
 describe('parseApexDebugLog', () => {
   it('extrae userDebug, soql y dml', () => {
@@ -134,6 +151,44 @@ describe('parseApexDebugLog', () => {
     expect(p.meta.sizeBytes).toBeGreaterThan(0);
     expect(p.meta.durationMs).toBeGreaterThan(0);
     expect(p.user?.name).toBe('Test User');
+    expect(p.meta.lineOffset).toBe(2);
+    expect(p.lineEvents.length).toBeGreaterThan(15);
+  });
+
+  it('deduplica errores consecutivos duplicados', () => {
+    const p = parseApexDebugLog(DUP_ERROR_LOG);
+    expect(p.issues.filter((i) => i.type === 'error')).toHaveLength(1);
+    expect(deduplicateIssues([
+      { type: 'error', summary: 'A', description: 'B', line: 1 },
+      { type: 'error', summary: 'A', description: 'B', line: 2 }
+    ])).toHaveLength(1);
+  });
+
+  it('parsea SOQL_EXECUTE_EXPLAIN', () => {
+    const p = parseApexDebugLog(EXPLAIN_LOG);
+    expect(p.soql[0].explain?.table).toBe('Profile');
+    expect(p.soql[0].explain?.relativeCost).toBeCloseTo(0.717);
+    const explain = parseSoqlExplain('No explain plan is available');
+    expect(explain?.noPlan).toBe(true);
+  });
+
+  it('detecta ejecuciones y permite filtrar por ejecución', () => {
+    const multi = `${SAMPLE_LOG}
+10:26:03.0 (42000000)|EXECUTION_STARTED
+10:26:03.0 (43000000)|CODE_UNIT_STARTED|[EXTERNAL]|01pxx|OtherTest.testTwo()
+10:26:03.0 (44000000)|USER_DEBUG|[1]|DEBUG|second run
+10:26:03.0 (45000000)|EXECUTION_FINISHED`;
+    const p = parseApexDebugLog(multi);
+    expect(p.executions.length).toBe(2);
+    expect(p.meta.executionCount).toBe(2);
+    const scoped = sliceParsedForExecution(p, 1);
+    expect(scoped.userDebug).toHaveLength(1);
+    expect(scoped.userDebug[0].message).toContain('second run');
+  });
+
+  it('computeLogLineOffset cuenta líneas de preludio', () => {
+    expect(computeLogLineOffset(SAMPLE_LOG)).toBe(2);
+    expect(computeLogLineOffset('10:26:03.0 (1)|EXECUTION_STARTED')).toBe(0);
   });
 
   it('ordena soql por duración descendente', () => {

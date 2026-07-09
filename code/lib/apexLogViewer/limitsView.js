@@ -1,6 +1,11 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { panelSectionHeading, wirePanelHelpButtons } from './panelSectionHeading.js';
-import { bindLogTableRowNavigation, renderSummaryChips } from './analysisTableUtils.js';
+import {
+  APEX_LOG_PREVIEW,
+  createPreviewController,
+  mountPreviewTable,
+  mountShowMoreFooter
+} from './analysisTableUtils.js';
 
 const TRACKED_LIMITS = ['SOQL', 'SOQL_ROWS', 'DML', 'DML_ROWS', 'CALLOUT', 'CPU', 'HEAP', 'AGGS'];
 
@@ -28,6 +33,7 @@ export function renderLimitsView(mount, parsed, onJump, t) {
   const limits = parsed?.limits || [];
   const peak = parsed?.limitPeak || {};
   const series = buildLimitSeries(limits);
+  const chartsCtrl = createPreviewController(APEX_LOG_PREVIEW.limitsCharts);
 
   const peakChips = Object.entries(peak)
     .filter(([type]) => TRACKED_LIMITS.includes(type))
@@ -48,11 +54,11 @@ export function renderLimitsView(mount, parsed, onJump, t) {
       <h3>${escapeHtml(t('apexLogViewer.limits.peak'))}</h3>
       <div class="apex-log-limit-peaks">${peakChips || `<p class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.limits'))}</p>`}</div>
     </div>
-    <div class="apex-log-summary-section">
+    <div class="apex-log-summary-section" id="apexLogLimitsChartsSection">
       <h3>${escapeHtml(t('apexLogViewer.limits.progression'))}</h3>
       <div class="apex-log-limit-charts" id="apexLogLimitCharts"></div>
     </div>
-    <div class="apex-log-table-wrap">
+    <div class="apex-log-table-wrap" id="apexLogLimitsTableWrap">
       <table class="apex-log-data-table">
         <thead><tr>
           <th>${escapeHtml(t('apexLogViewer.col.line'))}</th>
@@ -64,11 +70,20 @@ export function renderLimitsView(mount, parsed, onJump, t) {
         <tbody id="apexLogLimitsBody"></tbody>
       </table>
     </div>`;
+  const chartsSection = mount.querySelector('#apexLogLimitsChartsSection');
   const chartsEl = mount.querySelector('#apexLogLimitCharts');
   const tbody = mount.querySelector('#apexLogLimitsBody');
+  const tableWrap = mount.querySelector('#apexLogLimitsTableWrap');
+  const display = limits.filter((r) => TRACKED_LIMITS.includes(r.type));
 
-  if (chartsEl) {
-    for (const [type, rows] of series) {
+  const seriesEntries = [...series.entries()];
+
+  function paintCharts(repaint = false) {
+    if (!chartsEl) return;
+    if (!repaint) chartsCtrl.reset();
+    chartsEl.innerHTML = '';
+    const visible = chartsCtrl.slice(seriesEntries);
+    for (const [type, rows] of visible) {
       const maxVal = rows[rows.length - 1]?.max || 1;
       const svgW = 400;
       const svgH = 60;
@@ -86,29 +101,38 @@ export function renderLimitsView(mount, parsed, onJump, t) {
         </svg>`;
       chartsEl.appendChild(chart);
     }
+    mountShowMoreFooter(
+      chartsSection,
+      chartsCtrl,
+      seriesEntries.length,
+      APEX_LOG_PREVIEW.limitsCharts,
+      t,
+      () => paintCharts(true)
+    );
   }
 
+  paintCharts();
+
+  /** @type {ReturnType<typeof mountPreviewTable> | null} */
+  let tablePreview = null;
   if (tbody) {
-    const display = limits.filter((r) => TRACKED_LIMITS.includes(r.type));
-    tbody.innerHTML = display.length
-      ? display
-          .map(
-            (r) => `<tr data-line="${r.line}" tabindex="0" role="button">
+    if (!display.length) {
+      tbody.innerHTML = `<tr><td colspan="5" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.limits'))}</td></tr>`;
+    } else {
+      tablePreview = mountPreviewTable(tbody, tableWrap, display, APEX_LOG_PREVIEW.limitsTableRows, {
+        rowHtmlFn: (r) => `<tr data-line="${r.line}" tabindex="0" role="button">
           <td>${r.line}</td>
           <td>${escapeHtml(r.timestamp)}</td>
           <td>${escapeHtml(r.type)}</td>
           <td>${r.used}</td>
           <td>${r.max}</td>
-        </tr>`
-          )
-          .join('')
-      : `<tr><td colspan="5" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.limits'))}</td></tr>`;
-    bindLogTableRowNavigation(tbody.querySelectorAll('tr[data-line]'), onJump);
+        </tr>`,
+        emptyHtml: `<tr><td colspan="5" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.limits'))}</td></tr>`,
+        t,
+        onJump
+      });
+    }
   }
 
-  const summaryEl = mount.querySelector('.apex-log-limit-peaks');
-  if (summaryEl && Object.keys(peak).length) {
-    renderSummaryChips(summaryEl.previousElementSibling, []);
-  }
   wirePanelHelpButtons(mount, t);
 }

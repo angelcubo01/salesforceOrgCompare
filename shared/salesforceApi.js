@@ -1598,6 +1598,69 @@ export function parseApexLogExecutionContext(logBody) {
   return { logType: 'N/A', logName: 'N/A', logMethod: 'N/A' };
 }
 
+const LOCAL_LOG_EXECUTION_STARTED_RE =
+  /^(\d{2}:\d{2}:\d{2}\.\d+)\s*(?:\(\d+\))?\|EXECUTION_STARTED(?:\||$)/m;
+
+/**
+ * Vista previa ligera de un Apex debug log local (sin parseo completo).
+ * @param {string} logBody
+ * @returns {{
+ *   user: { id: string, name: string } | null,
+ *   executionStartTime: string | null,
+ *   logType: string,
+ *   logName: string,
+ *   logMethod: string,
+ *   isValid: boolean
+ * }}
+ */
+export function parseLocalApexLogPreview(logBody) {
+  const text = normalizeApexLogBodyText(logBody);
+  const invalid = {
+    user: null,
+    executionStartTime: null,
+    logType: 'N/A',
+    logName: 'N/A',
+    logMethod: 'N/A',
+    isValid: false
+  };
+  if (!text) return invalid;
+
+  const ctx = parseApexLogExecutionContext(text);
+  const execMatch = text.match(LOCAL_LOG_EXECUTION_STARTED_RE);
+  const executionStartTime = execMatch ? execMatch[1] : null;
+  if (!executionStartTime) {
+    return { ...invalid, logType: ctx.logType, logName: ctx.logName, logMethod: ctx.logMethod };
+  }
+
+  let user = null;
+  const preludeEnd = text.search(/^.*EXECUTION_STARTED.*$/m);
+  const prelude = preludeEnd > 0 ? text.slice(0, preludeEnd) : text.slice(0, 50_000);
+  for (const lineText of prelude.split(/\r?\n/)) {
+    const trimmed = lineText.trim();
+    if (!trimmed || !trimmed.includes('|USER_INFO|')) continue;
+    const pipeIdx = trimmed.indexOf('|');
+    if (pipeIdx < 0) continue;
+    const fields = trimmed.slice(pipeIdx + 1).split('|');
+    const eventIdx = fields.indexOf('USER_INFO');
+    if (eventIdx < 0) continue;
+    const parts = fields.slice(eventIdx + 1);
+    const off = parts[0] === '[EXTERNAL]' ? 1 : 0;
+    const id = String(parts[off] || '').trim();
+    const name = String(parts[1 + off] || '').trim();
+    if (id || name) user = { id, name };
+    break;
+  }
+
+  return {
+    user,
+    executionStartTime,
+    logType: ctx.logType,
+    logName: ctx.logName,
+    logMethod: ctx.logMethod,
+    isValid: true
+  };
+}
+
 /** Body parseado + fallback con Location/Operation del registro ApexLog. */
 export function resolveApexLogExecutionContext(logBody, row) {
   return mergeApexLogExecutionContext(

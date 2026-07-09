@@ -9,67 +9,71 @@
   </head>
   <body>
     <header class="apex-log-viewer-toolbar">
-      <button type="button" id="apexLogViewerBack" class="apex-log-viewer-back" data-i18n="apexLogViewer.back">
-        Volver
-      </button>
-      <span id="apexLogViewerTitle" class="apex-log-viewer-title"></span>
-      <span id="apexLogViewerMeta" class="apex-log-viewer-meta" hidden></span>
-      <span id="apexLogViewerContext" class="apex-log-viewer-context" hidden></span>
-      <span id="apexLogViewerUser" class="apex-log-viewer-user ph-no-capture" hidden></span>
-      <span id="apexLogViewerParsing" class="apex-log-viewer-parsing" hidden data-i18n="apexLogViewer.parsing"
-        >Analizando…</span
-      >
-      <button
-        type="button"
-        id="apexLogViewerDownload"
-        class="apex-log-viewer-download"
-        data-i18n="apexLogViewer.download"
-        hidden
-      >
-        Descargar
-      </button>
+      <div class="apex-log-viewer-toolbar-row apex-log-viewer-toolbar-row--primary">
+        <button type="button" id="apexLogViewerBack" class="apex-log-viewer-back" data-i18n="apexLogViewer.back">
+          Volver
+        </button>
+        <span id="apexLogViewerTitle" class="apex-log-viewer-title"></span>
+        <span id="apexLogViewerMeta" class="apex-log-viewer-meta" hidden></span>
+        <span id="apexLogViewerName" class="apex-log-viewer-name" hidden></span>
+        <span id="apexLogExecutionBadge" class="apex-log-viewer-meta" hidden></span>
+        <span id="apexLogViewerParsing" class="apex-log-viewer-parsing" hidden></span>
+      </div>
+      <div class="apex-log-viewer-toolbar-row apex-log-viewer-toolbar-row--secondary">
+        <div id="apexLogFindMount" class="apex-log-find-mount"></div>
+        <span class="apex-log-viewer-toolbar-spacer" aria-hidden="true"></span>
+        <button
+          type="button"
+          id="apexLogViewerDownload"
+          class="apex-log-viewer-download"
+          data-i18n="apexLogViewer.download"
+          hidden
+        >
+          Descargar
+        </button>
+        <span
+          id="apexLogViewerUser"
+          class="apex-log-viewer-user ph-no-capture"
+          hidden
+          role="img"
+        ></span>
+      </div>
     </header>
     <nav id="apexLogTabs" class="apex-log-tabs" role="tablist" data-i18n-aria-label="apexLogViewer.tabListAria"></nav>
+    <div id="apexLogExecutionMount" class="apex-log-execution-mount" hidden></div>
+    <div id="apexLogViewerLoading" class="apex-log-viewer-loading" hidden>
+      <div class="apex-log-viewer-loading-inner">
+        <div class="apex-log-viewer-loading-spinner" aria-hidden="true"></div>
+        <span data-i18n="apexLogViewer.loading">Cargando log…</span>
+      </div>
+    </div>
     <main class="apex-log-panels">
       <div class="apex-log-panel is-active" data-panel="summary">
         <div id="apexLogSummaryMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div class="apex-log-panel" data-panel="errors" hidden>
+        <div id="apexLogErrorsMount" class="apex-log-panel-scroll"></div>
       </div>
       <div class="apex-log-panel" data-panel="text" hidden>
         <div id="apexLogTextToolbar" class="apex-log-text-toolbar"></div>
         <span id="apexLogTextFilterCount" class="apex-log-text-filter-count"></span>
         <div id="apexLogViewerMount" class="apex-log-viewer-editor"></div>
       </div>
-      <div class="apex-log-panel" data-panel="tree" hidden>
-        <div id="apexLogTreeToolbar" class="apex-log-panel-toolbar"></div>
-        <div id="apexLogTreeMount" class="apex-log-viewer-editor"></div>
-      </div>
-      <div class="apex-log-panel" data-panel="debug" hidden>
-        <div id="apexLogDebugMount" class="apex-log-panel-scroll"></div>
-      </div>
       <div class="apex-log-panel" data-panel="timeline" hidden>
         <div id="apexLogTimelineToolbar" class="apex-log-panel-toolbar"></div>
         <div id="apexLogTimelineMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="soql" hidden>
-        <div id="apexLogSoqlMount" class="apex-log-panel-scroll"></div>
+      <div class="apex-log-panel" data-panel="database" hidden>
+        <div id="apexLogDatabaseMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="dml" hidden>
-        <div id="apexLogDmlMount" class="apex-log-panel-scroll"></div>
+      <div class="apex-log-panel" data-panel="analysis" hidden>
+        <div id="apexLogAnalysisMount" class="apex-log-panel-scroll apex-log-panel-scroll--analysis"></div>
       </div>
-      <div class="apex-log-panel" data-panel="limits" hidden>
-        <div id="apexLogLimitsMount" class="apex-log-panel-scroll"></div>
+      <div class="apex-log-panel" data-panel="network" hidden>
+        <div id="apexLogNetworkMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="callouts" hidden>
-        <div id="apexLogCalloutsMount" class="apex-log-panel-scroll"></div>
-      </div>
-      <div class="apex-log-panel" data-panel="profiling" hidden>
-        <div id="apexLogProfilingMount" class="apex-log-panel-scroll"></div>
-      </div>
-      <div class="apex-log-panel" data-panel="validations" hidden>
-        <div id="apexLogValidationsMount" class="apex-log-panel-scroll"></div>
-      </div>
-      <div class="apex-log-panel" data-panel="workflow" hidden>
-        <div id="apexLogWorkflowMount" class="apex-log-panel-scroll"></div>
+      <div class="apex-log-panel" data-panel="platform" hidden>
+        <div id="apexLogPlatformMount" class="apex-log-panel-scroll"></div>
       </div>
     </main>
     <script src="../vendor/monaco-editor/min/vs/loader.js"></script>

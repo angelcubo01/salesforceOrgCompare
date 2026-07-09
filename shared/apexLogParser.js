@@ -18,6 +18,63 @@ const ENTRY_EXIT = {
 };
 
 const SF_ID_RE = /\b([a-zA-Z0-9]{15,18})\b/g;
+const STACK_TRACE_RE = /^(?:Class|Trigger)\.[^:]+:\s*line\s+\d+/i;
+const TEST_METHOD_RE = /Test\.\w+/i;
+
+/** @param {string} text */
+export function computeLogLineOffset(text) {
+  const idx = String(text || '').search(/^.*EXECUTION_STARTED.*$/m);
+  if (idx < 0) return 0;
+  const before = text.slice(0, idx);
+  if (!before) return 0;
+  return (before.match(/\r?\n/g) || []).length;
+}
+
+/** @param {number} bodyLine @param {number} lineOffset */
+export function toFileLine(bodyLine, lineOffset) {
+  return bodyLine + lineOffset;
+}
+
+/** @param {object[]} issues */
+export function deduplicateIssues(issues) {
+  const out = [];
+  const normalizeDesc = (desc) => String(desc || '').replace(/\s+/g, ' ').trim();
+  for (const issue of issues || []) {
+    const desc = normalizeDesc(issue.description);
+    const dup = out.find(
+      (existing) =>
+        issue.type === 'error' &&
+        existing.type === 'error' &&
+        existing.summary === issue.summary &&
+        normalizeDesc(existing.description) === desc &&
+        Math.abs((issue.line || 0) - (existing.line || 0)) <= 10
+    );
+    if (dup) continue;
+    out.push(issue);
+  }
+  return out;
+}
+
+/**
+ * @param {string} explainText
+ */
+export function parseSoqlExplain(explainText) {
+  const raw = String(explainText || '').trim();
+  if (!raw) return null;
+  const tableScan = raw.match(/TableScan on (\S+)/i);
+  const cardinality = raw.match(/cardinality:\s*([^,]+)/i);
+  const sobjectCardinality = raw.match(/sobjectCardinality:\s*([^,]+)/i);
+  const relativeCost = raw.match(/relativeCost\s*([\d.]+)/i);
+  const noPlan = /no explain plan is available/i.test(raw);
+  return {
+    raw,
+    table: tableScan?.[1] || '',
+    cardinality: cardinality?.[1]?.trim() || '',
+    sobjectCardinality: sobjectCardinality?.[1]?.trim() || '',
+    relativeCost: relativeCost ? Number(relativeCost[1]) : null,
+    noPlan
+  };
+}
 
 /** @param {string} event */
 export function classifyLogEvent(event) {
@@ -42,6 +99,131 @@ export function classifyLogEvent(event) {
   }
   if (ev.startsWith('CODE_UNIT') || ev.startsWith('EXECUTION_') || ev.startsWith('FLOW_')) return 'unit';
   return 'other';
+}
+
+/**
+ * Construye eventos de línea para todo el archivo (Monaco usa líneas de archivo).
+ * @param {string} text
+ * @param {{ line: number, event: string, category: string }[]} parsedEvents
+ */
+function buildFullLineEvents(text, parsedEvents) {
+  const byLine = new Map((parsedEvents || []).map((e) => [e.line, e]));
+  const rawLines = String(text || '').split(/\r?\n/);
+  const out = [];
+  let lastCategory = 'other';
+  for (let i = 0; i < rawLines.length; i++) {
+    const lineNum = i + 1;
+    const lineText = rawLines[i];
+    const known = byLine.get(lineNum);
+    if (known) {
+      lastCategory = known.category;
+      out.push({ line: lineNum, event: known.event, category: known.category });
+      continue;
+    }
+    if (!lineText.trim()) {
+      out.push({ line: lineNum, event: '', category: 'other' });
+      continue;
+    }
+    if (STACK_TRACE_RE.test(lineText.trim())) {
+      out.push({ line: lineNum, event: 'STACK_TRACE', category: 'stack' });
+      lastCategory = 'stack';
+      continue;
+    }
+    const m = lineText.match(/\|([A-Z_]+)\|/);
+    if (m) {
+      const cat = classifyLogEvent(m[1]);
+      lastCategory = cat;
+      out.push({ line: lineNum, event: m[1], category: cat });
+      continue;
+    }
+    if (lastCategory === 'error' || lastCategory === 'stack') {
+      out.push({ line: lineNum, event: 'STACK_TRACE', category: 'stack' });
+      continue;
+    }
+    out.push({ line: lineNum, event: '', category: 'other' });
+  }
+  return out;
+}
+
+/**
+ * @param {object | null} node
+ * @param {number} startLine
+ * @param {number} endLine
+ */
+export function sliceTreeForLineRange(node, startLine, endLine) {
+  if (!node) return null;
+  const inRange = (line) => line >= startLine && line <= endLine;
+
+  if (node.kind === 'root') {
+    const children = (node.children || [])
+      .map((ch) => sliceTreeForLineRange(ch, startLine, endLine))
+      .filter(Boolean);
+    return { ...node, children };
+  }
+
+  const children = (node.children || [])
+    .map((ch) => sliceTreeForLineRange(ch, startLine, endLine))
+    .filter(Boolean);
+  const line = node.line || 0;
+  if (!inRange(line) && !children.length) return null;
+  return { ...node, children };
+}
+
+/**
+ * @param {object} parsed
+ * @param {number | string} executionId
+ */
+export function sliceParsedForExecution(parsed, executionId) {
+  if (!parsed || executionId == null || executionId === 'all') return parsed;
+  const exec = (parsed.executions || []).find((e) => String(e.id) === String(executionId));
+  if (!exec) return parsed;
+  const { startLine, endLine } = exec;
+  const inRange = (line) => line >= startLine && line <= endLine;
+  const filterByLine = (arr) => (arr || []).filter((r) => inRange(r.line || 0));
+  const issues = (parsed.issues || []).filter((i) => inRange(i.line || 0));
+  const soql = filterByLine(parsed.soql);
+  const dml = filterByLine(parsed.dml);
+  const limits = filterByLine(parsed.limits);
+  const callouts = filterByLine(parsed.callouts);
+  const validations = filterByLine(parsed.validations);
+  const workflows = filterByLine(parsed.workflows);
+  const userDebug = filterByLine(parsed.userDebug);
+  const codeUnits = filterByLine(parsed.codeUnits);
+  const timeline = (parsed.timeline || []).filter((e) => inRange(e.line || 0));
+  const lineEvents = (parsed.lineEvents || []).filter((e) => inRange(e.line));
+  const tree = sliceTreeForLineRange(parsed.tree, startLine, endLine);
+  const limitPeak = {};
+  for (const l of limits) {
+    if (!limitPeak[l.type] || l.used > limitPeak[l.type].used) {
+      limitPeak[l.type] = { used: l.used, max: l.max, line: l.line };
+    }
+  }
+  const soqlGovernor = buildSoqlGovernorSummary(soql, limitPeak);
+  return {
+    ...parsed,
+    issues,
+    soql,
+    dml,
+    limits,
+    limitPeak,
+    callouts,
+    validations,
+    workflows,
+    userDebug,
+    codeUnits,
+    timeline,
+    lineEvents,
+    tree,
+    soqlGovernor,
+    soqlDuplicates: groupDuplicateSoql(soql.filter((s) => s.countsTowardSoqlLimit)),
+    meta: {
+      ...parsed.meta,
+      durationMs: exec.durationMs || parsed.meta?.durationMs || 0,
+      issueCount: issues.length,
+      scopedExecutionId: exec.id
+    },
+    scopedExecution: exec
+  };
 }
 
 /** @param {string} query */
@@ -254,26 +436,33 @@ function parseRowsFromTail(parts) {
 function splitLogLines(text) {
   const startIdx = text.search(/^.*EXECUTION_STARTED.*$/m);
   const body = startIdx >= 0 ? text.slice(startIdx) : text;
+  const lineOffset = computeLogLineOffset(text);
   const lines = [];
   const raw = body.split(/\r?\n/);
   let buf = '';
   let bufLine = 0;
+  /** @type {number[]} */
+  let bufContinuationLines = [];
   for (let i = 0; i < raw.length; i++) {
     const line = raw[i];
+    const fileLine = i + 1 + lineOffset;
     if (!line.trim() && !buf) continue;
     if (LOG_LINE_RE.test(line) && buf) {
-      lines.push({ text: buf, line: bufLine });
+      lines.push({ text: buf, line: bufLine, continuationLines: bufContinuationLines });
       buf = line;
-      bufLine = i + 1;
+      bufLine = fileLine;
+      bufContinuationLines = [];
     } else if (!buf) {
       buf = line;
-      bufLine = i + 1;
+      bufLine = fileLine;
+      bufContinuationLines = [];
     } else {
       buf += '\n' + line;
+      if (line.trim()) bufContinuationLines.push(fileLine);
     }
   }
-  if (buf) lines.push({ text: buf, line: bufLine });
-  return lines;
+  if (buf) lines.push({ text: buf, line: bufLine, continuationLines: bufContinuationLines });
+  return { lines, lineOffset };
 }
 
 function parseDebugLevels(text) {
@@ -362,6 +551,12 @@ export function parseApexDebugLog(rawText) {
   const workflows = [];
   const codeUnits = [];
   const lineEvents = [];
+  /** @type {object[]} */
+  const executions = [];
+  /** @type {object | null} */
+  let currentExecution = null;
+  /** @type {Map<number, object>} */
+  const openSoqlByLine = new Map();
   const recordSets = {
     accounts: new Set(),
     cases: new Set(),
@@ -399,11 +594,11 @@ export function parseApexDebugLog(rawText) {
     }
   }
 
-  const lines = splitLogLines(text);
+  const { lines, lineOffset } = splitLogLines(text);
   let minNs = null;
   let maxNs = null;
 
-  for (const { text: lineText, line: lineNum } of lines) {
+  for (const { text: lineText, line: lineNum, continuationLines = [] } of lines) {
     const parsed = parseLineFields(lineText);
     if (!parsed) continue;
 
@@ -411,8 +606,63 @@ export function parseApexDebugLog(rawText) {
     if (minNs == null || timestampNs < minNs) minNs = timestampNs;
     if (maxNs == null || timestampNs > maxNs) maxNs = timestampNs;
 
-    lineEvents.push({ line: lineNum, event, category: classifyLogEvent(event) });
+    const category = classifyLogEvent(event);
+    lineEvents.push({ line: lineNum, event, category });
+    for (const contLine of continuationLines) {
+      const contCat = category === 'error' ? 'stack' : category;
+      lineEvents.push({ line: contLine, event: 'STACK_TRACE', category: contCat });
+    }
     extractRecordIds(lineText, recordSets);
+
+    if (event === 'EXECUTION_STARTED') {
+      currentExecution = {
+        id: executions.length,
+        label: '',
+        startLine: lineNum,
+        endLine: lineNum,
+        durationMs: 0,
+        hasError: false,
+        codeUnitLabel: '',
+        isTest: false,
+        startNs: timestampNs,
+        endNs: timestampNs
+      };
+      executions.push(currentExecution);
+    }
+
+    if (event === 'EXECUTION_FINISHED' && currentExecution) {
+      currentExecution.endLine = lineNum;
+      currentExecution.endNs = timestampNs;
+      if (timestampNs > currentExecution.startNs) {
+        currentExecution.durationMs = Math.round(
+          (timestampNs - currentExecution.startNs) / 1_000_000
+        );
+      }
+      if (!currentExecution.label) {
+        currentExecution.label = `Ejecución ${currentExecution.id + 1}`;
+      }
+      currentExecution = null;
+    }
+
+    if (event === 'CODE_UNIT_STARTED' && parts[1] === '[EXTERNAL]' && currentExecution) {
+      const cuLabel = parts[3] || parts[2] || '';
+      if (!currentExecution.codeUnitLabel) {
+        currentExecution.codeUnitLabel = cuLabel;
+        currentExecution.label = cuLabel || currentExecution.label;
+      }
+      if (TEST_METHOD_RE.test(cuLabel)) currentExecution.isTest = true;
+    }
+
+    if (event === 'SOQL_EXECUTE_EXPLAIN') {
+      const apexLine = parseApexLineNumber(parts[1]);
+      const explainText = parts.slice(2).join('|') || lineText;
+      const explain = parseSoqlExplain(explainText);
+      const soqlRec =
+        openSoqlByLine.get(apexLine ?? -1) ||
+        [...soql].reverse().find((s) => s.apexLine === apexLine);
+      if (soqlRec && explain) soqlRec.explain = explain;
+      continue;
+    }
 
     if (event === 'LIMIT_USAGE') {
       if (lineText.includes('MAXIMUM DEBUG LOG SIZE REACHED')) {
@@ -533,11 +783,15 @@ export function parseApexDebugLog(rawText) {
       if (stack.length > 1) {
         stack[stack.length - 1].hasError = true;
       }
+      if (event === 'FATAL_ERROR' && currentExecution) currentExecution.hasError = true;
+      const stackMatch = lineText.match(/Class\.([^:]+):\s*line\s+(\d+)/i);
       issues.push({
         summary: event === 'FATAL_ERROR' ? 'Error fatal' : 'Excepción',
         description: parts.slice(1).join('|') || lineText,
         type: 'error',
-        line: lineNum
+        line: lineNum,
+        apexClass: stackMatch?.[1]?.trim() || '',
+        apexLine: stackMatch ? Number(stackMatch[2]) : null
       });
       continue;
     }
@@ -605,17 +859,21 @@ export function parseApexDebugLog(rawText) {
 
       if (event === 'SOQL_EXECUTE_BEGIN') {
         const ctx = methodStack.length ? methodStack[methodStack.length - 1] : null;
-        soql.push({
+        const soqlRec = {
           line: lineNum,
           query: label,
           rows: 0,
           durationMs: 0,
           aggregations,
           context: ctx ? `${ctx.label}:${ctx.apexLine}` : '',
+          apexLine: apexLine ?? '',
           _soqlLimitAtBegin: lastSoqlLimitUsed,
           _aggsLimitAtBegin: lastAggsLimitUsed,
-          _nodeId: node.id
-        });
+          _nodeId: node.id,
+          explain: null
+        };
+        soql.push(soqlRec);
+        openSoqlByLine.set(apexLine ?? lineNum, soqlRec);
       }
       if (event === 'DML_BEGIN') {
         dml.push({
@@ -758,16 +1016,30 @@ export function parseApexDebugLog(rawText) {
   for (const d of dml) delete d._nodeId;
 
   const soqlGovernor = buildSoqlGovernorSummary(soql, limitPeak);
+  const dedupedIssues = deduplicateIssues(issues);
+  const fullLineEvents = buildFullLineEvents(text, lineEvents);
+  const testExecutions = executions.filter((e) => e.isTest);
+  const isTestLog = testExecutions.length >= 2 || (executions.length >= 2 && testExecutions.length > 0);
+
+  for (const exec of executions) {
+    if (!exec.label && exec.codeUnitLabel) exec.label = exec.codeUnitLabel;
+    if (!exec.label) exec.label = `Ejecución ${exec.id + 1}`;
+  }
 
   return {
     meta: {
       sizeBytes,
       durationMs: root.durationMs || 0,
-      issueCount: issues.length
+      issueCount: dedupedIssues.length,
+      lineOffset,
+      executionCount: executions.length,
+      isTestLog,
+      failedExecutionCount: executions.filter((e) => e.hasError).length
     },
     debugLevels,
     user,
-    issues,
+    issues: dedupedIssues,
+    executions,
     tree: root,
     userDebug,
     soql,
@@ -780,7 +1052,7 @@ export function parseApexDebugLog(rawText) {
     codeUnits,
     profiling,
     records,
-    lineEvents,
+    lineEvents: fullLineEvents,
     soqlGovernor,
     soqlDuplicates: groupDuplicateSoql(soql.filter((s) => s.countsTowardSoqlLimit)),
     timeline

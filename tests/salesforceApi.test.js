@@ -5,6 +5,7 @@ import {
   sourceSignatureFromFiles,
   normalizeApexLogBodyText,
   parseApexLogExecutionContext,
+  parseLocalApexLogPreview,
   inferApexLogExecutionFromMetadata,
   mergeApexLogExecutionContext,
   resolveApexLogExecutionContext,
@@ -125,6 +126,43 @@ describe('parseApexLogExecutionContext', () => {
       logName: 'N/A',
       logMethod: 'N/A'
     });
+  });
+});
+
+describe('parseLocalApexLogPreview', () => {
+  const VALID_LOG = `65.0 APEX_CODE,FINEST;APEX_PROFILING,INFO
+10:26:03.0 (14406125)|USER_INFO|[EXTERNAL]|005xx|Test User|GMT+01:00
+10:26:03.0 (14450000)|EXECUTION_STARTED
+apex://CC_MyClass/ACTION$runProcess
+10:26:03.0 (15000000)|CODE_UNIT_STARTED|[EXTERNAL]|01pxx|CC_MyClass.runProcess()
+`;
+
+  it('extrae usuario, hora y clase de un Apex debug log válido', () => {
+    const parsed = parseLocalApexLogPreview(VALID_LOG);
+    expect(parsed.isValid).toBe(true);
+    expect(parsed.executionStartTime).toBe('10:26:03.0');
+    expect(parsed.user).toEqual({ id: '005xx', name: 'Test User' });
+    expect(parsed.logType).toBe('Apex');
+    expect(parsed.logName).toBe('CC_MyClass');
+    expect(parsed.logMethod).toBe('runProcess');
+  });
+
+  it('devuelve isValid false con texto vacío', () => {
+    const parsed = parseLocalApexLogPreview('');
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.user).toBeNull();
+    expect(parsed.executionStartTime).toBeNull();
+  });
+
+  it('devuelve isValid false sin EXECUTION_STARTED', () => {
+    const parsed = parseLocalApexLogPreview('<?xml version="1.0"?><root/>');
+    expect(parsed.isValid).toBe(false);
+    expect(parsed.executionStartTime).toBeNull();
+  });
+
+  it('devuelve isValid false con EXECUTION_STARTED sin timestamp válido', () => {
+    const parsed = parseLocalApexLogPreview('INVALID|EXECUTION_STARTED');
+    expect(parsed.isValid).toBe(false);
   });
 });
 

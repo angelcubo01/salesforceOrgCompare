@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Código Apex · Salesforce Org Compare</title>
+    <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
+    <link rel="stylesheet" href="./apex-source-viewer.css" />
+  </head>
+  <body>
+    <header class="apex-src-viewer-toolbar">
+      <button type="button" id="apexSrcViewerBack" class="apex-src-viewer-back" data-i18n="apexLogViewer.back">
+        Volver
+      </button>
+      <span id="apexSrcViewerTitle" class="apex-src-viewer-title"></span>
+      <button
+        type="button"
+        id="apexSrcViewerDownload"
+        class="apex-src-viewer-download"
+        data-i18n="apexLogViewer.download"
+      >
+        Descargar
+      </button>
+    </header>
+    <div id="apexSrcViewerMount" class="apex-src-viewer-editor"></div>
+    <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
+    <script src="./editor/monaco-amd-config.js"></script>
+    <script type="module" src="./apex-source-viewer.js"></script>
+  </body>
+</html>

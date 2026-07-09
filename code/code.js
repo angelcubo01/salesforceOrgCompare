@@ -77,6 +77,7 @@ import { setupQueryExplorerPanel, refreshQueryExplorerPanel } from './ui/queryEx
 import { setupDebugLogBrowserPanel, refreshDebugLogBrowserPanel } from './ui/debugLogBrowserPanel.js';
 import { setupDebugLogTraceModal } from './ui/debugLogTraceModal.js';
 import { setupDebugLogViewTracesModal } from './ui/debugLogViewTracesModal.js';
+import { setupDebugLogLocalAnalyzeModal } from './ui/debugLogLocalAnalyzeModal.js';
 import { setupApexCoverageComparePanel, refreshApexCoverageComparePanel } from './ui/apexCoverageComparePanel.js';
 import {
   setupCustomSettingsComparePanel,
@@ -281,6 +282,7 @@ async function init() {
   setupDebugLogBrowserPanel();
   setupDebugLogTraceModal();
   setupDebugLogViewTracesModal();
+  setupDebugLogLocalAnalyzeModal();
   setupApexCoverageComparePanel();
   setupCustomSettingsComparePanel();
   setupCustomMetadataComparePanel();

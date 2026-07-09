@@ -1,5 +1,6 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { formatMs, formatLogSize } from '../../../shared/apexLogParser.js';
+import { APEX_LOG_PREVIEW, createPreviewController, mountShowMoreFooter } from './analysisTableUtils.js';
 import { panelSectionHeading, wirePanelHelpButtons } from './panelSectionHeading.js';
 
 const LIMIT_KEYS = ['SOQL', 'SOQL_ROWS', 'DML', 'DML_ROWS', 'CPU', 'HEAP', 'CALLOUT'];
@@ -23,31 +24,40 @@ function recordUrl(instanceUrl, id, prefix) {
 }
 
 /**
+ * @param {number} pct
+ */
+function limitTone(pct) {
+  if (pct >= 80) return 'danger';
+  if (pct >= 50) return 'warn';
+  return 'ok';
+}
+
+/**
  * @param {object} parsed
  */
 function buildSummaryContext(parsed) {
-  const codeUnits = parsed.codeUnits || [];
-  const entry =
-    codeUnits.find((cu) => /\[EXTERNAL\]/i.test(cu.label))?.label ||
-    codeUnits[0]?.label ||
-    parsed.profiling?.methods?.[0]?.detail ||
-    '';
+  const scopedExec = parsed.scopedExecution;
+  const singleExec = (parsed.executions || []).length === 1 ? parsed.executions[0] : null;
+  const entry = scopedExec
+    ? scopedExec.codeUnitLabel || scopedExec.label || ''
+    : singleExec
+      ? singleExec.codeUnitLabel || singleExec.label || ''
+      : '';
   const errors = (parsed.issues || []).filter((i) => i.type === 'error');
   const warnings = (parsed.issues || []).filter((i) => i.type === 'warning');
   const truncated = warnings.some((i) => i.summary === 'Log truncado');
   const slowest = [...(parsed.timeline || [])]
     .filter((ev) => ev.durationMs > 0)
-    .sort((a, b) => b.durationMs - a.durationMs)[0];
+    .sort((a, b) => b.durationMs - a.durationMs)
+    .slice(0, 3);
   const limitPeak = parsed.limitPeak || {};
-  const limitsAtRisk = LIMIT_KEYS.map((key) => {
+  const allLimits = LIMIT_KEYS.map((key) => {
     const p = limitPeak[key];
-    if (!p?.max) return null;
+    if (!p?.max) return { key, used: 0, max: 0, pct: 0, line: 0 };
     const pct = Math.round((p.used / p.max) * 100);
     return { key, used: p.used, max: p.max, pct, line: p.line };
-  })
-    .filter(Boolean)
-    .filter((l) => l.pct >= 50)
-    .sort((a, b) => b.pct - a.pct);
+  });
+  const limitsAtRisk = allLimits.filter((l) => l.max > 0 && l.pct >= 50).sort((a, b) => b.pct - a.pct);
   const records = parsed.records || {};
   const recordCounts = [
     { label: 'Account', ids: records.accounts, prefix: '001' },
@@ -61,6 +71,7 @@ function buildSummaryContext(parsed) {
     warnings,
     truncated,
     slowest,
+    allLimits,
     limitsAtRisk,
     recordCounts,
     duplicateGroups: (parsed.soqlDuplicates || []).length,
@@ -73,17 +84,102 @@ function buildSummaryContext(parsed) {
  * @param {ReturnType<typeof buildSummaryContext>} ctx
  * @param {(key: string, params?: object) => string} t
  */
-function renderStatusPanel(ctx, t) {
-  const items = [];
+function renderHeroBanner(ctx, t) {
+  let tone = 'ok';
+  let title = t('apexLogViewer.summary.heroOk');
+  let cta = '';
   if (ctx.errors.length) {
-    const first = ctx.errors[0];
-    items.push(
-      `<div class="apex-log-summary-status apex-log-summary-status--error">
-        <span class="apex-log-summary-status-label">${escapeHtml(t('apexLogViewer.summary.statusErrors', { count: ctx.errors.length }))}</span>
-        <p class="apex-log-summary-status-detail">${escapeHtml(first.summary)}${first.description ? ` — ${escapeHtml(first.description.slice(0, 120))}` : ''}</p>
-        ${first.line ? `<button type="button" class="apex-log-summary-link-btn" data-line="${first.line}">${escapeHtml(t('apexLogViewer.summary.viewLine'))}</button>` : ''}
-      </div>`
+    tone = 'error';
+    title = t('apexLogViewer.summary.heroErrors', { count: ctx.errors.length });
+    cta = `<button type="button" class="apex-log-summary-hero-cta" data-line="${ctx.errors[0].line || 0}">${escapeHtml(t('apexLogViewer.summary.viewFirstError'))}</button>`;
+  } else if (ctx.truncated) {
+    tone = 'warn';
+    title = t('apexLogViewer.summary.statusTruncated');
+  } else if (ctx.warnings.length) {
+    tone = 'warn';
+    title = t('apexLogViewer.summary.statusWarnings', { count: ctx.warnings.length });
+  }
+  return `<div class="apex-log-summary-hero apex-log-summary-hero--${tone}">
+    <span class="apex-log-summary-hero-icon" aria-hidden="true">${tone === 'error' ? '✕' : tone === 'warn' ? '!' : '✓'}</span>
+    <div class="apex-log-summary-hero-body">
+      <strong>${escapeHtml(title)}</strong>
+      ${cta}
+    </div>
+  </div>`;
+}
+
+/**
+ * @param {ReturnType<typeof buildSummaryContext>} ctx
+ * @param {(key: string) => string} t
+ */
+function renderLimitsPanel(ctx, t) {
+  const limits = ctx.allLimits.filter((l) => l.max > 0);
+  if (!limits.length) {
+    return `<p class="apex-log-summary-muted">${escapeHtml(t('apexLogViewer.summary.noLimitsData'))}</p>`;
+  }
+  return limits
+    .map((l) => {
+      const rowTone =
+        l.pct >= 80 ? ' apex-log-summary-limit-row--warn' : l.pct >= 50 ? ' apex-log-summary-limit-row--caution' : '';
+      return `<div class="apex-log-summary-limit-row${rowTone}">
+        <span class="apex-log-summary-limit-key">${escapeHtml(l.key)}</span>
+        <div class="apex-log-summary-limit-bar"><div class="apex-log-summary-limit-fill apex-log-summary-limit-fill--${limitTone(l.pct)}" style="width:${Math.min(100, l.pct)}%"></div></div>
+        <span class="apex-log-summary-limit-val">${l.used} / ${l.max}</span>
+      </div>`;
+    })
+    .join('');
+}
+
+/**
+ * @param {object} parsed
+ * @param {ReturnType<typeof buildSummaryContext>} ctx
+ * @param {(key: string) => string} t
+ * @param {string} recordPillsHtml
+ */
+function renderLeadContext(parsed, ctx, t, recordPillsHtml) {
+  const rows = [];
+  if (parsed.user?.name) {
+    rows.push(
+      `<div class="apex-log-summary-lead-row"><span class="apex-log-summary-lead-k">${escapeHtml(t('apexLogViewer.summary.user'))}</span><span class="apex-log-summary-lead-v">${escapeHtml(parsed.user.name)}</span></div>`
     );
+  }
+  if (ctx.entry) {
+    rows.push(
+      `<div class="apex-log-summary-lead-row"><span class="apex-log-summary-lead-k">${escapeHtml(t('apexLogViewer.summary.entryPoint'))}</span><span class="apex-log-summary-lead-v">${escapeHtml(ctx.entry)}</span></div>`
+    );
+  }
+  if (!rows.length && !recordPillsHtml) return '';
+  return `<section class="apex-log-summary-lead">
+    <div class="apex-log-summary-lead-rows">${rows.join('')}</div>
+    ${recordPillsHtml ? `<div class="apex-log-summary-lead-records">${recordPillsHtml}</div>` : ''}
+  </section>`;
+}
+
+/**
+ * @param {ReturnType<typeof buildSummaryContext>} ctx
+ * @param {(key: string, params?: object) => string} t
+ */
+function renderStatusPanel(ctx, t, errorCtrl) {
+  const items = [];
+  if (ctx.errors.length && errorCtrl) {
+    const visible = errorCtrl.slice(ctx.errors);
+    items.push(
+      `<div class="apex-log-summary-status-heading">${escapeHtml(t('apexLogViewer.summary.statusErrors', { count: ctx.errors.length }))}</div>`
+    );
+    for (const err of visible) {
+      const apexHint =
+        err.apexClass && err.apexLine
+          ? `<span class="apex-log-summary-status-apex">${escapeHtml(err.apexClass)}:${err.apexLine}</span>`
+          : '';
+      items.push(
+        `<div class="apex-log-summary-status apex-log-summary-status--error">
+          <span class="apex-log-summary-status-label">${escapeHtml(err.summary || t('apexLogViewer.errors.unknown'))}</span>
+          <p class="apex-log-summary-status-detail">${escapeHtml(err.description || '—')}</p>
+          ${apexHint}
+          ${err.line ? `<button type="button" class="apex-log-summary-link-btn" data-line="${err.line}">${escapeHtml(t('apexLogViewer.summary.viewLine'))}</button>` : ''}
+        </div>`
+      );
+    }
   } else {
     items.push(
       `<div class="apex-log-summary-status apex-log-summary-status--ok">
@@ -97,95 +193,29 @@ function renderStatusPanel(ctx, t) {
         <span class="apex-log-summary-status-label">${escapeHtml(t('apexLogViewer.summary.statusTruncated'))}</span>
       </div>`
     );
-  } else if (ctx.warnings.length && !ctx.errors.length) {
-    items.push(
-      `<div class="apex-log-summary-status apex-log-summary-status--warn">
-        <span class="apex-log-summary-status-label">${escapeHtml(t('apexLogViewer.summary.statusWarnings', { count: ctx.warnings.length }))}</span>
-      </div>`
-    );
   }
   return items.join('');
 }
 
 /**
- * @param {ReturnType<typeof buildSummaryContext>} ctx
- * @param {(key: string, params?: object) => string} t
- */
-function renderLimitsPanel(ctx, t) {
-  if (!ctx.limitsAtRisk.length) {
-    return `<p class="apex-log-summary-muted">${escapeHtml(t('apexLogViewer.summary.noLimitsRisk'))}</p>`;
-  }
-  return ctx.limitsAtRisk
-    .slice(0, 4)
-    .map((l) => {
-      const warn = l.pct >= 80 ? ' apex-log-summary-limit-row--warn' : '';
-      return `<div class="apex-log-summary-limit-row${warn}">
-        <span class="apex-log-summary-limit-key">${escapeHtml(l.key)}</span>
-        <div class="apex-log-summary-limit-bar"><div class="apex-log-summary-limit-fill" style="width:${Math.min(100, l.pct)}%"></div></div>
-        <span class="apex-log-summary-limit-val">${l.used} / ${l.max}</span>
-      </div>`;
-    })
-    .join('');
-}
-
-/**
- * @param {ReturnType<typeof buildSummaryContext>} ctx
- * @param {(key: string, params?: object) => string} t
- * @param {(line: number) => void} onJump
- */
-function renderHighlights(ctx, t, onJump) {
-  const lines = [];
-  if (ctx.slowest) {
-    lines.push(
-      `<button type="button" class="apex-log-summary-highlight" data-line="${ctx.slowest.line}">
-        <span class="apex-log-summary-highlight-kicker">${escapeHtml(t('apexLogViewer.summary.slowestOp'))}</span>
-        <span class="apex-log-summary-highlight-body">${escapeHtml(formatMs(ctx.slowest.durationMs))} · ${escapeHtml(t(`apexLogViewer.kind.${ctx.slowest.type}`) || ctx.slowest.type)} · ${escapeHtml(ctx.slowest.label)}</span>
-      </button>`
-    );
-  }
-  if (ctx.duplicateGroups > 0) {
-    lines.push(
-      `<div class="apex-log-summary-highlight apex-log-summary-highlight--static">
-        <span class="apex-log-summary-highlight-kicker">${escapeHtml(t('apexLogViewer.summary.soqlDuplicates'))}</span>
-        <span class="apex-log-summary-highlight-body">${escapeHtml(t('apexLogViewer.summary.soqlDuplicatesDetail', { count: ctx.duplicateGroups }))}</span>
-      </div>`
-    );
-  }
-  if (ctx.soqlExempt > 0) {
-    lines.push(
-      `<div class="apex-log-summary-highlight apex-log-summary-highlight--static">
-        <span class="apex-log-summary-highlight-kicker">${escapeHtml(t('apexLogViewer.summary.soqlExempt'))}</span>
-        <span class="apex-log-summary-highlight-body">${escapeHtml(t('apexLogViewer.summary.soqlExemptDetail', { count: ctx.soqlExempt }))}</span>
-      </div>`
-    );
-  }
-  if (!lines.length) {
-    return `<p class="apex-log-summary-muted">${escapeHtml(t('apexLogViewer.summary.noHighlights'))}</p>`;
-  }
-  return lines.join('');
-}
-
-/**
  * @param {object} parsed
  * @param {ReturnType<typeof buildSummaryContext>} ctx
- * @param {(key: string, params?: object) => string} t
+ * @param {(key: string) => string} t
  */
 function buildQuickNav(parsed, ctx, t) {
-  /** @type {{ id: string, label: string }[]} */
   const tabs = [];
-  const push = (id, labelKey) => {
-    tabs.push({ id, label: t(labelKey) });
-  };
-  if (ctx.errors.length) push('text', 'apexLogViewer.summary.navErrors');
-  if ((parsed.soql || []).length) push('soql', 'apexLogViewer.tab.soql');
-  if (ctx.limitsAtRisk.length || Object.keys(parsed.limitPeak || {}).length) {
-    push('limits', 'apexLogViewer.tab.limits');
-  }
+  const push = (id, labelKey) => tabs.push({ id, label: t(labelKey) });
+  if (ctx.errors.length) push('errors', 'apexLogViewer.summary.navErrors');
+  if ((parsed.soql || []).length || (parsed.dml || []).length) push('database', 'apexLogViewer.tab.database');
+  if (ctx.allLimits.some((l) => l.max > 0)) push('database', 'apexLogViewer.tab.limits');
   if ((parsed.timeline || []).length) push('timeline', 'apexLogViewer.tab.timeline');
-  if ((parsed.callouts || []).length) push('callouts', 'apexLogViewer.tab.callouts');
-  if ((parsed.dml || []).length) push('dml', 'apexLogViewer.tab.dml');
-  if (ctx.debugCount) push('debug', 'apexLogViewer.tab.debug');
-  return tabs;
+  if ((parsed.callouts || []).length || ctx.debugCount) push('network', 'apexLogViewer.tab.network');
+  const seen = new Set();
+  return tabs.filter((tab) => {
+    if (seen.has(tab.id)) return false;
+    seen.add(tab.id);
+    return true;
+  });
 }
 
 /**
@@ -210,23 +240,6 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
     (parsed.soql || []).filter((s) => s.countsTowardSoqlLimit !== false).length;
   const soqlLimitDisplay = soqlPeak?.used ?? soqlCounted;
 
-  const contextItems = [];
-  if (parsed.user?.name) {
-    contextItems.push(
-      `<span class="apex-log-summary-context-item"><span class="apex-log-summary-context-k">${escapeHtml(t('apexLogViewer.summary.user'))}</span>${escapeHtml(parsed.user.name)}</span>`
-    );
-  }
-  if (ctx.entry) {
-    contextItems.push(
-      `<span class="apex-log-summary-context-item"><span class="apex-log-summary-context-k">${escapeHtml(t('apexLogViewer.summary.entryPoint'))}</span>${escapeHtml(ctx.entry)}</span>`
-    );
-  }
-  if (ctx.debugCount) {
-    contextItems.push(
-      `<span class="apex-log-summary-context-item"><span class="apex-log-summary-context-k">${escapeHtml(t('apexLogViewer.summary.debugCount'))}</span>${ctx.debugCount}</span>`
-    );
-  }
-
   const recordPills = [];
   for (const { label, ids, prefix } of ctx.recordCounts) {
     const count = ids.length;
@@ -250,9 +263,14 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
   }
 
   const quickNav = buildQuickNav(parsed, ctx, t);
+  const errorCtrl = createPreviewController(APEX_LOG_PREVIEW.summaryErrors);
+  const recordPillsHtml = recordPills.join('');
+  const leadContext = renderLeadContext(parsed, ctx, t, recordPillsHtml);
 
   mount.innerHTML = `
     ${panelSectionHeading('summary', t('apexLogViewer.tab.summary'), t)}
+    ${renderHeroBanner(ctx, t)}
+    ${leadContext}
     <div class="apex-log-summary-grid">
       <div class="apex-log-summary-card">
         <span class="apex-log-summary-card-label">${escapeHtml(t('apexLogViewer.meta.duration'))}</span>
@@ -278,26 +296,24 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
         <span class="apex-log-summary-card-label">${escapeHtml(t('apexLogViewer.summary.errors'))}</span>
         <strong class="${ctx.errors.length ? 'apex-log-text--error' : ''}">${ctx.errors.length}</strong>
       </div>
+      ${
+        ctx.debugCount
+          ? `<div class="apex-log-summary-card">
+        <span class="apex-log-summary-card-label">${escapeHtml(t('apexLogViewer.summary.debugCount'))}</span>
+        <strong>${ctx.debugCount}</strong>
+      </div>`
+          : ''
+      }
     </div>
-    ${
-      contextItems.length || recordPills.length
-        ? `<div class="apex-log-summary-context">${contextItems.join('')}<span class="apex-log-summary-context-records">${recordPills.join('')}</span></div>`
-        : ''
-    }
     <div class="apex-log-summary-panels">
-      <section class="apex-log-summary-panel">
+      <section class="apex-log-summary-panel" id="apexLogSummaryStatusPanel">
         <h3>${escapeHtml(t('apexLogViewer.summary.panelStatus'))}</h3>
-        ${renderStatusPanel(ctx, t)}
       </section>
-      <section class="apex-log-summary-panel">
+      <section class="apex-log-summary-panel" id="apexLogSummaryLimitsPanel">
         <h3>${escapeHtml(t('apexLogViewer.summary.panelLimits'))}</h3>
-        ${renderLimitsPanel(ctx, t)}
+        <div id="apexLogSummaryLimitsBody">${renderLimitsPanel(ctx, t)}</div>
       </section>
     </div>
-    <section class="apex-log-summary-panel apex-log-summary-panel--full">
-      <h3>${escapeHtml(t('apexLogViewer.summary.panelHighlights'))}</h3>
-      <div class="apex-log-summary-highlights" id="apexLogSummaryHighlights">${renderHighlights(ctx, t, onJump)}</div>
-    </section>
     ${
       quickNav.length
         ? `<div class="apex-log-summary-quicknav">
@@ -309,10 +325,35 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
         : ''
     }`;
 
+  const statusPanel = mount.querySelector('#apexLogSummaryStatusPanel');
+
+  const wireStatusPanel = () => {
+    if (!statusPanel) return;
+    const heading = statusPanel.querySelector('h3');
+    statusPanel.innerHTML = '';
+    if (heading) statusPanel.appendChild(heading);
+    const body = document.createElement('div');
+    body.innerHTML = renderStatusPanel(ctx, t, errorCtrl);
+    statusPanel.appendChild(body);
+    statusPanel.querySelectorAll('[data-line]').forEach((el) => {
+      el.addEventListener('click', () => onJump(Number(el.getAttribute('data-line'))));
+    });
+    mountShowMoreFooter(
+      statusPanel,
+      errorCtrl,
+      ctx.errors.length,
+      APEX_LOG_PREVIEW.summaryErrors,
+      t,
+      wireStatusPanel
+    );
+  };
+
+  wireStatusPanel();
+
   mount.querySelectorAll('[data-line]').forEach((el) => {
     el.addEventListener('click', () => onJump(Number(el.getAttribute('data-line'))));
   });
-  mount.querySelectorAll('.apex-log-summary-quicknav-btn').forEach((btn) => {
+  mount.querySelectorAll('[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tabId = btn.getAttribute('data-tab');
       if (tabId && onTabSwitch) onTabSwitch(tabId);
@@ -322,14 +363,6 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
   wirePanelHelpButtons(mount, t);
 }
 
-/**
- * Convierte los pills de registros relacionados en desplegables que se abren
- * al pasar el ratón, con foco o clic, y resuelve los nombres de los registros
- * de forma diferida la primera vez que se abren.
- * @param {HTMLElement} mount
- * @param {((ids: string[]) => Promise<Record<string, { name?: string, type?: string }>>) | undefined} resolveRecords
- * @param {(key: string, params?: object) => string} t
- */
 function setupRecordDropdowns(mount, resolveRecords, t) {
   const dropdowns = mount.querySelectorAll('.apex-log-summary-record-dd');
   dropdowns.forEach((dd) => {

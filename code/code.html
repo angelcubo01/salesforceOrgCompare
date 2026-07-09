@@ -2118,26 +2118,59 @@
                 <button
                   type="button"
                   id="debugLogBrowserRefreshBtn"
-                  class="debug-log-browser-view-traces-btn"
-                  data-i18n="debugLogs.refresh"
+                  class="debug-log-browser-head-btn debug-log-browser-refresh-btn"
                 >
-                  Refrescar
+                  <span class="debug-log-browser-head-btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="23 4 23 10 17 10"></polyline>
+                      <polyline points="1 20 1 14 7 14"></polyline>
+                      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+                      <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+                    </svg>
+                  </span>
+                  <span data-i18n="debugLogs.refresh">Refrescar</span>
                 </button>
                 <button
                   type="button"
                   id="debugLogBrowserViewTracesBtn"
-                  class="debug-log-browser-view-traces-btn"
-                  data-i18n="debugLogs.viewTraces"
+                  class="debug-log-browser-head-btn debug-log-browser-view-traces-btn"
                 >
-                  Ver trazas
+                  <span class="debug-log-browser-head-btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 20h9"></path>
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                    </svg>
+                  </span>
+                  <span data-i18n="debugLogs.viewTraces">Ver trazas</span>
+                </button>
+                <button
+                  type="button"
+                  id="debugLogBrowserAnalyzeLocalBtn"
+                  class="debug-log-browser-head-btn debug-log-browser-analyze-local-btn"
+                >
+                  <span class="debug-log-browser-head-btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                      <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                  </span>
+                  <span data-i18n="debugLogs.analyzeLocal">Analizar log local</span>
                 </button>
                 <button
                   type="button"
                   id="debugLogBrowserDeleteAllBtn"
-                  class="debug-log-browser-delete-all-btn"
-                  data-i18n="debugLogs.deleteAll"
+                  class="debug-log-browser-head-btn debug-log-browser-delete-all-btn"
                 >
-                  Borrar todos los logs
+                  <span class="debug-log-browser-head-btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"></polyline>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                  </span>
+                  <span data-i18n="debugLogs.deleteAll">Borrar todos los logs</span>
                 </button>
               </div>
             </div>
@@ -2212,6 +2245,64 @@
                 <span class="debug-log-browser-context-loading-text" data-i18n="debugLogs.loadingContext"
                   >Cargando Type, Name y Method…</span
                 >
+              </div>
+            </div>
+          </div>
+          <div id="debugLogLocalAnalyzeModal" class="debug-log-trace-modal hidden" aria-hidden="true">
+            <div class="debug-log-trace-modal-backdrop" data-debug-log-local-close="1"></div>
+            <div
+              class="debug-log-trace-modal-panel debug-log-local-analyze-modal-panel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="debugLogLocalAnalyzeModalTitle"
+            >
+              <h3 id="debugLogLocalAnalyzeModalTitle" data-i18n="debugLogs.localModalTitle">Analizar log local</h3>
+              <div
+                id="debugLogLocalDropzone"
+                class="debug-log-local-dropzone"
+                tabindex="0"
+                role="button"
+                data-i18n-aria-label="debugLogs.localDropHint"
+              >
+                <p class="debug-log-local-dropzone-hint" data-i18n="debugLogs.localDropHint">
+                  Arrastra un archivo .log aquí o haz clic para seleccionar (máx. 30 MB)
+                </p>
+                <input type="file" id="debugLogLocalFileInput" accept=".log" tabindex="-1" hidden />
+              </div>
+              <p id="debugLogLocalError" class="debug-log-local-error hidden" role="alert"></p>
+              <div id="debugLogLocalPreview" class="debug-log-local-preview hidden">
+                <dl class="debug-log-local-preview-list">
+                  <div class="debug-log-local-preview-row">
+                    <dt data-i18n="debugLogs.localPreviewFile">Archivo</dt>
+                    <dd id="debugLogLocalPreviewFile">—</dd>
+                  </div>
+                  <div class="debug-log-local-preview-row">
+                    <dt data-i18n="debugLogs.localPreviewClass">Clase</dt>
+                    <dd id="debugLogLocalPreviewClass">—</dd>
+                  </div>
+                  <div class="debug-log-local-preview-row">
+                    <dt data-i18n="debugLogs.localPreviewTime">Hora de ejecución</dt>
+                    <dd id="debugLogLocalPreviewTime">—</dd>
+                  </div>
+                  <div class="debug-log-local-preview-row">
+                    <dt data-i18n="debugLogs.localPreviewUser">Usuario</dt>
+                    <dd id="debugLogLocalPreviewUser">—</dd>
+                  </div>
+                </dl>
+              </div>
+              <div class="debug-log-trace-modal-actions">
+                <button type="button" id="debugLogLocalCancelBtn" class="debug-log-trace-modal-btn" data-i18n="debugLogs.traceCancel">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  id="debugLogLocalAnalyzeBtn"
+                  class="debug-log-trace-modal-btn debug-log-trace-modal-btn-primary"
+                  data-i18n="debugLogs.localAnalyze"
+                  disabled
+                >
+                  Analizar
+                </button>
               </div>
             </div>
           </div>

@@ -1,9 +1,10 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { formatMs } from '../../../shared/apexLogParser.js';
 import {
+  APEX_LOG_PREVIEW,
   avgDurationMs,
-  bindLogTableRowNavigation,
   filterRowsByQuery,
+  mountPreviewTable,
   renderSummaryChips,
   wireSearchFilter
 } from './analysisTableUtils.js';
@@ -26,7 +27,7 @@ export function renderCalloutView(mount, parsed, onJump, t) {
         placeholder="${escapeHtml(t('apexLogViewer.filter.calloutPlaceholder'))}" />
       <div class="apex-log-summary-chips" id="apexLogCalloutSummary"></div>
     </div>
-    <div class="apex-log-table-wrap">
+    <div class="apex-log-table-wrap" id="apexLogCalloutWrap">
       <table class="apex-log-data-table">
         <thead><tr>
           <th>${escapeHtml(t('apexLogViewer.col.line'))}</th>
@@ -39,8 +40,12 @@ export function renderCalloutView(mount, parsed, onJump, t) {
       </table>
     </div>`;
   const tbody = mount.querySelector('#apexLogCalloutBody');
+  const tableWrap = mount.querySelector('#apexLogCalloutWrap');
   const filter = mount.querySelector('#apexLogCalloutFilter');
   const summary = mount.querySelector('#apexLogCalloutSummary');
+
+  /** @type {ReturnType<typeof mountPreviewTable> | null} */
+  let preview = null;
 
   function paint(list) {
     if (!tbody) return;
@@ -52,20 +57,25 @@ export function renderCalloutView(mount, parsed, onJump, t) {
     ]);
     if (!list.length) {
       tbody.innerHTML = `<tr><td colspan="5" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.callouts'))}</td></tr>`;
+      tableWrap?.querySelector('.apex-log-show-more-wrap')?.remove();
       return;
     }
-    tbody.innerHTML = list
-      .map(
-        (r) => `<tr data-line="${r.requestLine}" tabindex="0" role="button">
+    if (!preview) {
+      preview = mountPreviewTable(tbody, tableWrap, list, APEX_LOG_PREVIEW.tableRows, {
+        rowHtmlFn: (r) => `<tr data-line="${r.requestLine}" tabindex="0" role="button">
           <td>${r.requestLine}</td>
           <td>${escapeHtml(formatMs(r.durationMs || 0))}</td>
           <td>${escapeHtml(r.method || '—')}</td>
           <td>${r.statusCode ? `${r.statusCode} ${escapeHtml(r.status || '')}` : '—'}</td>
           <td class="apex-log-cell-query">${escapeHtml(r.endpoint)}</td>
-        </tr>`
-      )
-      .join('');
-    bindLogTableRowNavigation(tbody.querySelectorAll('tr[data-line]'), onJump);
+        </tr>`,
+        emptyHtml: `<tr><td colspan="5" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.callouts'))}</td></tr>`,
+        t,
+        onJump
+      });
+    } else {
+      preview.setRows(list);
+    }
   }
 
   function applyFilter() {

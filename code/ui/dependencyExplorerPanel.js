@@ -11,9 +11,8 @@ import {
   categoriesToSummaryText,
   compareCategories
 } from '../../shared/dependencyExplorer.js';
-import { randomStagingId } from '../../shared/randomId.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
-import { apexViewerIdbPut } from '../lib/apexViewerIdb.js';
+import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
 
 /** @type {{ id: string, name: string, displayName: string, type: string, seedTypeId: string } | null} */
 let selectedComponent = null;
@@ -104,61 +103,6 @@ function typeIconChar(type) {
   return '◇';
 }
 
-async function openApexLogViewerWithPayload(title, content, viewerOpts = {}) {
-  const initialLine =
-    viewerOpts.initialLine != null && Number.isFinite(Number(viewerOpts.initialLine))
-      ? Math.max(1, Math.floor(Number(viewerOpts.initialLine)))
-      : undefined;
-  const downloadFileName =
-    viewerOpts.downloadFileName != null && String(viewerOpts.downloadFileName).trim()
-      ? String(viewerOpts.downloadFileName).trim()
-      : undefined;
-  const lineQs = initialLine != null ? `&line=${encodeURIComponent(String(initialLine))}` : '';
-  const staged = await bg({
-    type: 'apexViewer:stage',
-    title,
-    content,
-    ...(initialLine != null ? { initialLine } : {}),
-    ...(downloadFileName ? { downloadFileName } : {})
-  });
-  if (staged?.ok && staged.id) {
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}${lineQs}`),
-      '_blank'
-    );
-    return true;
-  }
-  const storageKey = randomStagingId('sfoc_de_');
-  try {
-    await chrome.storage.local.set({
-      [storageKey]: {
-        title,
-        content,
-        ...(initialLine != null ? { initialLine } : {}),
-        ...(downloadFileName ? { downloadFileName } : {})
-      }
-    });
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?k=${encodeURIComponent(storageKey)}${lineQs}`),
-      '_blank'
-    );
-    return true;
-  } catch {
-    /* storage fallback */
-  }
-  try {
-    const idbId = randomStagingId('idb_');
-    await apexViewerIdbPut(idbId, { title, content });
-    window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}${lineQs}`),
-      '_blank'
-    );
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function openMetadataSourceInViewer(orgId, ref) {
   if (!canOpenMetadataSource(ref)) return;
   showToastWithSpinner(t('depExplorer.openingSource'));
@@ -208,7 +152,7 @@ async function openMetadataSourceInViewer(orgId, ref) {
       showToast(t('depExplorer.openSourceError'), 'error');
       return;
     }
-    const ok = await openApexLogViewerWithPayload(title, body, { downloadFileName: fileName });
+    const ok = await openApexSourceViewerWithPayload(title, body, { downloadFileName: fileName });
     if (!ok) showToast(t('depExplorer.openSourceError'), 'warn');
   } finally {
     dismissSpinnerToast();

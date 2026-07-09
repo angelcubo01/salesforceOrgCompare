@@ -1,7 +1,9 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import {
-  bindLogTableRowNavigation,
+  APEX_LOG_PREVIEW,
+  createPreviewController,
   filterRowsByQuery,
+  mountShowMoreFooter,
   renderSummaryChips,
   wireSearchFilter
 } from './analysisTableUtils.js';
@@ -18,6 +20,7 @@ export function renderDebugView(mount, parsed, onJump, t) {
   if (!mount) return;
   const rows = parsed?.userDebug || [];
   const methods = [...new Set(rows.map((r) => parseDebugMessage(r.message).methodTag).filter(Boolean))];
+  const previewCtrl = createPreviewController(APEX_LOG_PREVIEW.debugItems);
 
   mount.innerHTML = `
     ${panelSectionHeading('debug', t('apexLogViewer.tab.debug'), t)}
@@ -32,6 +35,7 @@ export function renderDebugView(mount, parsed, onJump, t) {
     </div>
     <div class="apex-log-debug-list apex-log-panel-content" id="apexLogDebugList"></div>`;
   const listEl = mount.querySelector('#apexLogDebugList');
+  const listSection = listEl?.parentElement;
   const filter = mount.querySelector('#apexLogDebugFilter');
   const methodFilter = mount.querySelector('#apexLogDebugMethodFilter');
   const summary = mount.querySelector('#apexLogDebugSummary');
@@ -45,9 +49,11 @@ export function renderDebugView(mount, parsed, onJump, t) {
     ]);
     if (!list.length) {
       listEl.innerHTML = `<p class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.debug'))}</p>`;
+      listSection?.querySelector('.apex-log-show-more-wrap')?.remove();
       return;
     }
-    listEl.innerHTML = list
+    const visible = previewCtrl.slice(list);
+    listEl.innerHTML = visible
       .map((r) => {
         const { json, prefix, methodTag } = parseDebugMessage(r.message);
         const jsonBlock = json
@@ -89,9 +95,16 @@ export function renderDebugView(mount, parsed, onJump, t) {
         navigator.clipboard?.writeText(text).catch(() => {});
       });
     });
+
+    if (listSection) {
+      mountShowMoreFooter(listSection, previewCtrl, list.length, APEX_LOG_PREVIEW.debugItems, t, () =>
+        paint(list)
+      );
+    }
   }
 
   function applyFilter() {
+    previewCtrl.reset();
     let filtered = filterRowsByQuery(
       rows,
       filter?.value,

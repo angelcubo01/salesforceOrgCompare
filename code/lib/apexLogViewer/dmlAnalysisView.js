@@ -1,9 +1,12 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { formatMs } from '../../../shared/apexLogParser.js';
 import {
+  APEX_LOG_PREVIEW,
   avgDurationMs,
   bindLogTableRowNavigation,
+  createPreviewController,
   filterRowsByQuery,
+  mountShowMoreFooter,
   mountSegmentControl,
   normalizeDmlOperation,
   renderSummaryChips,
@@ -52,6 +55,7 @@ export function renderDmlView(mount, parsed, onJump, t) {
   if (!mount) return;
   const rows = parsed?.dml || [];
   let groupMode = 'operation';
+  const previewCtrl = createPreviewController(APEX_LOG_PREVIEW.tableRows);
 
   mount.innerHTML = `
     ${panelSectionHeading('dml', t('apexLogViewer.tab.dml'), t)}
@@ -63,7 +67,7 @@ export function renderDmlView(mount, parsed, onJump, t) {
       </div>
       <div class="apex-log-summary-chips" id="apexLogDmlSummary"></div>
     </div>
-    <div class="apex-log-table-wrap">
+    <div class="apex-log-table-wrap" id="apexLogDmlTableWrap">
       <table class="apex-log-data-table">
         <thead>
           <tr>
@@ -78,6 +82,7 @@ export function renderDmlView(mount, parsed, onJump, t) {
       </table>
     </div>`;
   const tbody = mount.querySelector('#apexLogDmlBody');
+  const tableWrap = mount.querySelector('#apexLogDmlTableWrap');
   const filter = mount.querySelector('#apexLogDmlFilter');
   const summary = mount.querySelector('#apexLogDmlSummary');
   const segmentHost = mount.querySelector('#apexLogDmlGroup');
@@ -92,6 +97,7 @@ export function renderDmlView(mount, parsed, onJump, t) {
     ],
     (mode) => {
       groupMode = mode;
+      previewCtrl.reset();
       applyFilter();
     }
   );
@@ -116,9 +122,10 @@ export function renderDmlView(mount, parsed, onJump, t) {
     updateSummary(list);
     if (!list.length) {
       tbody.innerHTML = `<tr><td colspan="5" class="apex-log-empty">${escapeHtml(t('apexLogViewer.empty.dml'))}</td></tr>`;
+      tableWrap?.querySelector('.apex-log-show-more-wrap')?.remove();
       return;
     }
-    const display = buildDmlDisplayRows(list, groupMode);
+    const display = previewCtrl.slice(buildDmlDisplayRows(list, groupMode));
     tbody.innerHTML = display
       .map((item) => {
         if (item.kind === 'group') {
@@ -139,6 +146,10 @@ export function renderDmlView(mount, parsed, onJump, t) {
       })
       .join('');
     bindLogTableRowNavigation(tbody.querySelectorAll('tr[data-line]'), onJump);
+    const totalDisplay = buildDmlDisplayRows(list, groupMode).length;
+    mountShowMoreFooter(tableWrap, previewCtrl, totalDisplay, APEX_LOG_PREVIEW.tableRows, t, () =>
+      paint(list)
+    );
   }
 
   function applyFilter() {
@@ -147,6 +158,7 @@ export function renderDmlView(mount, parsed, onJump, t) {
       filter?.value,
       (r) => `${r.line} ${r.operation} ${r.object} ${r.rows} ${r.durationMs}`
     );
+    previewCtrl.reset();
     paint(filtered);
     mountSegmentControl(
       segmentHost,
@@ -158,6 +170,7 @@ export function renderDmlView(mount, parsed, onJump, t) {
       ],
       (mode) => {
         groupMode = mode;
+        previewCtrl.reset();
         applyFilter();
       }
     );
