@@ -25,6 +25,9 @@ export function ttlExpiryCache(defaultTtlMs = 60 * 1000) {
     del(key) {
       entries.delete(key);
     },
+    keys() {
+      return [...entries.keys()];
+    },
     clear() {
       entries.clear();
     }
@@ -54,6 +57,9 @@ export function lruEvictionCache(maxKeys = 100) {
     },
     del(key) {
       order.delete(key);
+    },
+    keys() {
+      return [...order.keys()];
     },
     clear() {
       order.clear();

@@ -56,6 +56,7 @@ export const TOOL_I18N = {
   LightningQuickEdit: 'code.opLightningQuickEdit',
   AnonymousApex: 'code.opAnonymousApex',
   QueryExplorer: 'code.opQueryExplorer',
+  RestExplorer: 'code.opRestExplorer',
   DebugLogBrowser: 'code.opDebugLogs',
   EnvironmentStatus: 'code.opEnvironmentStatus',
   OrgLimits: 'code.opOrgLimits',
@@ -68,6 +69,10 @@ export const TOOL_I18N = {
   CustomSettingsCompare: 'code.opCustomSettingsCompare',
   CustomMetadataCompare: 'code.opCustomMetadataCompare',
   RecordCompare: 'code.opRecordCompare',
+  ObjectDescribe: 'code.opObjectDescribe',
+  DataWorkbench: 'code.opDataWorkbench',
+  BulkJobMonitor: 'code.opBulkJobMonitor',
+  EventMonitor: 'code.opEventMonitor',
   GeneratePackageXml: 'code.opPkgGenerate',
   MetadataTypeCompare: 'code.opMetadataTypeCompare',
   PackageXml: 'code.opPkgCompare'

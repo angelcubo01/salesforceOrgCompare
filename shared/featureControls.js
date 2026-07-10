@@ -56,7 +56,12 @@ export const FEATURE_CONTROL_ACTIONS = Object.freeze([
   'compare_run',
   'apex_test_run',
   'anonymous_apex_execute',
-  'quick_edit_save'
+  'quick_edit_save',
+  'dml_execute',
+  'rest_write',
+  'bulk_job_create',
+  'streaming_subscribe',
+  'event_monitor_subscribe'
 ]);
 
 /** @type {FeatureControlsConfig} */

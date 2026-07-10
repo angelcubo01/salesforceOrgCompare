@@ -15,6 +15,17 @@ export function isMonacoCanceledError(error) {
   return text === 'Canceled' || text.includes('Canceled: Canceled');
 }
 
+/** @param {unknown} error */
+export function isMonacoDisposedError(error) {
+  if (!error) return false;
+  const text = error instanceof Error ? `${error.name}\n${error.message}` : String(error);
+  return (
+    text.includes('InstantiationService has been disposed') ||
+    text.includes('TextModel got disposed') ||
+    text.includes('DisposableStore has been disposed')
+  );
+}
+
 /** @type {ReadonlySet<string>} */
 export const OPERATIONAL_REASON_CODES = new Set([
   'NO_SID',
@@ -40,6 +51,8 @@ const BENIGN_MESSAGE_MARKERS = [
   'ResizeObserver loop',
   'no diff result available',
   'Illegal value for lineNumber',
+  'InstantiationService has been disposed',
+  'DisposableStore has been disposed',
   'TextModel got disposed before DiffEditorWidget',
   'Receiving end does not exist',
   'Extension context invalidated',

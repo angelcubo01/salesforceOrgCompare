@@ -19,7 +19,12 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     Object.freeze({
       id: 'inspect',
       i18nKey: 'code.toolGroup.devInspect',
-      tools: Object.freeze(['QueryExplorer', 'DebugLogBrowser'])
+      tools: Object.freeze(['QueryExplorer', 'RestExplorer', 'DebugLogBrowser'])
+    }),
+    Object.freeze({
+      id: 'streaming',
+      i18nKey: 'code.toolGroup.streaming',
+      tools: Object.freeze(['EventMonitor'])
     })
   ]),
   analysis: Object.freeze([
@@ -32,6 +37,11 @@ export const TOOL_NAV_GROUPS = Object.freeze({
       id: 'permissions',
       i18nKey: 'code.toolGroup.monPermissions',
       tools: Object.freeze(['PermissionDiff'])
+    }),
+    Object.freeze({
+      id: 'dataOps',
+      i18nKey: 'code.toolGroup.dataOps',
+      tools: Object.freeze(['ObjectDescribe', 'DataWorkbench'])
     }),
     Object.freeze({
       id: 'dataCompare',
@@ -47,7 +57,7 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     Object.freeze({
       id: 'orgHealth',
       i18nKey: 'code.toolGroup.monOrgHealth',
-      tools: Object.freeze(['EnvironmentStatus', 'OrgLimits', 'DeployStatus'])
+      tools: Object.freeze(['EnvironmentStatus', 'OrgLimits', 'DeployStatus', 'BulkJobMonitor'])
     }),
     Object.freeze({
       id: 'audit',

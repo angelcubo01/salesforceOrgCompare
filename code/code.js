@@ -55,6 +55,11 @@ import {
   refreshMetadataTypeComparePanel
 } from './ui/metadataTypeComparePanel.js';
 import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
+import { setupObjectDescribePanel, refreshObjectDescribePanel } from './ui/objectDescribePanel.js';
+import { setupRestExplorerPanel, refreshRestExplorerPanel } from './ui/restExplorerPanel.js';
+import { setupDataWorkbenchPanel, refreshDataWorkbenchPanel } from './ui/dataWorkbenchPanel.js';
+import { setupBulkJobMonitorPanel, refreshBulkJobMonitorPanel } from './ui/bulkJobMonitorPanel.js';
+import { setupEventMonitorPanel, refreshEventMonitorPanel } from './ui/eventMonitorPanel.js';
 import {
   setupDependencyExplorerPanel,
   refreshDependencyExplorerPanel
@@ -292,6 +297,11 @@ async function init() {
   setupQuickEditPanel();
   setupLightningQuickEditPanel();
   setupFieldDependencyPanel();
+  setupObjectDescribePanel();
+  setupRestExplorerPanel();
+  setupDataWorkbenchPanel();
+  setupBulkJobMonitorPanel();
+  setupEventMonitorPanel();
   setupDependencyExplorerPanel();
   renderEditor();
   refreshGeneratePackageXmlTypes();
@@ -303,6 +313,11 @@ async function init() {
   void refreshDeployStatusPanel();
   void refreshPermissionDiffPanel();
   void refreshQueryExplorerPanel();
+  void refreshRestExplorerPanel();
+  void refreshObjectDescribePanel();
+  void refreshDataWorkbenchPanel();
+  void refreshBulkJobMonitorPanel();
+  void refreshEventMonitorPanel();
   void refreshDebugLogBrowserPanel();
   void refreshApexCoverageComparePanel();
   void refreshCustomSettingsComparePanel();

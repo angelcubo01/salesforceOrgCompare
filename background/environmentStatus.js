@@ -3,6 +3,8 @@ import {
   fetchOrganizationStatus,
   fetchSessionUserInfo
 } from '../shared/salesforceApi.js';
+import { buildSessionDetailPayload } from '../shared/sessionInfoApi.js';
+import { clearDescribeCachesForOrg } from './caches.js';
 import {
   fetchTrustInstanceStatus,
   inferInstanceKeyFromHostname,
@@ -11,6 +13,7 @@ import {
 } from '../shared/trustStatusApi.js';
 import {
   getOrderedSavedOrgs,
+  loadSavedOrgs,
   resolveSidForOrg,
   checkOrgAuthStatus
 } from './orgHelpers.js';
@@ -150,4 +153,40 @@ export async function fetchAllEnvironmentStatusRows() {
     rows,
     fetchedAt: new Date().toISOString()
   };
+}
+
+/**
+ * Detalle de sesión para una org (lazy load desde Environment Status).
+ * @param {string} orgId
+ * @returns {Promise<{ ok: true, detail: ReturnType<typeof buildSessionDetailPayload> } | { ok: false, reason?: string, error?: string }>}
+ */
+export async function fetchSessionDetailForOrg(orgId) {
+  const saved = (await loadSavedOrgs())[orgId];
+  if (!saved) {
+    return { ok: false, error: 'Org not saved' };
+  }
+  const sid = await resolveSidForOrg(saved);
+  if (!sid) {
+    return { ok: false, reason: 'NO_SID' };
+  }
+  const apiVersion = saved.apiVersion || '59.0';
+  try {
+    const [sf, liveApiVersion, sessionUser] = await Promise.all([
+      fetchOrganizationStatus(saved.instanceUrl, sid, apiVersion),
+      probeApiVersion(saved.instanceUrl, sid).catch(() => null),
+      fetchSessionUserInfo(saved.instanceUrl, sid).catch(() => null)
+    ]);
+    const detail = buildSessionDetailPayload(sessionUser, sf, saved, liveApiVersion);
+    return { ok: true, detail };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+}
+
+/**
+ * @param {string} orgId
+ */
+export function invalidateDescribeCacheForOrg(orgId) {
+  clearDescribeCachesForOrg(orgId);
+  return { ok: true };
 }

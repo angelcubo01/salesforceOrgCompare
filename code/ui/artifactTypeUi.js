@@ -9,7 +9,16 @@ import { syncCompareListToolbarVisibility } from './listUi.js';
 
 export function getSelectedArtifactType() {
   const el = document.getElementById('typeSelect');
-  return el ? el.value : '';
+  let val = el ? el.value : '';
+  if (val === 'StreamingExplorer') {
+    val = 'EventMonitor';
+    if (el) el.value = val;
+  }
+  if (val === 'RecordDetail') {
+    val = 'DataWorkbench';
+    if (el) el.value = val;
+  }
+  return val;
 }
 
 export function isGeneratePackageXmlMode() {
@@ -38,6 +47,22 @@ export function isAnonymousApexMode() {
 
 export function isQueryExplorerMode() {
   return getSelectedArtifactType() === 'QueryExplorer';
+}
+
+export function isRestExplorerMode() {
+  return getSelectedArtifactType() === 'RestExplorer';
+}
+
+export function isDataWorkbenchMode() {
+  return getSelectedArtifactType() === 'DataWorkbench';
+}
+
+export function isBulkJobMonitorMode() {
+  return getSelectedArtifactType() === 'BulkJobMonitor';
+}
+
+export function isEventMonitorMode() {
+  return getSelectedArtifactType() === 'EventMonitor';
 }
 
 export function isOrgLimitsMode() {
@@ -92,6 +117,10 @@ export function isRecordCompareMode() {
   return getSelectedArtifactType() === 'RecordCompare';
 }
 
+export function isObjectDescribeMode() {
+  return getSelectedArtifactType() === 'ObjectDescribe';
+}
+
 export function isOperationPlaceholder() {
   return !getSelectedArtifactType();
 }
@@ -110,6 +139,7 @@ export function isFullScreenToolMode() {
     isDependencyExplorerMode() ||
     isAnonymousApexMode() ||
     isQueryExplorerMode() ||
+    isRestExplorerMode() ||
     isOrgLimitsMode() ||
     isEnvironmentStatusMode() ||
     isDeployStatusMode() ||
@@ -122,7 +152,11 @@ export function isFullScreenToolMode() {
     isApexCoverageCompareMode() ||
     isCustomSettingsCompareMode() ||
     isCustomMetadataCompareMode() ||
-    isRecordCompareMode()
+    isRecordCompareMode() ||
+    isObjectDescribeMode() ||
+    isDataWorkbenchMode() ||
+    isBulkJobMonitorMode() ||
+    isEventMonitorMode()
   );
 }
 
@@ -183,6 +217,10 @@ export function applyArtifactTypeUi() {
   const isApexTests = op === 'ApexTests';
   const isAnonymousApex = op === 'AnonymousApex';
   const isQueryExplorer = op === 'QueryExplorer';
+  const isRestExplorer = op === 'RestExplorer';
+  const isDataWorkbench = op === 'DataWorkbench';
+  const isBulkJobMonitor = op === 'BulkJobMonitor';
+  const isEventMonitor = op === 'EventMonitor';
   const isOrgLimits = op === 'OrgLimits';
   const isEnvironmentStatus = op === 'EnvironmentStatus';
   const isDeployStatus = op === 'DeployStatus';
@@ -198,6 +236,7 @@ export function applyArtifactTypeUi() {
   const isCustomSettingsCompare = op === 'CustomSettingsCompare';
   const isCustomMetadataCompare = op === 'CustomMetadataCompare';
   const isRecordCompare = op === 'RecordCompare';
+  const isObjectDescribe = op === 'ObjectDescribe';
   document.body.classList.toggle('artifact-generate-package-xml', isGen);
   document.body.classList.toggle(
     'artifact-generate-package-xml-compare',
@@ -210,6 +249,8 @@ export function applyArtifactTypeUi() {
     isAnonymousApex && !!state.anonymousApexCompareMode
   );
   document.body.classList.toggle('artifact-query-explorer', isQueryExplorer);
+  document.body.classList.toggle('artifact-rest-explorer', isRestExplorer);
+  document.body.classList.toggle('artifact-data-workbench', isDataWorkbench);
   document.body.classList.toggle(
     'artifact-query-explorer-compare',
     isQueryExplorer && !!state.queryExplorerCompareMode
@@ -237,6 +278,9 @@ export function applyArtifactTypeUi() {
   document.body.classList.toggle('artifact-custom-settings-compare', isCustomSettingsCompare);
   document.body.classList.toggle('artifact-custom-metadata-compare', isCustomMetadataCompare);
   document.body.classList.toggle('artifact-record-compare', isRecordCompare);
+  document.body.classList.toggle('artifact-object-describe', isObjectDescribe);
+  document.body.classList.toggle('artifact-bulk-job-monitor', isBulkJobMonitor);
+  document.body.classList.toggle('artifact-event-monitor', isEventMonitor);
   document.body.classList.toggle(
     'artifact-record-compare-compare',
     isRecordCompare && !!state.recordCompareCompareMode
@@ -256,9 +300,14 @@ export function applyArtifactTypeUi() {
   const metadataTypeComparePanel = document.getElementById('metadataTypeComparePanel');
   const apexTestsPanel = document.getElementById('apexTestsPanel');
   const fieldDepPanel = document.getElementById('fieldDependencyPanel');
+  const objectDescribePanel = document.getElementById('objectDescribePanel');
   const depExplorerPanel = document.getElementById('dependencyExplorerPanel');
   const anonymousApexPanel = document.getElementById('anonymousApexPanel');
   const queryExplorerPanel = document.getElementById('queryExplorerPanel');
+  const restExplorerPanel = document.getElementById('restExplorerPanel');
+  const dataWorkbenchPanel = document.getElementById('dataWorkbenchPanel');
+  const bulkJobMonitorPanel = document.getElementById('bulkJobMonitorPanel');
+  const eventMonitorPanel = document.getElementById('eventMonitorPanel');
   const orgLimitsPanel = document.getElementById('orgLimitsPanel');
   const environmentStatusPanel = document.getElementById('environmentStatusPanel');
   const deployStatusPanel = document.getElementById('deployStatusPanel');
@@ -291,9 +340,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -333,9 +387,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -375,9 +434,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.remove('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -422,9 +486,14 @@ export function applyArtifactTypeUi() {
     metadataTypeComparePanel?.classList.remove('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -450,6 +519,10 @@ export function applyArtifactTypeUi() {
     apexTestsPanel?.classList.remove('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
   } else if (isAnonymousApex) {
     searchPanel?.classList.add('hidden');
     clearBtn?.classList.add('hidden');
@@ -460,9 +533,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.remove('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -496,33 +574,12 @@ export function applyArtifactTypeUi() {
         rightReauth.disabled = true;
       }
     }
+  } else if (isRestExplorer) {
+    applySingleLeftOrgToolUi();
+    restExplorerPanel?.classList.remove('hidden');
   } else if (isQueryExplorer) {
-    searchPanel?.classList.add('hidden');
-    clearBtn?.classList.add('hidden');
-    syncComparatorActionButtons();
-    compareListBody?.classList.add('hidden');
-    compareListToolbar?.classList.add('hidden');
-    standardPanel?.classList.add('hidden');
-    genPanel?.classList.add('hidden');
-    apexTestsPanel?.classList.add('hidden');
-    fieldDepPanel?.classList.add('hidden');
-    depExplorerPanel?.classList.add('hidden');
-    anonymousApexPanel?.classList.add('hidden');
+    applyFullScreenToolShellUi();
     queryExplorerPanel?.classList.remove('hidden');
-    orgLimitsPanel?.classList.add('hidden');
-    environmentStatusPanel?.classList.add('hidden');
-    deployStatusPanel?.classList.add('hidden');
-    debugLogsPanel?.classList.add('hidden');
-    setupAuditPanel?.classList.add('hidden');
-    fieldHistoryPanel?.classList.add('hidden');
-    permissionDiffPanel?.classList.add('hidden');
-    quickEditPanel?.classList.add('hidden');
-    lightningQuickEditPanel?.classList.add('hidden');
-    apexCoverageComparePanel?.classList.add('hidden');
-    customSettingsComparePanel?.classList.add('hidden');
-    customMetadataComparePanel?.classList.add('hidden');
-    recordComparePanel?.classList.add('hidden');
-    metadataTypeComparePanel?.classList.add('hidden');
     const rightQx = document.getElementById('rightOrg');
     const rightReauthQx = document.getElementById('rightReauthBtn');
     if (state.queryExplorerCompareMode) {
@@ -552,9 +609,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -605,9 +667,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.remove('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -670,9 +737,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -704,9 +776,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -738,9 +815,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -772,9 +854,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -817,9 +904,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.remove('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -863,9 +955,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.remove('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -890,6 +987,18 @@ export function applyArtifactTypeUi() {
       rightReauth.disabled = false;
       rightReauth.classList.remove('hidden');
     }
+  } else if (isObjectDescribe) {
+    applySingleLeftOrgToolUi();
+    objectDescribePanel?.classList.remove('hidden');
+  } else if (isDataWorkbench) {
+    applySingleLeftOrgToolUi();
+    dataWorkbenchPanel?.classList.remove('hidden');
+  } else if (isBulkJobMonitor) {
+    applySingleLeftOrgToolUi();
+    bulkJobMonitorPanel?.classList.remove('hidden');
+  } else if (isEventMonitor) {
+    applySingleLeftOrgToolUi();
+    eventMonitorPanel?.classList.remove('hidden');
   } else {
     searchPanel?.classList.remove('hidden');
     clearBtn?.classList.remove('hidden');
@@ -899,9 +1008,14 @@ export function applyArtifactTypeUi() {
     genPanel?.classList.add('hidden');
     apexTestsPanel?.classList.add('hidden');
     fieldDepPanel?.classList.add('hidden');
+    objectDescribePanel?.classList.add('hidden');
     depExplorerPanel?.classList.add('hidden');
     anonymousApexPanel?.classList.add('hidden');
     queryExplorerPanel?.classList.add('hidden');
+    restExplorerPanel?.classList.add('hidden');
+    dataWorkbenchPanel?.classList.add('hidden');
+    bulkJobMonitorPanel?.classList.add('hidden');
+    eventMonitorPanel?.classList.add('hidden');
     orgLimitsPanel?.classList.add('hidden');
     environmentStatusPanel?.classList.add('hidden');
     deployStatusPanel?.classList.add('hidden');
@@ -940,6 +1054,7 @@ export function applyArtifactTypeUi() {
     isApexTests ||
     isAnonymousApex ||
     isQueryExplorer ||
+    isRestExplorer ||
     isOrgLimits ||
     isEnvironmentStatus ||
     isDeployStatus ||
@@ -948,6 +1063,10 @@ export function applyArtifactTypeUi() {
     isSetupAudit ||
     isFieldHistory ||
     isFieldDep ||
+    isObjectDescribe ||
+    isDataWorkbench ||
+    isBulkJobMonitor ||
+    isEventMonitor ||
     isDepExplorer ||
     isQuickEdit ||
     isLightningQuickEdit ||

@@ -12,10 +12,21 @@
     return s.includes('ResizeObserver loop');
   }
 
+  function isBenignMonacoLifecycleNoise(text) {
+    if (!text) return false;
+    const s = String(text);
+    return (
+      s.includes('InstantiationService has been disposed') ||
+      s.includes('TextModel got disposed') ||
+      s.includes('DisposableStore has been disposed')
+    );
+  }
+
   console.error = function (...args) {
     const errorString = args.join(' ');
     if (
       isResizeObserverLoopNoise(errorString) ||
+      isBenignMonacoLifecycleNoise(errorString) ||
       errorString.includes('workerMain.js') ||
       errorString.includes('vs/base/worker') ||
       errorString.includes('Failed trying to load default language strings') ||
@@ -31,6 +42,7 @@
   console.warn = function (...args) {
     const warnString = args.join(' ');
     if (
+      isBenignMonacoLifecycleNoise(warnString) ||
       warnString.includes('workerMain.js') ||
       warnString.includes('vs/base/worker') ||
       warnString.includes('Duplicate definition of module') ||

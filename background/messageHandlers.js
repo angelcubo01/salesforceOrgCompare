@@ -38,15 +38,44 @@ import {
   fetchOrgLimits,
   queryApexCodeCoverageAggregate,
   restDescribeGlobal,
-  restDescribeSobject
+  restDescribeSobject,
+  restRequestWithSid,
+  listRestApiVersions
 } from '../shared/salesforceApi.js';
+import { isRestWriteMethod } from '../shared/restExplorerApi.js';
+import { executeDml, retrieveRecord, retrieveLayout } from '../shared/dataWorkbenchApi.js';
+import {
+  fetchBulkJob,
+  fetchBulkJobBatches,
+  fetchBulkBatchResult
+} from '../shared/bulkJobApi.js';
+import { executeSoapImportBatch } from '../shared/dataImportSoap.js';
+import { listEventChannels } from '../shared/eventMonitorApi.js';
+import {
+  clearEventMonitorEvents,
+  getEventMonitorSession,
+  subscribeEventMonitor,
+  unsubscribeEventMonitor
+} from './eventMonitorSession.js';
+import {
+  getSoapHeadersForOrg,
+  normalizeSoapHeadersMap,
+  SOAP_HEADERS_STORAGE_KEY
+} from '../shared/soapHeadersPrefs.js';
+import {
+  loadOrgReadOnlyMap,
+  ORG_READ_ONLY_STORAGE_KEY,
+  assertOrgWriteAllowed,
+  recordLocalAudit,
+  syncOrgSandboxFlagIfNeeded
+} from './orgWriteGuard.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
 import {
   sanitizeRunTestsBodyForApi,
   validateRunTestsBodyForApi
 } from '../shared/apexTestRunBodyApi.js';
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
-import { fetchAllEnvironmentStatusRows } from './environmentStatus.js';
+import { fetchAllEnvironmentStatusRows, fetchSessionDetailForOrg, invalidateDescribeCacheForOrg } from './environmentStatus.js';
 import { pollDeployStatus, fetchDeployDetail, cancelDeployRequest } from '../shared/deployStatusApi.js';
 import { resolveDeployCoverageLineSets } from '../shared/apexCoverageLines.js';
 
@@ -76,6 +105,7 @@ import {
   deployAndWait,
   checkDeployStatus
 } from '../shared/metadataRetrieve.js';
+import { formatMetadataApiVersion } from '../shared/metadataApiVersion.js';
 import {
   fetchPermissionContainerData,
   searchPermissionContainers,
@@ -131,6 +161,8 @@ import {
 import {
   authStatusCache,
   depExplorerListCache,
+  describeGlobalCache,
+  describeSobjectCache,
   indexCache,
   sourceCache,
   versionCache
@@ -621,6 +653,12 @@ export function installMessageHandlers() {
             saved[org.id] = org;
             await saveSavedOrgs(saved);
             await syncOrgOrderAfterAdd(org.id);
+            try {
+              const sid = await resolveSidForOrg(org);
+              if (sid) await syncOrgSandboxFlagIfNeeded(org, sid);
+            } catch {
+              /* ignore */
+            }
             void maybeSendFirstOrgConnectedTelemetry(org);
             reply({ ok: true });
             break;
@@ -1201,21 +1239,29 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:deploy': {
+            const actionId = message.checkOnly ? 'quick_edit_save' : 'deploy';
             {
-              const actionId = message.checkOnly ? 'quick_edit_save' : 'deploy';
               const blocked = featureControlBlockedResponse(actionId);
               if (blocked) {
                 reply(blocked);
                 break;
               }
             }
-            const { orgId, metadataType, memberName, content, fileName, checkOnly, async: deployAsync } = message;
+            const { orgId, metadataType, memberName, content, fileName, checkOnly, async: deployAsync, deployApiVersion } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) throw new Error('Org not saved');
             const sid = await resolveSidForOrg(org);
             if (!sid) return reply({ ok: false, reason: 'NO_SID' });
-            const ver = org.apiVersion;
+            const writeGuard = await assertOrgWriteAllowed(org, sid, {
+              checkOnly: !!checkOnly,
+              action: actionId
+            });
+            if (!writeGuard.ok) {
+              reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error });
+              break;
+            }
+            const ver = formatMetadataApiVersion(deployApiVersion || org.apiVersion);
             try {
               await loadExtensionSettings();
               const zipBase64 = createDeployZipBase64(
@@ -1241,6 +1287,11 @@ export function installMessageHandlers() {
                   zipBase64,
                   deployOpts
                 );
+                await recordLocalAudit({
+                  action: checkOnly ? 'deploy_validate' : 'deploy',
+                  orgId: String(orgId),
+                  detail: `${metadataType}/${memberName}`
+                });
                 reply({ ok: true, asyncId });
                 break;
               }
@@ -1251,6 +1302,11 @@ export function installMessageHandlers() {
                 zipBase64,
                 deployOpts
               );
+              await recordLocalAudit({
+                action: checkOnly ? 'deploy_validate' : 'deploy',
+                orgId: String(orgId),
+                detail: `${metadataType}/${memberName}:${result.status || ''}`
+              });
               reply({
                 ok: result.success,
                 asyncId: result.asyncId,
@@ -1264,8 +1320,8 @@ export function installMessageHandlers() {
             break;
           }
           case 'metadata:deployBundle': {
+            const actionId = message.checkOnly ? 'quick_edit_save' : 'deploy';
             {
-              const actionId = message.checkOnly ? 'quick_edit_save' : 'deploy';
               const blocked = featureControlBlockedResponse(actionId);
               if (blocked) {
                 reply(blocked);
@@ -1278,6 +1334,14 @@ export function installMessageHandlers() {
             if (!org) throw new Error('Org not saved');
             const sid = await resolveSidForOrg(org);
             if (!sid) return reply({ ok: false, reason: 'NO_SID' });
+            const writeGuard = await assertOrgWriteAllowed(org, sid, {
+              checkOnly: !!checkOnly,
+              action: actionId
+            });
+            if (!writeGuard.ok) {
+              reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error });
+              break;
+            }
             if (!Array.isArray(files) || files.length === 0) {
               return reply({ ok: false, errorMessage: 'No files to deploy' });
             }
@@ -1301,6 +1365,11 @@ export function installMessageHandlers() {
                   zipBase64,
                   deployOpts
                 );
+                await recordLocalAudit({
+                  action: checkOnly ? 'deploy_validate' : 'deploy',
+                  orgId: String(orgId),
+                  detail: `${metadataType}/${memberName}:bundle`
+                });
                 reply({ ok: true, asyncId });
                 break;
               }
@@ -1311,6 +1380,11 @@ export function installMessageHandlers() {
                 zipBase64,
                 deployOpts
               );
+              await recordLocalAudit({
+                action: checkOnly ? 'deploy_validate' : 'deploy',
+                orgId: String(orgId),
+                detail: `${metadataType}/${memberName}:bundle:${result.status || ''}`
+              });
               reply({
                 ok: result.success,
                 asyncId: result.asyncId,
@@ -1527,6 +1601,11 @@ export function installMessageHandlers() {
               reply({ ok: false, reason: 'NO_SID' });
               break;
             }
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'anonymous_apex_execute' });
+            if (!writeGuard.ok) {
+              reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error });
+              break;
+            }
             const startedAtIso = new Date().toISOString();
             let traceFlagId = null;
             try {
@@ -1671,6 +1750,555 @@ export function installMessageHandlers() {
             } catch (e) {
               replyHandlerError(reply, e);
             }
+            break;
+          }
+          case 'environmentStatus:getSessionDetail': {
+            const { orgId } = message;
+            try {
+              const result = await fetchSessionDetailForOrg(String(orgId || ''));
+              reply(result);
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'environmentStatus:clearDescribeCache': {
+            const { orgId } = message;
+            try {
+              reply(invalidateDescribeCacheForOrg(String(orgId || '')));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'api:listVersions': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const versions = await listRestApiVersions(org.instanceUrl, sid);
+              reply({ ok: true, versions });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'apexClass:getApiVersion': {
+            const { orgId, className } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const name = String(className || '').trim();
+            if (!name) {
+              reply({ ok: false, error: 'Class name required' });
+              break;
+            }
+            try {
+              const safe = escapeSoqlLiteral(name);
+              const rows =
+                (await toolingQuery(
+                  org.instanceUrl,
+                  sid,
+                  org.apiVersion,
+                  `SELECT ApiVersion FROM ApexClass WHERE Name = '${safe}' LIMIT 1`
+                )) || [];
+              const apiVersion = rows[0]?.ApiVersion;
+              reply({
+                ok: true,
+                apiVersion: apiVersion != null ? formatMetadataApiVersion(apiVersion) : null
+              });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'objectDescribe:describeGlobal': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const cacheKey = `${orgId}:global`;
+              let sobjects = describeGlobalCache.get(cacheKey);
+              if (!sobjects) {
+                sobjects = await restDescribeGlobal(org.instanceUrl, sid, org.apiVersion);
+                describeGlobalCache.set(cacheKey, sobjects);
+              }
+              reply({ ok: true, sobjects });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'objectDescribe:describeSobject': {
+            const { orgId, objectApiName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const name = String(objectApiName || '').trim();
+              const cacheKey = `${orgId}:${name}`;
+              let describe = describeSobjectCache.get(cacheKey);
+              if (!describe) {
+                describe = await restDescribeSobject(org.instanceUrl, sid, org.apiVersion, name);
+                describeSobjectCache.set(cacheKey, describe);
+              }
+              reply({ ok: true, describe });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'restExplorer:request': {
+            const { orgId, method, uri, headers, body } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const httpMethod = String(method || 'GET').toUpperCase();
+            if (isRestWriteMethod(httpMethod)) {
+              const blocked = featureControlBlockedResponse('rest_write');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+              const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'rest_write' });
+              if (!writeGuard.ok) {
+                reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error });
+                break;
+              }
+            }
+            try {
+              const result = await restRequestWithSid(org.instanceUrl, sid, httpMethod, String(uri || ''), {
+                headers: headers && typeof headers === 'object' ? headers : {},
+                body: body != null && body !== '' ? String(body) : undefined
+              });
+              if (isRestWriteMethod(httpMethod)) {
+                await recordLocalAudit({
+                  action: 'rest_request',
+                  orgId: String(orgId),
+                  detail: `${httpMethod} ${String(uri || '').slice(0, 120)}`
+                });
+              }
+              reply({
+                ok: result.ok,
+                status: result.status,
+                statusText: result.statusText,
+                text: result.text,
+                json: result.json,
+                headers: result.headers
+              });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'dataWorkbench:describeSobject': {
+            const { orgId, objectApiName } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const name = String(objectApiName || '').trim();
+              const cacheKey = `${orgId}:${name}`;
+              let describe = describeSobjectCache.get(cacheKey);
+              if (!describe) {
+                describe = await restDescribeSobject(org.instanceUrl, sid, org.apiVersion, name);
+                describeSobjectCache.set(cacheKey, describe);
+              }
+              reply({ ok: true, describe });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'dataWorkbench:retrieveRecord': {
+            const { orgId, objectApiName, recordId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const record = await retrieveRecord(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                String(objectApiName || ''),
+                String(recordId || '')
+              );
+              reply({ ok: true, record });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'dataWorkbench:describeLayout': {
+            const { orgId, objectApiName, recordTypeId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const layout = await retrieveLayout(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                String(objectApiName || ''),
+                recordTypeId ? String(recordTypeId) : undefined
+              );
+              reply({ ok: true, layout });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'dataWorkbench:importBatch': {
+            const blocked = featureControlBlockedResponse('dml_execute');
+            if (blocked) {
+              reply(blocked);
+              break;
+            }
+            const { orgId, operation, objectApiName, records, externalIdField, batchSize } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
+            if (!writeGuard.ok) {
+              reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error });
+              break;
+            }
+            try {
+              const data = await chrome.storage.local.get(SOAP_HEADERS_STORAGE_KEY);
+              const map = normalizeSoapHeadersMap(data[SOAP_HEADERS_STORAGE_KEY]);
+              const soapHeaders = getSoapHeadersForOrg(map, String(orgId || ''));
+              const list = Array.isArray(records) ? records : [];
+              const size = Math.max(1, Math.min(200, Number(batchSize) || 200));
+              /** @type {Array<{ success: boolean, id?: string, errors?: string[] }>} */
+              const allResults = [];
+              for (let i = 0; i < list.length; i += size) {
+                const chunk = list.slice(i, i + size);
+                const chunkResults = await executeSoapImportBatch({
+                  instanceUrl: org.instanceUrl,
+                  sid,
+                  apiVersion: org.apiVersion,
+                  operation: String(operation || 'insert'),
+                  objectApiName: String(objectApiName || ''),
+                  records: chunk,
+                  externalIdField: externalIdField ? String(externalIdField) : 'Id',
+                  soapHeaders
+                });
+                allResults.push(...chunkResults);
+              }
+              await recordLocalAudit({
+                action: 'dml_execute',
+                orgId: String(orgId),
+                detail: `import:${operation}:${list.length}`
+              });
+              reply({ ok: true, results: allResults });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'dataWorkbench:dml': {
+            const { orgId, operation, objectApiName, records } = message;
+            {
+              const blocked = featureControlBlockedResponse('dml_execute');
+              if (blocked) {
+                reply(blocked);
+                break;
+              }
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
+            if (!writeGuard.ok) {
+              reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error });
+              break;
+            }
+            try {
+              const result = await executeDml(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                String(operation || ''),
+                String(objectApiName || ''),
+                Array.isArray(records) ? records : []
+              );
+              await recordLocalAudit({
+                action: 'dml_execute',
+                orgId: String(orgId),
+                detail: `${operation} ${objectApiName} (${Array.isArray(records) ? records.length : 0})`
+              });
+              reply({ ok: true, results: result.results });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'bulkJob:getJob': {
+            const { orgId, jobId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const loaded = await fetchBulkJob(org.instanceUrl, sid, org.apiVersion, String(jobId || ''));
+              const batches = await fetchBulkJobBatches(
+                org.instanceUrl,
+                sid,
+                loaded.apiVersion,
+                String(jobId || ''),
+                loaded.bulkApiKind
+              );
+              reply({ ok: true, job: loaded.job, batches, bulkApiKind: loaded.bulkApiKind, apiVersion: loaded.apiVersion });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'bulkJob:getBatchResult': {
+            const { orgId, jobId, batchId, bulkApiKind, apiVersion } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const result = await fetchBulkBatchResult(
+                org.instanceUrl,
+                sid,
+                String(apiVersion || org.apiVersion),
+                String(jobId || ''),
+                String(batchId || ''),
+                bulkApiKind || 'bulk1'
+              );
+              reply({ ok: true, text: result.text, contentType: result.contentType });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'eventMonitor:listChannels': {
+            const { orgId, channelType } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const channels = await listEventChannels(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                channelType
+              );
+              reply({ ok: true, channels });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'eventMonitor:subscribe': {
+            const blocked =
+              featureControlBlockedResponse('event_monitor_subscribe') ||
+              featureControlBlockedResponse('streaming_subscribe');
+            if (blocked) {
+              reply({ ...blocked, reason: 'FEATURE_BLOCKED' });
+              break;
+            }
+            const { orgId, channelPath, replayId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const sub = await subscribeEventMonitor({
+                orgId: String(orgId),
+                instanceUrl: org.instanceUrl,
+                sid,
+                apiVersion: org.apiVersion,
+                channelPath: String(channelPath || ''),
+                replayId: replayId != null ? Number(replayId) : -1
+              });
+              await recordLocalAudit({
+                action: 'event_monitor_subscribe',
+                orgId: String(orgId),
+                detail: String(channelPath || '')
+              });
+              reply({ ok: true, ...sub });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'eventMonitor:unsubscribe': {
+            const { orgId } = message;
+            try {
+              await unsubscribeEventMonitor(String(orgId || ''));
+              reply({ ok: true });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'eventMonitor:getSession': {
+            const { orgId } = message;
+            const session = getEventMonitorSession(String(orgId || ''));
+            reply({ ok: true, session });
+            break;
+          }
+          case 'eventMonitor:clearEvents': {
+            const { orgId } = message;
+            clearEventMonitorEvents(String(orgId || ''));
+            reply({ ok: true });
+            break;
+          }
+          case 'orgWrite:getReadOnlyMap': {
+            const map = await loadOrgReadOnlyMap();
+            reply({ ok: true, map });
+            break;
+          }
+          case 'orgWrite:setReadOnly': {
+            const { orgId, readOnly } = message;
+            const id = String(orgId || '');
+            if (!id) {
+              reply({ ok: false, error: 'Missing orgId' });
+              break;
+            }
+            const data = await chrome.storage.local.get(ORG_READ_ONLY_STORAGE_KEY);
+            const prev = data[ORG_READ_ONLY_STORAGE_KEY];
+            const map = prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev } : {};
+            if (readOnly) map[id] = true;
+            else delete map[id];
+            await chrome.storage.local.set({ [ORG_READ_ONLY_STORAGE_KEY]: map });
+            reply({ ok: true, map });
+            break;
+          }
+          case 'soapHeaders:get': {
+            const { orgId } = message;
+            const data = await chrome.storage.local.get(SOAP_HEADERS_STORAGE_KEY);
+            const map = normalizeSoapHeadersMap(data[SOAP_HEADERS_STORAGE_KEY]);
+            reply({ ok: true, headers: getSoapHeadersForOrg(map, String(orgId || '')) });
+            break;
+          }
+          case 'soapHeaders:set': {
+            const { orgId, headers } = message;
+            const id = String(orgId || '');
+            if (!id) {
+              reply({ ok: false, error: 'Missing orgId' });
+              break;
+            }
+            const data = await chrome.storage.local.get(SOAP_HEADERS_STORAGE_KEY);
+            const map = normalizeSoapHeadersMap(data[SOAP_HEADERS_STORAGE_KEY]);
+            map[id] = headers && typeof headers === 'object' ? headers : {};
+            await chrome.storage.local.set({ [SOAP_HEADERS_STORAGE_KEY]: map });
+            reply({ ok: true });
             break;
           }
           case 'deployStatus:poll': {
@@ -2722,7 +3350,7 @@ export function installMessageHandlers() {
             break;
           }
           case 'debugLogs:extendTrace': {
-            const { orgId, traceFlagId } = message;
+            const { orgId, traceFlagId, allowReactivate } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
@@ -2736,7 +3364,8 @@ export function installMessageHandlers() {
             }
             try {
               const result = await extendUserDebugTraceFlag(org.instanceUrl, sid, org.apiVersion, {
-                traceFlagId
+                traceFlagId,
+                allowReactivate: !!allowReactivate
               });
               reply({ ok: true, ...result });
             } catch (e) {

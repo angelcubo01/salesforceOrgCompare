@@ -25,11 +25,17 @@ import {
   syncQueryExplorerEditorLanguage,
   applyQueryExplorerEditorHeight
 } from './queryExplorerMonaco.js';
+import {
+  buildSoqlFromBuilder,
+  encodeQueryExplorerDeepLink,
+  parseQueryExplorerDeepLink
+} from '../../shared/queryExplorerBuilder.js';
 
 const QUERY_EXPLORER_SAVED_KEY = 'sfoc_query_explorer_saved_queries';
 let selectedSavedQueryId = '';
 
 let lastQueryExplorerSchemaOrgId = null;
+let appliedQueryExplorerUrl = false;
 
 /** @typedef {{ records: unknown[], totalSize?: number, nextPath: string | null }} Snapshot */
 
@@ -1041,6 +1047,54 @@ function setupQueryExplorerSavedQueriesUi() {
   syncSaveQueryButtonLabels();
 }
 
+export async function applyQueryExplorerFromUrl() {
+  if (appliedQueryExplorerUrl) return;
+  const parsed = parseQueryExplorerDeepLink(window.location.search);
+  if (!parsed?.query) return;
+  appliedQueryExplorerUrl = true;
+  const apiSel = /** @type {HTMLSelectElement} */ (document.getElementById('queryExplorerApiSelect'));
+  const langSel = /** @type {HTMLSelectElement} */ (document.getElementById('queryExplorerLangSelect'));
+  if (apiSel) apiSel.value = parsed.api === 'tooling' ? 'tooling' : 'rest';
+  if (langSel) langSel.value = parsed.lang === 'sosl' ? 'sosl' : 'soql';
+  await ensureQueryExplorerEditor();
+  setQueryExplorerEditorValue(parsed.query);
+  syncQueryExplorerEditorLanguage();
+  syncToolingSoslRule();
+}
+
+function applyBuilderToEditor() {
+  const obj = document.getElementById('queryExplorerBuilderObject')?.value || '';
+  const fieldsRaw = document.getElementById('queryExplorerBuilderFields')?.value || '';
+  const fields = fieldsRaw.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
+  const where = document.getElementById('queryExplorerBuilderWhere')?.value || '';
+  const limit = document.getElementById('queryExplorerBuilderLimit')?.value || '';
+  const soql = buildSoqlFromBuilder(obj, fields, where, limit);
+  if (!soql) {
+    showToast(t('queryExplorer.builderMissingObject'), 'warn');
+    return;
+  }
+  setQueryExplorerEditorValue(soql);
+  showToast(t('queryExplorer.builderApplied'), 'success');
+}
+
+async function copyQueryDeepLink() {
+  const query = getQueryExplorerQueryText().trim();
+  if (!query) {
+    showToast(t('queryExplorer.builderMissingQuery'), 'warn');
+    return;
+  }
+  const api = document.getElementById('queryExplorerApiSelect')?.value || 'rest';
+  const lang = document.getElementById('queryExplorerLangSelect')?.value || 'soql';
+  const suffix = encodeQueryExplorerDeepLink(query, { api, lang });
+  const url = `${window.location.origin}${window.location.pathname}${suffix}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(t('queryExplorer.linkCopied'), 'success');
+  } catch {
+    showToast(t('queryExplorer.linkCopyFailed'), 'error');
+  }
+}
+
 export async function refreshQueryExplorerPanel() {
   const schemaKey = state.leftOrgId || state.rightOrgId || null;
   if (schemaKey !== lastQueryExplorerSchemaOrgId) {
@@ -1048,6 +1102,7 @@ export async function refreshQueryExplorerPanel() {
     invalidateQueryExplorerSchemaCache();
   }
   void ensureQueryExplorerEditor();
+  await applyQueryExplorerFromUrl();
 
   const toggle = /** @type {HTMLInputElement} */ (document.getElementById('queryExplorerCompareToggle'));
   if (toggle) toggle.checked = !!state.queryExplorerCompareMode;
@@ -1092,6 +1147,9 @@ export function setupQueryExplorerPanel() {
   document.getElementById('queryExplorerLeftJson')?.addEventListener('click', () => exportJson('left'));
   document.getElementById('queryExplorerRightCsv')?.addEventListener('click', () => exportCsv('right'));
   document.getElementById('queryExplorerRightJson')?.addEventListener('click', () => exportJson('right'));
+
+  document.getElementById('queryExplorerBuilderApplyBtn')?.addEventListener('click', () => applyBuilderToEditor());
+  document.getElementById('queryExplorerCopyLinkBtn')?.addEventListener('click', () => void copyQueryDeepLink());
 
   syncCompareLayoutUi();
   syncToolingSoslRule();

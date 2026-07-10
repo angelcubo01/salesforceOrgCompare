@@ -9,6 +9,11 @@ import { updateDocumentTitle } from './documentMeta.js';
 import { refreshGeneratePackageXmlTypes } from './generatePackageXmlPanel.js';
 import { refreshMetadataTypeComparePanel } from './metadataTypeComparePanel.js';
 import { refreshFieldDependencyPanel } from './fieldDependencyPanel.js';
+import { refreshObjectDescribePanel } from './objectDescribePanel.js';
+import { refreshRestExplorerPanel } from './restExplorerPanel.js';
+import { refreshDataWorkbenchPanel } from './dataWorkbenchPanel.js';
+import { refreshBulkJobMonitorPanel } from './bulkJobMonitorPanel.js';
+import { refreshEventMonitorPanel } from './eventMonitorPanel.js';
 import { refreshDependencyExplorerPanel } from './dependencyExplorerPanel.js';
 import { refreshApexTestsPanel, resetApexTestsShellToHub } from './apexTestsPanel.js';
 import { refreshAnonymousApexPanel } from './anonymousApexPanel.js';
@@ -114,6 +119,11 @@ export function handleArtifactTypeSelectChange(options = {}) {
   void refreshCustomMetadataComparePanel();
   void refreshRecordComparePanel();
   refreshFieldDependencyPanel();
+  void refreshObjectDescribePanel();
+  void refreshRestExplorerPanel();
+  void refreshDataWorkbenchPanel();
+  void refreshBulkJobMonitorPanel();
+  void refreshEventMonitorPanel();
   refreshDependencyExplorerPanel();
   onAfterArtifactTypeChange(isUserChange);
 }

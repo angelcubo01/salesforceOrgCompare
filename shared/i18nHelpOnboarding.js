@@ -226,6 +226,56 @@ export const helpOnboardingEs = {
   'help.tool.MetadataTypeCompare.body3':
     'Si el tipo tiene muchos miembros, usa «solo diferencias» antes de revisar fila a fila. Abre un miembro en el comparador para ver el detalle.',
 
+  'help.tool.ObjectDescribe.title': 'Describe de objeto',
+  'help.tool.ObjectDescribe.lead':
+    'Explora el esquema de un objeto Salesforce: campos, tipos, relaciones y permisos de lectura/escritura.',
+  'help.tool.ObjectDescribe.body1':
+    'Selecciona el entorno y pulsa Cargar objetos para rellenar el desplegable.',
+  'help.tool.ObjectDescribe.body2':
+    'Elige un objeto y revisa la tabla de campos con API name, tipo y flags updateable/createable.',
+  'help.tool.ObjectDescribe.body3':
+    'Útil antes de montar consultas SOQL, imports CSV o comparar estructuras entre entornos.',
+
+  'help.tool.DataWorkbench.title': 'Editor e importación de datos',
+  'help.tool.DataWorkbench.lead':
+    'Consulta y edita un registro concreto o importa datos masivos (CSV, Excel, JSON) vía SOAP.',
+  'help.tool.DataWorkbench.body1':
+    'En Editor de registro: elige objeto, introduce el Record Id y pulsa Cargar. Usa el lápiz junto a cada campo para editar solo lo que necesites.',
+  'help.tool.DataWorkbench.body2':
+    'En Importación masiva: pega o carga un fichero, revisa el mapeo de columnas y ejecuta insert, update, upsert o delete.',
+  'help.tool.DataWorkbench.body3':
+    'Las operaciones de escritura respetan el control de org de solo lectura y la política de DML de la extensión.',
+
+  'help.tool.RestExplorer.title': 'REST Explorer',
+  'help.tool.RestExplorer.lead':
+    'Llama a la REST API de Salesforce con la sesión del entorno seleccionado y revisa la respuesta JSON.',
+  'help.tool.RestExplorer.body1':
+    'Elige método HTTP, escribe la ruta (por ejemplo /services/data/vXX.X/sobjects/Account/describe) y pulsa Enviar.',
+  'help.tool.RestExplorer.body2':
+    'La URL base y la versión de API se rellenan según el entorno conectado.',
+  'help.tool.RestExplorer.body3':
+    'Ideal para probar endpoints antes de integrarlos en Apex o herramientas externas.',
+
+  'help.tool.EventMonitor.title': 'Event Monitor',
+  'help.tool.EventMonitor.lead':
+    'Suscríbete a Platform Events, Change Events y canales en tiempo real con replay configurable.',
+  'help.tool.EventMonitor.body1':
+    'Selecciona el tipo de canal, carga la lista disponible y elige el canal al que suscribirte.',
+  'help.tool.EventMonitor.body2':
+    'Los eventos recibidos aparecen en la tabla con hora, replay Id y payload. Filtra por texto en el payload.',
+  'help.tool.EventMonitor.body3':
+    'Replay Id -1 recibe solo eventos nuevos; -2 recupera eventos almacenados (pide confirmación).',
+
+  'help.tool.BulkJobMonitor.title': 'Monitor Bulk API',
+  'help.tool.BulkJobMonitor.lead':
+    'Consulta el estado de un trabajo Bulk API (v1 o v2) y descarga resultados de batches o ingest.',
+  'help.tool.BulkJobMonitor.body1':
+    'Introduce el Job Id (750…) del entorno seleccionado y pulsa Cargar job.',
+  'help.tool.BulkJobMonitor.body2':
+    'Se detecta automáticamente Bulk 2.0 ingest/query o Bulk 1.0 async según la respuesta de la org.',
+  'help.tool.BulkJobMonitor.body3':
+    'Descarga CSV de resultados correctos, fallidos o de query desde la tabla de batches.',
+
   'help.tool.ApexCoverageViewer.title': 'Visor de cobertura Apex',
   'help.tool.ApexCoverageViewer.lead':
     'Muestra qué líneas de una clase Apex están cubiertas por tests y cuáles no.',
@@ -421,7 +471,48 @@ export const helpOnboardingEs = {
     'Selecciona ambos entornos y elige un tipo de metadatos en el desplegable.',
   'onboarding.tool.MetadataTypeCompare.step2': 'Pulsa Comparar para ver la lista de miembros con su estado.',
   'onboarding.tool.MetadataTypeCompare.step3':
-    'Abre un miembro en el comparador o filtra solo diferencias.'
+    'Abre un miembro en el comparador o filtra solo diferencias.',
+
+  'onboarding.tool.ObjectDescribe.title': 'Describe de objeto',
+  'onboarding.tool.ObjectDescribe.lead':
+    'Consulta campos y metadatos de un objeto sin ir a Setup.',
+  'onboarding.tool.ObjectDescribe.step1': 'Selecciona el entorno y pulsa Cargar objetos.',
+  'onboarding.tool.ObjectDescribe.step2': 'Elige el objeto en el desplegable y revisa la tabla de campos.',
+  'onboarding.tool.ObjectDescribe.step3':
+    'Usa la API name y los flags para preparar consultas o imports.',
+
+  'onboarding.tool.DataWorkbench.title': 'Editor e importación de datos',
+  'onboarding.tool.DataWorkbench.lead':
+    'Edita registros campo a campo o importa datos masivos desde CSV/JSON.',
+  'onboarding.tool.DataWorkbench.step1':
+    'Pestaña Editor: carga un registro por Id y activa el lápiz solo en los campos que quieras cambiar.',
+  'onboarding.tool.DataWorkbench.step2':
+    'Pestaña Importación: pega datos, revisa columnas y mapeo a campos Salesforce.',
+  'onboarding.tool.DataWorkbench.step3':
+    'Guardar o Ejecutar importación aplican DML en el entorno seleccionado.',
+
+  'onboarding.tool.RestExplorer.title': 'REST Explorer',
+  'onboarding.tool.RestExplorer.lead':
+    'Prueba llamadas REST con la sesión del entorno activo.',
+  'onboarding.tool.RestExplorer.step1': 'Elige método y escribe la ruta del recurso REST.',
+  'onboarding.tool.RestExplorer.step2': 'Opcional: cuerpo JSON para POST o PATCH.',
+  'onboarding.tool.RestExplorer.step3': 'Revisa status y respuesta en el panel de resultados.',
+
+  'onboarding.tool.EventMonitor.title': 'Event Monitor',
+  'onboarding.tool.EventMonitor.lead':
+    'Escucha eventos de plataforma y CDC en tiempo real.',
+  'onboarding.tool.EventMonitor.step1': 'Selecciona tipo de canal y pulsa Cargar canales.',
+  'onboarding.tool.EventMonitor.step2': 'Elige canal, replay Id y Suscríbete.',
+  'onboarding.tool.EventMonitor.step3':
+    'Filtra eventos, copia payloads o desuscribe cuando termines.',
+
+  'onboarding.tool.BulkJobMonitor.title': 'Monitor Bulk API',
+  'onboarding.tool.BulkJobMonitor.lead':
+    'Sigue un job Bulk por Id y descarga sus resultados.',
+  'onboarding.tool.BulkJobMonitor.step1': 'Pega el Job Id del entorno seleccionado.',
+  'onboarding.tool.BulkJobMonitor.step2': 'Pulsa Cargar job para ver estado y batches.',
+  'onboarding.tool.BulkJobMonitor.step3':
+    'Descarga resultados CSV desde la fila de cada batch o tipo de resultado.'
 };
 
 export const helpOnboardingEn = {
@@ -650,6 +741,56 @@ export const helpOnboardingEn = {
   'help.tool.MetadataTypeCompare.body3':
     'If the type has many members, use “differences only” before reviewing row by row. Open a member in the comparator for detail.',
 
+  'help.tool.ObjectDescribe.title': 'Object describe',
+  'help.tool.ObjectDescribe.lead':
+    'Explore a Salesforce object schema: fields, types, relationships, and read/write permissions.',
+  'help.tool.ObjectDescribe.body1':
+    'Select the org and press Load objects to fill the dropdown.',
+  'help.tool.ObjectDescribe.body2':
+    'Pick an object and review the field table with API name, type, and updateable/createable flags.',
+  'help.tool.ObjectDescribe.body3':
+    'Useful before building SOQL queries, CSV imports, or comparing structures across orgs.',
+
+  'help.tool.DataWorkbench.title': 'Record editor & import',
+  'help.tool.DataWorkbench.lead':
+    'View and edit a single record or bulk-import data (CSV, Excel, JSON) via SOAP.',
+  'help.tool.DataWorkbench.body1':
+    'Record editor tab: pick object, enter Record Id, and press Load. Use the pencil next to each field to edit only what you need.',
+  'help.tool.DataWorkbench.body2':
+    'Bulk import tab: paste or load a file, review column mapping, then run insert, update, upsert, or delete.',
+  'help.tool.DataWorkbench.body3':
+    'Write operations respect read-only org controls and the extension DML policy.',
+
+  'help.tool.RestExplorer.title': 'REST Explorer',
+  'help.tool.RestExplorer.lead':
+    'Call the Salesforce REST API with the selected org session and inspect the JSON response.',
+  'help.tool.RestExplorer.body1':
+    'Choose HTTP method, enter the path (e.g. /services/data/vXX.X/sobjects/Account/describe), and press Send.',
+  'help.tool.RestExplorer.body2':
+    'Base URL and API version are filled from the connected org.',
+  'help.tool.RestExplorer.body3':
+    'Handy to try endpoints before wiring them in Apex or external tools.',
+
+  'help.tool.EventMonitor.title': 'Event Monitor',
+  'help.tool.EventMonitor.lead':
+    'Subscribe to Platform Events, Change Events, and real-time channels with configurable replay.',
+  'help.tool.EventMonitor.body1':
+    'Select channel type, load the available list, and pick the channel to subscribe.',
+  'help.tool.EventMonitor.body2':
+    'Received events appear in the table with time, replay Id, and payload. Filter by payload text.',
+  'help.tool.EventMonitor.body3':
+    'Replay Id -1 receives new events only; -2 replays stored events (asks for confirmation).',
+
+  'help.tool.BulkJobMonitor.title': 'Bulk API monitor',
+  'help.tool.BulkJobMonitor.lead':
+    'Check a Bulk API job status (v1 or v2) and download batch or ingest results.',
+  'help.tool.BulkJobMonitor.body1':
+    'Enter the Job Id (750…) for the selected org and press Load job.',
+  'help.tool.BulkJobMonitor.body2':
+    'Bulk 2.0 ingest/query or Bulk 1.0 async is detected automatically from the org response.',
+  'help.tool.BulkJobMonitor.body3':
+    'Download CSV for successful, failed, or query results from the batches table.',
+
   'help.tool.ApexCoverageViewer.title': 'Apex coverage viewer',
   'help.tool.ApexCoverageViewer.lead':
     'Shows which lines of an Apex class are covered by tests and which are not.',
@@ -844,5 +985,46 @@ export const helpOnboardingEn = {
     'Select both orgs and pick a metadata type in the dropdown.',
   'onboarding.tool.MetadataTypeCompare.step2': 'Press Compare to see the member list with status.',
   'onboarding.tool.MetadataTypeCompare.step3':
-    'Open a member in the comparator or filter differences only.'
+    'Open a member in the comparator or filter differences only.',
+
+  'onboarding.tool.ObjectDescribe.title': 'Object describe',
+  'onboarding.tool.ObjectDescribe.lead':
+    'Inspect object fields and metadata without opening Setup.',
+  'onboarding.tool.ObjectDescribe.step1': 'Select the org and press Load objects.',
+  'onboarding.tool.ObjectDescribe.step2': 'Pick the object in the dropdown and review the field table.',
+  'onboarding.tool.ObjectDescribe.step3':
+    'Use API names and flags to prepare queries or imports.',
+
+  'onboarding.tool.DataWorkbench.title': 'Record editor & import',
+  'onboarding.tool.DataWorkbench.lead':
+    'Edit records field by field or bulk-import from CSV/JSON.',
+  'onboarding.tool.DataWorkbench.step1':
+    'Editor tab: load a record by Id and use the pencil only on fields you want to change.',
+  'onboarding.tool.DataWorkbench.step2':
+    'Import tab: paste data, review columns, and map to Salesforce fields.',
+  'onboarding.tool.DataWorkbench.step3':
+    'Save or Run import applies DML in the selected org.',
+
+  'onboarding.tool.RestExplorer.title': 'REST Explorer',
+  'onboarding.tool.RestExplorer.lead':
+    'Try REST calls with the active org session.',
+  'onboarding.tool.RestExplorer.step1': 'Choose method and enter the REST resource path.',
+  'onboarding.tool.RestExplorer.step2': 'Optional: JSON body for POST or PATCH.',
+  'onboarding.tool.RestExplorer.step3': 'Review status and response in the results panel.',
+
+  'onboarding.tool.EventMonitor.title': 'Event Monitor',
+  'onboarding.tool.EventMonitor.lead':
+    'Listen to platform and CDC events in real time.',
+  'onboarding.tool.EventMonitor.step1': 'Select channel type and press Load channels.',
+  'onboarding.tool.EventMonitor.step2': 'Pick channel, replay Id, and Subscribe.',
+  'onboarding.tool.EventMonitor.step3':
+    'Filter events, copy payloads, or unsubscribe when done.',
+
+  'onboarding.tool.BulkJobMonitor.title': 'Bulk API monitor',
+  'onboarding.tool.BulkJobMonitor.lead':
+    'Track a Bulk job by Id and download its results.',
+  'onboarding.tool.BulkJobMonitor.step1': 'Paste the Job Id for the selected org.',
+  'onboarding.tool.BulkJobMonitor.step2': 'Press Load job to see status and batches.',
+  'onboarding.tool.BulkJobMonitor.step3':
+    'Download CSV results from each batch or result type row.'
 };

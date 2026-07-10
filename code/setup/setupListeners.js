@@ -29,6 +29,8 @@ import { resetDependencyExplorerPanel } from '../ui/dependencyExplorerPanel.js';
 import { refreshApexTestsPanel } from '../ui/apexTestsPanel.js';
 import { refreshAnonymousApexPanel } from '../ui/anonymousApexPanel.js';
 import { refreshQueryExplorerPanel } from '../ui/queryExplorerPanel.js';
+import { refreshObjectDescribePanel } from '../ui/objectDescribePanel.js';
+import { refreshDataWorkbenchPanel } from '../ui/dataWorkbenchPanel.js';
 import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
 import { reloadEnvironmentStatusIfActive } from '../ui/environmentStatusPanel.js';
 import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
@@ -84,6 +86,12 @@ export function wireSelectors() {
     }
     if (getSelectedArtifactType() === 'QueryExplorer') {
       void refreshQueryExplorerPanel();
+    }
+    if (getSelectedArtifactType() === 'ObjectDescribe') {
+      void refreshObjectDescribePanel();
+    }
+    if (getSelectedArtifactType() === 'DataWorkbench') {
+      void refreshDataWorkbenchPanel();
     }
     if (getSelectedArtifactType() === 'OrgLimits') {
       void refreshOrgLimitsPanel();

@@ -49,6 +49,42 @@ async function restFetchWithSid(instanceUrl, sid, path, init = {}) {
   return fetch(url, { ...init, headers });
 }
 
+/**
+ * Petición REST genérica (Rest Explorer).
+ * @param {string} instanceUrl
+ * @param {string} sid
+ * @param {string} method
+ * @param {string} path path absoluto o relativo (/services/data/...)
+ * @param {{ headers?: Record<string, string>, body?: string }} [options]
+ */
+export async function restRequestWithSid(instanceUrl, sid, method, path, options = {}) {
+  const p = String(path || '').trim();
+  const rel = p.startsWith('http') ? new URL(p).pathname + new URL(p).search : p.startsWith('/') ? p : `/${p}`;
+  const init = { method: String(method || 'GET').toUpperCase() };
+  const hdrs = { ...(options.headers || {}) };
+  if (options.body != null && options.body !== '') {
+    init.body = String(options.body);
+    if (!hdrs['Content-Type'] && !hdrs['content-type']) hdrs['Content-Type'] = 'application/json';
+  }
+  init.headers = hdrs;
+  const res = await restFetchWithSid(instanceUrl, sid, rel, init);
+  const text = await res.text();
+  let json = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  return {
+    ok: res.ok,
+    status: res.status,
+    statusText: res.statusText,
+    text,
+    json,
+    headers: Object.fromEntries(res.headers.entries())
+  };
+}
+
 /** Convierte `nextRecordsUrl` de la API en path relativo para `restFetchWithSid`. */
 function nextPathFromRecordsUrl(nextRecordsUrl) {
   if (nextRecordsUrl == null || nextRecordsUrl === '') return null;
@@ -166,6 +202,14 @@ export async function restSoslSearchPage(instanceUrl, sid, apiVersion, soslOrRel
 }
 
 export async function probeApiVersion(instanceUrl, sid) {
+  const versions = await listRestApiVersions(instanceUrl, sid);
+  return versions[versions.length - 1];
+}
+
+/**
+ * @returns {Promise<string[]>} versiones ordenadas ascendente (p. ej. ["59.0", …, "67.0"])
+ */
+export async function listRestApiVersions(instanceUrl, sid) {
   const res = await restFetchWithSid(instanceUrl, sid, `/services/data`);
   if (!res.ok) {
     const err = new Error(`API /services/data: ${res.status}`);
@@ -174,7 +218,9 @@ export async function probeApiVersion(instanceUrl, sid) {
   }
   const versions = await res.json();
   if (!Array.isArray(versions) || versions.length === 0) throw new Error('No API versions');
-  return versions[versions.length - 1].version;
+  return versions
+    .map((v) => String(v?.version || '').trim())
+    .filter(Boolean);
 }
 
 /**
@@ -2103,40 +2149,143 @@ export async function createUserDebugTraceFlag(
 /** Ventana máxima de una traza USER_DEBUG (24 h). */
 export const USER_DEBUG_TRACE_MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+/** Trazas caducadas hace menos de este tiempo siguen visibles y se pueden reactivar. */
+export const USER_DEBUG_TRACE_RECENTLY_INACTIVE_MS = 30 * 60 * 1000;
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function parseSalesforceDateTimeMs(value) {
+  if (value == null || value === '') return NaN;
+  if (value instanceof Date) return value.getTime();
+  const raw = String(value).trim();
+  if (!raw) return NaN;
+  const normalized = raw.replace(/(\.\d{3})\+(\d{2})(\d{2})$/, '$1+$2:$3');
+  const ms = Date.parse(normalized);
+  return Number.isFinite(ms) ? ms : NaN;
+}
+
+/**
+ * @param {{ startIso?: string, expirationIso?: string, StartDate?: string, ExpirationDate?: string }} row
+ */
+export function resolveUserDebugTraceDates(row) {
+  const startMs = parseSalesforceDateTimeMs(row?.startIso ?? row?.StartDate);
+  const expMs = parseSalesforceDateTimeMs(row?.expirationIso ?? row?.ExpirationDate);
+  return {
+    startMs,
+    expMs,
+    startIso: Number.isFinite(startMs) ? new Date(startMs).toISOString() : '',
+    expirationIso: Number.isFinite(expMs) ? new Date(expMs).toISOString() : ''
+  };
+}
+
 /**
  * @param {{ startIso?: string, expirationIso?: string, StartDate?: string, ExpirationDate?: string }} row
  * @param {number} [nowMs]
  */
 export function isUserDebugTraceActive(row, nowMs = Date.now()) {
-  const startIso = row?.startIso || row?.StartDate || '';
-  const expirationIso = row?.expirationIso || row?.ExpirationDate || '';
-  const startMs = new Date(startIso).getTime();
-  const expMs = new Date(expirationIso).getTime();
+  const { startMs, expMs } = resolveUserDebugTraceDates(row);
   if (!Number.isFinite(startMs) || !Number.isFinite(expMs)) return false;
   return startMs <= nowMs && nowMs < expMs;
 }
 
 /**
- * Calcula nueva caducidad sumando `addMs` a la actual, sin superar 24 h desde el inicio.
+ * Traza caducada recientemente (últimos 30 min), ya iniciada.
+ * @param {{ startIso?: string, expirationIso?: string, StartDate?: string, ExpirationDate?: string }} row
+ * @param {number} [nowMs]
+ */
+export function isUserDebugTraceRecentlyInactive(row, nowMs = Date.now()) {
+  if (isUserDebugTraceActive(row, nowMs)) return false;
+  const { startMs, expMs } = resolveUserDebugTraceDates(row);
+  if (!Number.isFinite(startMs) || !Number.isFinite(expMs)) return false;
+  if (startMs > nowMs) return false;
+  if (expMs > nowMs) return false;
+  return nowMs - expMs <= USER_DEBUG_TRACE_RECENTLY_INACTIVE_MS;
+}
+
+/**
+ * @param {{ startIso?: string, expirationIso?: string, StartDate?: string, ExpirationDate?: string }} row
+ * @param {number} [nowMs]
+ */
+export function isUserDebugTraceVisibleByDefault(row, nowMs = Date.now()) {
+  return isUserDebugTraceActive(row, nowMs) || isUserDebugTraceRecentlyInactive(row, nowMs);
+}
+
+/**
+ * Calcula nueva caducidad sumando `addMs` a la actual (activa) o desde ahora (reactivación).
  * @returns {{ expirationIso: string, cappedAtMax: boolean }}
  */
-export function computeTraceExtension({ startIso, expirationIso, addMs }) {
-  const startMs = new Date(startIso).getTime();
-  const expMs = new Date(expirationIso).getTime();
+export function computeTraceExtension({ startIso, expirationIso, addMs, nowMs = Date.now() }) {
+  const startMs = parseSalesforceDateTimeMs(startIso);
+  const expMs = parseSalesforceDateTimeMs(expirationIso);
   const add = Math.max(0, Number(addMs) || 0);
   if (!Number.isFinite(startMs) || !Number.isFinite(expMs)) {
     throw new Error('Invalid date range');
   }
   const maxExpMs = startMs + USER_DEBUG_TRACE_MAX_WINDOW_MS;
-  const requestedMs = expMs + add;
+  const active = startMs <= nowMs && nowMs < expMs;
+  const requestedMs = active ? expMs + add : nowMs + add;
   const nextMs = Math.min(requestedMs, maxExpMs);
-  if (nextMs <= expMs) {
+  if (active && nextMs <= expMs) {
     throw new Error('Trace window cannot exceed 24 hours');
+  }
+  if (!active && nextMs <= nowMs) {
+    throw new Error('Cannot reactivate trace');
   }
   return {
     expirationIso: new Date(nextMs).toISOString(),
     cappedAtMax: requestedMs > maxExpMs
   };
+}
+
+/**
+ * @param {{ startIso?: string, expirationIso?: string, StartDate?: string, ExpirationDate?: string }} row
+ * @param {number} [nowMs]
+ */
+export function buildTraceExtensionPlan(row, addMs = 15 * 60 * 1000, nowMs = Date.now()) {
+  const { startIso, expirationIso } = resolveUserDebugTraceDates(row);
+  if (!startIso || !expirationIso) {
+    throw new Error('Invalid trace dates');
+  }
+  const active = isUserDebugTraceActive(row, nowMs);
+  const recentlyInactive = isUserDebugTraceRecentlyInactive(row, nowMs);
+  if (!active && !recentlyInactive) {
+    throw new Error('Trace is not active');
+  }
+  if (active) {
+    const result = computeTraceExtension({ startIso, expirationIso, addMs, nowMs });
+    return { ...result, startIso: null, reactivated: false };
+  }
+  const nowIso = new Date(nowMs).toISOString();
+  const result = computeTraceExtension({
+    startIso: nowIso,
+    expirationIso: nowIso,
+    addMs,
+    nowMs
+  });
+  return { ...result, startIso: nowIso, reactivated: true };
+}
+
+/**
+ * @param {{ startIso?: string, expirationIso?: string, StartDate?: string, ExpirationDate?: string }} row
+ * @param {number} [nowMs]
+ */
+export function canExtendOrReactivateUserDebugTrace(row, nowMs = Date.now()) {
+  if (!isUserDebugTraceActive(row, nowMs) && !isUserDebugTraceRecentlyInactive(row, nowMs)) {
+    return false;
+  }
+  const { startIso, expirationIso, startMs, expMs } = resolveUserDebugTraceDates(row);
+  if (!Number.isFinite(startMs) || !Number.isFinite(expMs)) return false;
+  if (isUserDebugTraceActive(row, nowMs) && expMs >= startMs + USER_DEBUG_TRACE_MAX_WINDOW_MS) {
+    return false;
+  }
+  try {
+    buildTraceExtensionPlan(row, 15 * 60 * 1000, nowMs);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -2164,8 +2313,10 @@ export async function queryUserDebugTraceFlags(instanceUrl, sid, apiVersion) {
       const tracedEntityId = String(r?.TracedEntityId || '').replace(/[^a-zA-Z0-9]/g, '');
       const debugLevelId = String(r?.DebugLevelId || '').replace(/[^a-zA-Z0-9]/g, '');
       const lvl = levelById.get(debugLevelId);
-      const startIso = r?.StartDate ? new Date(r.StartDate).toISOString() : '';
-      const expirationIso = r?.ExpirationDate ? new Date(r.ExpirationDate).toISOString() : '';
+      const startMs = parseSalesforceDateTimeMs(r?.StartDate);
+      const expMs = parseSalesforceDateTimeMs(r?.ExpirationDate);
+      const startIso = Number.isFinite(startMs) ? new Date(startMs).toISOString() : '';
+      const expirationIso = Number.isFinite(expMs) ? new Date(expMs).toISOString() : '';
       return {
         id,
         tracedEntityId,
@@ -2188,7 +2339,7 @@ export async function extendUserDebugTraceFlag(
   instanceUrl,
   sid,
   apiVersion,
-  { traceFlagId, addMs = 15 * 60 * 1000 }
+  { traceFlagId, addMs = 15 * 60 * 1000, allowReactivate = false }
 ) {
   const id = String(traceFlagId || '').replace(/[^a-zA-Z0-9]/g, '');
   if (!id) throw new Error('Missing trace flag id');
@@ -2203,22 +2354,41 @@ export async function extendUserDebugTraceFlag(
   const row = rows[0];
   if (!row?.Id) throw new Error('Trace flag not found');
   if (String(row.LogType || '') !== 'USER_DEBUG') throw new Error('Not a USER_DEBUG trace');
-  const startIso = new Date(row.StartDate).toISOString();
-  const expirationIso = new Date(row.ExpirationDate).toISOString();
-  if (!isUserDebugTraceActive({ startIso, expirationIso })) {
-    throw new Error('Trace is not active');
+
+  let plan;
+  try {
+    plan = buildTraceExtensionPlan(row, addMs);
+  } catch (err) {
+    if (allowReactivate && err instanceof Error && err.message === 'Trace is not active') {
+      const { startIso, expirationIso } = resolveUserDebugTraceDates(row);
+      if (!startIso || !expirationIso) throw err;
+      const nowIso = new Date().toISOString();
+      const result = computeTraceExtension({
+        startIso: nowIso,
+        expirationIso: nowIso,
+        addMs
+      });
+      plan = { ...result, startIso: nowIso, reactivated: true };
+    } else {
+      throw err;
+    }
   }
-  const { expirationIso: nextIso, cappedAtMax } = computeTraceExtension({
-    startIso,
-    expirationIso,
-    addMs
-  });
-  const expStr = toSfJsonUtcDateTime(nextIso);
+
+  const expStr = toSfJsonUtcDateTime(plan.expirationIso);
   if (!expStr) throw new Error('Invalid expiration date');
-  await toolingPatchSobject(instanceUrl, sid, apiVersion, 'TraceFlag', id, {
-    ExpirationDate: expStr
-  });
-  return { expirationIso: nextIso, cappedAtMax };
+  const patch = { ExpirationDate: expStr };
+  if (plan.reactivated && plan.startIso) {
+    const startStr = toSfJsonUtcDateTime(plan.startIso);
+    if (!startStr) throw new Error('Invalid start date');
+    patch.StartDate = startStr;
+  }
+  await toolingPatchSobject(instanceUrl, sid, apiVersion, 'TraceFlag', id, patch);
+  return {
+    expirationIso: plan.expirationIso,
+    startIso: plan.startIso || undefined,
+    reactivated: !!plan.reactivated,
+    cappedAtMax: plan.cappedAtMax
+  };
 }
 
 /**

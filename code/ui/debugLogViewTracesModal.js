@@ -6,9 +6,10 @@ import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import {
   isUserDebugTraceActive,
-  computeTraceExtension,
-  validateUserDebugTraceDates,
-  USER_DEBUG_TRACE_MAX_WINDOW_MS
+  isUserDebugTraceRecentlyInactive,
+  isUserDebugTraceVisibleByDefault,
+  canExtendOrReactivateUserDebugTrace,
+  validateUserDebugTraceDates
 } from '../../shared/salesforceApi.js';
 import {
   openDebugLogTraceModal,
@@ -80,28 +81,14 @@ function traceDateValidationMessage(code) {
 }
 
 function canExtendTrace(row) {
-  if (!isUserDebugTraceActive(row)) return false;
-  const startMs = new Date(row.startIso).getTime();
-  const expMs = new Date(row.expirationIso).getTime();
-  if (!Number.isFinite(startMs) || !Number.isFinite(expMs)) return false;
-  if (expMs >= startMs + USER_DEBUG_TRACE_MAX_WINDOW_MS) return false;
-  try {
-    computeTraceExtension({
-      startIso: row.startIso,
-      expirationIso: row.expirationIso,
-      addMs: 1
-    });
-    return true;
-  } catch {
-    return false;
-  }
+  return canExtendOrReactivateUserDebugTrace(row);
 }
 
 function visibleTraces() {
   const { showInactive } = els();
   const includeInactive = !!showInactive?.checked;
   if (includeInactive) return allTraces;
-  return allTraces.filter((row) => isUserDebugTraceActive(row));
+  return allTraces.filter((row) => isUserDebugTraceVisibleByDefault(row));
 }
 
 function setLoading(on) {
@@ -191,15 +178,22 @@ function renderTable() {
   for (const row of rows) {
     const tr = document.createElement('tr');
     const active = isUserDebugTraceActive(row);
+    const recentlyInactive = isUserDebugTraceRecentlyInactive(row);
     const statusKey = active ? 'debugLogs.viewTracesStatusActive' : 'debugLogs.viewTracesStatusInactive';
     const statusClass = active
       ? 'debug-log-view-traces-status debug-log-view-traces-status--active'
       : 'debug-log-view-traces-status debug-log-view-traces-status--inactive';
     const rowBusy = busyRowId === row.id;
-    const extendDisabled = !canExtendTrace(row) || rowBusy;
-    const extendTitle = canExtendTrace(row)
-      ? t('debugLogs.viewTracesExtend15')
+    const extendable = canExtendTrace(row);
+    const extendDisabled = !extendable || rowBusy;
+    const extendTitle = extendable
+      ? recentlyInactive
+        ? t('debugLogs.viewTracesReactivate15')
+        : t('debugLogs.viewTracesExtend15')
       : t('debugLogs.viewTracesExtendMaxWindow');
+    const extendLabel = recentlyInactive
+      ? t('debugLogs.viewTracesReactivate15')
+      : t('debugLogs.viewTracesExtend15');
     const actionDisabled = rowBusy ? 'disabled' : '';
     tr.innerHTML = `
       <td>${escapeHtml(String(row.userLabel || row.tracedEntityId || '—'))}</td>
@@ -210,8 +204,8 @@ function renderTable() {
       <td class="debug-log-view-traces-actions-cell">
         <div class="debug-log-view-traces-actions">
           ${
-            active
-              ? `<button type="button" class="debug-log-view-traces-extend-btn" ${extendDisabled ? 'disabled' : ''} title="${escapeHtml(extendTitle)}">${escapeHtml(t('debugLogs.viewTracesExtend15'))}</button>`
+            active || recentlyInactive
+              ? `<button type="button" class="debug-log-view-traces-extend-btn" ${extendDisabled ? 'disabled' : ''} title="${escapeHtml(extendTitle)}">${escapeHtml(extendLabel)}</button>`
               : ''
           }
           <button type="button" class="debug-log-view-traces-edit-btn" ${actionDisabled} title="${escapeHtml(t('debugLogs.viewTracesEdit'))}">${escapeHtml(t('debugLogs.viewTracesEdit'))}</button>
@@ -273,7 +267,8 @@ async function extendTrace(row) {
     const res = await bg({
       type: 'debugLogs:extendTrace',
       orgId: state.leftOrgId,
-      traceFlagId: row.id
+      traceFlagId: row.id,
+      allowReactivate: isUserDebugTraceRecentlyInactive(row)
     });
     if (!res?.ok) {
       const msg =
@@ -287,11 +282,18 @@ async function extendTrace(row) {
       return;
     }
     const idx = allTraces.findIndex((tr) => tr.id === row.id);
-    if (idx >= 0 && res.expirationIso) {
-      allTraces[idx] = { ...allTraces[idx], expirationIso: res.expirationIso };
+    if (idx >= 0) {
+      allTraces[idx] = {
+        ...allTraces[idx],
+        ...(res.expirationIso ? { expirationIso: res.expirationIso } : {}),
+        ...(res.startIso ? { startIso: res.startIso } : {})
+      };
     }
+    const successKey = res.reactivated
+      ? 'debugLogs.viewTracesReactivateSuccess'
+      : 'debugLogs.viewTracesExtendSuccess';
     showToast(
-      res.cappedAtMax ? t('debugLogs.viewTracesExtendMaxWindow') : t('debugLogs.viewTracesExtendSuccess'),
+      res.cappedAtMax ? t('debugLogs.viewTracesExtendMaxWindow') : t(successKey),
       res.cappedAtMax ? 'warn' : 'info'
     );
     renderTable();

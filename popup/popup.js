@@ -250,6 +250,19 @@ function buildOrgRow(o) {
   });
   menu.appendChild(rmBtn);
 
+  const readOnlyBtn = el('button', 'org-actions-item', t('popup.readOnlyOrg'));
+  readOnlyBtn.type = 'button';
+  readOnlyBtn.setAttribute('role', 'menuitem');
+  readOnlyBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const mapRes = await bg({ type: 'orgWrite:getReadOnlyMap' });
+    const map = mapRes?.ok ? mapRes.map || {} : {};
+    const next = !map[o.id];
+    await bg({ type: 'orgWrite:setReadOnly', orgId: o.id, readOnly: next });
+    readOnlyBtn.textContent = next ? `✓ ${t('popup.readOnlyOrg')}` : t('popup.readOnlyOrg');
+  });
+  menu.appendChild(readOnlyBtn);
+
   wrap.appendChild(trigger);
   wrap.appendChild(menu);
 

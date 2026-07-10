@@ -7,7 +7,12 @@ import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { guardToolAction } from './featureControlsUi.js';
-import { getCodeEditorPersistenceEnabled } from '../../shared/extensionSettings.js';
+import {
+  formatMetadataApiVersion,
+  buildDeployApiVersionWindow,
+  clampApiVersion,
+  isApiVersionInRange
+} from '../../shared/metadataApiVersion.js';
 import {
   saveApexDraft,
   clearReturnContext,
@@ -76,8 +81,10 @@ let sessionRestored = false;
  * @property {string | null} [localSavedAt]
  */
 
-/** @type {{ orgId: string | null, activeTabId: string | null, activeTabIndex: number | null, tabs: QuickEditTab[] }} */
+/** @type {{ orgId: string | null, activeTabId: string | null, activeTabIndex: number | null, tabs: QuickEditTab[], deployApiVersion?: string | null }} */
 let editorSession = { orgId: null, activeTabId: null, activeTabIndex: null, tabs: [] };
+/** @type {ReturnType<typeof buildDeployApiVersionWindow> | null} */
+let deployApiVersionWindow = null;
 
 function syncActiveTabPointers() {
   if (!editorSession.tabs.length) {
@@ -154,6 +161,117 @@ function getTabSourceOrgId(tab) {
 
 function getDeployTargetOrgId() {
   return state.leftOrgId || null;
+}
+
+function getDeployApiVersionInput() {
+  return /** @type {HTMLInputElement | null} */ (document.getElementById('quickEditDeployApiVersion'));
+}
+
+function getDeployApiVersionDatalist() {
+  return document.getElementById('quickEditDeployApiVersionList');
+}
+
+function clampToDeployApiWindow(version) {
+  const win = deployApiVersionWindow;
+  if (!win) return formatMetadataApiVersion(version);
+  return clampApiVersion(version, win.minVersion, win.maxVersion);
+}
+
+function getSelectedDeployApiVersion() {
+  const input = getDeployApiVersionInput();
+  const raw = input?.value?.trim() || editorSession.deployApiVersion || '';
+  if (!deployApiVersionWindow) {
+    return formatMetadataApiVersion(raw);
+  }
+  if (!deployApiVersionWindow.editable) {
+    return deployApiVersionWindow.maxVersion;
+  }
+  return clampToDeployApiWindow(raw || deployApiVersionWindow.defaultVersion);
+}
+
+function setDeployApiVersion(version, opts = {}) {
+  const win = deployApiVersionWindow;
+  const formatted = win
+    ? clampToDeployApiWindow(version || win.defaultVersion)
+    : formatMetadataApiVersion(version);
+  editorSession.deployApiVersion = formatted;
+  const input = getDeployApiVersionInput();
+  if (input) input.value = formatted;
+  if (!opts.skipPersist) void persistSession();
+}
+
+function renderDeployApiVersionInput() {
+  const input = getDeployApiVersionInput();
+  const datalist = getDeployApiVersionDatalist();
+  const win = deployApiVersionWindow;
+  if (!input || !win) return;
+
+  if (datalist) {
+    datalist.innerHTML = win.options.map((v) => `<option value="${v}"></option>`).join('');
+  }
+
+  const preferred = editorSession.deployApiVersion || win.defaultVersion;
+  const next = win.editable ? clampToDeployApiWindow(preferred) : win.maxVersion;
+  input.value = next;
+  editorSession.deployApiVersion = next;
+  input.disabled = !win.editable || isDeploying;
+  input.readOnly = !win.editable;
+  input.title = win.editable
+    ? t('quickEdit.deployApiVersionRange', { min: win.minVersion, max: win.maxVersion })
+    : t('quickEdit.deployApiVersionLocked', { version: win.maxVersion, min: win.minVersion });
+}
+
+function commitDeployApiVersionFromInput() {
+  const win = deployApiVersionWindow;
+  const input = getDeployApiVersionInput();
+  if (!input || !win || !win.editable) return;
+  const before = input.value.trim();
+  const after = clampToDeployApiWindow(before || win.defaultVersion);
+  if (before && !isApiVersionInRange(before, win.minVersion, win.maxVersion)) {
+    showToast(
+      t('quickEdit.deployApiVersionClamped', { version: after, min: win.minVersion, max: win.maxVersion }),
+      'warn'
+    );
+  }
+  setDeployApiVersion(after, { skipPersist: false });
+}
+
+async function refreshDeployApiVersionOptions() {
+  const orgId = getDeployTargetOrgId();
+  if (!orgId) {
+    deployApiVersionWindow = buildDeployApiVersionWindow([]);
+    renderDeployApiVersionInput();
+    return;
+  }
+  try {
+    const res = await bg({ type: 'api:listVersions', orgId });
+    if (res?.ok && Array.isArray(res.versions) && res.versions.length) {
+      deployApiVersionWindow = buildDeployApiVersionWindow(res.versions);
+    } else {
+      const org = (state.orgsList || []).find((o) => o.id === orgId);
+      deployApiVersionWindow = buildDeployApiVersionWindow(
+        org?.apiVersion ? [org.apiVersion] : []
+      );
+    }
+  } catch {
+    const org = (state.orgsList || []).find((o) => o.id === orgId);
+    deployApiVersionWindow = buildDeployApiVersionWindow(org?.apiVersion ? [org.apiVersion] : []);
+  }
+  renderDeployApiVersionInput();
+}
+
+async function syncDeployApiVersionFromClass(tab) {
+  const orgId = tab?.sourceOrgId || getDeployTargetOrgId();
+  const className = tab?.name;
+  if (!orgId || !className || !deployApiVersionWindow) return;
+  try {
+    const res = await bg({ type: 'apexClass:getApiVersion', orgId, className });
+    if (res?.ok && res.apiVersion) {
+      setDeployApiVersion(res.apiVersion, { skipPersist: true });
+    }
+  } catch {
+    /* optional enrichment */
+  }
 }
 
 function confirmDeployOrgMismatch(tab) {
@@ -351,6 +469,7 @@ async function reloadTabFromOrg(tab, opts = {}) {
 
     renderDocTabs();
     void persistSession();
+    void syncDeployApiVersionFromClass(tab);
     return true;
   } catch (e) {
     if (!opts.silent) {
@@ -410,6 +529,7 @@ async function persistSession() {
       ? {
           activeTabId: editorSession.activeTabId,
           orgId: editorSession.orgId,
+          deployApiVersion: editorSession.deployApiVersion || null,
           tabs: editorSession.tabs
         }
       : null
@@ -419,7 +539,7 @@ async function persistSession() {
 async function clearAllEditorTabs() {
   if (!window.confirm(t('codeEditor.clearAllConfirm'))) return;
 
-  editorSession = { orgId: null, activeTabId: null, activeTabIndex: null, tabs: [] };
+  editorSession = { orgId: null, activeTabId: null, activeTabIndex: null, tabs: [], deployApiVersion: null };
   sessionRestored = true;
   quickEditWorkbench.disposeAll();
   quickEditWorkbench.getEditor()?.setModel(null);
@@ -475,6 +595,11 @@ function updateEditorActionButtons() {
   const retrieveBtn = document.getElementById('quickEditRetrieveBtn');
   if (retrieveBtn) {
     retrieveBtn.disabled = !hasItem || isDeploying;
+  }
+
+  const apiVersionInput = getDeployApiVersionInput();
+  if (apiVersionInput) {
+    apiVersionInput.disabled = isDeploying || !deployApiVersionWindow?.editable;
   }
 }
 
@@ -913,6 +1038,8 @@ async function deployComponent(checkOnly = false) {
     return;
   }
 
+  commitDeployApiVersionFromInput();
+
   const content = quickEditWorkbench.getValue(tab.id);
   if (!content.trim()) {
     showToast(t('quickEdit.emptyContent'), 'warn');
@@ -941,7 +1068,8 @@ async function deployComponent(checkOnly = false) {
       content,
       fileName: tab.fileName,
       checkOnly,
-      async: true
+      async: true,
+      deployApiVersion: getSelectedDeployApiVersion()
     });
 
     if (res?.ok && res.asyncId) {
@@ -1057,7 +1185,8 @@ async function restoreSessionFromStorage() {
     orgId: storedOrgId,
     activeTabId: unique.activeTabId,
     activeTabIndex: null,
-    tabs: unique.tabs
+    tabs: unique.tabs,
+    deployApiVersion: stored.deployApiVersion ? formatMetadataApiVersion(String(stored.deployApiVersion)) : null
   };
 
   if (!editorSession.activeTabId || !editorSession.tabs.some((t) => t.id === editorSession.activeTabId)) {
@@ -1086,6 +1215,7 @@ export async function refreshQuickEditPanel() {
     persistAllTabsContentFromWorkbench();
     await refreshAuthStatuses(true);
     await restoreSessionFromStorage();
+    await refreshDeployApiVersionOptions();
     syncTabsPendingAfterAuthRefresh(editorSession.tabs);
     await ensureEditor();
     const ctx = getReturnContext();
@@ -1131,6 +1261,12 @@ export function setupQuickEditPanel() {
   if (validateBtn) validateBtn.addEventListener('click', () => deployComponent(true));
   if (saveBtn) saveBtn.addEventListener('click', () => void saveActiveTabLocally());
   if (revertBtn) revertBtn.addEventListener('click', () => void revertActiveTabLocally());
+  document.getElementById('quickEditDeployApiVersion')?.addEventListener('change', () => {
+    commitDeployApiVersionFromInput();
+  });
+  document.getElementById('quickEditDeployApiVersion')?.addEventListener('blur', () => {
+    commitDeployApiVersionFromInput();
+  });
   if (retrieveBtn) retrieveBtn.addEventListener('click', () => void retrieveActiveTabFromOrg());
 
   if (newTabBtn) {

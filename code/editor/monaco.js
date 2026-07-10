@@ -181,14 +181,23 @@ export async function loadMonaco() {
  * @param {import('monaco-editor')} monaco
  * @param {HTMLElement} mount
  */
+/**
+ * @param {import('monaco-editor').editor.IStandaloneCodeEditor | import('monaco-editor').editor.IStandaloneDiffEditor | null | undefined} editor
+ * @param {HTMLElement | null | undefined} mount
+ */
+export function isEditorUsable(editor, mount) {
+  if (!editor || !mount) return false;
+  try {
+    return editor.getContainerDomNode() === mount;
+  } catch {
+    return false;
+  }
+}
+
 export function findStandaloneEditorOnMount(monaco, mount) {
   if (!monaco?.editor?.getEditors || !mount) return null;
   for (const ed of monaco.editor.getEditors()) {
-    try {
-      if (ed.getContainerDomNode() === mount) return ed;
-    } catch {
-      /* editor disposed */
-    }
+    if (isEditorUsable(ed, mount)) return ed;
   }
   return null;
 }
@@ -238,9 +247,17 @@ export function refreshMonacoReplayMasks(root = document.getElementById('monacoC
   }
 }
 
-/** Limpia restos DOM de un create anterior sin dispose (p. ej. recarga del panel). */
-export function prepareStandaloneEditorMount(mount) {
+/** Limpia restos DOM de un create anterior; hace dispose del editor previo si sigue registrado. */
+export function prepareStandaloneEditorMount(monaco, mount) {
   if (!mount) return;
+  const existing = monaco ? findStandaloneEditorOnMount(monaco, mount) : null;
+  if (existing) {
+    try {
+      existing.dispose();
+    } catch {
+      /* ignore */
+    }
+  }
   if (mount.querySelector('.monaco-editor')) {
     mount.replaceChildren();
   }
@@ -254,16 +271,10 @@ export function prepareStandaloneEditorMount(mount) {
  * @param {import('monaco-editor').editor.IStandaloneCodeEditor | null} [cached]
  */
 export function createStandaloneEditorSafe(monaco, mount, options, cached = null) {
-  if (cached) {
-    try {
-      if (cached.getContainerDomNode() === mount) return cached;
-    } catch {
-      /* stale reference */
-    }
-  }
+  if (isEditorUsable(cached, mount)) return cached;
   const existing = findStandaloneEditorOnMount(monaco, mount);
-  if (existing) return existing;
-  prepareStandaloneEditorMount(mount);
+  if (isEditorUsable(existing, mount)) return existing;
+  prepareStandaloneEditorMount(monaco, mount);
   markMountNoReplay(mount);
   const editor = monaco.editor.create(mount, options);
   markEditorNoReplay(editor);

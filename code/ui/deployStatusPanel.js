@@ -501,11 +501,16 @@ function resetDeployStatusPanelToHome() {
 
 function syncDeployDetailBackButton() {
   const backBtn = document.getElementById('deployStatusBackBtn');
+  const summaryBtn = document.getElementById('deployStatusViewSummaryBtn');
   const editorBtn = document.getElementById('deployStatusBackToEditorBtn');
   const ctx = getReturnContext();
   if (editorBtn) editorBtn.hidden = true;
   if (!backBtn) return;
-  if (ctx && viewMode === 'detail') {
+
+  const fromQuickEdit = !!(ctx && viewMode === 'detail');
+  if (summaryBtn) summaryBtn.hidden = !fromQuickEdit;
+
+  if (fromQuickEdit) {
     const labelKey =
       ctx.tool === 'LightningQuickEdit'
         ? 'deployStatus.backToLightningEditor'
@@ -1459,8 +1464,23 @@ export function setupDeployStatusPanel() {
     void refreshDeployStatusPanel();
   });
 
+  document.getElementById('deployStatusLookupBtn')?.addEventListener('click', () => {
+    const input = document.getElementById('deployStatusLookupInput');
+    const asyncId = input?.value?.trim() || '';
+    if (!asyncId) {
+      showToast(t('deployStatus.lookupMissing'), 'warn');
+      return;
+    }
+    navigateToDetail(asyncId);
+    void refreshDeployStatusPanel();
+  });
+
   document.getElementById('deployStatusBackBtn')?.addEventListener('click', () => {
     handleDeployDetailBack();
+  });
+
+  document.getElementById('deployStatusViewSummaryBtn')?.addEventListener('click', () => {
+    navigateToSummary();
   });
 
   document.getElementById('deployStatusBackToEditorBtn')?.addEventListener('click', () => {

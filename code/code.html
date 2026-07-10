@@ -1167,6 +1167,86 @@
             </div>
           </div>
         </div>
+        <div id="objectDescribePanel" class="object-describe-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaObjectDescribe">
+          <div class="org-limits-panel-inner object-describe-panel-inner">
+            <div class="org-limits-head">
+              <div>
+                <h2 class="org-limits-title" data-i18n="objectDescribe.title">Describe de objetos</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="objectDescribe.subtitle">Explora campos, relaciones y record types de cualquier objeto</p>
+              </div>
+            </div>
+            <p id="objectDescribeStatus" class="org-limits-status" role="status"></p>
+            <div class="object-describe-controls sfoc-tool-controls">
+              <div class="sfoc-tool-field">
+                <label class="sfoc-tool-label" for="objectDescribeSearch" data-i18n="objectDescribe.search">Buscar</label>
+                <input id="objectDescribeSearch" type="search" class="sfoc-query-input" data-i18n-placeholder="objectDescribe.searchPlaceholder" placeholder="Filtrar por nombre o etiqueta…" autocomplete="off" />
+              </div>
+              <div class="sfoc-tool-field sfoc-tool-field--narrow">
+                <label class="sfoc-tool-label" for="objectDescribeNsFilter" data-i18n="objectDescribe.nsFilter">Prefijo</label>
+                <input id="objectDescribeNsFilter" type="text" class="sfoc-query-input" data-i18n-placeholder="objectDescribe.nsFilterPlaceholder" placeholder="myns_" autocomplete="off" spellcheck="false" />
+              </div>
+              <div class="sfoc-tool-field">
+                <label class="sfoc-tool-label" for="objectDescribeObjectSelect" data-i18n="objectDescribe.object">Objeto</label>
+                <select id="objectDescribeObjectSelect" class="sfoc-query-select">
+                  <option value="" data-i18n="objectDescribe.selectObject">— Selecciona objeto —</option>
+                </select>
+              </div>
+              <button type="button" id="objectDescribeDescribeBtn" class="query-explorer-secondary-btn" data-i18n="objectDescribe.describe">Describe</button>
+              <div class="sfoc-tool-field">
+                <label class="sfoc-tool-label" for="objectDescribeIdInput" data-i18n="objectDescribe.recordId">Record Id</label>
+                <input id="objectDescribeIdInput" type="text" class="sfoc-query-input" placeholder="001…" autocomplete="off" spellcheck="false" />
+              </div>
+              <button type="button" id="objectDescribeResolveIdBtn" class="query-explorer-secondary-btn" data-i18n="objectDescribe.resolveId">Resolver objeto</button>
+            </div>
+            <div id="objectDescribeSummary" class="object-describe-summary"></div>
+            <div class="sfoc-tool-field sfoc-tool-field--grow object-describe-table-search-wrap">
+              <label class="sfoc-tool-label" for="objectDescribeTableSearch" data-i18n="objectDescribe.tableSearch">Filtrar tablas</label>
+              <input id="objectDescribeTableSearch" type="search" class="sfoc-query-input" data-i18n-placeholder="objectDescribe.tableSearchPlaceholder" placeholder="Filtrar campos, relaciones y record types…" autocomplete="off" spellcheck="false" />
+            </div>
+            <h3 class="object-describe-section-title" data-i18n="objectDescribe.fieldsTitle">Campos</h3>
+            <div class="object-describe-table-wrap">
+              <table class="object-describe-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="objectDescribe.colApi">API</th>
+                    <th data-i18n="objectDescribe.colLabel">Etiqueta</th>
+                    <th data-i18n="objectDescribe.colType">Tipo</th>
+                    <th data-i18n="objectDescribe.colRequired">Requerido</th>
+                    <th data-i18n="objectDescribe.colCustom">Custom</th>
+                    <th data-i18n="objectDescribe.colReference">Referencia</th>
+                  </tr>
+                </thead>
+                <tbody id="objectDescribeFieldsTbody"></tbody>
+              </table>
+            </div>
+            <h3 class="object-describe-section-title" data-i18n="objectDescribe.childRelsTitle">Child relationships</h3>
+            <div class="object-describe-table-wrap">
+              <table class="object-describe-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="objectDescribe.colRelationship">Relación</th>
+                    <th data-i18n="objectDescribe.colChildObject">Objeto hijo</th>
+                    <th data-i18n="objectDescribe.colField">Campo</th>
+                  </tr>
+                </thead>
+                <tbody id="objectDescribeChildRelsTbody"></tbody>
+              </table>
+            </div>
+            <h3 class="object-describe-section-title" data-i18n="objectDescribe.recordTypesTitle">Record types</h3>
+            <div class="object-describe-table-wrap">
+              <table class="object-describe-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="objectDescribe.colName">Nombre</th>
+                    <th data-i18n="objectDescribe.colRecordTypeId">Record Type Id</th>
+                    <th data-i18n="objectDescribe.colActive">Activo</th>
+                  </tr>
+                </thead>
+                <tbody id="objectDescribeRecordTypesTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
         <div id="anonymousApexPanel" class="anonymous-apex-panel hidden" data-i18n-aria-label="anonymousApex.title">
           <div class="anonymous-apex-panel-inner">
             <div class="anonymous-apex-head">
@@ -1277,6 +1357,254 @@
             </div>
           </div>
         </div>
+        <div id="restExplorerPanel" class="rest-explorer-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaRestExplorer">
+          <div class="org-limits-panel-inner rest-explorer-panel-inner">
+            <div class="org-limits-head">
+              <div>
+                <h2 class="org-limits-title" data-i18n="restExplorer.title">REST Explorer</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="restExplorer.subtitle">Envía peticiones REST a la API de Salesforce</p>
+              </div>
+            </div>
+            <p id="restExplorerStatus" class="org-limits-status" role="status"></p>
+            <div class="rest-explorer-controls sfoc-tool-controls">
+              <div class="sfoc-tool-field">
+                <label class="sfoc-tool-label" for="restExplorerMethod" data-i18n="restExplorer.method">Método</label>
+                <select id="restExplorerMethod" class="sfoc-query-select">
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="PUT">PUT</option>
+                  <option value="DELETE">DELETE</option>
+                </select>
+              </div>
+              <div class="sfoc-tool-field sfoc-tool-field--grow">
+                <label class="sfoc-tool-label" for="restExplorerUri" data-i18n="restExplorer.uri">URI</label>
+                <input id="restExplorerUri" type="text" class="sfoc-query-input" placeholder="/services/data/v59.0/sobjects/Account/describe" spellcheck="false" autocomplete="off" />
+              </div>
+              <button type="button" id="restExplorerSendBtn" class="org-limits-refresh-btn" data-i18n="restExplorer.send">Enviar</button>
+            </div>
+            <div class="sfoc-tool-field sfoc-tool-field--grow">
+              <label class="sfoc-tool-label" for="restExplorerHeaders" data-i18n="restExplorer.headers">Cabeceras (JSON)</label>
+              <textarea id="restExplorerHeaders" class="sfoc-tool-textarea" rows="3" placeholder='{"Sforce-Auto-Assign": "FALSE"}' spellcheck="false"></textarea>
+            </div>
+            <div class="sfoc-tool-field sfoc-tool-field--grow">
+              <label class="sfoc-tool-label" for="restExplorerBody" data-i18n="restExplorer.body">Cuerpo</label>
+              <textarea id="restExplorerBody" class="sfoc-tool-textarea" rows="6" spellcheck="false"></textarea>
+            </div>
+            <p id="restExplorerResponseStatus" class="rest-explorer-response-status" role="status"></p>
+            <div class="rest-explorer-table-wrap">
+              <table class="rest-explorer-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="restExplorer.colPath">Ruta</th>
+                    <th data-i18n="restExplorer.colType">Tipo</th>
+                    <th data-i18n="restExplorer.colValue">Valor</th>
+                  </tr>
+                </thead>
+                <tbody id="restExplorerResponseTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="dataWorkbenchPanel" class="data-workbench-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaDataWorkbench">
+          <div class="org-limits-panel-inner data-workbench-panel-inner">
+            <div class="org-limits-head">
+              <div>
+                <h2 class="org-limits-title" data-i18n="dataWorkbench.title">Editor e importación de datos</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="dataWorkbench.subtitle">Edita registros en la org e importa datos masivos (CSV, Excel, JSON)</p>
+              </div>
+            </div>
+            <p id="dataWorkbenchStatus" class="org-limits-status" role="status"></p>
+            <div class="data-workbench-tabs sfoc-tool-tabs" role="tablist">
+              <button type="button" class="data-workbench-tab sfoc-tool-tab active" data-dw-tab="recordEditor" role="tab" aria-selected="true" data-i18n="dataWorkbench.tabRecordEditor">Editor de registro</button>
+              <button type="button" class="data-workbench-tab sfoc-tool-tab" data-dw-tab="import" role="tab" aria-selected="false" data-i18n="dataWorkbench.tabImport">Importación masiva</button>
+            </div>
+            <div class="data-workbench-toolbar sfoc-tool-controls">
+              <div class="sfoc-tool-field sfoc-tool-field--wide">
+                <label class="sfoc-tool-label" for="dataWorkbenchObjectSearch" data-i18n="dataWorkbench.search">Buscar</label>
+                <input id="dataWorkbenchObjectSearch" type="search" class="sfoc-query-input" data-i18n-placeholder="dataWorkbench.searchPlaceholder" placeholder="Filtrar objetos…" autocomplete="off" />
+              </div>
+            </div>
+            <div id="dataWorkbenchTabRecordEditor" class="data-workbench-tab-panel">
+              <div class="data-workbench-controls sfoc-tool-controls">
+                <div class="sfoc-tool-field">
+                  <label class="sfoc-tool-label" for="dataWorkbenchObjectSelect" data-i18n="dataWorkbench.object">Objeto</label>
+                  <select id="dataWorkbenchObjectSelect" class="sfoc-query-select"><option value="" data-i18n="dataWorkbench.selectObject">— Selecciona objeto —</option></select>
+                </div>
+                <div class="sfoc-tool-field">
+                  <label class="sfoc-tool-label" for="dataWorkbenchRecordIdInput" data-i18n="dataWorkbench.recordId">Record Id</label>
+                  <input id="dataWorkbenchRecordIdInput" type="text" class="sfoc-query-input" placeholder="001…" spellcheck="false" autocomplete="off" />
+                </div>
+                <button type="button" id="dataWorkbenchLoadRecordBtn" class="org-limits-refresh-btn" data-i18n="dataWorkbench.loadRecord">Cargar</button>
+                <button type="button" id="dataWorkbenchOpenInSfBtn" class="query-explorer-secondary-btn" data-i18n="dataWorkbench.openInSf">Abrir en Salesforce</button>
+              </div>
+              <div class="data-workbench-actions data-workbench-actions--editor" role="toolbar" aria-label="Record actions">
+                <div class="data-workbench-actions-group">
+                  <button type="button" id="dataWorkbenchSaveBtn" class="org-limits-refresh-btn hidden" data-i18n="dataWorkbench.save">Guardar</button>
+                  <button type="button" id="dataWorkbenchCancelEditBtn" class="query-explorer-secondary-btn hidden" data-i18n="dataWorkbench.cancel">Cancelar</button>
+                  <button type="button" id="dataWorkbenchCreateBtn" class="query-explorer-secondary-btn" data-i18n="dataWorkbench.create">Crear registro</button>
+                </div>
+                <div class="data-workbench-actions-group data-workbench-actions-group--danger">
+                  <button type="button" id="dataWorkbenchDeleteBtn" class="query-explorer-secondary-btn data-workbench-danger-btn" data-i18n="dataWorkbench.delete">Eliminar</button>
+                  <button type="button" id="dataWorkbenchUndeleteBtn" class="query-explorer-secondary-btn" data-i18n="dataWorkbench.undelete">Restaurar</button>
+                  <button type="button" id="dataWorkbenchPurgeBtn" class="query-explorer-secondary-btn data-workbench-danger-btn" data-i18n="dataWorkbench.purge">Purgar</button>
+                </div>
+              </div>
+              <div class="data-workbench-table-wrap record-editor-table-wrap">
+                <table class="record-editor-table data-workbench-table">
+                  <thead>
+                    <tr>
+                      <th data-i18n="recordEditor.colLabel">Etiqueta</th>
+                      <th data-i18n="recordEditor.colApi">API</th>
+                      <th data-i18n="recordEditor.colType">Tipo</th>
+                      <th data-i18n="recordEditor.colValue">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dataWorkbenchRecordEditorTbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="dataWorkbenchTabImport" class="data-workbench-tab-panel hidden">
+              <div class="data-workbench-controls sfoc-tool-controls">
+                <div class="sfoc-tool-field">
+                  <label class="sfoc-tool-label" for="dataWorkbenchImportObjectSelect" data-i18n="dataWorkbench.object">Objeto</label>
+                  <select id="dataWorkbenchImportObjectSelect" class="sfoc-query-select"><option value="" data-i18n="dataWorkbench.selectObject">— Selecciona objeto —</option></select>
+                </div>
+                <div class="sfoc-tool-field">
+                  <label class="sfoc-tool-label" for="dataWorkbenchImportOperation" data-i18n="dataWorkbench.operation">Operación</label>
+                  <select id="dataWorkbenchImportOperation" class="sfoc-query-select">
+                    <option value="insert" data-i18n="dataWorkbench.insert">Insertar</option>
+                    <option value="update" data-i18n="dataWorkbench.update">Actualizar</option>
+                    <option value="delete" data-i18n="dataWorkbench.delete">Eliminar</option>
+                    <option value="upsert" data-i18n="dataWorkbench.upsert">Upsert</option>
+                    <option value="undelete" data-i18n="dataWorkbench.undelete">Restaurar</option>
+                  </select>
+                </div>
+                <div class="sfoc-tool-field">
+                  <label class="sfoc-tool-label" for="dataWorkbenchImportExternalId" data-i18n="dataImport.externalId">External Id</label>
+                  <input id="dataWorkbenchImportExternalId" type="text" class="sfoc-query-input" value="Id" spellcheck="false" autocomplete="off" />
+                </div>
+                <div class="sfoc-tool-field">
+                  <label class="sfoc-tool-label" for="dataWorkbenchImportBatchSize" data-i18n="dataImport.batchSize">Tamaño lote</label>
+                  <input id="dataWorkbenchImportBatchSize" type="number" class="sfoc-query-input" value="200" min="1" max="200" />
+                </div>
+              </div>
+              <div class="sfoc-tool-field sfoc-tool-field--wide">
+                <label class="sfoc-tool-label" for="dataWorkbenchImportPaste" data-i18n="dataImport.paste">Pegar datos (CSV, Excel o JSON)</label>
+                <textarea id="dataWorkbenchImportPaste" class="sfoc-tool-textarea data-import-paste" rows="6" spellcheck="false"></textarea>
+              </div>
+              <div class="data-import-actions" role="toolbar" aria-label="Import actions">
+                <div class="data-import-actions-group">
+                  <input id="dataWorkbenchImportFile" type="file" class="data-import-file-input" accept=".csv,text/csv,.json,application/json" hidden />
+                  <button type="button" id="dataWorkbenchImportFileBtn" class="query-explorer-secondary-btn data-import-file-btn" data-i18n="dataImport.chooseFile">Elegir archivo</button>
+                  <span id="dataWorkbenchImportFileName" class="data-import-file-name" data-i18n="dataImport.noFile">Sin archivo seleccionado</span>
+                  <button type="button" id="dataWorkbenchImportParseBtn" class="query-explorer-secondary-btn" data-i18n="dataImport.parse">Analizar datos</button>
+                </div>
+                <button type="button" id="dataWorkbenchImportRunBtn" class="org-limits-refresh-btn data-import-run-btn" data-i18n="dataImport.run">Ejecutar importación</button>
+              </div>
+              <div id="dataWorkbenchCsvMapping" class="data-workbench-csv-mapping"></div>
+              <div class="data-workbench-table-wrap data-import-preview-wrap">
+                <table class="data-import-results-table data-import-preview-table">
+                  <thead id="dataWorkbenchImportResultsThead">
+                    <tr></tr>
+                  </thead>
+                  <tbody id="dataWorkbenchImportResultsTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="bulkJobMonitorPanel" class="bulk-job-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaBulkJobMonitor">
+          <div class="org-limits-panel-inner bulk-job-panel-inner">
+            <div class="org-limits-head">
+              <div>
+                <h2 class="org-limits-title" data-i18n="bulkJob.title">Bulk API Jobs</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="bulkJob.subtitle">Consulta el estado de trabajos Bulk API y descarga resultados</p>
+              </div>
+            </div>
+            <p id="bulkJobStatus" class="org-limits-status" role="status"></p>
+            <div class="bulk-job-controls sfoc-tool-controls">
+              <div class="sfoc-tool-field sfoc-tool-field--wide">
+                <label class="sfoc-tool-label" for="bulkJobIdInput" data-i18n="bulkJob.jobId">Job Id</label>
+                <input id="bulkJobIdInput" type="text" class="sfoc-query-input" placeholder="750…" spellcheck="false" autocomplete="off" />
+              </div>
+              <button type="button" id="bulkJobLoadBtn" class="org-limits-refresh-btn" data-i18n="bulkJob.load">Cargar job</button>
+            </div>
+            <pre id="bulkJobJson" class="bulk-job-json ph-no-capture">—</pre>
+            <h3 class="bulk-job-section-title" data-i18n="bulkJob.batchesTitle">Batches</h3>
+            <div class="bulk-job-table-wrap">
+              <table class="bulk-job-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="bulkJob.colBatchId">Batch Id</th>
+                    <th data-i18n="bulkJob.colState">Estado</th>
+                    <th data-i18n="bulkJob.colProcessed">Procesados</th>
+                    <th data-i18n="bulkJob.colActions">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="bulkJobBatchesTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="eventMonitorPanel" class="event-monitor-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaEventMonitor">
+          <div class="org-limits-panel-inner event-monitor-panel-inner">
+            <div class="org-limits-head">
+              <div>
+                <h2 class="org-limits-title" data-i18n="eventMonitor.title">Event Monitor</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="eventMonitor.subtitle">Suscríbete a Platform Events, Change Events y canales en tiempo real</p>
+              </div>
+              <span id="eventMonitorListeningBadge" class="event-monitor-badge" data-i18n="eventMonitor.idle">Inactivo</span>
+            </div>
+            <p id="eventMonitorStatus" class="org-limits-status" role="status"></p>
+            <div class="event-monitor-controls sfoc-tool-controls">
+              <div class="sfoc-tool-field">
+                <label class="sfoc-tool-label" for="eventMonitorChannelType" data-i18n="eventMonitor.channelType">Tipo de canal</label>
+                <select id="eventMonitorChannelType" class="sfoc-query-select"></select>
+              </div>
+              <div class="sfoc-tool-field sfoc-tool-field--grow">
+                <label class="sfoc-tool-label" for="eventMonitorChannel" data-i18n="eventMonitor.channel">Canal</label>
+                <select id="eventMonitorChannel" class="sfoc-query-select"></select>
+              </div>
+              <button type="button" id="eventMonitorLoadChannelsBtn" class="org-limits-refresh-btn" data-i18n="eventMonitor.loadChannels">Cargar canales</button>
+            </div>
+            <div id="eventMonitorCustomPathWrap" class="event-monitor-controls sfoc-tool-controls hidden">
+              <div class="sfoc-tool-field sfoc-tool-field--grow">
+                <label class="sfoc-tool-label" for="eventMonitorCustomPath" data-i18n="eventMonitor.customPath">Ruta personalizada</label>
+                <input id="eventMonitorCustomPath" type="text" class="sfoc-query-input" placeholder="/event/MyChannel__chn" spellcheck="false" autocomplete="off" />
+              </div>
+            </div>
+            <div class="event-monitor-controls sfoc-tool-controls">
+              <div class="sfoc-tool-field">
+                <label class="sfoc-tool-label" for="eventMonitorReplayId" data-i18n="eventMonitor.replayId">Replay Id</label>
+                <input id="eventMonitorReplayId" type="number" class="sfoc-query-input" value="-1" />
+              </div>
+              <button type="button" id="eventMonitorSubscribeBtn" class="org-limits-refresh-btn" data-i18n="eventMonitor.subscribe">Suscribirse</button>
+              <button type="button" id="eventMonitorUnsubscribeBtn" class="query-explorer-secondary-btn" data-i18n="eventMonitor.unsubscribe" disabled>Desuscribirse</button>
+              <button type="button" id="eventMonitorClearEventsBtn" class="query-explorer-secondary-btn" data-i18n="eventMonitor.clearEvents">Limpiar eventos</button>
+            </div>
+            <div class="event-monitor-filter-row sfoc-tool-controls">
+              <div class="sfoc-tool-field sfoc-tool-field--grow">
+                <label class="sfoc-tool-label" for="eventMonitorFilter" data-i18n="eventMonitor.filter">Filtrar eventos</label>
+                <input id="eventMonitorFilter" type="search" class="sfoc-query-input" data-i18n-placeholder="eventMonitor.filterPlaceholder" placeholder="Texto en payload…" autocomplete="off" />
+              </div>
+              <span id="eventMonitorEventCount" class="event-monitor-count"></span>
+            </div>
+            <div class="event-monitor-table-wrap">
+              <table class="event-monitor-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="eventMonitor.colTime">Hora</th>
+                    <th data-i18n="eventMonitor.colReplay">Replay</th>
+                    <th data-i18n="eventMonitor.colPayload">Payload</th>
+                    <th data-i18n="eventMonitor.colActions">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="eventMonitorEventsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
         <div id="queryExplorerPanel" class="query-explorer-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaQueryExplorer">
           <div class="org-limits-panel-inner query-explorer-panel-inner">
             <div class="org-limits-head">
@@ -1293,6 +1621,15 @@
                   data-i18n-title="queryExplorer.openSavedQueriesTitle"
                 >
                   Consultas guardadas
+                </button>
+                <button
+                  type="button"
+                  id="queryExplorerCopyLinkBtn"
+                  class="anonymous-apex-small-btn"
+                  data-i18n="queryExplorer.copyLink"
+                  data-i18n-title="queryExplorer.copyLinkTitle"
+                >
+                  Copiar enlace
                 </button>
                 <button
                   type="button"
@@ -1332,6 +1669,30 @@
                   </select>
                 </label>
               </div>
+              <details class="query-explorer-builder" id="queryExplorerBuilder">
+                <summary data-i18n="queryExplorer.builderTitle">Builder SOQL</summary>
+                <div class="query-explorer-builder-body">
+                  <label class="query-explorer-field">
+                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderObject">Objeto</span>
+                    <input id="queryExplorerBuilderObject" type="text" class="sfoc-query-input" placeholder="Account" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <label class="query-explorer-field">
+                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderFields">Campos</span>
+                    <input id="queryExplorerBuilderFields" type="text" class="sfoc-query-input" placeholder="Id, Name" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <label class="query-explorer-field query-explorer-builder-where">
+                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderWhere">WHERE</span>
+                    <input id="queryExplorerBuilderWhere" type="text" class="sfoc-query-input" placeholder="Industry = 'Banking'" autocomplete="off" spellcheck="false" />
+                  </label>
+                  <label class="query-explorer-field">
+                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderLimit">LIMIT</span>
+                    <input id="queryExplorerBuilderLimit" type="number" class="sfoc-query-input query-explorer-builder-limit" min="1" placeholder="200" />
+                  </label>
+                  <button type="button" id="queryExplorerBuilderApplyBtn" class="query-explorer-secondary-btn" data-i18n="queryExplorer.builderApply">
+                    Aplicar al editor
+                  </button>
+                </div>
+              </details>
               <label class="query-explorer-query-label" for="queryExplorerEditorMount">
                 <span class="query-explorer-field-label" data-i18n="queryExplorer.queryLabel">Consulta</span>
               </label>
@@ -1797,8 +2158,8 @@
           <div class="env-status-panel-inner">
             <div class="env-status-head">
               <div>
-                <h2 class="env-status-title" data-i18n="envStatus.title">Estado entornos Salesforce</h2>
-                <p class="sfoc-panel-subtitle" data-i18n="envStatus.subtitle">Vista global de tus entornos guardados: versión, Trust y sesión</p>
+                <h2 class="env-status-title" data-i18n="envStatus.title">Entornos Salesforce</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="envStatus.subtitle">Estado Trust, versión API y detalle de sesión por entorno</p>
               </div>
               <div class="env-status-head-controls">
                 <div class="env-status-filters" role="group" data-i18n-aria-label="code.ariaEnvStatusFilters">
@@ -1866,6 +2227,9 @@
                 <p class="sfoc-panel-subtitle" data-i18n="deployStatus.subtitle">Sigue el progreso de Deploy y Validate en tiempo real</p>
               </div>
               <div class="deploy-status-head-controls">
+                <label class="deploy-status-lookup-label" for="deployStatusLookupInput" data-i18n="deployStatus.lookupLabel">Async Id</label>
+                <input id="deployStatusLookupInput" type="text" class="sfoc-query-input deploy-status-lookup-input" placeholder="0Af…" spellcheck="false" autocomplete="off" />
+                <button type="button" id="deployStatusLookupBtn" class="deploy-status-refresh-btn" data-i18n="deployStatus.lookupBtn">Consultar</button>
                 <span id="deployStatusLiveBadge" class="deploy-status-live-badge hidden" data-i18n="deployStatus.live">En vivo</span>
                 <button type="button" id="deployStatusRefreshBtn" class="deploy-status-refresh-btn" data-i18n="deployStatus.refresh">Actualizar</button>
               </div>
@@ -1935,8 +2299,11 @@
 
             <div id="deployStatusDetailView" class="deploy-status-detail-view hidden">
               <div class="deploy-status-detail-toolbar">
-                <button type="button" id="deployStatusBackBtn" class="deploy-status-back-btn" data-i18n="deployStatus.backToSummary">← Volver al resumen</button>
-                <button type="button" id="deployStatusBackToEditorBtn" class="deploy-status-back-to-editor-btn hidden" data-i18n="deployStatus.backToApexEditor">Volver al editor</button>
+                <div class="deploy-status-detail-nav">
+                  <button type="button" id="deployStatusBackBtn" class="deploy-status-back-btn" data-i18n="deployStatus.backToSummary">← Volver al resumen</button>
+                  <button type="button" id="deployStatusViewSummaryBtn" class="deploy-status-back-btn hidden" data-i18n="deployStatus.backToSummary">← Volver al resumen</button>
+                  <button type="button" id="deployStatusBackToEditorBtn" class="deploy-status-back-to-editor-btn hidden" data-i18n="deployStatus.backToApexEditor">Volver al editor</button>
+                </div>
                 <button type="button" id="deployStatusCoverageBtn" class="deploy-status-primary-btn hidden" data-i18n="deployStatus.viewCoverage">Ver cobertura</button>
                 <button type="button" id="deployStatusCancelBtn" class="deploy-status-cancel-btn hidden" data-i18n="deployStatus.cancelDeploy">Cancelar despliegue</button>
               </div>
@@ -2520,6 +2887,11 @@
                   <span class="quick-edit-action-sep" aria-hidden="true"></span>
                   </span>
                   <div class="quick-edit-action-group" role="group" data-i18n-aria-label="code.ariaQuickEditOrg">
+                    <label class="quick-edit-api-version-field" for="quickEditDeployApiVersion">
+                      <span class="quick-edit-api-version-label" data-i18n="quickEdit.deployApiVersion">API</span>
+                      <input id="quickEditDeployApiVersion" type="text" class="sfoc-query-input quick-edit-api-version-input" list="quickEditDeployApiVersionList" inputmode="decimal" autocomplete="off" spellcheck="false" data-i18n-aria-label="quickEdit.deployApiVersionTitle" />
+                      <datalist id="quickEditDeployApiVersionList"></datalist>
+                    </label>
                     <button type="button" id="quickEditRetrieveBtn" class="quick-edit-action-btn quick-edit-retrieve-btn" disabled data-i18n-title="quickEdit.retrieveFromOrgTitle">
                       <span class="quick-edit-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
                       <span class="quick-edit-action-label" data-i18n="quickEdit.retrieveFromOrg">Retrieve</span>

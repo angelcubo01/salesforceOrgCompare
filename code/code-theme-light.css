@@ -30,8 +30,20 @@ html[data-ui-theme="light"] {
 }
 
 html[data-ui-theme="light"] .sfoc-query-input,
-html[data-ui-theme="light"] .sfoc-query-select {
+html[data-ui-theme="light"] .sfoc-query-select,
+html[data-ui-theme="light"] .sfoc-tool-textarea {
   color-scheme: light;
+}
+
+html[data-ui-theme="light"] .sfoc-tool-textarea {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: var(--sfoc-query-border);
+}
+
+html[data-ui-theme="light"] .sfoc-tool-textarea:focus {
+  border-color: var(--sfoc-query-focus-border);
+  box-shadow: var(--sfoc-query-focus-glow);
 }
 
 html[data-ui-theme="light"] .sfoc-query-select {

@@ -3,7 +3,7 @@
  * saveViewState/restoreViewState al cambiar de pestaña y pila de undo independiente por modelo.
  */
 
-import { isMonacoCanceledError } from '../../shared/errorTelemetryPolicy.js';
+import { isMonacoCanceledError, isMonacoDisposedError } from '../../shared/errorTelemetryPolicy.js';
 
 /**
  * @typedef {object} MonacoWorkbenchTabEntry
@@ -45,6 +45,38 @@ export class MonacoWorkbench {
     return String(tabId);
   }
 
+  /** @returns {import('monaco-editor').editor.IStandaloneCodeEditor | null} */
+  #syncEditorRef() {
+    if (!this.editor) return null;
+    try {
+      this.editor.getContainerDomNode();
+      return this.editor;
+    } catch (err) {
+      if (!isMonacoCanceledError(err) && !isMonacoDisposedError(err)) {
+        /* ignore unexpected dispose errors */
+      }
+      this.editor = null;
+      return null;
+    }
+  }
+
+  /**
+   * @param {(editor: import('monaco-editor').editor.IStandaloneCodeEditor) => void} fn
+   */
+  #withEditor(fn) {
+    const ed = this.#syncEditorRef();
+    if (!ed) return;
+    try {
+      fn(ed);
+    } catch (err) {
+      if (isMonacoCanceledError(err) || isMonacoDisposedError(err)) {
+        this.editor = null;
+        return;
+      }
+      throw err;
+    }
+  }
+
   /**
    * Ruta URI segura para modelos (evita `::` en la authority, que rompe tsMode).
    * @param {string} tabId
@@ -66,9 +98,10 @@ export class MonacoWorkbench {
    * @param {import('monaco-editor').editor.IStandaloneCodeEditor | null} [cachedEditor]
    */
   async ensureEditor(mount, editorOptions, createEditor, loadMonaco, cachedEditor = null) {
-    if (this.editor) {
+    const alive = this.#syncEditorRef();
+    if (alive) {
       try {
-        if (this.editor.getContainerDomNode() === mount) return this.editor;
+        if (alive.getContainerDomNode() === mount) return alive;
       } catch {
         this.editor = null;
       }
@@ -218,7 +251,7 @@ export class MonacoWorkbench {
     const key = this.#key(tabId);
     if (this.activeTabId === key) return false;
 
-    const ed = this.editor;
+    const ed = this.#syncEditorRef();
     if (!ed) return false;
 
     if (this.activeTabId && this.tabs.has(this.activeTabId)) {
@@ -238,9 +271,11 @@ export class MonacoWorkbench {
         ed.setPosition({ lineNumber: 1, column: 1 });
       }
     } catch (err) {
-      if (!isMonacoCanceledError(err)) throw err;
+      if (!isMonacoCanceledError(err) && !isMonacoDisposedError(err)) throw err;
+      this.editor = null;
       try {
-        ed.setModel(next.model);
+        const retry = this.#syncEditorRef();
+        retry?.setModel(next.model);
       } catch {
         /* ignore */
       }
@@ -255,13 +290,11 @@ export class MonacoWorkbench {
     const entry = this.tabs.get(key);
     if (!entry) return;
 
-    try {
-      if (this.editor?.getModel() === entry.model) {
-        this.editor.setModel(null);
+    this.#withEditor((ed) => {
+      if (ed.getModel() === entry.model) {
+        ed.setModel(null);
       }
-    } catch {
-      /* editor disposed */
-    }
+    });
     entry.model.dispose();
     this.tabs.delete(key);
     if (this.activeTabId === key) this.activeTabId = null;
@@ -289,7 +322,7 @@ export class MonacoWorkbench {
   }
 
   getEditor() {
-    return this.editor;
+    return this.#syncEditorRef();
   }
 
   getActiveValue() {
