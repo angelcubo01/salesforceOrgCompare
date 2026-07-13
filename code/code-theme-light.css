@@ -540,6 +540,18 @@ html[data-ui-theme="light"] .file-viewer-loading-spinner {
   border-top-color: #2563eb;
 }
 
+html[data-ui-theme="light"] .app-boot-splash {
+  background: #f8fafc;
+  color: #0f172a;
+}
+html[data-ui-theme="light"] .app-boot-splash-spinner {
+  border-color: #cbd5e1;
+  border-top-color: #2563eb;
+}
+html[data-ui-theme="light"] .app-boot-splash-text {
+  color: #0f172a;
+}
+
 html[data-ui-theme="light"] .reauth-btn {
   background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
   border: 1px solid #94a3b8;

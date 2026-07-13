@@ -331,3 +331,14 @@ html[data-ui-theme="light"] .row button.small {
 html[data-ui-theme="light"] .row button.small:hover {
   background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
 }
+
+html[data-ui-theme="light"] .popup-open-overlay {
+  background: rgba(248, 250, 252, 0.92);
+}
+html[data-ui-theme="light"] .popup-open-overlay-spinner {
+  border-color: #cbd5e1;
+  border-top-color: #2563eb;
+}
+html[data-ui-theme="light"] .popup-open-overlay-text {
+  color: var(--sfoc-light-text);
+}

@@ -530,13 +530,24 @@ async function setupPopupControls() {
   }
 }
 
+function showOpenAppOverlay() {
+  const overlay = document.getElementById('popupOpenOverlay');
+  const text = document.getElementById('popupOpenOverlayText');
+  if (!overlay) return;
+  if (text) text.textContent = t('popup.openingApp');
+  overlay.classList.remove('hidden');
+  document.body.classList.add('popup-opening-app');
+}
+
 document.getElementById('openCodeBtn').addEventListener('click', async (e) => {
   const btn = /** @type {HTMLButtonElement | null} */ (e.currentTarget);
   if (btn?.disabled) {
     e.preventDefault();
     return;
   }
-  const url = chrome.runtime.getURL('code/code.html');
+  showOpenAppOverlay();
+  const lang = getCurrentLang();
+  const url = chrome.runtime.getURL(`code/code.html?lang=${encodeURIComponent(lang)}`);
   await chrome.tabs.create({ url });
 });
 

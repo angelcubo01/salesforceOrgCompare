@@ -45,6 +45,7 @@ const translations = {
     'popup.subtitle': 'Salesforce Org Compare: comparar, probar y desplegar entre entornos',
     'popup.compare': 'Abrir',
     'popup.openCode': 'Abrir Salesforce Org Compare',
+    'popup.openingApp': 'Abriendo Salesforce Org Compare',
     'popup.savedOrgs': 'Tus entornos',
     'popup.savedOrgsHint': 'Arrastra el asa ⋮⋮ solo dentro del mismo grupo (o entre entornos sin grupo). Ese orden se usa en los desplegables de la aplicación.',
     'popup.detectedOrg': 'Entorno en esta pestaña',
@@ -2370,6 +2371,7 @@ const translations = {
     'popup.subtitle': 'Salesforce Org Compare: compare, test, and deploy across environments',
     'popup.compare': 'Open',
     'popup.openCode': 'Open Salesforce Org Compare',
+    'popup.openingApp': 'Opening Salesforce Org Compare',
     'popup.savedOrgs': 'Your environments',
     'popup.savedOrgsHint':
       'Drag the ⋮⋮ handle only within the same group (or among ungrouped orgs). That order is used in the application dropdowns.',

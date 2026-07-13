@@ -8,12 +8,83 @@
       body.app-nav-booting .content {
         visibility: hidden;
       }
+      .app-boot-splash {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 20000;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: #1a1a1a;
+        color: #e0e0e0;
+        text-align: center;
+      }
+      body.app-nav-booting .app-boot-splash {
+        display: flex;
+      }
+      .app-boot-splash-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid #3f3f46;
+        border-top-color: #38bdf8;
+        border-radius: 50%;
+        animation: app-boot-spin 0.7s linear infinite;
+      }
+      @keyframes app-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .app-boot-splash-text {
+        margin: 0;
+        max-width: 320px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1.4;
+        color: #e0e0e0;
+      }
     </style>
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
     <link rel="stylesheet" href="./code.css" />
     <link rel="stylesheet" href="./code-theme-light.css" />
   </head>
   <body class="app-nav-booting">
+    <div id="appBootSplash" class="app-boot-splash" role="status" aria-live="polite" aria-busy="true">
+      <span class="app-boot-splash-spinner" aria-hidden="true"></span>
+      <p id="appBootSplashText" class="app-boot-splash-text" data-i18n="popup.openingApp"></p>
+    </div>
+    <script>
+      (function () {
+        var OPENING_APP_TEXT = {
+          es: 'Abriendo Salesforce Org Compare',
+          en: 'Opening Salesforce Org Compare'
+        };
+        function applyBootSplashLang(lang) {
+          var el = document.getElementById('appBootSplashText');
+          if (!el) return;
+          var code = lang === 'en' ? 'en' : 'es';
+          el.textContent = OPENING_APP_TEXT[code];
+          document.documentElement.lang = code;
+        }
+        try {
+          var fromUrl = new URLSearchParams(location.search).get('lang');
+          if (fromUrl === 'en' || fromUrl === 'es') {
+            applyBootSplashLang(fromUrl);
+            return;
+          }
+        } catch (e) {}
+        try {
+          chrome.storage.local.get('soc_language', function (result) {
+            applyBootSplashLang(result && result.soc_language === 'en' ? 'en' : 'es');
+          });
+        } catch (e) {
+          applyBootSplashLang('es');
+        }
+      })();
+    </script>
     <!-- Herramienta actual: mismo id para el código; solo se cambia desde la barra superior (menú modos). -->
     <div class="sfoc-type-select-host" aria-hidden="true">
       <select id="typeSelect" class="type-select sfoc-type-select-hidden" tabindex="-1" aria-hidden="true">
