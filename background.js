@@ -11,12 +11,16 @@ import {
 import { ensureTelemetryInstallId } from './shared/telemetryInstallId.js';
 import { installFeatureControlsGuard } from './background/featureControlsGuard.js';
 import { hydrateLogiAdvisorCache } from './shared/logiAdvisorCache.js';
+import { bootstrapLogiAdvisorViaProxy } from './shared/logiAdvisorBootstrap.js';
+import { loadExtensionSettings } from './shared/extensionSettings.js';
 import { sendPosthogException } from './background/posthogTelemetry.js';
 
 try {
   installMessageHandlers();
   void installFeatureControlsGuard();
-  void hydrateLogiAdvisorCache();
+  void loadExtensionSettings()
+    .then(() => hydrateLogiAdvisorCache())
+    .then(() => bootstrapLogiAdvisorViaProxy());
   installCookieCacheInvalidation();
   installApexTraceAlarmListener();
   installExtensionLifecycleTelemetry();

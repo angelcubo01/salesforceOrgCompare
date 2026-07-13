@@ -30,6 +30,35 @@ async function main() {
   }
 
   console.log('\nChat:', url);
+  const configUrl = url.replace(/\/v1\/chat\/?$/, '/v1/advisor-config');
+  console.log('\nAdvisor config:', configUrl);
+  const cfgRes = await fetch(configUrl, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }
+  });
+  const cfgText = await cfgRes.text();
+  console.log('config', cfgRes.status, cfgText.slice(0, 300));
+  if (!cfgRes.ok) {
+    console.error('advisor-config fallo');
+    process.exit(1);
+  }
+  try {
+    const cfgData = JSON.parse(cfgText);
+    const payload = cfgData?.payload;
+    const payloadText = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    if (/\(encrypted\)/i.test(payloadText)) {
+      console.error('advisor-config sigue cifrado: sube POSTHOG_PERSONAL_API_KEY (phx_) al Worker');
+      process.exit(1);
+    }
+    if (!payloadText.includes('"enabled"')) {
+      console.error('advisor-config no devolvio JSON de Logi');
+      process.exit(1);
+    }
+    console.log('advisor-config OK (payload desencriptado)');
+  } catch {
+    console.error('advisor-config JSON invalido');
+    process.exit(1);
+  }
+
   const res = await fetch(url, {
     method: 'POST',
     headers: {

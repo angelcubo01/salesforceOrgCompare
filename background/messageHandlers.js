@@ -267,6 +267,7 @@ import {
 } from './retrieveSession.js';
 import { featureControlBlockedResponse } from './featureControlsGuard.js';
 import {
+  handleLogiAdvisorBootstrap,
   handleLogiAdvisorChat,
   handleLogiAdvisorCancel,
   handleLogiAdvisorCheckUsageLimits,
@@ -2930,6 +2931,14 @@ export function installMessageHandlers() {
               reply({ ok: true, describe });
             } catch (e) {
               reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'aiAdvisor:bootstrap': {
+            try {
+              reply(await handleLogiAdvisorBootstrap(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
             }
             break;
           }

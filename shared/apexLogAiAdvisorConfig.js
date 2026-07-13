@@ -1,5 +1,7 @@
 /** @typedef {'openrouter_direct' | 'proxy'} LogiTransportMode */
 
+import { isEncryptedPosthogPayload } from './posthogFlagPayload.js';
+
 /**
  * @typedef {object} LogiAdvisorConfig
  * @property {boolean} enabled
@@ -23,6 +25,13 @@
  */
 
 export const LOGI_ADVISOR_FLAG = 'sfoc_apex_log_ai_advisor';
+
+/**
+ * URL publica del proxy Logi para el primer arranque cuando el payload PostHog esta cifrado
+ * y aun no hay credenciales en cache local.
+ */
+export const LOGI_PROXY_BOOTSTRAP_URL =
+  'https://sfoc-logi-proxy.angelpicadocuadrado.workers.dev/v1/chat';
 
 export const LOGI_QUICK_ACTION_IDS = Object.freeze([
   'debug_errors',
@@ -138,6 +147,9 @@ export function resolveLogiModelChain(config, reqModel) {
 export function parseLogiAdvisorConfig(raw) {
   let value = raw;
   if (typeof value === 'string') {
+    if (isEncryptedPosthogPayload(value)) {
+      return { ...DEFAULT_LOGI_ADVISOR_CONFIG };
+    }
     try {
       value = JSON.parse(value);
     } catch {

@@ -3,10 +3,18 @@ import { ensureFeatureFlagsLoaded } from './posthogFeatureFlagLoader.js';
 import {
   DEFAULT_LOGI_ADVISOR_CONFIG,
   LOGI_ADVISOR_FLAG,
+  LOGI_PROXY_BOOTSTRAP_URL,
   parseLogiAdvisorConfig
 } from './apexLogAiAdvisorConfig.js';
 import { readLogiAdvisorCache, writeLogiAdvisorCache } from './logiAdvisorCache.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
+import { fetchLogiAdvisorRemoteConfig } from './fetchLogiAdvisorRemoteConfig.js';
+import {
+  isEncryptedPosthogPayload,
+  isUsableFeatureFlagPayload,
+  normalizeFeatureFlagPayload
+} from './posthogFlagPayload.js';
+import { getOrCreateTelemetryInstallId } from './telemetryInstallId.js';
 
 export const LOGI_ADVISOR_READY_EVENT = 'sfoc:logi-advisor-ready';
 
@@ -35,54 +43,154 @@ function dispatchLogiAdvisorReady(config) {
 }
 
 /**
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} cached
+ * @param {unknown} rawPosthogPayload
+ * @returns {{ proxyUrl: string, proxyAuthToken: string } | null}
+ */
+function resolveProxyCredentials(cached, rawPosthogPayload) {
+  const fromCache =
+    cached?.proxyUrl && cached?.proxyAuthToken
+      ? { proxyUrl: cached.proxyUrl, proxyAuthToken: cached.proxyAuthToken }
+      : null;
+  if (fromCache) return fromCache;
+
+  if (!isUsableFeatureFlagPayload(rawPosthogPayload)) return null;
+  const o = /** @type {Record<string, unknown>} */ (normalizeFeatureFlagPayload(rawPosthogPayload));
+  const proxyUrl = typeof o.proxyUrl === 'string' ? o.proxyUrl.trim() : '';
+  const proxyAuthToken =
+    typeof o.proxyAuthToken === 'string' ? o.proxyAuthToken.trim() : '';
+  if (proxyUrl && proxyAuthToken) return { proxyUrl, proxyAuthToken };
+  return null;
+}
+
+/**
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} cached
+ * @param {unknown} rawPosthogPayload
+ * @returns {Promise<unknown>}
+ */
+async function fetchLogiConfigViaProxy(cached, rawPosthogPayload) {
+  if (isUsableFeatureFlagPayload(rawPosthogPayload)) {
+    return normalizeFeatureFlagPayload(rawPosthogPayload);
+  }
+
+  const proxy = resolveProxyCredentials(cached, rawPosthogPayload);
+  const installId = await getOrCreateTelemetryInstallId();
+  const proxyUrl = proxy?.proxyUrl || cached?.proxyUrl || LOGI_PROXY_BOOTSTRAP_URL;
+  if (!proxyUrl || !installId) {
+    return null;
+  }
+
+  try {
+    const remote = await fetchLogiAdvisorRemoteConfig({
+      proxyUrl,
+      proxyAuthToken: proxy?.proxyAuthToken || '',
+      installId,
+      bootstrap: !proxy?.proxyAuthToken
+    });
+    if (POSTHOG_DEBUG) {
+      console.log('[posthog] logi advisor remote config loaded via proxy');
+    }
+    return remote;
+  } catch (e) {
+    if (POSTHOG_DEBUG) {
+      console.warn('[posthog] logi advisor remote config fetch failed', e);
+    }
+    return null;
+  }
+}
+
+/**
+ * Remote config flags pueden devolver payload cifrado aunque isFeatureEnabled sea false.
+ * @param {import('./posthogClient.js').posthog | null | undefined} ph
+ * @param {unknown} rawPayload
+ */
+function isLogiAdvisorFlagActive(ph, rawPayload) {
+  if (typeof ph?.isFeatureEnabled === 'function' && ph.isFeatureEnabled(LOGI_ADVISOR_FLAG) === true) {
+    return true;
+  }
+  if (typeof ph?.getFeatureFlag === 'function' && ph.getFeatureFlag(LOGI_ADVISOR_FLAG) === true) {
+    return true;
+  }
+  if (
+    rawPayload != null &&
+    (isUsableFeatureFlagPayload(rawPayload) || isEncryptedPosthogPayload(rawPayload))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * @param {unknown} resolvedPayload
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} cached
+ * @returns {Promise<import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig>}
+ */
+async function commitLogiAdvisorConfig(resolvedPayload, cached) {
+  if (isUsableFeatureFlagPayload(resolvedPayload)) {
+    cachedConfig = parseLogiAdvisorConfig(resolvedPayload);
+    await writeLogiAdvisorCache(cachedConfig);
+    return cachedConfig;
+  }
+  cachedConfig = cached?.enabled ? cached : { ...DEFAULT_LOGI_ADVISOR_CONFIG };
+  return cachedConfig;
+}
+
+/**
  * @param {import('./posthogClient.js').posthog | null | undefined} ph
  * @param {{ force?: boolean, timeoutMs?: number }} [opts]
  * @returns {Promise<import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig>}
  */
 export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
   const telemetryEnabled = await getTelemetryEnabled();
-  if (!ph || !telemetryEnabled) {
-    cachedConfig = await readLogiAdvisorCache();
-    if (!cachedConfig.enabled) {
-      cachedConfig = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
-    }
+  const cached = await readLogiAdvisorCache();
+
+  if (!telemetryEnabled) {
+    cachedConfig = cached?.enabled ? cached : { ...DEFAULT_LOGI_ADVISOR_CONFIG };
     return cachedConfig;
   }
 
-  const flagsOk = await ensureFeatureFlagsLoaded(ph, {
-    force: opts.force === true,
-    timeoutMs: opts.timeoutMs ?? 8000
-  });
-  if (!flagsOk) {
-    cachedConfig = await readLogiAdvisorCache();
-    if (POSTHOG_DEBUG) console.log('[posthog] logi advisor fallback to storage cache');
-    return cachedConfig;
-  }
+  let rawPayload;
+  let flagsOk = false;
 
-  try {
-    let flagOn = false;
-    if (typeof ph.isFeatureEnabled === 'function') {
-      flagOn = ph.isFeatureEnabled(LOGI_ADVISOR_FLAG) === true;
-    }
-
-    if (!flagOn) {
-      cachedConfig = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
-      await writeLogiAdvisorCache(cachedConfig);
-      return cachedConfig;
-    }
-
-    let rawPayload;
+  if (ph) {
+    flagsOk = await ensureFeatureFlagsLoaded(ph, {
+      force: opts.force === true,
+      timeoutMs: opts.timeoutMs ?? 8000
+    });
     if (typeof ph.getFeatureFlagPayload === 'function') {
       rawPayload = ph.getFeatureFlagPayload(LOGI_ADVISOR_FLAG);
     }
-    cachedConfig = parseLogiAdvisorConfig(rawPayload);
+  }
+
+  const flagActive = isLogiAdvisorFlagActive(ph, rawPayload);
+
+  if (isUsableFeatureFlagPayload(rawPayload)) {
+    cachedConfig = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(rawPayload));
     await writeLogiAdvisorCache(cachedConfig);
-    if (POSTHOG_DEBUG) console.log('[posthog] logi advisor loaded');
-    return cachedConfig;
-  } catch {
-    cachedConfig = await readLogiAdvisorCache();
+    if (POSTHOG_DEBUG) console.log('[posthog] logi advisor loaded from flag payload');
     return cachedConfig;
   }
+
+  const shouldTryProxy =
+    !ph || !flagsOk || isEncryptedPosthogPayload(rawPayload) || flagActive || cached?.enabled;
+
+  if (shouldTryProxy) {
+    const remote = await fetchLogiConfigViaProxy(cached, rawPayload);
+    if (isUsableFeatureFlagPayload(remote)) {
+      return commitLogiAdvisorConfig(remote, cached);
+    }
+  }
+
+  if (ph && flagsOk && !flagActive) {
+    cachedConfig = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
+    await writeLogiAdvisorCache(cachedConfig);
+    return cachedConfig;
+  }
+
+  if (POSTHOG_DEBUG) {
+    console.log('[posthog] logi advisor fallback to storage cache', { flagsOk, flagActive });
+  }
+  return commitLogiAdvisorConfig(null, cached);
 }
 
 /**

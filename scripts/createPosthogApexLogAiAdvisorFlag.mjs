@@ -120,6 +120,7 @@ function flagBody(payload) {
       }
     },
     active: true,
+    is_remote_configuration: true,
     tags: ['sfoc', 'logi', 'ai'],
     ensure_experience_continuity: false
   };

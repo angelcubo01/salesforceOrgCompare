@@ -7,9 +7,11 @@ import {
 import { buildLogiToolDefinitions } from '../shared/apexLogAiContext.js';
 import {
   isLogiAdvisorOperational,
-  parseLogiAdvisorConfig
+  parseLogiAdvisorConfig,
+  DEFAULT_LOGI_ADVISOR_CONFIG
 } from '../shared/apexLogAiAdvisorConfig.js';
-import { readLogiAdvisorCache } from '../shared/logiAdvisorCache.js';
+import { readLogiAdvisorCache, readLogiAdvisorCacheFresh } from '../shared/logiAdvisorCache.js';
+import { bootstrapLogiAdvisorViaProxy } from '../shared/logiAdvisorBootstrap.js';
 import { getTelemetryEnabled } from '../shared/extensionSettings.js';
 import { captureAiGeneration } from './posthogAiTelemetry.js';
 import {
@@ -90,11 +92,22 @@ export function sanitizeConfigForUi(config) {
   };
 }
 
+export async function handleLogiAdvisorBootstrap(message = {}) {
+  const force = message?.force === true;
+  const config = await bootstrapLogiAdvisorViaProxy({ force });
+  return {
+    ok: true,
+    loaded: Boolean(config?.enabled && config?.showButton && isLogiAdvisorOperational(config)),
+    config: config ? sanitizeConfigForUi(config) : sanitizeConfigForUi({ ...DEFAULT_LOGI_ADVISOR_CONFIG })
+  };
+}
+
 /**
  * @param {object} message
  */
 export async function handleLogiAdvisorGetConfig() {
-  const config = await readLogiAdvisorCache();
+  await bootstrapLogiAdvisorViaProxy();
+  const config = await readLogiAdvisorCacheFresh();
   const telemetryEnabled = await getTelemetryEnabled();
   if (config.requireTelemetry && !telemetryEnabled) {
     return {
@@ -110,7 +123,8 @@ export async function handleLogiAdvisorGetConfig() {
  * @param {object} message
  */
 export async function handleLogiAdvisorChat(message) {
-  const config = await readLogiAdvisorCache();
+  await bootstrapLogiAdvisorViaProxy();
+  const config = await readLogiAdvisorCacheFresh();
   const parsedConfig = parseLogiAdvisorConfig(config);
 
   if (!isLogiAdvisorOperational(parsedConfig)) {

@@ -5,6 +5,14 @@ export const LOGI_ADVISOR_STORAGE_KEY = 'sfocLogiAdvisorCache';
 /** @type {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig | null} */
 let memoryCache = null;
 
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes[LOGI_ADVISOR_STORAGE_KEY]) return;
+    const raw = changes[LOGI_ADVISOR_STORAGE_KEY].newValue;
+    memoryCache = raw ? parseLogiAdvisorConfig(raw) : null;
+  });
+}
+
 /**
  * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  */
@@ -41,6 +49,12 @@ export async function readLogiAdvisorCache() {
 
 /** Hidrata caché en memoria (service worker al arrancar). */
 export async function hydrateLogiAdvisorCache() {
+  return readLogiAdvisorCache();
+}
+
+/** Fuerza lectura desde chrome.storage (evita memoria obsoleta en el SW). */
+export async function readLogiAdvisorCacheFresh() {
+  memoryCache = null;
   return readLogiAdvisorCache();
 }
 

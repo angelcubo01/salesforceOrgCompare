@@ -594,6 +594,7 @@ export async function mountLogiAdvisor(opts) {
   btnEl = document.getElementById('logiAdvisorBtn');
   if (!btnEl) return;
 
+  await bg({ type: 'aiAdvisor:bootstrap', force: true });
   await bootstrapLogiAdvisor({ force: true });
   await refreshConfig();
 
