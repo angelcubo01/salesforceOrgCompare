@@ -268,7 +268,10 @@ import {
 import { featureControlBlockedResponse } from './featureControlsGuard.js';
 import {
   handleLogiAdvisorChat,
+  handleLogiAdvisorCancel,
+  handleLogiAdvisorCheckUsageLimits,
   handleLogiAdvisorGetConfig,
+  handleLogiAdvisorGetSessionIteration,
   isReadOnlySalesforceQuery
 } from './apexLogAiAdvisor.js';
 import { slimQueryRecords } from '../shared/apexLogAiContext.js';
@@ -2938,9 +2941,33 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'aiAdvisor:getSessionIteration': {
+            try {
+              reply(await handleLogiAdvisorGetSessionIteration(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'aiAdvisor:checkUsageLimits': {
+            try {
+              reply(await handleLogiAdvisorCheckUsageLimits());
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
           case 'aiAdvisor:chat': {
             try {
               reply(await handleLogiAdvisorChat(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'aiAdvisor:cancel': {
+            try {
+              reply(handleLogiAdvisorCancel(message));
             } catch (e) {
               replyHandlerError(reply, e);
             }

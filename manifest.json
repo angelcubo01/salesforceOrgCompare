@@ -38,6 +38,8 @@
   "https://*.cloudforce.com/*",
   "https://*.salesforce-setup.com/*",
   "https://salesforceorgcompare.com/*",
+  "https://logi-api.salesforceorgcompare.com/*",
+  "https://*.workers.dev/*",
   "https://eu.i.posthog.com/*",
   "https://eu.posthog.com/*",
   "https://openrouter.ai/*",

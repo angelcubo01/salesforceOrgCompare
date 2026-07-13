@@ -25,6 +25,7 @@ dist/
 # Node
 node_modules/
 .env
+services/logi-proxy/.dev.vars
 shared/telemetryConfig.js
 
 # Tests (local development, not published)
@@ -48,4 +49,6 @@ npm-debug.log*
 
 # OS (extra)
 ehthumbs.db
+
+services/*
 

@@ -1,4 +1,9 @@
-import { createChatCompletion } from '../shared/aiTransport.js';
+import { createChatCompletion, classifyLlmTransportFailure } from '../shared/aiTransport.js';
+import {
+  beginLogiRequest,
+  cancelLogiRequest,
+  finishLogiRequest
+} from './logiAdvisorRequests.js';
 import { buildLogiToolDefinitions } from '../shared/apexLogAiContext.js';
 import {
   isLogiAdvisorOperational,
@@ -9,9 +14,12 @@ import { getTelemetryEnabled } from '../shared/extensionSettings.js';
 import { captureAiGeneration } from './posthogAiTelemetry.js';
 import {
   checkLogiUsageLimits,
-  isIterationAllowed,
-  recordLogiUsage
+  readSessionIterationByKey,
+  recordLogiUsage,
+  reserveSessionIterationByKey
 } from './logiAdvisorUsage.js';
+import { buildLogiSessionKey } from '../shared/logiAdvisorSession.js';
+import { getOrCreateTelemetryInstallId } from '../shared/telemetryInstallId.js';
 
 const DML_DDL_RE =
   /\b(INSERT|UPDATE|DELETE|UPSERT|MERGE|UNDELETE|CREATE|ALTER|DROP|TRUNCATE)\b/i;
@@ -28,14 +36,14 @@ export function buildLogiSystemPrompt(lang, config, hasOrg) {
 - Nunca inventes datos de la org; usa org_query solo si necesitas verificar algo en Salesforce.
 - Si el usuario escribe en otro idioma, responde en ese idioma.
 - Usa herramientas fetch_log_lines y fetch_parsed_section para profundizar antes de suponer.
-${hasOrg ? '- Puedes proponer org_query (solo lectura); el usuario debe aprobarla.' : '- No hay org conectada: no uses org_query.'}`;
+${hasOrg ? '- Puedes proponer org_query (solo lectura); el usuario debe aprobarla en pantalla antes de ejecutar nada.' : '- No hay org conectada: no uses org_query. Responde solo con el log y el contexto disponible.'}`;
 
   const en = `You are ${persona}, an expert in Salesforce Apex and debug logs. Be direct and practical.
 - Explain with examples citing log line numbers when possible.
 - Never invent org data; use org_query only when you need to verify something in Salesforce.
 - If the user writes in another language, reply in that language.
 - Use fetch_log_lines and fetch_parsed_section tools to dig deeper before assuming.
-${hasOrg ? '- You may propose org_query (read-only); the user must approve it.' : '- No org connected: do not use org_query.'}`;
+${hasOrg ? '- You may propose org_query (read-only); the user must approve it on screen before anything runs.' : '- No org connected: do not use org_query. Answer using only the log and available context.'}`;
 
   return lang === 'en' ? en : es;
 }
@@ -106,22 +114,58 @@ export async function handleLogiAdvisorChat(message) {
     return { ok: false, reason: 'TELEMETRY_REQUIRED' };
   }
 
-  const iteration = Number(message.iteration) || 1;
-  if (!isIterationAllowed(iteration, parsedConfig)) {
-    return { ok: false, reason: 'MAX_ITERATIONS' };
-  }
+  const orgId = String(message.orgId || '').trim();
+  const logId = String(message.logId || '').trim();
+  const sessionKey =
+    typeof message.sessionKey === 'string' && message.sessionKey.trim()
+      ? message.sessionKey.trim()
+      : buildLogiSessionKey({
+          orgId,
+          logId,
+          title: message.title,
+          instanceUrl: message.instanceUrl
+        });
+  const skipIterationReserve = message.skipIterationReserve === true;
+  const maxIterations = parsedConfig.maxIterationsPerChat;
 
   if (message.isNewChat) {
     const limitCheck = await checkLogiUsageLimits({ isNewChat: true });
     if (!limitCheck.ok) {
       return { ok: false, reason: limitCheck.reason };
     }
+  }
+
+  /** @type {number} */
+  let iteration;
+  /** @type {number} */
+  let iterationsRemaining;
+
+  if (skipIterationReserve) {
+    iteration = await readSessionIterationByKey(sessionKey);
+    iterationsRemaining = Math.max(0, maxIterations - iteration);
+  } else {
+    const reserved = await reserveSessionIterationByKey(sessionKey, maxIterations);
+    if (!reserved.ok) {
+      return {
+        ok: false,
+        reason: 'MAX_ITERATIONS',
+        iteration: reserved.iteration,
+        iterationsRemaining: 0
+      };
+    }
+    iteration = reserved.iteration;
+    iterationsRemaining = reserved.iterationsRemaining;
+  }
+
+  if (message.isNewChat) {
     await recordLogiUsage({ isNewChat: true });
   }
 
   const lang = message.lang === 'en' ? 'en' : 'es';
   const hasOrg = Boolean(message.orgId);
   const allowOrgQuery = parsedConfig.allowedOrgQuery && hasOrg;
+  const requestId = typeof message.requestId === 'string' ? message.requestId.trim() : '';
+  const signal = beginLogiRequest(requestId);
 
   /** @type {object[]} */
   const messages = Array.isArray(message.messages) ? message.messages : [];
@@ -153,16 +197,22 @@ export async function handleLogiAdvisorChat(message) {
   ];
 
   try {
-    const result = await createChatCompletion(parsedConfig, {
-      model: parsedConfig.model,
-      messages: apiMessages,
-      tools: buildLogiToolDefinitions({ allowOrgQuery }),
-      max_tokens: 2048
-    });
+    const installId = await getOrCreateTelemetryInstallId();
+    const result = await withServiceWorkerKeepalive(() =>
+      createChatCompletion(
+        parsedConfig,
+        {
+          messages: apiMessages,
+          tools: buildLogiToolDefinitions({ allowOrgQuery }),
+          max_tokens: 2048
+        },
+        { signal, installId }
+      )
+    );
 
     await recordLogiUsage({ llmCalls: 1 });
     await captureAiGeneration({
-      model: parsedConfig.model,
+      model: result.model || parsedConfig.model,
       latencyMs: result.latencyMs,
       usage: result.usage,
       cost: result.cost,
@@ -211,13 +261,84 @@ export async function handleLogiAdvisorChat(message) {
       pendingOrgQuery,
       finishReason: result.finish_reason,
       iteration,
-      iterationsRemaining: Math.max(0, parsedConfig.maxIterationsPerChat - iteration)
+      iterationsRemaining
     };
   } catch (e) {
     return {
       ok: false,
-      reason: 'LLM_ERROR',
-      error: String(e?.message || e || 'Unknown error')
+      reason: classifyLlmTransportFailure(e),
+      error: String(e?.message || e || 'Unknown error'),
+      iteration,
+      iterationsRemaining
     };
+  } finally {
+    finishLogiRequest(requestId);
+  }
+}
+
+/**
+ * @param {object} message
+ */
+export async function handleLogiAdvisorCheckUsageLimits() {
+  const limitCheck = await checkLogiUsageLimits({ isNewChat: true });
+  if (!limitCheck.ok) {
+    return { ok: false, reason: limitCheck.reason };
+  }
+  return { ok: true };
+}
+
+/**
+ * @param {object} message
+ */
+export async function handleLogiAdvisorGetSessionIteration(message) {
+  const sessionKey =
+    typeof message.sessionKey === 'string' && message.sessionKey.trim()
+      ? message.sessionKey.trim()
+      : buildLogiSessionKey({
+          orgId: message.orgId,
+          logId: message.logId,
+          title: message.title,
+          instanceUrl: message.instanceUrl
+        });
+  const config = await readLogiAdvisorCache();
+  const parsedConfig = parseLogiAdvisorConfig(config);
+  const iteration = await readSessionIterationByKey(sessionKey);
+  const max = parsedConfig.maxIterationsPerChat;
+  return {
+    ok: true,
+    iteration,
+    iterationsRemaining: Math.max(0, max - iteration)
+  };
+}
+
+/**
+ * @param {object} message
+ */
+export function handleLogiAdvisorCancel(message) {
+  const requestId = typeof message.requestId === 'string' ? message.requestId.trim() : '';
+  if (!requestId) return { ok: false, reason: 'NO_REQUEST_ID' };
+  return { ok: cancelLogiRequest(requestId) };
+}
+
+/**
+ * Evita que el service worker MV3 se suspenda durante llamadas LLM largas.
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+async function withServiceWorkerKeepalive(fn) {
+  const ping = () => {
+    try {
+      void chrome.storage?.local?.get?.('sfoc_sw_keepalive');
+    } catch {
+      /* ignore */
+    }
+  };
+  ping();
+  const timer = setInterval(ping, 12_000);
+  try {
+    return await fn();
+  } finally {
+    clearInterval(timer);
   }
 }

@@ -90,9 +90,17 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
  */
 export async function bootstrapLogiAdvisor(opts = {}) {
   try {
-    const { initPosthogClient } = await import('./posthogClient.js');
+    const { initPosthogClient, syncPosthogSfUserContext } = await import('./posthogClient.js');
+    const { invalidateFeatureFlagsCache } = await import('./posthogFeatureFlagLoader.js');
     const ph = await initPosthogClient({ forceFeatureFlags: opts.force, awaitReady: true });
-    const config = await loadLogiAdvisorFromPosthog(ph, { force: opts.force === true });
+    if (ph) {
+      await syncPosthogSfUserContext();
+      invalidateFeatureFlagsCache();
+    }
+    const config = await loadLogiAdvisorFromPosthog(ph, {
+      force: opts.force === true,
+      timeoutMs: 12000
+    });
     dispatchLogiAdvisorReady(config);
     return config;
   } catch {

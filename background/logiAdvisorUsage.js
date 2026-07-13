@@ -1,6 +1,8 @@
 import { readLogiAdvisorCache } from '../shared/logiAdvisorCache.js';
 
 const USAGE_STORAGE_KEY = 'sfocAiAdvisorUsage';
+const SESSION_ITERATIONS_KEY = 'sfocLogiSessionIterations';
+const MAX_SESSION_ITERATION_ENTRIES = 80;
 
 /**
  * @typedef {object} LogiUsageState
@@ -117,6 +119,7 @@ export async function recordLogiUsage(opts = {}) {
 /** Para tests. */
 export async function resetLogiUsageForTests() {
   await chrome.storage.local.remove(USAGE_STORAGE_KEY);
+  await chrome.storage.local.remove(SESSION_ITERATIONS_KEY);
 }
 
 /**
@@ -124,5 +127,101 @@ export async function resetLogiUsageForTests() {
  * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  */
 export function isIterationAllowed(iteration, config) {
-  return iteration <= config.maxIterationsPerChat;
+  const max = config?.maxIterationsPerChat ?? 10;
+  const n = Number(iteration);
+  if (!Number.isFinite(n) || n < 1) return false;
+  return n <= max;
+}
+
+/**
+ * @param {string} orgId
+ * @param {string} logId
+ */
+export function buildLogiIterationSessionKey(orgId, logId) {
+  const org = String(orgId || '').trim() || '_';
+  const log = String(logId || '').trim() || '_anonymous_';
+  return `${org}::${log}`;
+}
+
+/**
+ * @param {string} sessionKey
+ * @returns {Promise<number>}
+ */
+export async function readSessionIterationByKey(sessionKey) {
+  const key = String(sessionKey || '').trim() || '_::__anonymous__';
+  try {
+    const bag = await chrome.storage.local.get(SESSION_ITERATIONS_KEY);
+    const store = bag[SESSION_ITERATIONS_KEY];
+    if (store && typeof store === 'object') {
+      const n = Number(store[key]);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    }
+  } catch {
+    /* ignore */
+  }
+  return 0;
+}
+
+/**
+ * @param {string} orgId
+ * @param {string} logId
+ * @returns {Promise<number>}
+ * @deprecated Usar readSessionIterationByKey con buildLogiSessionKey
+ */
+export async function readSessionIteration(orgId, logId) {
+  return readSessionIterationByKey(buildLogiIterationSessionKey(orgId, logId));
+}
+
+/**
+ * @param {string} sessionKey
+ * @param {number} maxIterations
+ * @returns {Promise<
+ *   | { ok: true, iteration: number, iterationsRemaining: number }
+ *   | { ok: false, reason: 'MAX_ITERATIONS', iteration: number, iterationsRemaining: 0 }
+ * >}
+ */
+export async function reserveSessionIterationByKey(sessionKey, maxIterations) {
+  const key = String(sessionKey || '').trim() || '_::__anonymous__';
+  const max = Math.max(1, Math.floor(Number(maxIterations) || 10));
+  const bag = await chrome.storage.local.get(SESSION_ITERATIONS_KEY);
+  const store =
+    bag[SESSION_ITERATIONS_KEY] && typeof bag[SESSION_ITERATIONS_KEY] === 'object'
+      ? { ...bag[SESSION_ITERATIONS_KEY] }
+      : {};
+  const current = Number(store[key]);
+  const used = Number.isFinite(current) && current > 0 ? Math.floor(current) : 0;
+
+  if (used >= max) {
+    return { ok: false, reason: 'MAX_ITERATIONS', iteration: used, iterationsRemaining: 0 };
+  }
+
+  const next = used + 1;
+  store[key] = next;
+  pruneSessionIterations(store);
+  await chrome.storage.local.set({ [SESSION_ITERATIONS_KEY]: store });
+  return { ok: true, iteration: next, iterationsRemaining: Math.max(0, max - next) };
+}
+
+/**
+ * @param {string} orgId
+ * @param {string} logId
+ * @param {number} maxIterations
+ * @deprecated Usar reserveSessionIterationByKey con buildLogiSessionKey
+ */
+export async function reserveSessionIteration(orgId, logId, maxIterations) {
+  return reserveSessionIterationByKey(buildLogiIterationSessionKey(orgId, logId), maxIterations);
+}
+
+/**
+ * @param {Record<string, number>} store
+ */
+function pruneSessionIterations(store) {
+  const keys = Object.keys(store);
+  if (keys.length <= MAX_SESSION_ITERATION_ENTRIES) return;
+  keys
+    .sort((a, b) => (store[a] || 0) - (store[b] || 0))
+    .slice(0, keys.length - MAX_SESSION_ITERATION_ENTRIES)
+    .forEach((key) => {
+      delete store[key];
+    });
 }

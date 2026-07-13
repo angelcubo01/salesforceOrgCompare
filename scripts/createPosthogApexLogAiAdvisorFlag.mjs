@@ -3,7 +3,7 @@ import './loadProjectEnv.mjs';
 /**
  * Crea o actualiza el feature flag remoto `sfoc_apex_log_ai_advisor` en PostHog EU.
  *
- * Controla Logi (asesor IA del visor de logs Apex): visibilidad, límites, modelo y API key.
+ * Controla Logi (asesor IA del visor de logs Apex): visibilidad, límites, modelos y API key.
  *
  * Uso:
  *   $env:POSTHOG_PERSONAL_API_KEY="phx_..."
@@ -11,6 +11,7 @@ import './loadProjectEnv.mjs';
  *   npm run posthog:ai-advisor-flag
  *   npm run posthog:ai-advisor-flag:update
  *   npm run posthog:ai-advisor-flag:update -- --enable-beta
+ *   npm run posthog:ai-advisor-flag:enable-proxy
  */
 import {
   DEFAULT_LOGI_ADVISOR_CONFIG,
@@ -22,6 +23,7 @@ const FLAG_KEY = 'sfoc_apex_log_ai_advisor';
 const UPDATE = process.argv.includes('--update');
 const RESET = process.argv.includes('--reset');
 const ENABLE_BETA = process.argv.includes('--enable-beta');
+const ENABLE_PROXY = process.argv.includes('--enable-proxy');
 const PERSONAL_KEY =
   process.env.POSTHOG_PERSONAL_API_KEY || process.env.POSTHOG_WIZARD_API_KEY || '';
 
@@ -30,6 +32,26 @@ const DEFAULT_ROLLOUT_PERCENTAGE = Number(process.env.SFOC_LOGI_ADVISOR_ROLLOUT 
 function resolveDefaultPayload() {
   if (RESET) {
     return parseLogiAdvisorConfig({ enabled: false, showButton: false });
+  }
+  if (ENABLE_PROXY) {
+    const proxyUrl = process.env.LOGI_PROXY_URL || '';
+    const proxyAuthToken = process.env.LOGI_PROXY_AUTH_TOKEN || '';
+    if (!proxyUrl.trim() || !proxyAuthToken.trim()) {
+      console.error(
+        'Para --enable-proxy define LOGI_PROXY_URL y LOGI_PROXY_AUTH_TOKEN en .env o variables de entorno.'
+      );
+      process.exit(1);
+    }
+    return parseLogiAdvisorConfig({
+      ...DEFAULT_LOGI_ADVISOR_CONFIG,
+      enabled: true,
+      showButton: true,
+      beta: true,
+      transport: 'proxy',
+      proxyUrl: proxyUrl.trim(),
+      proxyAuthToken: proxyAuthToken.trim(),
+      openRouterApiKey: null
+    });
   }
   const openRouterApiKey = process.env.OPENROUTER_API_KEY || null;
   return parseLogiAdvisorConfig({
@@ -116,7 +138,7 @@ async function main() {
   const existing = await findExistingFlag(projectId);
   const payload = resolveDefaultPayload();
 
-  if (existing && !UPDATE && !ENABLE_BETA) {
+  if (existing && !UPDATE && !ENABLE_BETA && !ENABLE_PROXY) {
     console.log(`Flag "${FLAG_KEY}" ya existe (id ${existing.id}). Usa --update para actualizar.`);
     console.log('Payload actual:', JSON.stringify(existing.filters?.payloads?.true || existing.payload, null, 2));
     console.log(`\nhttps://eu.posthog.com/project/${projectId}/feature_flags/${existing.id}`);
@@ -124,7 +146,7 @@ async function main() {
   }
 
   const body = flagBody(payload);
-  if ((existing && UPDATE) || (existing && ENABLE_BETA)) {
+  if ((existing && UPDATE) || (existing && ENABLE_BETA) || (existing && ENABLE_PROXY)) {
     const updated = await api(`/api/projects/${projectId}/feature_flags/${existing.id}/`, {
       method: 'PATCH',
       body: JSON.stringify(body)
@@ -140,7 +162,11 @@ async function main() {
 
   console.log('\nRollout inicial:', DEFAULT_ROLLOUT_PERCENTAGE, '%');
   console.log('Configura la cohorte beta-ai-advisor en PostHog antes de activar usuarios.');
-  const safePayload = { ...payload, openRouterApiKey: payload.openRouterApiKey ? '[SET]' : null };
+  const safePayload = {
+    ...payload,
+    openRouterApiKey: payload.openRouterApiKey ? '[SET]' : null,
+    proxyAuthToken: payload.proxyAuthToken ? '[SET]' : null
+  };
   console.log('Payload cuando true:', JSON.stringify(safePayload, null, 2));
   console.log(`\nEditar: https://eu.posthog.com/project/${projectId}/feature_flags?search=${FLAG_KEY}`);
 }

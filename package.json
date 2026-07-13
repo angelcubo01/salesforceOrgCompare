@@ -29,6 +29,9 @@
     "posthog:ai-advisor-flag": "node scripts/createPosthogApexLogAiAdvisorFlag.mjs",
     "posthog:ai-advisor-flag:update": "node scripts/createPosthogApexLogAiAdvisorFlag.mjs --update",
     "posthog:ai-advisor-flag:enable-beta": "node scripts/createPosthogApexLogAiAdvisorFlag.mjs --update --enable-beta",
+    "posthog:ai-advisor-flag:enable-proxy": "node scripts/createPosthogApexLogAiAdvisorFlag.mjs --update --enable-proxy",
+    "logi-proxy:deploy": "npm run deploy --prefix services/logi-proxy",
+    "logi-proxy:test": "node scripts/testLogiProxy.mjs",
     "posthog:error-tracking": "node scripts/createPosthogErrorTrackingSetup.mjs",
     "posthog:error-tracking:update": "node scripts/createPosthogErrorTrackingSetup.mjs --update",
     "minify:extension": "node scripts/minify-extension.mjs",
@@ -37,6 +40,7 @@
   "devDependencies": {
     "esbuild": "^0.25.0",
     "posthog-js": "^1.379.0",
-    "vitest": "^3.1.4"
+    "vitest": "^3.1.4",
+    "wrangler": "^4.110.0"
   }
 }
