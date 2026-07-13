@@ -66,7 +66,8 @@ const OPERATIONAL_MESSAGE_MARKERS = [
   'No session',
   'Authenticate and retry',
   'Request failed. Please retry',
-  'package.xml vacío'
+  'package.xml vacío',
+  'ApexTestQueueServlet'
 ];
 
 const SFOC_STACK_MARKERS = ['/code/', '/shared/', '/background/', '/popup/'];

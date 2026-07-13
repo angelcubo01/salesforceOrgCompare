@@ -5,7 +5,8 @@ import {
   getGlobalNotice,
   getToolNotice,
   isActionDisabled,
-  getActionNotice
+  getActionNotice,
+  getActionInfoNotice
 } from '../../shared/featureControls.js';
 import {
   FEATURE_CONTROLS_READY_EVENT,
@@ -239,6 +240,21 @@ function applyToolModal() {
     hideToolModal();
     return;
   }
+  showToolModal(notice, dismissKey);
+}
+
+/**
+ * Muestra el aviso informativo de una acción (p. ej. beta en Importación masiva).
+ * @param {string} actionId
+ */
+export function showActionInfoNotice(actionId) {
+  const notice = getActionInfoNotice(getFeatureControlsConfig(), actionId, langCode());
+  if (!notice) {
+    hideToolModal();
+    return;
+  }
+  const dismissKey = `action:${actionId}:${noticeDismissKey(notice.message)}`;
+  if (!notice.blocking && isNoticeDismissed(dismissKey)) return;
   showToolModal(notice, dismissKey);
 }
 

@@ -578,6 +578,9 @@ async function main() {
   const verEl = document.getElementById('settingsVersion');
   if (verEl) verEl.textContent = `v${manifest.version}`;
 
+  const userIdEl = document.getElementById('settingsTelemetryUserId');
+  if (userIdEl) userIdEl.textContent = await getOrCreateTelemetryInstallId();
+
   const home = document.getElementById('settingsHomeLink');
   if (home && UPDATE_PAGE_URL) home.href = UPDATE_PAGE_URL;
   const priv = document.getElementById('settingsPrivacyLink');

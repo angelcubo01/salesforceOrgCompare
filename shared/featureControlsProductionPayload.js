@@ -12,7 +12,14 @@ export const BETA_TOOL_NOTICE = Object.freeze({
 });
 
 /** Herramientas visibles con aviso beta vía kill switch. */
-export const BETA_TOOL_IDS = Object.freeze(['DependencyExplorer', 'RecordCompare']);
+export const BETA_TOOL_IDS = Object.freeze([
+  'DependencyExplorer',
+  'RecordCompare',
+  'DataWorkbench'
+]);
+
+/** Acciones con aviso beta informativo (sin modal de herramienta). */
+export const BETA_ACTION_IDS = Object.freeze([]);
 
 /**
  * Construye el payload de producción, preservando restricciones existentes y
@@ -34,6 +41,12 @@ export function buildProductionFeatureControlsPayload(base) {
   for (const toolId of BETA_TOOL_IDS) {
     payload.tools[toolId] = {
       ...(payload.tools[toolId] || {}),
+      message: { ...BETA_TOOL_NOTICE }
+    };
+  }
+  for (const actionId of BETA_ACTION_IDS) {
+    payload.actions[actionId] = {
+      ...(payload.actions[actionId] || {}),
       message: { ...BETA_TOOL_NOTICE }
     };
   }

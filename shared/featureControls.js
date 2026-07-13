@@ -60,6 +60,7 @@ export const FEATURE_CONTROL_ACTIONS = Object.freeze([
   'dml_execute',
   'rest_write',
   'bulk_job_create',
+  'bulk_import',
   'streaming_subscribe',
   'event_monitor_subscribe'
 ]);
@@ -348,6 +349,27 @@ export function getActionNotice(config, actionId, lang, extensionVersion) {
     message: text,
     severity: entry.message.severity || 'error',
     blocking: true,
+    ...(entry.message.url ? { url: entry.message.url } : {})
+  };
+}
+
+/**
+ * Aviso informativo de una acción (p. ej. beta) cuando la acción no está deshabilitada.
+ * @param {FeatureControlsConfig} config
+ * @param {string} actionId
+ * @param {string} [lang]
+ */
+export function getActionInfoNotice(config, actionId, lang, extensionVersion) {
+  if (!config || !actionId || !configAppliesToVersion(config, extensionVersion)) return null;
+  const entry = config.actions[actionId];
+  if (!entryAppliesToVersion(entry, extensionVersion)) return null;
+  if (entry?.disabled === true || !entry?.message) return null;
+  const text = resolveFeatureControlMessageText(entry.message, lang);
+  if (!text) return null;
+  return {
+    message: text,
+    severity: entry.message.severity || 'info',
+    blocking: entry.message.blocking === true,
     ...(entry.message.url ? { url: entry.message.url } : {})
   };
 }

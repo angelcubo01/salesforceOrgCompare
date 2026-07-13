@@ -2015,7 +2015,8 @@ export function installMessageHandlers() {
             break;
           }
           case 'dataWorkbench:importBatch': {
-            const blocked = featureControlBlockedResponse('dml_execute');
+            const blocked =
+              featureControlBlockedResponse('bulk_import') || featureControlBlockedResponse('dml_execute');
             if (blocked) {
               reply(blocked);
               break;

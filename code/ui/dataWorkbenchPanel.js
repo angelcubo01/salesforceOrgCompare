@@ -656,7 +656,7 @@ function onImportFileSelected(file) {
 }
 
 async function runImport() {
-  if (guardToolAction('dml_execute')) return;
+  if (guardToolAction('bulk_import') || guardToolAction('dml_execute')) return;
   const orgId = getOrgId();
   const objectApiName = document.getElementById('dataWorkbenchImportObjectSelect')?.value || '';
   const operation = document.getElementById('dataWorkbenchImportOperation')?.value || 'insert';

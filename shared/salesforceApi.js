@@ -1181,6 +1181,9 @@ export function parseApexTestMethodNames(symbolTable) {
   return [...new Set(out)].sort((a, b) => a.localeCompare(b));
 }
 
+/** Respuesta vacía cuando ApexTestQueueServlet no está disponible o devuelve HTML/no-JSON. */
+const APEX_TEST_QUEUE_SERVLET_EMPTY = Object.freeze({ success: false, apexTestJobs: [] });
+
 /** Respuestas JSON de algunos servlets UI (p. ej. ApexTestQueueServlet) con anti-hijacking. */
 export function stripLeadingWhileOneJson(text) {
   return String(text || '').replace(/^\s*while\s*\(\s*1\s*\)\s*;\s*/i, '').trim();
@@ -1189,32 +1192,31 @@ export function stripLeadingWhileOneJson(text) {
 /**
  * Igual que la Developer Console: GET `ApexTestQueueServlet?action=STATUS`
  * (lista `apexTestJobs`: cola de pruebas con parentid = AsyncApexJob).
+ * Fallos HTTP, de red o JSON no válido devuelven lista vacía (sin lanzar).
  */
 export async function fetchApexTestQueueServletStatus(instanceUrl, sid) {
-  await restGate.acquire();
-  const base = String(instanceUrl).replace(/\/$/, '');
-  const url = `${base}/_ui/common/apex/test/ApexTestQueueServlet?action=STATUS&_=${Date.now()}`;
-  const headers = new Headers();
-  headers.set('Authorization', `Bearer ${sid}`);
-  headers.set('Accept', 'application/json');
-  headers.set('X-Requested-With', 'XMLHttpRequest');
-  headers.set('sforce-call-options', 'client=devconsole');
-  const res = await fetch(url, { method: 'GET', headers });
-  const text = await res.text();
-  if (!res.ok) {
-    const err = new Error(`ApexTestQueueServlet STATUS: HTTP ${res.status}`);
-    err.status = res.status;
-    throw err;
-  }
-  let json;
   try {
-    json = JSON.parse(stripLeadingWhileOneJson(text) || '{}');
-  } catch (e) {
-    const err = new Error('ApexTestQueueServlet: JSON inválido');
-    err.cause = e;
-    throw err;
+    await restGate.acquire();
+    const base = String(instanceUrl).replace(/\/$/, '');
+    const url = `${base}/_ui/common/apex/test/ApexTestQueueServlet?action=STATUS&_=${Date.now()}`;
+    const headers = new Headers();
+    headers.set('Authorization', `Bearer ${sid}`);
+    headers.set('Accept', 'application/json');
+    headers.set('X-Requested-With', 'XMLHttpRequest');
+    headers.set('sforce-call-options', 'client=devconsole');
+    const res = await fetch(url, { method: 'GET', headers });
+    const text = await res.text();
+    if (!res.ok) return APEX_TEST_QUEUE_SERVLET_EMPTY;
+    let json;
+    try {
+      json = JSON.parse(stripLeadingWhileOneJson(text) || '{}');
+    } catch {
+      return APEX_TEST_QUEUE_SERVLET_EMPTY;
+    }
+    return json && typeof json === 'object' ? json : APEX_TEST_QUEUE_SERVLET_EMPTY;
+  } catch {
+    return APEX_TEST_QUEUE_SERVLET_EMPTY;
   }
-  return json;
 }
 
 const APEX_LOG_BODY_PREFIX_BYTES = 196_608;
