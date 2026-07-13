@@ -13,8 +13,10 @@ import {
 } from '../../../shared/logiAdvisorSession.js';
 import {
   buildInitialLogContext,
+  enrichLocalToolResult,
   fetchLogLines,
   fetchParsedSection,
+  formatOrgQueryToolResult,
   quickActionUserMessage
 } from '../../../shared/apexLogAiContext.js';
 
@@ -32,7 +34,7 @@ const THINKING_BUBBLE_HTML = `<div class="logi-advisor-msg logi-advisor-msg--ass
 </div>`;
 
 const QUICK_ACTIONS_COLLAPSED_KEY = 'sfocLogiQuickActionsCollapsed';
-const THINKING_ROTATE_MS = 3500;
+const THINKING_ROTATE_MS = 10_000;
 
 /** @type {Record<'default' | 'tools' | 'org', string[]>} */
 const THINKING_MESSAGE_KEYS = {
@@ -1491,11 +1493,15 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
     let toolResult = '';
     if (name === 'fetch_log_lines') {
       const fetched = fetchLogLines(raw, args.start_line, args.end_line);
-      toolResult = JSON.stringify(fetched);
+      toolResult = JSON.stringify(enrichLocalToolResult(name, fetched, lang));
     } else if (name === 'fetch_parsed_section') {
-      toolResult = JSON.stringify(fetchParsedSection(parsed, args.section));
+      toolResult = JSON.stringify(
+        enrichLocalToolResult(name, fetchParsedSection(parsed, args.section), lang)
+      );
     } else {
-      toolResult = JSON.stringify({ error: 'unknown_tool' });
+      toolResult = JSON.stringify(
+        enrichLocalToolResult(name, { error: 'unknown_tool', retryable: false }, lang)
+      );
     }
 
     rt.messages.push({
@@ -1618,10 +1624,16 @@ async function runPendingOrgQueryFlow(
   /** @type {string} */
   let toolContent;
   if (!approved) {
-    toolContent = JSON.stringify({
-      error: 'user_denied',
-      message: 'The user denied running this org query. Continue using only the log context.'
-    });
+    toolContent = JSON.stringify(
+      formatOrgQueryToolResult(
+        {
+          ok: false,
+          error: 'user_denied',
+          reason: 'The user denied running this org query.'
+        },
+        lang
+      )
+    );
   } else {
     const queryRes = await bg({
       type: 'aiAdvisor:runQuery',
@@ -1629,9 +1641,7 @@ async function runPendingOrgQueryFlow(
       variant: pending.variant,
       queryText: pending.queryText
     });
-    toolContent = queryRes?.ok
-      ? JSON.stringify({ records: queryRes.records, totalSize: queryRes.totalSize })
-      : JSON.stringify({ error: queryRes?.error || queryRes?.reason || 'query_failed' });
+    toolContent = JSON.stringify(formatOrgQueryToolResult(queryRes, lang));
   }
 
   rt.messages.push({

@@ -33,6 +33,9 @@ export const LOGI_QUICK_ACTION_IDS = Object.freeze([
   'suggest_fix'
 ]);
 
+/** OpenRouter: máximo 3 modelos por petición en `models`; el resto se intenta en lotes. */
+export const OPENROUTER_MAX_MODELS_PER_REQUEST = 3;
+
 /** Cadena de modelos gratuitos OpenRouter (tool calling) en orden de prioridad. */
 export const DEFAULT_LOGI_MODELS = Object.freeze([
   'openai/gpt-oss-120b:free',

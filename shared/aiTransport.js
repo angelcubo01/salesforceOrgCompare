@@ -4,7 +4,10 @@
  * Production: proxy with subscription token.
  */
 
-import { resolveLogiModelChain } from './apexLogAiAdvisorConfig.js';
+import {
+  OPENROUTER_MAX_MODELS_PER_REQUEST,
+  resolveLogiModelChain
+} from './apexLogAiAdvisorConfig.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_TIMEOUT_MS = 120_000;
@@ -39,19 +42,49 @@ const RETRY_DELAY_MS = 1_500;
  */
 export async function createChatCompletion(config, req, opts = {}) {
   const signal = opts.signal;
-  if (config.transport === 'proxy' && config.proxyUrl) {
-    return proxyTransport(config, req, opts, signal);
+  const chain =
+    Array.isArray(req.models) && req.models.length
+      ? req.models
+      : resolveLogiModelChain(config, req.model);
+  const baseReq = { ...req };
+  delete baseReq.models;
+  delete baseReq.model;
+
+  /** @type {Error | null} */
+  let lastError = null;
+
+  for (let i = 0; i < chain.length; i += OPENROUTER_MAX_MODELS_PER_REQUEST) {
+    const batch = chain.slice(i, i + OPENROUTER_MAX_MODELS_PER_REQUEST);
+    const batchReq = { ...baseReq, models: batch };
+
+    try {
+      if (config.transport === 'proxy' && config.proxyUrl) {
+        return await proxyTransport(config, batchReq, opts, signal);
+      }
+
+      try {
+        return await openRouterDirectTransport(config, batchReq, signal);
+      } catch (e) {
+        if (isUserAbortError(e, signal)) throw e;
+        if (config.proxyUrl && isProxyBlockError(e)) {
+          return await proxyTransport(config, batchReq, opts, signal);
+        }
+        throw e;
+      }
+    } catch (e) {
+      if (isUserAbortError(e, signal)) throw e;
+      if (isProxyBlockError(e)) throw e;
+
+      const hasMoreBatches = i + OPENROUTER_MAX_MODELS_PER_REQUEST < chain.length;
+      if (hasMoreBatches && isModelFailureError(e)) {
+        lastError = e instanceof Error ? e : new Error(String(e || 'LOGI_MODEL_FAILED'));
+        continue;
+      }
+      throw e;
+    }
   }
 
-  try {
-    return await openRouterDirectTransport(config, req, signal);
-  } catch (e) {
-    if (isUserAbortError(e, signal)) throw e;
-    if (config.proxyUrl && isProxyBlockError(e)) {
-      return proxyTransport(config, req, opts, signal);
-    }
-    throw e;
-  }
+  throw lastError || new Error('LOGI_ALL_MODELS_FAILED');
 }
 
 /**
@@ -139,12 +172,13 @@ async function proxyTransport(config, req, opts = {}, signal) {
  * @param {ChatCompletionRequest} req
  */
 function buildRequestBody(config, req) {
-  const models =
+  const models = (
     Array.isArray(req.models) && req.models.length
       ? req.models
-      : resolveLogiModelChain(config, req.model);
+      : resolveLogiModelChain(config, req.model)
+  ).slice(0, OPENROUTER_MAX_MODELS_PER_REQUEST);
+
   const body = {
-    model: models[0],
     models,
     messages: req.messages,
     max_tokens: req.max_tokens ?? 2048
@@ -384,6 +418,36 @@ function normalizeFetchError(err) {
  */
 function isRetriableHttp(status) {
   return status === 408 || status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Errores por los que conviene probar el siguiente lote de modelos.
+ * @param {unknown} err
+ */
+function isModelFailureError(err) {
+  const msg = String(err?.message || err || '');
+  if (
+    msg.includes('LOGI_PROXY_BLOCKED') ||
+    msg.includes('LOGI_NO_') ||
+    msg.includes('LOGI_CANCELLED') ||
+    msg.includes('LOGI_TIMEOUT') ||
+    msg.includes('LOGI_NETWORK') ||
+    /HTTP_401\b/.test(msg) ||
+    /HTTP_403\b/.test(msg) ||
+    /HTTP_413\b/.test(msg)
+  ) {
+    return false;
+  }
+
+  if (/HTTP_404\b|HTTP_429\b|HTTP_502\b|HTTP_503\b|HTTP_504\b|HTTP_408\b/.test(msg)) {
+    return true;
+  }
+
+  if (/HTTP_400\b/.test(msg)) {
+    return /model|provider|endpoint|rate.?limit|unavailable|overloaded/i.test(msg);
+  }
+
+  return /rate.?limit|unavailable|overloaded|downtime|no endpoints|provider error/i.test(msg);
 }
 
 /**

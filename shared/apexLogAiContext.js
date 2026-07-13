@@ -214,6 +214,126 @@ export function fetchParsedSection(parsed, section, limit = 30) {
 }
 
 /**
+ * Añade señales de reintento a resultados de herramientas locales del log.
+ * @param {string} toolName
+ * @param {unknown} result
+ * @param {'es' | 'en'} [lang]
+ */
+export function enrichLocalToolResult(toolName, result, lang = 'es') {
+  const es = lang === 'en';
+  /** @type {Record<string, unknown>} */
+  const out =
+    result && typeof result === 'object' && !Array.isArray(result)
+      ? { ...(/** @type {Record<string, unknown>} */ (result)) }
+      : { data: result };
+
+  if (toolName === 'fetch_parsed_section') {
+    if (out.error === 'unknown_section') {
+      out.ok = false;
+      out.retryable = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'Invalid section. Valid values: soql, dml, issues, timeline, profiling, callouts, validations, limits, userDebug, executions. Call fetch_parsed_section again with a valid section.'
+        : 'Sección inválida. Valores válidos: soql, dml, issues, timeline, profiling, callouts, validations, limits, userDebug, executions. Vuelve a llamar fetch_parsed_section con una sección válida.';
+    } else if (out.count === 0 || (Array.isArray(out.items) && out.items.length === 0)) {
+      out.ok = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'Section is empty. Try another section, fetch_log_lines around relevant lines, or broaden your search before answering.'
+        : 'La sección está vacía. Prueba otra sección, fetch_log_lines en líneas relevantes o amplía la búsqueda antes de responder.';
+    } else if (out.truncated === true) {
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'Section truncated. Call fetch_log_lines for specific line ranges or fetch_parsed_section on a narrower slice if you need more detail.'
+        : 'Sección truncada. Usa fetch_log_lines en rangos concretos o profundiza con líneas adyacentes si necesitas más detalle.';
+    } else {
+      out.ok = true;
+    }
+    return out;
+  }
+
+  if (toolName === 'fetch_log_lines') {
+    const lines = Array.isArray(out.lines) ? out.lines : [];
+    if (lines.length === 0) {
+      out.ok = false;
+      out.retryable = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'No lines returned. Check start_line/end_line (1-based) and try an adjacent or wider range with fetch_log_lines.'
+        : 'No se devolvieron líneas. Revisa start_line/end_line (base 1) y prueba un rango adyacente o más amplio con fetch_log_lines.';
+    } else if (out.truncated === true) {
+      out.ok = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'Line range truncated (max 80). Fetch the next chunk or a narrower range around the key stack trace.'
+        : 'Rango truncado (máx. 80 líneas). Pide el siguiente bloque o un rango más estrecho alrededor del stack trace.';
+    } else {
+      out.ok = true;
+    }
+    return out;
+  }
+
+  out.ok = out.ok !== false;
+  return out;
+}
+
+/**
+ * @param {object | null | undefined} queryRes
+ * @param {'es' | 'en'} [lang]
+ */
+export function formatOrgQueryToolResult(queryRes, lang = 'es') {
+  const es = lang === 'en';
+  const errText = queryRes?.error || queryRes?.reason || 'query_failed';
+  if (errText === 'user_denied' || queryRes?.reason === 'user_denied') {
+    return {
+      ok: false,
+      retryable: false,
+      error: 'user_denied',
+      message: es
+        ? 'The user denied this org query. Continue with log context only; do not propose the same query again unless the user asks.'
+        : 'El usuario rechazó esta consulta. Continúa solo con el log; no propongas la misma consulta salvo que el usuario lo pida.'
+    };
+  }
+  if (!queryRes?.ok) {
+    return {
+      ok: false,
+      retryable: true,
+      insufficient: true,
+      error: queryRes?.error || queryRes?.reason || 'query_failed',
+      errorCode: queryRes?.errorCode || undefined,
+      retry_hint: es
+        ? 'Query failed. Read the Salesforce error, fix query_text or variant (rest-soql, tooling-soql, rest-sosl), and call org_query again. Do not answer the user until you retried or explain why not.'
+        : 'Consulta fallida. Lee el error de Salesforce, corrige query_text o variant (rest-soql, tooling-soql, rest-sosl) y vuelve a llamar org_query. No respondas al usuario hasta reintentar o explicar por qué no.'
+    };
+  }
+
+  const records = queryRes.records || [];
+  const totalSize = queryRes.totalSize ?? records.length;
+  /** @type {Record<string, unknown>} */
+  const out = {
+    ok: true,
+    records,
+    totalSize,
+    done: queryRes.done !== false
+  };
+
+  if (totalSize === 0 || records.length === 0) {
+    out.insufficient = true;
+    out.retryable = true;
+    out.retry_hint = es
+      ? 'Zero records. Broaden filters, fix object/field API names, or switch variant, then call org_query again.'
+      : 'Cero registros. Amplía filtros, corrige API names de objeto/campo o cambia variant, y vuelve a llamar org_query.';
+  } else if (queryRes.done === false) {
+    out.insufficient = true;
+    out.retry_hint = es
+      ? 'Partial result set. Narrow the query with filters or LIMIT, then call org_query again if needed.'
+      : 'Resultado parcial. Acota la consulta con filtros o LIMIT y vuelve a llamar org_query si hace falta.';
+  }
+
+  return out;
+}
+
+/**
  * @param {unknown[]} records
  * @param {number} max
  */
@@ -228,7 +348,8 @@ export function buildLogiToolDefinitions({ allowOrgQuery = true } = {}) {
       type: 'function',
       function: {
         name: 'fetch_log_lines',
-        description: 'Fetch raw log lines by line number range (max 80 lines).',
+        description:
+          'Fetch raw log lines by line number range (max 80 lines). If the result is empty, truncated, or insufficient, call again with a corrected or adjacent range before answering.',
         parameters: {
           type: 'object',
           properties: {
@@ -244,7 +365,8 @@ export function buildLogiToolDefinitions({ allowOrgQuery = true } = {}) {
       type: 'function',
       function: {
         name: 'fetch_parsed_section',
-        description: 'Fetch a parsed section of the log (soql, dml, issues, timeline, profiling, etc.).',
+        description:
+          'Fetch a parsed section of the log (soql, dml, issues, timeline, profiling, etc.). If empty, unknown, or truncated, try another section or fetch_log_lines before answering.',
         parameters: {
           type: 'object',
           properties: {
@@ -266,7 +388,7 @@ export function buildLogiToolDefinitions({ allowOrgQuery = true } = {}) {
       function: {
         name: 'org_query',
         description:
-          'Run a read-only SOQL/SOSL query against the Salesforce org. Requires explicit user approval.',
+          'Run a read-only SOQL/SOSL query against the Salesforce org. Requires explicit user approval. If it fails or returns no useful data, fix the query and call org_query again.',
         parameters: {
           type: 'object',
           properties: {
