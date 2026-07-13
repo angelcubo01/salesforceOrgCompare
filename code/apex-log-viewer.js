@@ -25,6 +25,7 @@ import {
   renderExecutionToolbarBadge,
   shouldShowExecutionSelector
 } from './lib/apexLogViewer/executionSelector.js';
+import { mountLogiAdvisor } from './lib/apexLogViewer/logiAdvisorModal.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -578,6 +579,12 @@ async function main() {
     } else {
       setTimeout(run, 0);
     }
+  });
+
+  void mountLogiAdvisor({
+    getParsed: () => getScopedParsed(),
+    getRawContent: () => content,
+    payload: payload || {}
   });
 
   downloadBtn?.addEventListener('click', () => {

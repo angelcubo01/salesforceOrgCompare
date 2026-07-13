@@ -253,6 +253,30 @@ async function sendTelemetryPreferenceEvent(mapped, telemetryEnabled) {
 }
 
 /**
+ * Captura evento $ai_generation para AI Observability (Logi / OpenRouter).
+ * @param {object} opts
+ */
+export async function sendPosthogAiGeneration(opts) {
+  if (!isPosthogConfigured()) return false;
+  const installId = opts.distinctId || (await getOrCreateTelemetryInstallId());
+  /** @type {Record<string, string | number | boolean>} */
+  const props = {
+    $ai_model: String(opts.model || '').slice(0, 120),
+    $ai_latency: Number(opts.latencySec) || 0,
+    sfoc_feature: 'apex_log_ai_advisor',
+    sfoc_log_id: String(opts.logId || '').slice(0, 64),
+    sfoc_iteration: Number(opts.iteration) || 0
+  };
+  if (opts.promptTokens != null) props.$ai_input_tokens = Number(opts.promptTokens);
+  if (opts.completionTokens != null) props.$ai_output_tokens = Number(opts.completionTokens);
+  if (opts.totalCostUsd != null) props.$ai_total_cost_usd = Number(opts.totalCostUsd);
+  if (opts.input) props.$ai_input = String(opts.input).slice(0, 8000);
+  if (opts.outputChoices) props.$ai_output_choices = String(opts.outputChoices).slice(0, 8000);
+
+  return postCapture('$ai_generation', props, { installId });
+}
+
+/**
  * @param {Record<string, unknown>} entry Entrada ya pasada por pickUsageLogEntry.
  */
 export async function sendPosthogUsageEvent(entry) {

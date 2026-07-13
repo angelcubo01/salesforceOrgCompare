@@ -44,6 +44,10 @@ import {
   loadFeatureControlsFromPosthog
 } from './posthogFeatureControlsFlag.js';
 import {
+  hookLogiAdvisorOnFeatureFlags,
+  loadLogiAdvisorFromPosthog
+} from './posthogLogiAdvisorFlag.js';
+import {
   ensureFeatureFlagsLoaded,
   invalidateFeatureFlagsCache
 } from './posthogFeatureFlagLoader.js';
@@ -183,6 +187,7 @@ export async function initPosthogClient(opts = {}) {
     if (opts.forceFeatureFlags) {
       await ensureFeatureFlagsLoaded(posthog, { force: true });
       await loadFeatureControlsFromPosthog(posthog, { force: true });
+      await loadLogiAdvisorFromPosthog(posthog, { force: true });
     }
     return posthog;
   }
@@ -233,7 +238,9 @@ export async function initPosthogClient(opts = {}) {
       try {
         await ensureFeatureFlagsLoaded(ph, { force: forceFeatureFlags });
         await loadFeatureControlsFromPosthog(ph, { force: forceFeatureFlags });
+        await loadLogiAdvisorFromPosthog(ph, { force: forceFeatureFlags });
         hookFeatureControlsOnFeatureFlags(ph, undefined, { skipInitialRun: true });
+        hookLogiAdvisorOnFeatureFlags(ph);
 
         if (!telemetryEnabled) {
           ph.opt_out_capturing();

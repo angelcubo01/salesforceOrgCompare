@@ -266,6 +266,12 @@ import {
   retrieveCancelOpts
 } from './retrieveSession.js';
 import { featureControlBlockedResponse } from './featureControlsGuard.js';
+import {
+  handleLogiAdvisorChat,
+  handleLogiAdvisorGetConfig,
+  isReadOnlySalesforceQuery
+} from './apexLogAiAdvisor.js';
+import { slimQueryRecords } from '../shared/apexLogAiContext.js';
 
 /**
  * @param {(response: object) => void} reply
@@ -2919,6 +2925,84 @@ export function installMessageHandlers() {
             try {
               const describe = await restDescribeSobject(org.instanceUrl, sid, org.apiVersion, objectApiName);
               reply({ ok: true, describe });
+            } catch (e) {
+              reply(queryExplorerCatchErrorPayload(e));
+            }
+            break;
+          }
+          case 'aiAdvisor:getConfig': {
+            try {
+              reply(await handleLogiAdvisorGetConfig());
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'aiAdvisor:chat': {
+            try {
+              reply(await handleLogiAdvisorChat(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'aiAdvisor:runQuery': {
+            const blocked = featureControlBlockedResponse('ai_org_query');
+            if (blocked) {
+              reply(blocked);
+              break;
+            }
+            const { orgId, variant, queryText } = message;
+            const q = queryText != null ? String(queryText).trim() : '';
+            if (!q || !isReadOnlySalesforceQuery(q)) {
+              reply({ ok: false, error: 'Query not allowed (read-only SELECT/FIND only)' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              let records = [];
+              let totalSize = 0;
+              let done = true;
+              if (variant === 'rest-soql') {
+                const r = await restSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, q);
+                records = r.records;
+                totalSize = r.totalSize;
+                done = r.done;
+              } else if (variant === 'tooling-soql') {
+                const r = await toolingSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, q);
+                records = r.records;
+                totalSize = r.totalSize;
+                done = r.done;
+              } else if (variant === 'rest-sosl') {
+                const r = await restSoslSearchPage(org.instanceUrl, sid, org.apiVersion, q);
+                records = r.records;
+                totalSize = r.totalSize;
+                done = r.done;
+              } else {
+                reply({ ok: false, error: 'Invalid variant' });
+                break;
+              }
+              await recordLocalAudit({
+                action: 'ai_org_query',
+                orgId,
+                detail: q.slice(0, 120)
+              });
+              reply({
+                ok: true,
+                records: slimQueryRecords(records, 50),
+                totalSize,
+                done
+              });
             } catch (e) {
               reply(queryExplorerCatchErrorPayload(e));
             }

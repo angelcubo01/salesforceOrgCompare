@@ -6,6 +6,7 @@
     <title>Log Apex · Salesforce Org Compare</title>
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
     <link rel="stylesheet" href="./apex-log-viewer.css" />
+    <link rel="stylesheet" href="./lib/apexLogViewer/logiAdvisorModal.css" />
   </head>
   <body>
     <header class="apex-log-viewer-toolbar">
@@ -22,6 +23,15 @@
       <div class="apex-log-viewer-toolbar-row apex-log-viewer-toolbar-row--secondary">
         <div id="apexLogFindMount" class="apex-log-find-mount"></div>
         <span class="apex-log-viewer-toolbar-spacer" aria-hidden="true"></span>
+        <button
+          type="button"
+          id="logiAdvisorBtn"
+          class="logi-advisor-btn"
+          data-i18n="apexLogViewer.logi.button"
+          hidden
+        >
+          Pregúntale a Logi
+        </button>
         <button
           type="button"
           id="apexLogViewerDownload"

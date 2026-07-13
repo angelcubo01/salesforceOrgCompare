@@ -40,6 +40,7 @@
   "https://salesforceorgcompare.com/*",
   "https://eu.i.posthog.com/*",
   "https://eu.posthog.com/*",
+  "https://openrouter.ai/*",
   "https://api.status.salesforce.com/*"
   ],
   "content_security_policy": {

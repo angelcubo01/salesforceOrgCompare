@@ -36,11 +36,7 @@ coverage/
 node_modules/.vite/
 
 # Internal documentation
-docs/production-readiness/
-docs/SFOC_ROADMAP_MEJORAS.md
-docs/SFOC_DEV_ADMIN_TOOLS.md
-docs/SFOC_FEATURE_CONTROLS.md
-docs/SFOC_POPUP_CONTROLS.md
+docs/*
 
 # i18n / script generation artifacts
 scripts/_block*.txt
@@ -52,3 +48,4 @@ npm-debug.log*
 
 # OS (extra)
 ehthumbs.db
+

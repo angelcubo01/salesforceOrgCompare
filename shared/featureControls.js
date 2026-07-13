@@ -62,7 +62,8 @@ export const FEATURE_CONTROL_ACTIONS = Object.freeze([
   'bulk_job_create',
   'bulk_import',
   'streaming_subscribe',
-  'event_monitor_subscribe'
+  'event_monitor_subscribe',
+  'ai_org_query'
 ]);
 
 /** @type {FeatureControlsConfig} */
