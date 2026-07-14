@@ -116,6 +116,17 @@ export async function recordLogiUsage(opts = {}) {
   return usage;
 }
 
+/** Snapshot para telemetría PostHog (sin PII). */
+export async function readLogiUsageSnapshot() {
+  const usage = normalizeUsage(await readUsage());
+  return {
+    chatsTotal: usage.chatsTotal,
+    chatsToday: usage.chatsToday,
+    chatsMonth: usage.chatsMonth,
+    llmCallsTotal: usage.llmCallsTotal
+  };
+}
+
 /** Para tests. */
 export async function resetLogiUsageForTests() {
   await chrome.storage.local.remove(USAGE_STORAGE_KEY);

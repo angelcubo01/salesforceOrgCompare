@@ -19,6 +19,15 @@ import {
   formatOrgQueryToolResult,
   quickActionUserMessage
 } from '../../../shared/apexLogAiContext.js';
+import { hashLogiSessionKey } from '../../../shared/logiAiMetrics.js';
+
+/**
+ * @param {string} action
+ * @param {Record<string, unknown>} [props]
+ */
+function trackLogiUi(action, props = {}) {
+  void bg({ type: 'telemetry:logiUsage', action, ...props }).catch(() => {});
+}
 
 const LOGI_AVATAR_SVG = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 5a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm10 0v4h4M8 13h8M8 17h5"/></svg>`;
 
@@ -929,6 +938,7 @@ function renderQuickActions(modal) {
       if (!actionId) return;
       const lang = getCurrentLang() === 'en' ? 'en' : 'es';
       void enqueueUserMessage(quickActionUserMessage(actionId, lang), modal, { quickActionId: actionId });
+      trackLogiUi('quick_action', { sfoc_quick_action: actionId });
     });
   });
 }
@@ -1319,6 +1329,9 @@ async function cancelActiveGeneration(modal, opts = {}) {
     void bg({ type: 'aiAdvisor:cancel', requestId });
   }
   if (!opts.silent) {
+    trackLogiUi('cancelled', {
+      sfoc_session_key: hashLogiSessionKey(sessionKey)
+    });
     appendAssistantMessage(t('apexLogViewer.logi.cancelled'), modal, { skipPersist: false });
   }
   await persistRuntime(sessionKey);
@@ -1619,12 +1632,22 @@ async function runPendingOrgQueryFlow(
     return;
   }
 
+  trackLogiUi('org_query_proposed', {
+    sfoc_org_query_variant: String(pending.variant || 'rest-soql').slice(0, 32),
+    sfoc_log_id: String(payload.logId || '').slice(0, 64),
+    sfoc_session_key: hashLogiSessionKey(sessionKey)
+  });
+
   const approved = await showOrgQueryApproval(pending, payload.orgId);
   if (!shouldApplyTurnResult(sessionKey, turnId)) return;
 
   /** @type {string} */
   let toolContent;
   if (!approved) {
+    trackLogiUi('org_query_denied', {
+      sfoc_org_query_variant: String(pending.variant || 'rest-soql').slice(0, 32),
+      sfoc_log_id: String(payload.logId || '').slice(0, 64)
+    });
     toolContent = JSON.stringify(
       formatOrgQueryToolResult(
         {

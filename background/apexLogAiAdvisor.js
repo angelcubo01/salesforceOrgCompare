@@ -14,6 +14,8 @@ import { readLogiAdvisorCache, readLogiAdvisorCacheFresh } from '../shared/logiA
 import { bootstrapLogiAdvisorViaProxy } from '../shared/logiAdvisorBootstrap.js';
 import { getTelemetryEnabled } from '../shared/extensionSettings.js';
 import { captureAiGeneration } from './posthogAiTelemetry.js';
+import { captureLogiUsage } from './posthogLogiTelemetry.js';
+import { buildLogiAiMetrics, buildLogiErrorMetrics, hashLogiSessionKey } from '../shared/logiAiMetrics.js';
 import {
   checkLogiUsageLimits,
   readSessionIterationByKey,
@@ -56,6 +58,59 @@ ${hasOrg ? '- Puedes proponer org_query (solo lectura); el usuario debe aprobarl
 ${hasOrg ? '- You may propose org_query (read-only); the user must approve it on screen before anything runs.' : '- No org connected: do not use org_query. Answer using only the log and available context.'}`;
 
   return lang === 'en' ? en : es;
+}
+
+/**
+ * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ */
+function logiTransportLabel(config) {
+  return config?.transport === 'proxy' && config?.proxyUrl ? 'proxy' : 'direct';
+}
+
+/**
+ * @param {string} action
+ * @param {Record<string, unknown>} props
+ */
+async function trackLogi(action, props = {}) {
+  await captureLogiUsage({ action, ...props });
+}
+
+/**
+ * @param {string} reason
+ * @param {object} ctx
+ */
+async function trackLogiLimit(reason, ctx) {
+  await trackLogi('limit_reached', {
+    sfoc_limit_reason: reason,
+    ...buildLogiErrorMetrics(null, { reason }),
+    ...ctx
+  });
+}
+
+/**
+ * @param {string} reason
+ * @param {object} ctx
+ */
+async function trackLogiConfigError(reason, ctx) {
+  await trackLogi('error', {
+    ...buildLogiErrorMetrics(null, { reason }),
+    ...ctx
+  });
+}
+
+/**
+ * @param {unknown} err
+ * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {object} ctx
+ */
+async function trackLogiLlmError(err, config, ctx) {
+  await trackLogi('error', {
+    ...buildLogiErrorMetrics(err, {
+      transport: logiTransportLabel(config),
+      modelConfigured: config?.model
+    }),
+    ...ctx
+  });
 }
 
 /**
@@ -128,11 +183,17 @@ export async function handleLogiAdvisorChat(message) {
   const parsedConfig = parseLogiAdvisorConfig(config);
 
   if (!isLogiAdvisorOperational(parsedConfig)) {
+    await trackLogiConfigError('LOGI_DISABLED', {
+      sfoc_log_id: String(message.logId || '').slice(0, 64)
+    });
     return { ok: false, reason: 'LOGI_DISABLED' };
   }
 
   const telemetryEnabled = await getTelemetryEnabled();
   if (parsedConfig.requireTelemetry && !telemetryEnabled) {
+    await trackLogiConfigError('TELEMETRY_REQUIRED', {
+      sfoc_log_id: String(message.logId || '').slice(0, 64)
+    });
     return { ok: false, reason: 'TELEMETRY_REQUIRED' };
   }
 
@@ -153,6 +214,10 @@ export async function handleLogiAdvisorChat(message) {
   if (message.isNewChat) {
     const limitCheck = await checkLogiUsageLimits({ isNewChat: true });
     if (!limitCheck.ok) {
+      await trackLogiLimit(limitCheck.reason, {
+        sfoc_log_id: logId.slice(0, 64),
+        sfoc_session_key: hashLogiSessionKey(sessionKey)
+      });
       return { ok: false, reason: limitCheck.reason };
     }
   }
@@ -168,6 +233,11 @@ export async function handleLogiAdvisorChat(message) {
   } else {
     const reserved = await reserveSessionIterationByKey(sessionKey, maxIterations);
     if (!reserved.ok) {
+      await trackLogiLimit('MAX_ITERATIONS', {
+        sfoc_log_id: logId.slice(0, 64),
+        sfoc_session_key: hashLogiSessionKey(sessionKey),
+        sfoc_iteration: reserved.iteration
+      });
       return {
         ok: false,
         reason: 'MAX_ITERATIONS',
@@ -182,6 +252,14 @@ export async function handleLogiAdvisorChat(message) {
   if (message.isNewChat) {
     await recordLogiUsage({ isNewChat: true });
   }
+
+  const telemetryCtx = {
+    sfoc_log_id: logId.slice(0, 64),
+    sfoc_session_key: hashLogiSessionKey(sessionKey),
+    sfoc_iteration: iteration,
+    sfoc_is_new_chat: message.isNewChat === true
+  };
+  await trackLogi('chat_turn_started', telemetryCtx);
 
   const lang = message.lang === 'en' ? 'en' : 'es';
   const hasOrg = Boolean(message.orgId);
@@ -233,17 +311,27 @@ export async function handleLogiAdvisorChat(message) {
     );
 
     await recordLogiUsage({ llmCalls: 1 });
+
+    const aiMetrics = buildLogiAiMetrics(result, parsedConfig, {
+      iteration,
+      logId: message.logId,
+      isNewChat: message.isNewChat === true,
+      sessionKey
+    });
+
     await captureAiGeneration({
       model: result.model || parsedConfig.model,
       latencyMs: result.latencyMs,
       usage: result.usage,
       cost: result.cost,
-      inputMessages: apiMessages,
-      outputContent: result.content,
-      toolCalls: result.tool_calls,
       logId: message.logId,
-      iteration
+      iteration,
+      result,
+      config: parsedConfig,
+      context: { sessionKey, isNewChat: message.isNewChat === true }
     });
+
+    await trackLogi('llm_response', { ...telemetryCtx, ...aiMetrics });
 
     /** @type {object | null} */
     let pendingOrgQuery = null;
@@ -286,9 +374,13 @@ export async function handleLogiAdvisorChat(message) {
       iterationsRemaining
     };
   } catch (e) {
+    const reason = classifyLlmTransportFailure(e);
+    if (reason !== 'CANCELLED') {
+      await trackLogiLlmError(e, parsedConfig, telemetryCtx);
+    }
     return {
       ok: false,
-      reason: classifyLlmTransportFailure(e),
+      reason,
       error: String(e?.message || e || 'Unknown error'),
       iteration,
       iterationsRemaining

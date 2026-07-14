@@ -2,6 +2,17 @@
  * Políticas de escritura por org (deploy, DML, REST mutaciones).
  */
 
+/** Acciones permitidas en producción (no aplicar bloqueo de deploy). */
+export const PRODUCTION_WRITE_ALLOWED_ACTIONS = Object.freeze(['anonymous_apex_execute']);
+
+/**
+ * @param {string} [action]
+ */
+export function isProductionWriteAllowedAction(action) {
+  const id = String(action || '').trim();
+  return id.length > 0 && PRODUCTION_WRITE_ALLOWED_ACTIONS.includes(id);
+}
+
 /**
  * @param {Record<string, unknown> | null | undefined} org
  */
@@ -13,9 +24,11 @@ export function isOrgMarkedProduction(org) {
  * @param {Record<string, unknown> | null | undefined} org
  * @param {boolean | null} verifiedIsSandbox desde API Organization
  * @param {boolean} [checkOnly]
+ * @param {string} [action]
  */
-export function shouldBlockProductionDeploy(org, verifiedIsSandbox, checkOnly = false) {
+export function shouldBlockProductionDeploy(org, verifiedIsSandbox, checkOnly = false, action = '') {
   if (checkOnly) return false;
+  if (isProductionWriteAllowedAction(action)) return false;
   if (verifiedIsSandbox === true) return false;
   if (verifiedIsSandbox === false) return true;
   return isOrgMarkedProduction(org);

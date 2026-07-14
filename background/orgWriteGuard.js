@@ -64,7 +64,7 @@ export async function assertOrgWriteAllowed(org, sid, opts = {}) {
   } catch {
     verified = null;
   }
-  if (shouldBlockProductionDeploy(org, verified, !!opts.checkOnly)) {
+  if (shouldBlockProductionDeploy(org, verified, !!opts.checkOnly, String(opts.action || ''))) {
     return { ok: false, reason: 'PROD_DEPLOY_BLOCKED', error: 'Deploy to production is blocked' };
   }
   return { ok: true, verifiedIsSandbox: verified };

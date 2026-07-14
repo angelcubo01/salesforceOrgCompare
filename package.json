@@ -30,6 +30,8 @@
     "posthog:ai-advisor-flag:update": "node scripts/createPosthogApexLogAiAdvisorFlag.mjs --update",
     "posthog:ai-advisor-flag:enable-beta": "node scripts/createPosthogApexLogAiAdvisorFlag.mjs --update --enable-beta",
     "posthog:ai-advisor-flag:enable-proxy": "node scripts/createPosthogApexLogAiAdvisorFlag.mjs --update --enable-proxy",
+    "posthog:logi-dashboard": "node scripts/createPosthogLogiDashboard.mjs",
+    "posthog:logi-dashboard:update": "node scripts/createPosthogLogiDashboard.mjs --update",
     "logi-proxy:deploy": "npm run deploy --prefix services/logi-proxy",
     "logi-proxy:test": "node scripts/testLogiProxy.mjs",
     "posthog:error-tracking": "node scripts/createPosthogErrorTrackingSetup.mjs",

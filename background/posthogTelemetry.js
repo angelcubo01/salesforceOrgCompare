@@ -35,6 +35,8 @@ import {
 } from '../shared/errorTelemetryPolicy.js';
 import { resolveTelemetryUserLabel, resolveSfUserContextForOrg } from './telemetryUserResolver.js';
 import { orgFieldsForTelemetry } from '../shared/telemetryOrgContext.js';
+import { buildSfocAiUserProperties } from '../shared/posthogAiUserContext.js';
+import { LOGI_USAGE_EVENT } from '../shared/logiTelemetryConstants.js';
 
 function posthogDebugLog(...args) {
   if (POSTHOG_DEBUG) console.log('[posthog]', ...args);
@@ -258,22 +260,73 @@ async function sendTelemetryPreferenceEvent(mapped, telemetryEnabled) {
  */
 export async function sendPosthogAiGeneration(opts) {
   if (!isPosthogConfigured()) return false;
+  try {
+    const cfg = await loadExtensionSettings();
+    if (cfg.telemetryEnabled === false) return false;
+  } catch {
+    return false;
+  }
+
   const installId = opts.distinctId || (await getOrCreateTelemetryInstallId());
+  const aiUserProps = buildSfocAiUserProperties(installId);
   /** @type {Record<string, string | number | boolean>} */
   const props = {
     $ai_model: String(opts.model || '').slice(0, 120),
     $ai_latency: Number(opts.latencySec) || 0,
     sfoc_feature: 'apex_log_ai_advisor',
     sfoc_log_id: String(opts.logId || '').slice(0, 64),
-    sfoc_iteration: Number(opts.iteration) || 0
+    sfoc_iteration: Number(opts.iteration) || 0,
+    ...aiUserProps
   };
   if (opts.promptTokens != null) props.$ai_input_tokens = Number(opts.promptTokens);
   if (opts.completionTokens != null) props.$ai_output_tokens = Number(opts.completionTokens);
   if (opts.totalCostUsd != null) props.$ai_total_cost_usd = Number(opts.totalCostUsd);
-  if (opts.input) props.$ai_input = String(opts.input).slice(0, 8000);
-  if (opts.outputChoices) props.$ai_output_choices = String(opts.outputChoices).slice(0, 8000);
+  if (opts.transport) props.sfoc_transport = String(opts.transport).slice(0, 16);
 
-  return postCapture('$ai_generation', props, { installId });
+  return postCapture('$ai_generation', props, {
+    installId,
+    personProperties: { ...aiUserProps, ...(opts.personProperties || {}) }
+  });
+}
+
+/**
+ * Evento logi_usage (producto Logi). Respeta telemetryEnabled.
+ * @param {{ installId: string, action: string, properties: Record<string, string | number | boolean>, personProperties?: Record<string, string> }} opts
+ */
+export async function sendPosthogLogiUsage(opts) {
+  if (!isPosthogConfigured()) return false;
+  try {
+    const cfg = await loadExtensionSettings();
+    if (cfg.telemetryEnabled === false) return false;
+  } catch {
+    return false;
+  }
+
+  const ctx = await telemetryContext();
+  const installId = opts.installId || (await getOrCreateTelemetryInstallId());
+  const aiUserProps = buildSfocAiUserProperties(installId);
+  const sfUser = await resolveSfUserForTelemetry();
+  const sfProps = sfUserPersonProps(sfUser);
+
+  return postCapture(
+    LOGI_USAGE_EVENT,
+    {
+      action: String(opts.action || '').slice(0, 64),
+      ...audienceParamsForEvent(ctx.audience),
+      ...opts.properties,
+      ...aiUserProps,
+      ...sfProps
+    },
+    {
+      installId,
+      personProperties: {
+        ...buildPostHogPersonProperties(ctx.audience),
+        ...aiUserProps,
+        ...sfProps,
+        ...(opts.personProperties || {})
+      }
+    }
+  );
 }
 
 /**

@@ -13,6 +13,7 @@ import {
   buildPostHogPersonProperties,
   getTelemetryAudienceContext
 } from './telemetryAudienceContext.js';
+import { buildSfocAiUserProperties } from './posthogAiUserContext.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
 import { getCurrentLang } from './i18n.js';
 import { pickUsageLogEntry } from './usageLogEntry.js';
@@ -95,6 +96,12 @@ function applyAppLanguageToPosthog(ph = posthog) {
   }
 }
 
+/** Super + person properties del ID de IA (alineado con proxy Logi). */
+async function aiUserPropsForPosthog() {
+  const installId = await getOrCreateTelemetryInstallId();
+  return buildSfocAiUserProperties(installId);
+}
+
 /** Sincroniza idioma de la app con PostHog (p. ej. al cambiar en Ajustes). */
 export function syncPosthogAppLanguage() {
   if (!initialized || !isPosthogConfigured()) return;
@@ -149,9 +156,12 @@ export async function syncPosthogSfUserContext(opts = {}) {
 
   const installId = await getOrCreateTelemetryInstallId();
   const audience = await getTelemetryAudienceContext();
+  const aiUserProps = buildSfocAiUserProperties(installId);
+  posthog.register(aiUserProps);
   posthog.identify(installId, {
     ...buildPostHogPersonProperties(audience),
     ...userProps,
+    ...aiUserProps,
     app_ui_language: appLanguageCode(),
     language: appLanguageCode(),
     telemetry_enabled: 'true'
@@ -256,8 +266,11 @@ export async function initPosthogClient(opts = {}) {
             else dismissPosthogConversationsWidget(ph);
           });
           const audience = await getTelemetryAudienceContext();
+          const aiUserProps = await aiUserPropsForPosthog();
+          ph.register(aiUserProps);
           ph.identify(installId, {
             ...buildPostHogPersonProperties(audience),
+            ...aiUserProps,
             app_ui_language: lang,
             language: lang,
             telemetry_enabled: 'true'
@@ -314,8 +327,11 @@ export async function syncPosthogOptOut(enabled) {
     applyAppLanguageToPosthog();
     const installId = await getOrCreateTelemetryInstallId();
     const audience = await getTelemetryAudienceContext();
+    const aiUserProps = buildSfocAiUserProperties(installId);
+    posthog.register(aiUserProps);
     posthog.identify(installId, {
       ...buildPostHogPersonProperties(audience),
+      ...aiUserProps,
       app_ui_language: appLanguageCode(),
       language: appLanguageCode(),
       telemetry_enabled: 'true'

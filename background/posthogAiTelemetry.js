@@ -1,54 +1,37 @@
-import { getOrCreateTelemetryInstallId } from '../shared/telemetryInstallId.js';
+import { buildLogiAiMetrics } from '../shared/logiAiMetrics.js';
 
 /**
  * @param {object} opts
  */
 export async function captureAiGeneration(opts) {
-  const {
-    model,
-    latencyMs,
-    usage,
-    cost,
-    inputMessages,
-    outputContent,
-    toolCalls,
-    logId,
-    iteration
-  } = opts;
+  const { model, latencyMs, usage, cost, logId, iteration, result, config, context } = opts;
 
   try {
     const { sendPosthogAiGeneration } = await import('./posthogTelemetry.js');
+    const { getOrCreateTelemetryInstallId } = await import('../shared/telemetryInstallId.js');
     const installId = await getOrCreateTelemetryInstallId();
+
+    const metrics =
+      result && config
+        ? buildLogiAiMetrics(result, config, {
+            iteration,
+            logId,
+            ...context
+          })
+        : {};
+
     await sendPosthogAiGeneration({
       distinctId: installId,
-      model: String(model || ''),
-      latencySec: latencyMs ? latencyMs / 1000 : 0,
-      promptTokens: usage?.prompt_tokens,
-      completionTokens: usage?.completion_tokens,
-      totalCostUsd: cost,
-      input: truncateJson(inputMessages, 4000),
-      outputChoices: truncateJson(
-        [{ content: outputContent, tool_calls: toolCalls }],
-        4000
-      ),
+      model: String(model || metrics.sfoc_model || ''),
+      latencySec: latencyMs ? latencyMs / 1000 : (Number(metrics.sfoc_latency_ms) || 0) / 1000,
+      promptTokens: usage?.prompt_tokens ?? metrics.sfoc_prompt_tokens,
+      completionTokens: usage?.completion_tokens ?? metrics.sfoc_completion_tokens,
+      totalCostUsd: cost ?? metrics.sfoc_total_cost_usd,
       logId: logId ? String(logId) : '',
-      iteration: iteration ?? 0
+      iteration: iteration ?? 0,
+      transport: metrics.sfoc_transport
     });
   } catch {
     /* telemetry optional */
-  }
-}
-
-/**
- * @param {unknown} value
- * @param {number} max
- */
-function truncateJson(value, max) {
-  try {
-    const s = JSON.stringify(value);
-    if (s.length <= max) return s;
-    return `${s.slice(0, max - 1)}…`;
-  } catch {
-    return '';
   }
 }
