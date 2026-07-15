@@ -1427,19 +1427,19 @@ export function installMessageHandlers() {
             const sid = await resolveSidForOrg(org);
             if (!sid) return reply({ ok: false, reason: 'NO_SID' });
             try {
-              /** LIKE en servidor: evita paginar miles de ApexClass (muchas llamadas con restQueryAll). */
+              /** LIKE en servidor: evita paginar miles de ApexClass (Tooling API). */
               await loadExtensionSettings();
               const nameWhere = buildApexClassNameLikeWhere(getApexTestsClassNameLikePatterns());
               let rows;
               try {
-                rows = await restQueryAll(
+                rows = await toolingQueryAll(
                   org.instanceUrl,
                   sid,
                   org.apiVersion,
                   `SELECT Id, Name FROM ApexClass WHERE Status = 'Active' AND ${nameWhere} ORDER BY Name`
                 );
               } catch {
-                rows = await restQueryAll(
+                rows = await toolingQueryAll(
                   org.instanceUrl,
                   sid,
                   org.apiVersion,
@@ -1492,7 +1492,7 @@ export function installMessageHandlers() {
                 const inList = chunk.map((n) => `'${escapeSoqlLiteral(n)}'`).join(',');
                 const soql = `SELECT Id, Name FROM ApexClass WHERE Name IN (${inList})`;
                 try {
-                  const qrows = await restQuery(org.instanceUrl, sid, org.apiVersion, soql);
+                  const qrows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
                   const byName = new Map((qrows || []).map((row) => [row.Name, row.Id]));
                   for (const n of chunk) {
                     const id = byName.get(n);

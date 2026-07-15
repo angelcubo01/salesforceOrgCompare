@@ -603,7 +603,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
   switch (type) {
     case 'ApexClass': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -613,7 +613,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
     }
     case 'ApexTrigger': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -623,7 +623,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
     }
     case 'ApexPage': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -633,7 +633,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
     }
     case 'ApexComponent': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -717,7 +717,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
 export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
   switch (type) {
     case 'ApexClass': {
-      const rows = await restQueryAll(
+      const rows = await toolingQueryAll(
         instanceUrl,
         sid,
         apiVersion,
@@ -726,7 +726,7 @@ export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
       return rows.map((r) => ({ type, name: r.Name }));
     }
     case 'ApexTrigger': {
-      const rows = await restQueryAll(
+      const rows = await toolingQueryAll(
         instanceUrl,
         sid,
         apiVersion,
@@ -735,7 +735,7 @@ export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
       return rows.map((r) => ({ type, name: r.Name }));
     }
     case 'ApexPage': {
-      const rows = await restQueryAll(
+      const rows = await toolingQueryAll(
         instanceUrl,
         sid,
         apiVersion,
@@ -744,7 +744,7 @@ export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
       return rows.map((r) => ({ type, name: r.Name }));
     }
     case 'ApexComponent': {
-      const rows = await restQueryAll(
+      const rows = await toolingQueryAll(
         instanceUrl,
         sid,
         apiVersion,
@@ -872,7 +872,7 @@ function auraFileNameToDefType(fileName, bundleDeveloperName) {
 export async function fetchSourceListOnly(instanceUrl, sid, apiVersion, type, descriptor) {
   switch (type) {
     case 'ApexClass': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -889,7 +889,7 @@ export async function fetchSourceListOnly(instanceUrl, sid, apiVersion, type, de
       }];
     }
     case 'ApexTrigger': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -906,7 +906,7 @@ export async function fetchSourceListOnly(instanceUrl, sid, apiVersion, type, de
       }];
     }
     case 'ApexPage': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -923,7 +923,7 @@ export async function fetchSourceListOnly(instanceUrl, sid, apiVersion, type, de
       }];
     }
     case 'ApexComponent': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -1002,7 +1002,7 @@ export async function fetchSourceVersionSignature(instanceUrl, sid, apiVersion, 
 export async function fetchSource(instanceUrl, sid, apiVersion, type, descriptor) {
   switch (type) {
     case 'ApexClass': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -1019,7 +1019,7 @@ export async function fetchSource(instanceUrl, sid, apiVersion, type, descriptor
       }];
     }
     case 'ApexTrigger': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -1036,7 +1036,7 @@ export async function fetchSource(instanceUrl, sid, apiVersion, type, descriptor
       }];
     }
     case 'ApexPage': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -1053,7 +1053,7 @@ export async function fetchSource(instanceUrl, sid, apiVersion, type, descriptor
       }];
     }
     case 'ApexComponent': {
-      const rows = await restQuery(
+      const rows = await toolingQuery(
         instanceUrl,
         sid,
         apiVersion,

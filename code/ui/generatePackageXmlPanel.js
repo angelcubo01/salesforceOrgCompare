@@ -486,6 +486,10 @@ export function setupGeneratePackageXmlPanel() {
         showToast(t('toast.noPackageXml'), 'warn');
         return;
       }
+      if (!/<types\b/i.test(xml)) {
+        showToast(t('genPkg.noTypesInXml'), 'warn');
+        return;
+      }
 
       const orgId = state.leftOrgId;
       if (!orgId) {

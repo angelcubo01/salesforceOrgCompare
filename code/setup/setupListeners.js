@@ -53,6 +53,7 @@ export function wireSelectors() {
   const right = document.getElementById('rightOrg');
   const leftReauth = document.getElementById('leftReauthBtn');
   const rightReauth = document.getElementById('rightReauthBtn');
+  if (!left || !right) return;
   left.addEventListener('change', () => {
     if (state.selectedItem) {
       saveScrollPosition(state.selectedItem, state.leftOrgId, state.rightOrgId);
@@ -193,18 +194,22 @@ export function wireSelectors() {
     }
   });
 
-  leftReauth.addEventListener('click', async () => {
-    if (!state.leftOrgId) return;
-    const orgId = state.leftOrgId;
-    await bg({ type: 'auth:reauth', orgId });
-    void pollAuthAfterReauth(orgId);
-  });
-  rightReauth.addEventListener('click', async () => {
-    if (!state.rightOrgId) return;
-    const orgId = state.rightOrgId;
-    await bg({ type: 'auth:reauth', orgId });
-    void pollAuthAfterReauth(orgId);
-  });
+  if (leftReauth) {
+    leftReauth.addEventListener('click', async () => {
+      if (!state.leftOrgId) return;
+      const orgId = state.leftOrgId;
+      await bg({ type: 'auth:reauth', orgId });
+      void pollAuthAfterReauth(orgId);
+    });
+  }
+  if (rightReauth) {
+    rightReauth.addEventListener('click', async () => {
+      if (!state.rightOrgId) return;
+      const orgId = state.rightOrgId;
+      await bg({ type: 'auth:reauth', orgId });
+      void pollAuthAfterReauth(orgId);
+    });
+  }
 
   const swapBtn = document.getElementById('swapOrgsBtn');
   if (swapBtn) {
@@ -280,6 +285,7 @@ export function wireSelectors() {
 export function setupResizable() {
   const sidebar = document.querySelector('.sidebar');
   const resizeHandle = document.querySelector('.resize-handle');
+  if (!sidebar || !resizeHandle) return;
   let isResizing = false;
   let layoutAfterResize = null;
 
@@ -317,14 +323,18 @@ export function setupResizable() {
 
 export function setupDragAndDrop() {
   const list = document.getElementById('leftList');
+  if (!list) return;
   let draggedElement = null;
   let draggedIndex = null;
   let placeholder = null;
 
   list.addEventListener('dragstart', (e) => {
-    draggedElement = e.target;
-    draggedIndex = parseInt(e.target.getAttribute('data-item-index'));
-    e.target.classList.add('dragging');
+    const row = e.target?.closest?.('li[data-item-index]');
+    if (!row) return;
+    draggedElement = row;
+    draggedIndex = parseInt(row.getAttribute('data-item-index'), 10);
+    if (!Number.isFinite(draggedIndex)) return;
+    row.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
     
     
@@ -336,7 +346,8 @@ export function setupDragAndDrop() {
   });
 
   list.addEventListener('dragend', (e) => {
-    e.target.classList.remove('dragging');
+    const row = e.target?.closest?.('li[data-item-index]');
+    if (row) row.classList.remove('dragging');
     
     // Remove placeholder
     if (placeholder && placeholder.parentNode) {
@@ -381,11 +392,12 @@ export function setupDragAndDrop() {
       if (newIndex !== draggedIndex && newIndex >= 0 && newIndex < state.savedItems.length) {
         // Get the current display order of items
         const displayOrder = Array.from(list.children)
-          .filter(child => child.tagName === 'LI')
-          .map(li => {
-            const displayIndex = parseInt(li.getAttribute('data-item-index'));
-            return state.savedItems[displayIndex];
-          });
+          .filter((child) => child.tagName === 'LI')
+          .map((li) => {
+            const displayIndex = parseInt(li.getAttribute('data-item-index'), 10);
+            return Number.isFinite(displayIndex) ? state.savedItems[displayIndex] : null;
+          })
+          .filter(Boolean);
         
         // Reorder the items in the display order
         const draggedItem = displayOrder[draggedIndex];
@@ -609,7 +621,9 @@ export function setupDiffNavigation() {
   }
 
   document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+    const target = e.target;
+    if (!target || typeof target.tagName !== 'string') return;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') return;
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
       if (prevBtn) prevBtn.click();

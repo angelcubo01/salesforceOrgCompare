@@ -47,6 +47,8 @@ const MONACO_PATH_MARKERS = [
   'monaco-editor/min/vs/'
 ];
 
+const DOCKVIEW_PATH_MARKERS = ['dockview-core', 'vendor/dockview-core'];
+
 const BENIGN_MESSAGE_MARKERS = [
   'ResizeObserver loop',
   'no diff result available',
@@ -56,7 +58,9 @@ const BENIGN_MESSAGE_MARKERS = [
   'TextModel got disposed before DiffEditorWidget',
   'Receiving end does not exist',
   'Extension context invalidated',
-  'The message port closed before a response was received'
+  'The message port closed before a response was received',
+  "Failed to execute 'appendChild' on 'Node'",
+  'parentElement'
 ];
 
 const OPERATIONAL_MESSAGE_MARKERS = [
@@ -71,6 +75,74 @@ const OPERATIONAL_MESSAGE_MARKERS = [
 ];
 
 const SFOC_STACK_MARKERS = ['/code/', '/shared/', '/background/', '/popup/'];
+
+/**
+ * Fallos de red, Salesforce o validación de entrada que no son bugs de aplicación.
+ * @param {string} text
+ */
+export function isSalesforceOrNetworkOperationalText(text) {
+  const hay = String(text || '');
+  if (!hay) return false;
+
+  if (
+    hay.includes('Failed to fetch') ||
+    hay.includes('NetworkError') ||
+    hay.includes('ERR_CONNECTION') ||
+    hay.includes('ERR_NETWORK') ||
+    hay.includes('ERR_INTERNET_DISCONNECTED')
+  ) {
+    return true;
+  }
+
+  if (
+    hay.includes('Metadata retrieve finished without ZIP') ||
+    hay.includes('Metadata SOAP call failed') ||
+    hay.includes('Metadata retrieve agotó el tiempo de espera') ||
+    hay.includes('package.xml sin bloques')
+  ) {
+    return true;
+  }
+
+  if (
+    hay.includes('is not supported') ||
+    /unknown exception occurred/i.test(hay) ||
+    hay.includes('INVALID_SESSION_ID')
+  ) {
+    return true;
+  }
+
+  if (
+    hay.includes('Bulk job failed') ||
+    hay.includes('unknown version') ||
+    hay.includes('InvalidUrl')
+  ) {
+    return true;
+  }
+
+  if (hay.includes('Message type not handled') || hay.includes('reload the extension')) {
+    return true;
+  }
+
+  if (
+    hay.includes('Trace is not active') ||
+    hay.includes('ExpirationDate must be in the future') ||
+    /maximum.*MB of debug logs/i.test(hay) ||
+    hay.includes('Before you can edit trace flags') ||
+    hay.includes('ApexLog Body: HTTP')
+  ) {
+    return true;
+  }
+
+  if (
+    hay.includes('Could not load limits') ||
+    hay.includes('Access from current IP address is not allowed') ||
+    hay.includes('IP address is not allowed')
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 /**
  * @param {unknown} error
@@ -111,9 +183,15 @@ export function isBenignErrorText(text, context = {}) {
       if (filename.includes(m)) return true;
     }
     if (filename.includes('monaco') && filename.includes('worker')) return true;
+    for (const m of DOCKVIEW_PATH_MARKERS) {
+      if (filename.includes(m)) return true;
+    }
   }
 
   for (const m of MONACO_PATH_MARKERS) {
+    if (hay.includes(m)) return true;
+  }
+  for (const m of DOCKVIEW_PATH_MARKERS) {
     if (hay.includes(m)) return true;
   }
 
@@ -137,6 +215,8 @@ export function isOperationalError(error, context = {}) {
   for (const m of OPERATIONAL_MESSAGE_MARKERS) {
     if (hay.includes(m)) return true;
   }
+
+  if (isSalesforceOrNetworkOperationalText(hay)) return true;
 
   return false;
 }

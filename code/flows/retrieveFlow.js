@@ -13,7 +13,7 @@ import { updateDocumentTitle, updateFileMeta } from '../ui/documentMeta.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { renderEditor } from '../editor/editorRender.js';
 import { saveItemsToStorage } from '../core/persistence.js';
-import { reportBug } from '../../shared/posthogClient.js';
+import { handleToolError } from '../../shared/reportToolError.js';
 import { usageDescriptorFromItem } from '../../shared/usageLogEntry.js';
 import { t } from '../../shared/i18n.js';
 import { buildPackageDiffSummary } from '../../shared/packageDiffSummary.js';
@@ -359,7 +359,7 @@ export async function retrieveAndLoadFromZip(item) {
     }
   } catch (e) {
     dismissSpinnerToast();
-    reportBug(e, { artifact_type: 'Retrieve', phase: 'retrieve' });
+    void handleToolError(e, { artifact_type: 'Retrieve', phase: 'retrieve' });
     if (isCompareRetrieveActive(retrieveGeneration)) {
       await logRetrieveOnce({ ok: false, error: String(e || '') });
       showToast(t('toast.retrieveError'), 'error');

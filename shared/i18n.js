@@ -472,6 +472,7 @@ const translations = {
     'genPkg.download': 'Descargar package.xml',
     'genPkg.retrieveBtn': 'Retrieve y descargar ZIP',
     'genPkg.retrieving': 'Ejecutando retrieve…',
+    'genPkg.noTypesInXml': 'El package.xml debe incluir al menos un bloque <types>',
 
     // ── Metadata type compare panel ──
     'metadataTypeCompare.title': 'Comparar tipo de metadatos',
@@ -2856,6 +2857,7 @@ const translations = {
     'genPkg.download': 'Download package.xml',
     'genPkg.retrieveBtn': 'Retrieve and download ZIP',
     'genPkg.retrieving': 'Running retrieve…',
+    'genPkg.noTypesInXml': 'package.xml must include at least one <types> block',
 
     // ── Metadata type compare panel ──
     'metadataTypeCompare.title': 'Compare metadata type',
