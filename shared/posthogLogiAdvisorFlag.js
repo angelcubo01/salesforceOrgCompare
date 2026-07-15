@@ -9,7 +9,7 @@ import {
 } from './apexLogAiAdvisorConfig.js';
 import { readLogiAdvisorCache, writeLogiAdvisorCache, clearLogiAdvisorCache } from './logiAdvisorCache.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
-import { fetchLogiAdvisorRemoteConfig } from './fetchLogiAdvisorRemoteConfig.js';
+import { fetchLogiAdvisorRemoteConfig, LogiFlagDisabledError } from './fetchLogiAdvisorRemoteConfig.js';
 import {
   isEncryptedPosthogPayload,
   isUsableFeatureFlagPayload,
@@ -93,6 +93,10 @@ async function fetchLogiConfigViaProxy(cached, rawPosthogPayload) {
     }
     return remote;
   } catch (e) {
+    if (e instanceof LogiFlagDisabledError) {
+      if (POSTHOG_DEBUG) console.log('[posthog] logi advisor flag disabled (proxy)');
+      return null;
+    }
     if (POSTHOG_DEBUG) {
       console.warn('[posthog] logi advisor remote config fetch failed', e);
     }
@@ -194,10 +198,11 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
   }
 
   const shouldTryProxy =
-    !ph ||
-    !flagsOk ||
-    isEncryptedPosthogPayload(rawPayload) ||
-    (flagActive && !isUsableFeatureFlagPayload(rawPayload));
+    flagActive &&
+    (!ph ||
+      !flagsOk ||
+      isEncryptedPosthogPayload(rawPayload) ||
+      !isUsableFeatureFlagPayload(rawPayload));
 
   if (shouldTryProxy) {
     const remote = await fetchLogiConfigViaProxy(cached, rawPayload);
@@ -234,10 +239,7 @@ export async function bootstrapLogiAdvisor(opts = {}) {
     dispatchLogiAdvisorReady(config);
     return config;
   } catch {
-    cachedConfig = await readLogiAdvisorCache();
-    if (!isLogiAdvisorOperational(cachedConfig)) {
-      cachedConfig = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
-    }
+    cachedConfig = await clearLogiAdvisorCache();
     dispatchLogiAdvisorReady(cachedConfig);
     return cachedConfig;
   }

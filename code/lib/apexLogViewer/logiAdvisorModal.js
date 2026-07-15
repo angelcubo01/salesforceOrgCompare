@@ -615,13 +615,9 @@ function isModalBusy(modal) {
  * @param {object} opts
  */
 async function ensureLogiAdvisorConfigLoaded() {
-  const cached = getCachedLogiAdvisorConfig();
-  const needsBootstrap =
-    !cached.enabled || !cached.showButton || !isLogiAdvisorOperational(cached);
-
   await Promise.allSettled([
-    bg({ type: 'aiAdvisor:bootstrap', force: needsBootstrap }),
-    bootstrapLogiAdvisor({ force: needsBootstrap })
+    bg({ type: 'aiAdvisor:bootstrap', force: true }),
+    bootstrapLogiAdvisor({ force: true })
   ]);
   customQuickActionPrompts = await loadLogiQuickActionPrompts();
 }
@@ -690,27 +686,6 @@ async function refreshConfig() {
   if (!btnEl) return;
   btnEl.hidden = !(pageShow || swShow);
   btnEl.textContent = t('apexLogViewer.logi.button');
-
-  if (!pageShow && !swShow) {
-    console.warn('[logi] botón oculto', {
-      telemetryRequired,
-      page: {
-        enabled: fromPage.enabled,
-        showButton: fromPage.showButton,
-        operational: pageOperational,
-        transport: fromPage.transport,
-        hasProxyUrl: Boolean(fromPage.proxyUrl),
-        hasProxyAuth: Boolean(fromPage.proxyAuthToken)
-      },
-      serviceWorker: advisorConfig
-        ? {
-            enabled: advisorConfig.enabled,
-            showButton: advisorConfig.showButton,
-            operational: advisorConfig.operational
-          }
-        : null
-    });
-  }
 }
 
 function getSelectedLogiModel() {
