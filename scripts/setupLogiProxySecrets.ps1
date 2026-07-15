@@ -1,57 +1,47 @@
-# Configura secrets del Worker Logi en Cloudflare (lee .env de la raiz del repo).
-# Uso: .\scripts\setupLogiProxySecrets.ps1
+# Configure sfoc-logi-proxy Worker secrets from repo .env
+# Usage: .\scripts\setupLogiProxySecrets.ps1
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path $PSScriptRoot -Parent
+$root = Split-Path -Parent $PSScriptRoot
 $envFile = Join-Path $root '.env'
 $proxyDir = Join-Path $root 'services\logi-proxy'
 
 if (-not (Test-Path $envFile)) {
-  Write-Error "No existe $envFile - copia .env.example y rellena las claves."
+  Write-Error "Missing $envFile - copy .env.example and fill values."
 }
 
-Get-Content $envFile | ForEach-Object {
-  if ($_ -match '^\s*([^#=]+)=(.*)$') {
-    $name = $matches[1].Trim()
-    $value = $matches[2].Trim().Trim('"').Trim("'")
-    Set-Item -Path "env:$($name)" -Value $value
+function Read-DotEnv($path) {
+  $map = @{}
+  Get-Content $path | ForEach-Object {
+    $line = $_.Trim()
+    if (-not $line -or $line.StartsWith('#')) { return }
+    $idx = $line.IndexOf('=')
+    if ($idx -lt 1) { return }
+    $key = $line.Substring(0, $idx).Trim()
+    $val = $line.Substring($idx + 1).Trim()
+    if ($val.StartsWith('"') -and $val.EndsWith('"')) { $val = $val.Substring(1, $val.Length - 2) }
+    $map[$key] = $val
   }
+  return $map
 }
 
-if (-not $env:OPENROUTER_API_KEY) {
-  Write-Error 'Falta OPENROUTER_API_KEY en .env'
-}
-if (-not $env:LOGI_PROXY_AUTH_TOKEN) {
-  Write-Error 'Falta LOGI_PROXY_AUTH_TOKEN en .env'
+$vars = Read-DotEnv $envFile
+
+$secrets = @{
+  OPENROUTER_API_KEY       = $vars['OPENROUTER_API_KEY']
+  LOGI_PROXY_AUTH_TOKEN    = $vars['LOGI_PROXY_AUTH_TOKEN']
+  POSTHOG_PERSONAL_API_KEY = $vars['POSTHOG_PERSONAL_API_KEY']
+  POSTHOG_PROJECT_TOKEN    = $vars['POSTHOG_PROJECT_TOKEN']
+  POSTHOG_PROJECT_ID       = $vars['POSTHOG_PROJECT_ID']
 }
 
-Push-Location $proxyDir
-try {
-  Write-Host 'Subiendo OPENROUTER_API_KEY...'
-  $env:OPENROUTER_API_KEY | npx wrangler secret put OPENROUTER_API_KEY
-  Write-Host 'Subiendo PROXY_SHARED_SECRET...'
-  $env:LOGI_PROXY_AUTH_TOKEN | npx wrangler secret put PROXY_SHARED_SECRET
-  if ($env:POSTHOG_PERSONAL_API_KEY) {
-    Write-Host 'Subiendo POSTHOG_PERSONAL_API_KEY...'
-    $env:POSTHOG_PERSONAL_API_KEY | npx wrangler secret put POSTHOG_PERSONAL_API_KEY
-  } else {
-    Write-Warning 'Falta POSTHOG_PERSONAL_API_KEY en .env (necesaria para desencriptar remote config).'
+foreach ($entry in $secrets.GetEnumerator()) {
+  if (-not $entry.Value) {
+    Write-Warning "Skip $($entry.Key): empty in .env"
+    continue
   }
-  if ($env:POSTHOG_FF_SECURE_API_KEY) {
-    Write-Host 'Subiendo POSTHOG_FF_SECURE_API_KEY (opcional, no desencripta remote config)...'
-    $env:POSTHOG_FF_SECURE_API_KEY | npx wrangler secret put POSTHOG_FF_SECURE_API_KEY
-  }
-  if ($env:POSTHOG_PROJECT_TOKEN) {
-    Write-Host 'Subiendo POSTHOG_PROJECT_TOKEN...'
-    $env:POSTHOG_PROJECT_TOKEN | npx wrangler secret put POSTHOG_PROJECT_TOKEN
-  } elseif ($env:POSTHOG_API_KEY) {
-    Write-Host 'Subiendo POSTHOG_PROJECT_TOKEN (desde POSTHOG_API_KEY)...'
-    $env:POSTHOG_API_KEY | npx wrangler secret put POSTHOG_PROJECT_TOKEN
-  } else {
-    Write-Warning 'Falta POSTHOG_PROJECT_TOKEN o POSTHOG_API_KEY en .env (remote config).'
-  }
-  Write-Host 'Secrets OK. Ejecuta: npm run deploy'
+  Write-Host "Setting $($entry.Key)..."
+  $entry.Value | npx wrangler secret put $entry.Key --cwd $proxyDir
 }
-finally {
-  Pop-Location
-}
+
+Write-Host 'Done. Reload the extension and reopen an Apex log viewer.'

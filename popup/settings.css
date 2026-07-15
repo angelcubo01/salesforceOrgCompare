@@ -437,3 +437,42 @@ html[data-ui-theme='light'] .settings-secondary:hover {
   background: var(--sfoc-light-bg-hover);
   border-color: var(--sfoc-light-border);
 }
+
+.settings-logi-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.settings-logi-mode-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  padding: 10px 12px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.settings-logi-mode-card:has(input:checked) {
+  border-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.settings-logi-mode-title {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.settings-logi-mode-desc {
+  grid-column: 2;
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+.settings-logi-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #334155;
+}

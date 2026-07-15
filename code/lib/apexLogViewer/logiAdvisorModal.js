@@ -4,6 +4,7 @@ import { getCurrentLang, t } from '../../../shared/i18n.js';
 import { bg } from '../../core/bridge.js';
 import { bootstrapLogiAdvisor, getCachedLogiAdvisorConfig, LOGI_ADVISOR_READY_EVENT } from '../../../shared/posthogLogiAdvisorFlag.js';
 import { isLogiAdvisorOperational } from '../../../shared/apexLogAiAdvisorConfig.js';
+import { formatLogiModelLabel } from '../../../shared/logiModelLabels.js';
 import { LOGI_ADVISOR_STORAGE_KEY } from '../../../shared/logiAdvisorCache.js';
 import {
   buildLogiSessionKey,
@@ -17,9 +18,18 @@ import {
   fetchLogLines,
   fetchParsedSection,
   formatOrgQueryToolResult,
+  getDefaultQuickActionUserMessage,
   quickActionUserMessage
 } from '../../../shared/apexLogAiContext.js';
 import { hashLogiSessionKey } from '../../../shared/logiAiMetrics.js';
+import {
+  buildLogiQuickActionPromptsExport,
+  getLogiQuickActionPromptsSnapshot,
+  importLogiQuickActionPromptStore,
+  loadLogiQuickActionPrompts,
+  LOGI_QUICK_ACTION_PROMPTS_KEY,
+  saveLogiQuickActionPrompt
+} from '../../../shared/logiQuickActionPrompts.js';
 
 /**
  * @param {string} action
@@ -44,6 +54,10 @@ const THINKING_BUBBLE_HTML = `<div class="logi-advisor-msg logi-advisor-msg--ass
 
 const QUICK_ACTIONS_COLLAPSED_KEY = 'sfocLogiQuickActionsCollapsed';
 const THINKING_ROTATE_MS = 10_000;
+
+const PENCIL_ICON_SVG = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.086 4.5l1.414 1.414 1.988-1.988a.25.25 0 0 0 0-.354l-1.061-1.06Z"/></svg>`;
+
+const LADYBUG_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3.5c-.9 0-1.65.55-1.94 1.32C8.4 4.45 7.05 4.8 5.8 5.55 4.55 6.3 3.65 7.45 3.2 8.85 2.45 9.2 1.9 9.95 1.9 10.85c0 .95.65 1.75 1.55 1.98.75 2.35 2.95 4.07 5.55 4.07h6c2.6 0 4.8-1.72 5.55-4.07.9-.23 1.55-1.03 1.55-1.98 0-.9-.55-1.65-1.3-2-.45-1.4-1.35-2.55-2.6-3.3-1.25-.75-2.6-1.1-4.26-1.27C13.65 4.05 12.9 3.5 12 3.5Z"/><path fill="currentColor" opacity="0.35" d="M12 7.5v11"/><circle cx="8.25" cy="11.25" r="1.35" fill="currentColor" opacity="0.45"/><circle cx="15.75" cy="11.25" r="1.35" fill="currentColor" opacity="0.45"/><circle cx="9.75" cy="14.75" r="1.1" fill="currentColor" opacity="0.45"/><circle cx="14.25" cy="14.75" r="1.1" fill="currentColor" opacity="0.45"/><circle cx="12" cy="17.25" r="1.1" fill="currentColor" opacity="0.45"/></svg>`;
 
 /** @type {Record<'default' | 'tools' | 'org', string[]>} */
 const THINKING_MESSAGE_KEYS = {
@@ -71,7 +85,7 @@ const THINKING_MESSAGE_KEYS = {
 const QUICK_ACTION_META = {
   debug_errors: {
     tone: 'rose',
-    icon: `<svg viewBox="0 0 16 16" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M4.978.855a.75.75 0 0 1 .696.662l.063 1.093c.178.024.355.058.528.096l1.06-1.06a.75.75 0 1 1 1.06 1.06l-1.062 1.062c.226.218.42.47.572.746l1.185-.296a.75.75 0 0 1 .932.932l-.296 1.185a3.5 3.5 0 0 1 .746.572l1.06-1.06a.75.75 0 1 1 1.061 1.06l-1.062 1.061c.038.173.072.35.096.528l1.093.063a.75.75 0 0 1-.662.696l-1.093.063a3.5 3.5 0 0 1-.096.528l1.06 1.061a.75.75 0 0 1-1.06 1.06l-1.062-1.06a3.5 3.5 0 0 1-.746.572l.296 1.185a.75.75 0 0 1-.932.932l-1.185-.296a3.5 3.5 0 0 1-.572.746l1.061 1.06a.75.75 0 1 1-1.06 1.06l-1.061-1.062a3.5 3.5 0 0 1-.528.096l-.063 1.093a.75.75 0 0 1-1.396 0l-.063-1.093a3.5 3.5 0 0 1-.528-.096l-1.061 1.062a.75.75 0 1 1-1.06-1.06l1.062-1.061a3.5 3.5 0 0 1-.746-.572l-1.185.296a.75.75 0 0 1-.932-.932l.296-1.185a3.5 3.5 0 0 1-.572-.746L2.28 9.28a.75.75 0 0 1 1.06-1.06l1.061 1.062c.173-.038.35-.072.528-.096L4.775 8.09a.75.75 0 0 1 .696-.662ZM9 2.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM6.5 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm3 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm-3 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm3 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"/></svg>`
+    icon: LADYBUG_ICON_SVG
   },
   explain_flow: {
     tone: 'sky',
@@ -100,7 +114,10 @@ const QUICK_ACTION_META = {
 /** @typedef {{ role: string, content?: string, quickActionId?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
 
 let modalEl = null;
+let quickActionEditModalEl = null;
 let btnEl = null;
+/** @type {ReturnType<typeof getLogiQuickActionPromptsSnapshot> | null} */
+let customQuickActionPrompts = null;
 /** @type {ChatMessage[]} */
 let messages = [];
 let iteration = 0;
@@ -597,15 +614,33 @@ function isModalBusy(modal) {
 /**
  * @param {object} opts
  */
+async function ensureLogiAdvisorConfigLoaded() {
+  const cached = getCachedLogiAdvisorConfig();
+  const needsBootstrap =
+    !cached.enabled || !cached.showButton || !isLogiAdvisorOperational(cached);
+
+  await Promise.allSettled([
+    bg({ type: 'aiAdvisor:bootstrap', force: needsBootstrap }),
+    bootstrapLogiAdvisor({ force: needsBootstrap })
+  ]);
+  customQuickActionPrompts = await loadLogiQuickActionPrompts();
+}
+
 export async function mountLogiAdvisor(opts) {
   const { getParsed, getRawContent, payload } = opts;
   currentAdvisorPayload = payload || null;
   btnEl = document.getElementById('logiAdvisorBtn');
   if (!btnEl) return;
 
-  await bg({ type: 'aiAdvisor:bootstrap', force: true });
-  await bootstrapLogiAdvisor({ force: true });
   await refreshConfig();
+
+  try {
+    await ensureLogiAdvisorConfigLoaded();
+  } catch (err) {
+    console.warn('[logi] bootstrap failed', err);
+  } finally {
+    await refreshConfig();
+  }
 
   document.addEventListener(LOGI_ADVISOR_READY_EVENT, () => {
     void refreshConfig();
@@ -619,6 +654,10 @@ export async function mountLogiAdvisor(opts) {
       if (area === 'local' && changes[LOGI_SESSION_STORAGE_KEY]) {
         void onLogiSessionsStorageChanged(changes[LOGI_SESSION_STORAGE_KEY].newValue);
       }
+      if (area === 'local' && changes[LOGI_QUICK_ACTION_PROMPTS_KEY]) {
+        customQuickActionPrompts = getLogiQuickActionPromptsSnapshot();
+        if (modalEl && !modalEl.hidden) renderQuickActions(modalEl);
+      }
     });
   }
 
@@ -627,6 +666,8 @@ export async function mountLogiAdvisor(opts) {
       getParsed,
       getRawContent,
       payload: payload || {}
+    }).catch((err) => {
+      console.error('[logi] open modal failed', err);
     });
   });
 }
@@ -636,14 +677,92 @@ async function refreshConfig() {
   const res = await bg({ type: 'aiAdvisor:getConfig' });
   advisorConfig = res?.config || null;
 
+  const telemetryRequired = res?.telemetryRequired === true;
+  const pageOperational = isLogiAdvisorOperational(fromPage);
   const pageShow =
-    fromPage.enabled && fromPage.showButton && isLogiAdvisorOperational(fromPage) && !res?.telemetryRequired;
+    fromPage.enabled && fromPage.showButton && pageOperational && !telemetryRequired;
   const swShow =
-    advisorConfig?.enabled && advisorConfig?.showButton && advisorConfig?.operational && !res?.telemetryRequired;
+    advisorConfig?.enabled &&
+    advisorConfig?.showButton &&
+    advisorConfig?.operational &&
+    !telemetryRequired;
 
   if (!btnEl) return;
   btnEl.hidden = !(pageShow || swShow);
   btnEl.textContent = t('apexLogViewer.logi.button');
+
+  if (!pageShow && !swShow) {
+    console.warn('[logi] botón oculto', {
+      telemetryRequired,
+      page: {
+        enabled: fromPage.enabled,
+        showButton: fromPage.showButton,
+        operational: pageOperational,
+        transport: fromPage.transport,
+        hasProxyUrl: Boolean(fromPage.proxyUrl),
+        hasProxyAuth: Boolean(fromPage.proxyAuthToken)
+      },
+      serviceWorker: advisorConfig
+        ? {
+            enabled: advisorConfig.enabled,
+            showButton: advisorConfig.showButton,
+            operational: advisorConfig.operational
+          }
+        : null
+    });
+  }
+}
+
+function getSelectedLogiModel() {
+  const sel = modalEl?.querySelector('#logiAdvisorModel');
+  if (!sel || sel.hidden) return undefined;
+  const v = String(sel.value || '').trim();
+  return v || undefined;
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+function updateLogiHeaderUi(modal) {
+  const cfg = advisorConfig;
+  const badge = modal.querySelector('#logiAdvisorModeBadge');
+  const modelSel = modal.querySelector('#logiAdvisorModel');
+  if (!badge || !modelSel) return;
+
+  const mode = cfg?.requestedMode || cfg?.logiMode || 'free';
+  const fallback = cfg?.modeFallback === true;
+  let badgeText = t('apexLogViewer.logi.modeFree');
+  if (mode === 'byok' && !fallback) badgeText = t('apexLogViewer.logi.modeByok');
+  else if (fallback) badgeText = t('apexLogViewer.logi.modeFreeFallback');
+
+  badge.textContent = badgeText;
+  badge.hidden = false;
+  badge.classList.toggle('logi-advisor-mode-badge--fallback', fallback);
+
+  const pickerAllowed = cfg?.modelPickerAllowed === true;
+  modelSel.hidden = !pickerAllowed;
+  if (!pickerAllowed) return;
+
+  const options = cfg?.modelPickerOptions || [];
+  const current = cfg?.userSettings?.logiSelectedPremiumModel || '';
+  modelSel.innerHTML = '';
+  const autoOpt = document.createElement('option');
+  autoOpt.value = '__auto__';
+  autoOpt.textContent = t('apexLogViewer.logi.modelAuto');
+  modelSel.appendChild(autoOpt);
+  for (const id of options) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = formatLogiModelLabel(id);
+    if (current === id) opt.selected = true;
+    modelSel.appendChild(opt);
+  }
+  if (!current) modelSel.value = '__auto__';
+}
+
+function buildChatMessageExtras() {
+  const selected = getSelectedLogiModel();
+  return selected ? { selectedModel: selected } : {};
 }
 
 /**
@@ -686,15 +805,24 @@ function ensureModal() {
         <span class="logi-advisor-avatar">${LOGI_AVATAR_SVG}</span>
         <div class="logi-advisor-header-text">
           <h2 id="logiAdvisorTitle"></h2>
-          <span class="logi-advisor-beta" id="logiAdvisorBeta"></span>
+          <div class="logi-advisor-header-meta">
+            <span class="logi-advisor-beta" id="logiAdvisorBeta"></span>
+            <span class="logi-advisor-mode-badge" id="logiAdvisorModeBadge" hidden></span>
+            <select id="logiAdvisorModel" class="logi-advisor-model-select" hidden></select>
+          </div>
         </div>
         <button type="button" class="logi-advisor-close" data-close="1" aria-label="Close">×</button>
       </header>
       <div class="logi-advisor-quick-section" id="logiAdvisorQuickSection">
-        <button type="button" class="logi-advisor-quick-toggle" id="logiAdvisorQuickToggle" aria-expanded="true">
-          <span class="logi-advisor-quick-toggle-label" id="logiAdvisorQuickToggleLabel"></span>
-          <span class="logi-advisor-quick-toggle-chevron" aria-hidden="true"></span>
-        </button>
+        <div class="logi-advisor-quick-toolbar">
+          <button type="button" class="logi-advisor-quick-toggle" id="logiAdvisorQuickToggle" aria-expanded="true">
+            <span class="logi-advisor-quick-toggle-label" id="logiAdvisorQuickToggleLabel"></span>
+            <span class="logi-advisor-quick-toggle-chevron" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="logi-advisor-quick-io-btn" id="logiAdvisorQuickExport" aria-label=""></button>
+          <button type="button" class="logi-advisor-quick-io-btn" id="logiAdvisorQuickImport" aria-label=""></button>
+          <input type="file" id="logiAdvisorQuickImportFile" class="visually-hidden" accept=".json,application/json" />
+        </div>
         <div class="logi-advisor-quick" id="logiAdvisorQuick"></div>
       </div>
       <div class="logi-advisor-messages ph-no-capture" id="logiAdvisorMessages"></div>
@@ -718,15 +846,42 @@ function ensureModal() {
     el.addEventListener('click', () => closeLogiModal());
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modalEl && !modalEl.hidden) closeLogiModal();
+    if (e.key !== 'Escape') return;
+    if (quickActionEditModalEl && !quickActionEditModalEl.hidden) {
+      closeQuickActionEditModal();
+      return;
+    }
+    if (modalEl && !modalEl.hidden) closeLogiModal();
   });
 
   modalEl.querySelector('#logiAdvisorQuickToggle')?.addEventListener('click', () => {
     setQuickActionsCollapsed(modalEl, !readQuickActionsCollapsed());
   });
 
+  modalEl.querySelector('#logiAdvisorQuickExport')?.addEventListener('click', () => {
+    exportQuickActionPrompts();
+  });
+
+  modalEl.querySelector('#logiAdvisorQuickImport')?.addEventListener('click', () => {
+    modalEl.querySelector('#logiAdvisorQuickImportFile')?.click();
+  });
+
+  modalEl.querySelector('#logiAdvisorQuickImportFile')?.addEventListener('change', (e) => {
+    void importQuickActionPromptsFromFile(/** @type {HTMLInputElement} */ (e.target));
+  });
+
   modalEl.querySelector('#logiAdvisorSend')?.addEventListener('click', () => {
     void onSendFromInput();
+  });
+
+  modalEl.querySelector('#logiAdvisorModel')?.addEventListener('change', (e) => {
+    const value = e.target?.value === '__auto__' ? null : e.target?.value || null;
+    void bg({
+      type: 'aiAdvisor:saveSettings',
+      logiSelectedPremiumModel: value
+    }).then((res) => {
+      if (res?.config) advisorConfig = res.config;
+    });
   });
   modalEl.querySelector('#logiAdvisorStop')?.addEventListener('click', () => {
     void cancelActiveGeneration(modalEl);
@@ -754,6 +909,7 @@ function ensureModal() {
 
 export function closeLogiModal() {
   if (!modalEl) return;
+  closeQuickActionEditModal();
   if (boundSessionKey) {
     void persistRuntime(boundSessionKey);
   }
@@ -774,7 +930,10 @@ async function persistSession(modal, sessionKey) {
  * @param {object} ctx
  */
 async function openLogiModal(ctx) {
+  await refreshConfig();
   const modal = ensureModal();
+  modal.removeAttribute('aria-hidden');
+  closeQuickActionEditModal();
   const sessionKey = buildLogiSessionKey(ctx.payload || {});
   const rt = getRuntime(sessionKey);
   const wasProcessingInMemory = rt.processing;
@@ -831,6 +990,7 @@ async function openLogiModal(ctx) {
     betaEl.textContent = advisorConfig?.beta ? t('apexLogViewer.logi.beta') : '';
     betaEl.hidden = !advisorConfig?.beta;
   }
+  updateLogiHeaderUi(modal);
   if (privacyEl) privacyEl.textContent = t('apexLogViewer.logi.privacyNotice');
   if (sendBtn) sendBtn.textContent = t('apexLogViewer.logi.send');
   if (stopBtn) {
@@ -843,6 +1003,7 @@ async function openLogiModal(ctx) {
   }
   if (closeBtn) closeBtn.setAttribute('aria-label', t('apexLogViewer.logi.close'));
 
+  customQuickActionPrompts = await loadLogiQuickActionPrompts();
   renderQuickActions(modal);
   applyQuickActionsCollapsed(modal, readQuickActionsCollapsed());
   syncBusyUi(modal);
@@ -913,7 +1074,17 @@ function setQuickActionsCollapsed(modal, collapsed) {
 function renderQuickActions(modal) {
   const section = modal.querySelector('#logiAdvisorQuickSection');
   const mount = modal.querySelector('#logiAdvisorQuick');
+  const exportBtn = modal.querySelector('#logiAdvisorQuickExport');
+  const importBtn = modal.querySelector('#logiAdvisorQuickImport');
   if (!mount || !section) return;
+  if (exportBtn) {
+    exportBtn.textContent = t('apexLogViewer.logi.quickActionsExport');
+    exportBtn.title = t('apexLogViewer.logi.quickActionsExport');
+  }
+  if (importBtn) {
+    importBtn.textContent = t('apexLogViewer.logi.quickActionsImport');
+    importBtn.title = t('apexLogViewer.logi.quickActionsImport');
+  }
   const actions = advisorConfig?.quickActions || [];
   if (!actions.length) {
     section.hidden = true;
@@ -926,10 +1097,14 @@ function renderQuickActions(modal) {
     .map((id) => {
       const meta = QUICK_ACTION_META[id] || { tone: 'sky', icon: LOGI_AVATAR_SVG };
       const label = labels[id] || id;
-      return `<button type="button" class="logi-advisor-chip logi-advisor-chip--${meta.tone}" data-action="${escapeHtml(id)}">
-        <span class="logi-advisor-chip-icon">${meta.icon}</span>
-        <span class="logi-advisor-chip-label">${escapeHtml(label)}</span>
-      </button>`;
+      const isCustom = Boolean(getCustomQuickActionPrompt(id));
+      return `<div class="logi-advisor-chip-wrap logi-advisor-chip-wrap--${meta.tone}">
+        <button type="button" class="logi-advisor-chip logi-advisor-chip--${meta.tone}" data-action="${escapeHtml(id)}">
+          <span class="logi-advisor-chip-icon">${meta.icon}</span>
+          <span class="logi-advisor-chip-label">${escapeHtml(label)}</span>
+        </button>
+        <button type="button" class="logi-advisor-chip-edit${isCustom ? ' logi-advisor-chip-edit--custom' : ''}" data-edit-action="${escapeHtml(id)}" aria-label="${escapeHtml(t('apexLogViewer.logi.quickActionEdit'))}" title="${escapeHtml(t('apexLogViewer.logi.quickActionEdit'))}">${PENCIL_ICON_SVG}</button>
+      </div>`;
     })
     .join('');
   mount.querySelectorAll('.logi-advisor-chip').forEach((btn) => {
@@ -937,10 +1112,184 @@ function renderQuickActions(modal) {
       const actionId = btn.getAttribute('data-action');
       if (!actionId) return;
       const lang = getCurrentLang() === 'en' ? 'en' : 'es';
-      void enqueueUserMessage(quickActionUserMessage(actionId, lang), modal, { quickActionId: actionId });
+      void enqueueUserMessage(
+        quickActionUserMessage(actionId, lang, customQuickActionPrompts),
+        modal,
+        { quickActionId: actionId }
+      );
       trackLogiUi('quick_action', { sfoc_quick_action: actionId });
     });
   });
+  mount.querySelectorAll('.logi-advisor-chip-edit').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const actionId = btn.getAttribute('data-edit-action');
+      if (!actionId) return;
+      openQuickActionEditModal(actionId, modal);
+    });
+  });
+}
+
+function getPromptLang() {
+  return getCurrentLang() === 'en' ? 'en' : 'es';
+}
+
+/**
+ * @param {string} actionId
+ */
+function getCustomQuickActionPrompt(actionId) {
+  const lang = getPromptLang();
+  return customQuickActionPrompts?.[lang]?.[actionId] || '';
+}
+
+/**
+ * @param {string} actionId
+ * @param {HTMLElement} parentModal
+ */
+function openQuickActionEditModal(actionId, parentModal) {
+  ensureQuickActionEditModal();
+  if (!quickActionEditModalEl) return;
+  const lang = getPromptLang();
+  const labels = getQuickActionLabels();
+  const title = quickActionEditModalEl.querySelector('#logiQuickActionEditTitle');
+  const textarea = quickActionEditModalEl.querySelector('#logiQuickActionEditText');
+  const status = quickActionEditModalEl.querySelector('#logiQuickActionEditStatus');
+  if (!textarea) return;
+
+  quickActionEditModalEl.dataset.actionId = actionId;
+  if (title) {
+    title.textContent = t('apexLogViewer.logi.quickActionEditTitle', {
+      action: labels[actionId] || actionId
+    });
+  }
+  textarea.value =
+    getCustomQuickActionPrompt(actionId) || getDefaultQuickActionUserMessage(actionId, lang);
+  if (status) status.textContent = '';
+  quickActionEditModalEl.hidden = false;
+  parentModal.setAttribute('aria-hidden', 'true');
+  textarea.focus();
+}
+
+function closeQuickActionEditModal() {
+  if (!quickActionEditModalEl) return;
+  quickActionEditModalEl.hidden = true;
+  delete quickActionEditModalEl.dataset.actionId;
+  if (modalEl) modalEl.removeAttribute('aria-hidden');
+}
+
+function ensureQuickActionEditModal() {
+  if (quickActionEditModalEl) return quickActionEditModalEl;
+  quickActionEditModalEl = document.createElement('div');
+  quickActionEditModalEl.className = 'logi-advisor-edit-modal ph-no-capture';
+  quickActionEditModalEl.hidden = true;
+  quickActionEditModalEl.innerHTML = `
+    <div class="logi-advisor-edit-backdrop" data-close-edit="1"></div>
+    <div class="logi-advisor-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="logiQuickActionEditTitle">
+      <header class="logi-advisor-edit-header">
+        <h3 id="logiQuickActionEditTitle"></h3>
+        <button type="button" class="logi-advisor-close" data-close-edit="1" aria-label="Close">×</button>
+      </header>
+      <p class="logi-advisor-edit-hint" id="logiQuickActionEditHint"></p>
+      <textarea id="logiQuickActionEditText" class="logi-advisor-edit-textarea" rows="12" spellcheck="false"></textarea>
+      <footer class="logi-advisor-edit-footer">
+        <button type="button" class="logi-advisor-edit-secondary" id="logiQuickActionEditReset"></button>
+        <div class="logi-advisor-edit-actions">
+          <button type="button" class="logi-advisor-edit-secondary" id="logiQuickActionEditCancel"></button>
+          <button type="button" class="logi-advisor-edit-primary" id="logiQuickActionEditSave"></button>
+        </div>
+      </footer>
+      <p id="logiQuickActionEditStatus" class="logi-advisor-edit-status" role="status"></p>
+    </div>`;
+  document.body.appendChild(quickActionEditModalEl);
+
+  quickActionEditModalEl.querySelector('#logiQuickActionEditHint').textContent = t(
+    'apexLogViewer.logi.quickActionEditHint'
+  );
+  quickActionEditModalEl.querySelector('#logiQuickActionEditReset').textContent = t(
+    'apexLogViewer.logi.quickActionEditReset'
+  );
+  quickActionEditModalEl.querySelector('#logiQuickActionEditCancel').textContent = t(
+    'apexLogViewer.logi.quickActionEditCancel'
+  );
+  quickActionEditModalEl.querySelector('#logiQuickActionEditSave').textContent = t(
+    'apexLogViewer.logi.quickActionEditSave'
+  );
+
+  quickActionEditModalEl.querySelectorAll('[data-close-edit]').forEach((el) => {
+    el.addEventListener('click', () => closeQuickActionEditModal());
+  });
+
+  quickActionEditModalEl.querySelector('#logiQuickActionEditCancel')?.addEventListener('click', () => {
+    closeQuickActionEditModal();
+  });
+
+  quickActionEditModalEl.querySelector('#logiQuickActionEditReset')?.addEventListener('click', async () => {
+    const actionId = quickActionEditModalEl.dataset.actionId;
+    if (!actionId) return;
+    const lang = getPromptLang();
+    customQuickActionPrompts = await saveLogiQuickActionPrompt(actionId, lang, null);
+    const textarea = quickActionEditModalEl.querySelector('#logiQuickActionEditText');
+    const status = quickActionEditModalEl.querySelector('#logiQuickActionEditStatus');
+    if (textarea) textarea.value = getDefaultQuickActionUserMessage(actionId, lang);
+    if (status) status.textContent = t('apexLogViewer.logi.quickActionEditResetDone');
+    if (modalEl) renderQuickActions(modalEl);
+  });
+
+  quickActionEditModalEl.querySelector('#logiQuickActionEditSave')?.addEventListener('click', async () => {
+    const actionId = quickActionEditModalEl.dataset.actionId;
+    const textarea = quickActionEditModalEl.querySelector('#logiQuickActionEditText');
+    const status = quickActionEditModalEl.querySelector('#logiQuickActionEditStatus');
+    if (!actionId || !textarea) return;
+    const lang = getPromptLang();
+    const text = String(textarea.value || '').trim();
+    if (!text) {
+      if (status) status.textContent = t('apexLogViewer.logi.quickActionEditEmpty');
+      return;
+    }
+    const defaultText = getDefaultQuickActionUserMessage(actionId, lang);
+    customQuickActionPrompts = await saveLogiQuickActionPrompt(
+      actionId,
+      lang,
+      text === defaultText ? null : text
+    );
+    if (status) status.textContent = t('apexLogViewer.logi.quickActionEditSaved');
+    if (modalEl) renderQuickActions(modalEl);
+    window.setTimeout(() => closeQuickActionEditModal(), 450);
+  });
+
+  return quickActionEditModalEl;
+}
+
+function exportQuickActionPrompts() {
+  const payload = buildLogiQuickActionPromptsExport();
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json;charset=utf-8'
+  });
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(blob);
+  a.download = `sfoc-logi-quick-actions-${stamp}.json`;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(a.href);
+}
+
+/**
+ * @param {HTMLInputElement} input
+ */
+async function importQuickActionPromptsFromFile(input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    customQuickActionPrompts = await importLogiQuickActionPromptStore(data, { replace: true });
+    if (modalEl) renderQuickActions(modalEl);
+  } catch {
+    /* ignore invalid file */
+  }
 }
 
 function getQuickActionLabels() {
@@ -1428,7 +1777,8 @@ async function runChatTurn(modal, sessionKey, requestId, turnId) {
     orgId: payload.orgId || '',
     logId: payload.logId || '',
     lang,
-    isNewChat: rt.isNewChat
+    isNewChat: rt.isNewChat,
+    ...buildChatMessageExtras()
   });
   if (!shouldApplyTurnResult(sessionKey, turnId)) return;
 
@@ -1551,7 +1901,8 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
       logId: payload.logId || '',
       lang,
       isNewChat: false,
-      skipIterationReserve: true
+      skipIterationReserve: true,
+      ...buildChatMessageExtras()
     });
     if (Number.isFinite(Number(followUp?.iteration))) {
       rt.iteration = Math.max(rt.iteration, Math.floor(Number(followUp.iteration)));
@@ -1713,7 +2064,8 @@ async function runPendingOrgQueryFlow(
     logId: payload.logId || '',
     lang,
     isNewChat: false,
-    skipIterationReserve: true
+    skipIterationReserve: true,
+    ...buildChatMessageExtras()
   });
   if (Number.isFinite(Number(followUp?.iteration))) {
     rt.iteration = Math.max(rt.iteration, Math.floor(Number(followUp.iteration)));

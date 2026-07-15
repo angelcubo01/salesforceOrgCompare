@@ -63,6 +63,10 @@ export function buildLogiAiMetrics(result, config, context = {}) {
   if (context.logId) out.sfoc_log_id = String(context.logId).slice(0, 64);
   if (context.isNewChat) out.sfoc_is_new_chat = true;
   if (context.sessionKey) out.sfoc_session_key = hashLogiSessionKey(context.sessionKey);
+  if (context.logiMode) out.sfoc_logi_mode = String(context.logiMode).slice(0, 16);
+  if (context.requestedMode) out.sfoc_logi_mode_requested = String(context.requestedMode).slice(0, 16);
+  if (context.modeFallback) out.sfoc_mode_fallback = true;
+  if (context.modelSelected) out.sfoc_model_selected = String(context.modelSelected).slice(0, 120);
 
   return out;
 }

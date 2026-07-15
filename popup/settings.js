@@ -32,6 +32,12 @@ import {
   mergeApexTestRunProfiles,
   normalizeApexTestRunProfileList
 } from '../shared/apexTestRunProfilesCore.js';
+import { mountLogiSettingsPanel } from './logiSettingsPanel.js';
+import {
+  LOGI_QUICK_ACTION_PROMPTS_KEY,
+  importLogiQuickActionPromptStore,
+  normalizeLogiQuickActionPromptStore
+} from '../shared/logiQuickActionPrompts.js';
 
 const MONACO_THEME_I18N_KEYS = {
   'sfoc-editor-dark': 'settings.monacoThemeSfocDark',
@@ -411,7 +417,8 @@ function wireOrgsBackup() {
         EXTENSION_CONFIG_KEY,
         'savedCodeItems',
         'pinnedKeys',
-        APEX_TEST_RUN_PROFILES_STORAGE_KEY
+        APEX_TEST_RUN_PROFILES_STORAGE_KEY,
+        LOGI_QUICK_ACTION_PROMPTS_KEY
       ]),
       getOrCreateTelemetryInstallId()
     ]);
@@ -430,6 +437,9 @@ function wireOrgsBackup() {
         anonymousApexScripts: readLocalAnonScripts(),
         apexTestRunProfiles: normalizeApexTestRunProfileList(
           local?.[APEX_TEST_RUN_PROFILES_STORAGE_KEY]
+        ),
+        logiQuickActionPrompts: normalizeLogiQuickActionPromptStore(
+          local?.[LOGI_QUICK_ACTION_PROMPTS_KEY]
         ),
         telemetryInstallId
       }
@@ -500,6 +510,7 @@ function wireOrgsBackup() {
       ? normalizeApexTestRunProfileList(data.localConfig.apexTestRunProfiles)
       : null;
     const incomingTelemetryId = data.localConfig.telemetryInstallId;
+    const incomingLogiPrompts = data.localConfig.logiQuickActionPrompts;
 
     if (importReplace) {
       const replacePayload = {
@@ -516,6 +527,9 @@ function wireOrgsBackup() {
       writeLocalAnonScripts(incomingAnonScripts);
       if (incomingProfiles !== null) {
         await chrome.storage.local.set({ [APEX_TEST_RUN_PROFILES_STORAGE_KEY]: incomingProfiles });
+      }
+      if (incomingLogiPrompts) {
+        await importLogiQuickActionPromptStore(incomingLogiPrompts, { replace: true });
       }
       await applyTelemetryInstallIdFromBackup(incomingTelemetryId, { replace: true });
     } else {
@@ -552,6 +566,9 @@ function wireOrgsBackup() {
           incomingProfiles
         );
         await chrome.storage.local.set({ [APEX_TEST_RUN_PROFILES_STORAGE_KEY]: mergedProfiles });
+      }
+      if (incomingLogiPrompts) {
+        await importLogiQuickActionPromptStore(incomingLogiPrompts, { replace: false });
       }
       await applyTelemetryInstallIdFromBackup(incomingTelemetryId, { replace: false });
     }
@@ -590,6 +607,8 @@ async function main() {
     const url = chrome.runtime.getURL('code/code.html');
     await chrome.tabs.create({ url });
   });
+
+  mountLogiSettingsPanel(t);
 }
 
 void main();

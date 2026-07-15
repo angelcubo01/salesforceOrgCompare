@@ -1,11 +1,10 @@
 import {
-  DEFAULT_LOGI_ADVISOR_CONFIG,
   isLogiAdvisorOperational,
   LOGI_PROXY_BOOTSTRAP_URL,
   parseLogiAdvisorConfig
 } from './apexLogAiAdvisorConfig.js';
-import { readLogiAdvisorCache, writeLogiAdvisorCache } from './logiAdvisorCache.js';
-import { fetchLogiAdvisorRemoteConfig } from './fetchLogiAdvisorRemoteConfig.js';
+import { clearLogiAdvisorCache, readLogiAdvisorCache, writeLogiAdvisorCache } from './logiAdvisorCache.js';
+import { fetchLogiAdvisorRemoteConfig, LogiFlagDisabledError } from './fetchLogiAdvisorRemoteConfig.js';
 import { isUsableFeatureFlagPayload } from './posthogFlagPayload.js';
 import { getOrCreateTelemetryInstallId } from './telemetryInstallId.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
@@ -21,17 +20,11 @@ let bootstrapInFlight = null;
 export async function bootstrapLogiAdvisorViaProxy(opts = {}) {
   const force = opts.force === true;
   const telemetryEnabled = await getTelemetryEnabled();
-  if (!telemetryEnabled) return null;
+  if (!telemetryEnabled) {
+    return clearLogiAdvisorCache();
+  }
 
   const cached = await readLogiAdvisorCache();
-  if (
-    !force &&
-    cached.enabled &&
-    cached.showButton &&
-    isLogiAdvisorOperational(cached)
-  ) {
-    return cached;
-  }
 
   if (bootstrapInFlight && !force) {
     return bootstrapInFlight;
@@ -42,7 +35,11 @@ export async function bootstrapLogiAdvisorViaProxy(opts = {}) {
       const installId = await getOrCreateTelemetryInstallId();
       const proxyUrl = cached.proxyUrl || LOGI_PROXY_BOOTSTRAP_URL;
       if (!proxyUrl || !installId) {
-        return cached.enabled ? cached : null;
+        console.warn('[logi] bootstrap omitido: sin proxyUrl o installId', {
+          proxyUrl: Boolean(proxyUrl),
+          installId: Boolean(installId)
+        });
+        return clearLogiAdvisorCache();
       }
 
       const remote = await fetchLogiAdvisorRemoteConfig({
@@ -53,14 +50,28 @@ export async function bootstrapLogiAdvisorViaProxy(opts = {}) {
       });
 
       if (!isUsableFeatureFlagPayload(remote)) {
-        return cached.enabled ? cached : null;
+        console.warn('[logi] proxy devolvió payload no usable', { proxyUrl });
+        return clearLogiAdvisorCache();
       }
 
       const config = parseLogiAdvisorConfig(remote);
+      if (!isLogiAdvisorOperational(config)) {
+        console.warn('[logi] payload del proxy no es operacional', {
+          enabled: config.enabled,
+          showButton: config.showButton,
+          transport: config.transport
+        });
+        return clearLogiAdvisorCache();
+      }
       await writeLogiAdvisorCache(config);
       return config;
-    } catch {
-      return cached.enabled ? cached : null;
+    } catch (err) {
+      if (err instanceof LogiFlagDisabledError) {
+        console.warn('[logi] feature flag desactivado en PostHog');
+        return clearLogiAdvisorCache();
+      }
+      console.warn('[logi] bootstrap proxy falló', err);
+      return clearLogiAdvisorCache();
     } finally {
       bootstrapInFlight = null;
     }

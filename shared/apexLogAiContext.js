@@ -408,13 +408,9 @@ export function buildLogiToolDefinitions({ allowOrgQuery = true } = {}) {
   return tools;
 }
 
-/**
- * Prompt detallado enviado al modelo (no se muestra en la UI del chat).
- * @param {string} actionId
- * @param {'es' | 'en'} lang
- */
-export function quickActionUserMessage(actionId, lang = 'es') {
-  const es = {
+/** @type {Record<'es' | 'en', Record<string, string>>} */
+const QUICK_ACTION_USER_MESSAGES = {
+  es: {
     debug_errors: `Analiza errores y excepciones en este log de Apex.
 
 Antes de responder:
@@ -498,9 +494,8 @@ Responde con:
 - Fix recomendado (pasos verificables, pseudocódigo o snippet Apex breve si aporta).
 - Cómo validar el fix (test, escenario manual, qué revisar en el siguiente log).
 - Riesgos o efectos secundarios del cambio.`
-  };
-
-  const en = {
+  },
+  en: {
     debug_errors: `Analyze errors and exceptions in this Apex debug log.
 
 Before answering:
@@ -584,10 +579,31 @@ Respond with:
 - Recommended fix (verifiable steps, brief pseudocode or Apex snippet if useful).
 - How to validate the fix (test, manual scenario, what to check in the next log).
 - Risks or side effects of the change.`
-  };
+  }
+};
 
-  const map = lang === 'en' ? en : es;
+/**
+ * @param {string} actionId
+ * @param {'es' | 'en'} lang
+ */
+export function getDefaultQuickActionUserMessage(actionId, lang = 'es') {
+  const map = lang === 'en' ? QUICK_ACTION_USER_MESSAGES.en : QUICK_ACTION_USER_MESSAGES.es;
   return map[actionId] || map.debug_errors;
+}
+
+/**
+ * Prompt detallado enviado al modelo (no se muestra en la UI del chat).
+ * @param {string} actionId
+ * @param {'es' | 'en'} lang
+ * @param {Record<'es' | 'en', Record<string, string>> | null | undefined} [customPrompts]
+ */
+export function quickActionUserMessage(actionId, lang = 'es', customPrompts = null) {
+  const custom =
+    customPrompts?.[lang === 'en' ? 'en' : 'es']?.[actionId] ??
+    customPrompts?.es?.[actionId] ??
+    customPrompts?.en?.[actionId];
+  if (typeof custom === 'string' && custom.trim()) return custom.trim();
+  return getDefaultQuickActionUserMessage(actionId, lang);
 }
 
 /**

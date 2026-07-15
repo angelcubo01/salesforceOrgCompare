@@ -4,9 +4,10 @@ import {
   DEFAULT_LOGI_ADVISOR_CONFIG,
   LOGI_ADVISOR_FLAG,
   LOGI_PROXY_BOOTSTRAP_URL,
+  isLogiAdvisorOperational,
   parseLogiAdvisorConfig
 } from './apexLogAiAdvisorConfig.js';
-import { readLogiAdvisorCache, writeLogiAdvisorCache } from './logiAdvisorCache.js';
+import { readLogiAdvisorCache, writeLogiAdvisorCache, clearLogiAdvisorCache } from './logiAdvisorCache.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
 import { fetchLogiAdvisorRemoteConfig } from './fetchLogiAdvisorRemoteConfig.js';
 import {
@@ -100,24 +101,27 @@ async function fetchLogiConfigViaProxy(cached, rawPosthogPayload) {
 }
 
 /**
- * Remote config flags pueden devolver payload cifrado aunque isFeatureEnabled sea false.
+ * Solo la evaluación del SDK PostHog cuenta como flag activo.
+ * Un payload cifrado puede existir aunque el flag esté desactivado (remote config).
  * @param {import('./posthogClient.js').posthog | null | undefined} ph
- * @param {unknown} rawPayload
  */
-function isLogiAdvisorFlagActive(ph, rawPayload) {
-  if (typeof ph?.isFeatureEnabled === 'function' && ph.isFeatureEnabled(LOGI_ADVISOR_FLAG) === true) {
+export function isLogiAdvisorFlagEnabled(ph) {
+  if (!ph) return false;
+  if (typeof ph.isFeatureEnabled === 'function' && ph.isFeatureEnabled(LOGI_ADVISOR_FLAG) === true) {
     return true;
   }
-  if (typeof ph?.getFeatureFlag === 'function' && ph.getFeatureFlag(LOGI_ADVISOR_FLAG) === true) {
-    return true;
-  }
-  if (
-    rawPayload != null &&
-    (isUsableFeatureFlagPayload(rawPayload) || isEncryptedPosthogPayload(rawPayload))
-  ) {
+  if (typeof ph.getFeatureFlag === 'function' && ph.getFeatureFlag(LOGI_ADVISOR_FLAG) === true) {
     return true;
   }
   return false;
+}
+
+/**
+ * @param {import('./posthogClient.js').posthog | null | undefined} ph
+ * @param {unknown} _rawPayload
+ */
+function isLogiAdvisorFlagActive(ph, _rawPayload) {
+  return isLogiAdvisorFlagEnabled(ph);
 }
 
 /**
@@ -127,12 +131,17 @@ function isLogiAdvisorFlagActive(ph, rawPayload) {
  */
 async function commitLogiAdvisorConfig(resolvedPayload, cached) {
   if (isUsableFeatureFlagPayload(resolvedPayload)) {
-    cachedConfig = parseLogiAdvisorConfig(resolvedPayload);
-    await writeLogiAdvisorCache(cachedConfig);
-    return cachedConfig;
+    const parsed = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(resolvedPayload));
+    if (isLogiAdvisorOperational(parsed)) {
+      cachedConfig = parsed;
+      await writeLogiAdvisorCache(cachedConfig);
+      return cachedConfig;
+    }
   }
-  cachedConfig = cached?.enabled ? cached : { ...DEFAULT_LOGI_ADVISOR_CONFIG };
-  return cachedConfig;
+  return clearLogiAdvisorCache().then((disabled) => {
+    cachedConfig = disabled;
+    return disabled;
+  });
 }
 
 /**
@@ -145,8 +154,10 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
   const cached = await readLogiAdvisorCache();
 
   if (!telemetryEnabled) {
-    cachedConfig = cached?.enabled ? cached : { ...DEFAULT_LOGI_ADVISOR_CONFIG };
-    return cachedConfig;
+    return clearLogiAdvisorCache().then((disabled) => {
+      cachedConfig = disabled;
+      return disabled;
+    });
   }
 
   let rawPayload;
@@ -164,15 +175,29 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
 
   const flagActive = isLogiAdvisorFlagActive(ph, rawPayload);
 
-  if (isUsableFeatureFlagPayload(rawPayload)) {
-    cachedConfig = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(rawPayload));
-    await writeLogiAdvisorCache(cachedConfig);
-    if (POSTHOG_DEBUG) console.log('[posthog] logi advisor loaded from flag payload');
-    return cachedConfig;
+  if (ph && flagsOk && !flagActive) {
+    if (POSTHOG_DEBUG) console.log('[posthog] logi advisor flag disabled');
+    return clearLogiAdvisorCache().then((disabled) => {
+      cachedConfig = disabled;
+      return disabled;
+    });
+  }
+
+  if (flagActive && isUsableFeatureFlagPayload(rawPayload)) {
+    const parsed = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(rawPayload));
+    if (isLogiAdvisorOperational(parsed)) {
+      cachedConfig = parsed;
+      await writeLogiAdvisorCache(cachedConfig);
+      if (POSTHOG_DEBUG) console.log('[posthog] logi advisor loaded from flag payload');
+      return cachedConfig;
+    }
   }
 
   const shouldTryProxy =
-    !ph || !flagsOk || isEncryptedPosthogPayload(rawPayload) || flagActive || cached?.enabled;
+    !ph ||
+    !flagsOk ||
+    isEncryptedPosthogPayload(rawPayload) ||
+    (flagActive && !isUsableFeatureFlagPayload(rawPayload));
 
   if (shouldTryProxy) {
     const remote = await fetchLogiConfigViaProxy(cached, rawPayload);
@@ -181,16 +206,13 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
     }
   }
 
-  if (ph && flagsOk && !flagActive) {
-    cachedConfig = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
-    await writeLogiAdvisorCache(cachedConfig);
-    return cachedConfig;
-  }
-
   if (POSTHOG_DEBUG) {
-    console.log('[posthog] logi advisor fallback to storage cache', { flagsOk, flagActive });
+    console.log('[posthog] logi advisor fallback to disabled', { flagsOk, flagActive });
   }
-  return commitLogiAdvisorConfig(null, cached);
+  return clearLogiAdvisorCache().then((disabled) => {
+    cachedConfig = disabled;
+    return disabled;
+  });
 }
 
 /**
@@ -213,6 +235,9 @@ export async function bootstrapLogiAdvisor(opts = {}) {
     return config;
   } catch {
     cachedConfig = await readLogiAdvisorCache();
+    if (!isLogiAdvisorOperational(cachedConfig)) {
+      cachedConfig = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
+    }
     dispatchLogiAdvisorReady(cachedConfig);
     return cachedConfig;
   }

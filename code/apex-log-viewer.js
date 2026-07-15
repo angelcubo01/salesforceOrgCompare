@@ -282,6 +282,12 @@ async function main() {
   if (titleEl) titleEl.textContent = title;
   if (downloadBtn) downloadBtn.hidden = false;
 
+  void mountLogiAdvisor({
+    getParsed: () => getScopedParsed(),
+    getRawContent: () => content,
+    payload: payload || {}
+  });
+
   if (!mount) return;
 
   let textEditor = null;
@@ -579,12 +585,6 @@ async function main() {
     } else {
       setTimeout(run, 0);
     }
-  });
-
-  void mountLogiAdvisor({
-    getParsed: () => getScopedParsed(),
-    getRawContent: () => content,
-    payload: payload || {}
   });
 
   downloadBtn?.addEventListener('click', () => {

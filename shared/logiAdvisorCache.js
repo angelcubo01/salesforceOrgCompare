@@ -27,6 +27,20 @@ export async function writeLogiAdvisorCache(config) {
   }
 }
 
+/** Borra la config operacional cuando el feature flag está desactivado. */
+export async function clearLogiAdvisorCache() {
+  const disabled = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
+  memoryCache = disabled;
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      await chrome.storage.local.set({ [LOGI_ADVISOR_STORAGE_KEY]: disabled });
+    }
+  } catch {
+    /* ignore */
+  }
+  return disabled;
+}
+
 /**
  * @returns {Promise<import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig>}
  */

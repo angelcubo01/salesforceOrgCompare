@@ -275,6 +275,8 @@ import {
   handleLogiAdvisorCheckUsageLimits,
   handleLogiAdvisorGetConfig,
   handleLogiAdvisorGetSessionIteration,
+  handleLogiAdvisorSaveSettings,
+  handleLogiAdvisorTestByok,
   isReadOnlySalesforceQuery
 } from './apexLogAiAdvisor.js';
 import { slimQueryRecords } from '../shared/apexLogAiContext.js';
@@ -2987,6 +2989,22 @@ export function installMessageHandlers() {
           case 'aiAdvisor:cancel': {
             try {
               reply(handleLogiAdvisorCancel(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'aiAdvisor:saveSettings': {
+            try {
+              reply(await handleLogiAdvisorSaveSettings(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'aiAdvisor:testByok': {
+            try {
+              reply(await handleLogiAdvisorTestByok(message));
             } catch (e) {
               replyHandlerError(reply, e);
             }

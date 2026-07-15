@@ -125,7 +125,25 @@
           <p id="settingsGeneralTraceStatus" class="settings-status" role="status"></p>
         </section>
 
-
+        <section class="settings-card" id="settingsLogi" hidden aria-labelledby="settings-logi-heading">
+          <h2 id="settings-logi-heading" class="settings-card-title" data-i18n="settings.logi.sectionTitle">Logi · IA</h2>
+          <p class="settings-hint settings-hint--nomargin" data-i18n="settings.logi.lead"></p>
+          <div id="settingsLogiModes" class="settings-logi-modes"></div>
+          <div id="settingsLogiByokPanel" class="settings-logi-panel" hidden>
+            <label class="settings-label" for="settingsLogiByokKey" data-i18n="settings.logi.byokKey"></label>
+            <input type="password" id="settingsLogiByokKey" class="settings-text settings-text--wide" autocomplete="off" spellcheck="false" />
+            <p class="settings-hint" data-i18n="settings.logi.byokKeyHint"></p>
+            <label class="settings-label" for="settingsLogiByokModels" data-i18n="settings.logi.byokModels"></label>
+            <select id="settingsLogiByokModels" class="settings-select settings-select--full" multiple size="4"></select>
+            <div class="settings-btn-row">
+              <button type="button" id="settingsLogiTestByok" class="settings-secondary" data-i18n="settings.logi.testByok"></button>
+            </div>
+          </div>
+          <div class="settings-btn-row">
+            <button type="button" id="settingsLogiSave" class="settings-secondary" data-i18n="settings.advancedSaveAll"></button>
+          </div>
+          <p id="settingsLogiStatus" class="settings-status" role="status"></p>
+        </section>
 
         <section class="settings-card" aria-labelledby="settings-orgs-heading">
           <h2 id="settings-orgs-heading" class="settings-card-title" data-i18n="settings.sectionBackup">

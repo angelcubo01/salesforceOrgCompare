@@ -15,6 +15,7 @@ import './loadProjectEnv.mjs';
  */
 import {
   DEFAULT_LOGI_ADVISOR_CONFIG,
+  DEFAULT_LOGI_MODES,
   parseLogiAdvisorConfig
 } from '../shared/apexLogAiAdvisorConfig.js';
 
@@ -24,21 +25,39 @@ const UPDATE = process.argv.includes('--update');
 const RESET = process.argv.includes('--reset');
 const ENABLE_BETA = process.argv.includes('--enable-beta');
 const ENABLE_PROXY = process.argv.includes('--enable-proxy');
+const ENABLE_MODES_ALL = process.argv.includes('--modes-all');
+const ENABLE_MODES_BYOK_ONLY = process.argv.includes('--modes-byok-only');
 const PERSONAL_KEY =
   process.env.POSTHOG_PERSONAL_API_KEY || process.env.POSTHOG_WIZARD_API_KEY || '';
 
 const DEFAULT_ROLLOUT_PERCENTAGE = Number(process.env.SFOC_LOGI_ADVISOR_ROLLOUT || 0);
 
+function buildModesPayload() {
+  const modes = structuredClone(DEFAULT_LOGI_MODES);
+  if (ENABLE_MODES_BYOK_ONLY) {
+    modes.free.enabled = false;
+    modes.byok.enabled = true;
+    modes.byok.default = true;
+    return modes;
+  }
+  if (ENABLE_MODES_ALL || ENABLE_PROXY) {
+    modes.free.enabled = true;
+    modes.free.default = true;
+    modes.byok.enabled = true;
+  }
+  return modes;
+}
+
 function resolveDefaultPayload() {
   if (RESET) {
     return parseLogiAdvisorConfig({ enabled: false, showButton: false });
   }
-  if (ENABLE_PROXY) {
+  if (ENABLE_PROXY || ENABLE_MODES_ALL || ENABLE_MODES_BYOK_ONLY) {
     const proxyUrl = process.env.LOGI_PROXY_URL || '';
     const proxyAuthToken = process.env.LOGI_PROXY_AUTH_TOKEN || '';
     if (!proxyUrl.trim() || !proxyAuthToken.trim()) {
       console.error(
-        'Para --enable-proxy define LOGI_PROXY_URL y LOGI_PROXY_AUTH_TOKEN en .env o variables de entorno.'
+        'Para --enable-proxy / --modes-all define LOGI_PROXY_URL y LOGI_PROXY_AUTH_TOKEN en .env o variables de entorno.'
       );
       process.exit(1);
     }
@@ -46,11 +65,13 @@ function resolveDefaultPayload() {
       ...DEFAULT_LOGI_ADVISOR_CONFIG,
       enabled: true,
       showButton: true,
+      showLogiSettings: true,
       beta: true,
       transport: 'proxy',
       proxyUrl: proxyUrl.trim(),
       proxyAuthToken: proxyAuthToken.trim(),
-      openRouterApiKey: null
+      openRouterApiKey: null,
+      modes: buildModesPayload()
     });
   }
   const openRouterApiKey = process.env.OPENROUTER_API_KEY || null;
@@ -147,7 +168,7 @@ async function main() {
   }
 
   const body = flagBody(payload);
-  if ((existing && UPDATE) || (existing && ENABLE_BETA) || (existing && ENABLE_PROXY)) {
+  if ((existing && UPDATE) || (existing && ENABLE_BETA) || (existing && ENABLE_PROXY) || (existing && ENABLE_MODES_ALL) || (existing && ENABLE_MODES_BYOK_ONLY)) {
     const updated = await api(`/api/projects/${projectId}/feature_flags/${existing.id}/`, {
       method: 'PATCH',
       body: JSON.stringify(body)

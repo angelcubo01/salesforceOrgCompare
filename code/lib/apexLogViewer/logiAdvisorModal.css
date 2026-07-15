@@ -142,12 +142,42 @@
   border-bottom: 1px solid var(--alb-border, #334155);
 }
 
+.logi-advisor-quick-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.logi-advisor-quick-io-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alb-muted, #94a3b8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.logi-advisor-quick-io-btn:hover {
+  color: var(--alb-accent, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
 .logi-advisor-quick-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 10px 16px;
   font: inherit;
   font-size: 0.75rem;
@@ -189,9 +219,53 @@
   padding: 0 16px 12px;
   flex-shrink: 0;
   overflow: hidden;
-  max-height: 220px;
+  max-height: 260px;
   opacity: 1;
   transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+}
+
+.logi-advisor-chip-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+
+.logi-advisor-chip-wrap .logi-advisor-chip {
+  flex: 1;
+  min-width: 0;
+}
+
+.logi-advisor-chip-edit {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  align-self: stretch;
+  padding: 0;
+  color: var(--alb-muted, #94a3b8);
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--alb-border, #334155);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.logi-advisor-chip-edit:hover {
+  color: var(--alb-accent, #38bdf8);
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.logi-advisor-chip-edit--custom {
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.logi-advisor-chip-edit--custom:hover {
+  color: #fde68a;
+  border-color: rgba(251, 191, 36, 0.55);
 }
 
 .logi-advisor-quick-section--collapsed .logi-advisor-quick {
@@ -975,8 +1049,170 @@ html[data-ui-theme='light'] .logi-advisor-approval-query {
   color: #1e293b;
 }
 
+.logi-advisor-header-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.logi-advisor-mode-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.logi-advisor-mode-badge--fallback {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.logi-advisor-model-select {
+  font-size: 0.72rem;
+  max-width: 180px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
 @media (max-width: 520px) {
   .logi-advisor-quick {
     grid-template-columns: 1fr;
   }
+}
+
+/* Quick action edit overlay */
+.logi-advisor-edit-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10060;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.logi-advisor-edit-modal[hidden] {
+  display: none !important;
+}
+
+.logi-advisor-edit-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.82);
+  cursor: pointer;
+}
+
+.logi-advisor-edit-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(92vw, 640px);
+  max-height: min(88vh, 760px);
+  background: #1e293b;
+  color: var(--alb-text, #e2e8f0);
+  border: 1px solid var(--alb-border, #334155);
+  border-radius: 10px;
+  box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.logi-advisor-edit-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--alb-border, #334155);
+}
+
+.logi-advisor-edit-header h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.logi-advisor-edit-hint {
+  margin: 0;
+  padding: 10px 16px 0;
+  font-size: 0.78rem;
+  color: var(--alb-muted, #94a3b8);
+  line-height: 1.4;
+}
+
+.logi-advisor-edit-textarea {
+  flex: 1;
+  min-height: 240px;
+  margin: 10px 16px 0;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--alb-text, #e2e8f0);
+  background: #0f172a;
+  border: 1px solid var(--alb-border, #334155);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.logi-advisor-edit-textarea:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.logi-advisor-edit-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px 14px;
+}
+
+.logi-advisor-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.logi-advisor-edit-primary,
+.logi-advisor-edit-secondary {
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.logi-advisor-edit-primary {
+  color: #0f172a;
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.logi-advisor-edit-secondary {
+  color: var(--alb-muted, #94a3b8);
+  background: transparent;
+  border-color: var(--alb-border, #334155);
+}
+
+.logi-advisor-edit-secondary:hover {
+  color: var(--alb-accent, #38bdf8);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.logi-advisor-edit-status {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: 0.75rem;
+  color: #86efac;
 }

@@ -1,15 +1,16 @@
 /**
  * Transport layer for Logi LLM calls.
- * Beta: OpenRouter direct from service worker (with proxy auto-fallback).
- * Production: proxy with subscription token.
+ * Supports free models via proxy and BYOK via OpenRouter direct.
  */
 
 import {
+  DEFAULT_LOGI_MODELS,
   OPENROUTER_MAX_MODELS_PER_REQUEST,
   resolveLogiModelChain
 } from './apexLogAiAdvisorConfig.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
 const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1_500;
@@ -32,20 +33,38 @@ const RETRY_DELAY_MS = 1_500;
  * @property {number} [cost]
  * @property {string} [finish_reason]
  * @property {number} latencyMs
+ * @property {boolean} [modeFallback]
+ * @property {string} [effectiveLogiMode]
+ */
+
+/**
+ * @typedef {object} CreateChatCompletionOpts
+ * @property {string} [userToken]
+ * @property {string} [installId]
+ * @property {AbortSignal} [signal]
+ * @property {import('./apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
+ * @property {boolean} [forceFreeFallback]
  */
 
 /**
  * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {ChatCompletionRequest} req
- * @param {{ userToken?: string, installId?: string, signal?: AbortSignal }} [opts]
+ * @param {CreateChatCompletionOpts} [opts]
  * @returns {Promise<ChatCompletionResponse>}
  */
 export async function createChatCompletion(config, req, opts = {}) {
   const signal = opts.signal;
+  const runtime = opts.runtime;
+  const forceFree = opts.forceFreeFallback === true;
+
+  const effectiveConfig = buildEffectiveTransportConfig(config, runtime, forceFree);
   const chain =
     Array.isArray(req.models) && req.models.length
       ? req.models
-      : resolveLogiModelChain(config, req.model);
+      : runtime?.models?.length && !forceFree
+        ? runtime.models
+        : resolveLogiModelChain(effectiveConfig, req.model);
+
   const baseReq = { ...req };
   delete baseReq.models;
   delete baseReq.model;
@@ -58,21 +77,15 @@ export async function createChatCompletion(config, req, opts = {}) {
     const batchReq = { ...baseReq, models: batch };
 
     try {
-      if (config.transport === 'proxy' && config.proxyUrl) {
-        return await proxyTransport(config, batchReq, opts, signal);
-      }
-
-      try {
-        return await openRouterDirectTransport(config, batchReq, signal);
-      } catch (e) {
-        if (isUserAbortError(e, signal)) throw e;
-        if (config.proxyUrl && isProxyBlockError(e)) {
-          return await proxyTransport(config, batchReq, opts, signal);
-        }
-        throw e;
-      }
+      const result = await dispatchTransport(effectiveConfig, batchReq, opts, signal, runtime, forceFree);
+      return {
+        ...result,
+        modeFallback: forceFree || Boolean(runtime?.modeFallback),
+        effectiveLogiMode: forceFree ? 'free' : runtime?.mode || 'free'
+      };
     } catch (e) {
       if (isUserAbortError(e, signal)) throw e;
+
       if (isProxyBlockError(e)) throw e;
 
       const hasMoreBatches = i + OPENROUTER_MAX_MODELS_PER_REQUEST < chain.length;
@@ -88,18 +101,72 @@ export async function createChatCompletion(config, req, opts = {}) {
 }
 
 /**
- * Beta: future subscription hook.
- * @param {string} [_userId]
- * @returns {Promise<'free' | 'pro' | 'team'>}
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
+ * @param {boolean} forceFree
  */
-export async function checkAiAdvisorEntitlement(_userId) {
-  return 'free';
+function buildEffectiveTransportConfig(config, runtime, forceFree) {
+  if (forceFree || !runtime) return config;
+  if (runtime.transport === 'openrouter_direct' && runtime.openRouterApiKey) {
+    return {
+      ...config,
+      transport: 'openrouter_direct',
+      openRouterApiKey: runtime.openRouterApiKey
+    };
+  }
+  return config;
 }
 
 /**
  * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
- * @param {ChatCompletionRequest} req
+ * @param {ChatCompletionRequest} batchReq
+ * @param {CreateChatCompletionOpts} opts
+ * @param {AbortSignal | undefined} signal
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiRuntime | undefined} runtime
+ * @param {boolean} forceFree
  */
+async function dispatchTransport(config, batchReq, opts, signal, runtime, forceFree) {
+  const logiModeHeader = forceFree ? 'free' : runtime?.requestedMode || runtime?.mode || 'free';
+
+  if (config.transport === 'proxy' && config.proxyUrl) {
+    return proxyTransport(config, batchReq, opts, signal, logiModeHeader);
+  }
+
+  try {
+    return await openRouterDirectTransport(config, batchReq, signal);
+  } catch (e) {
+    if (isUserAbortError(e, signal)) throw e;
+    if (config.proxyUrl && isProxyBlockError(e)) {
+      return proxyTransport(config, batchReq, opts, signal, logiModeHeader);
+    }
+    throw e;
+  }
+}
+
+/**
+ * @param {string} apiKey
+ * @param {AbortSignal} [signal]
+ */
+export async function testOpenRouterApiKey(apiKey, signal) {
+  const key = String(apiKey || '').trim();
+  if (!key) throw new Error('LOGI_BYOK_NO_KEY');
+  const res = await fetchWithRetry(
+    OPENROUTER_MODELS_URL,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        Accept: 'application/json'
+      }
+    },
+    signal
+  );
+  if (!res.res.ok) {
+    throw new Error(`LOGI_BYOK_TEST_HTTP_${res.res.status}`);
+  }
+  return true;
+}
+
 async function openRouterDirectTransport(config, req, signal) {
   const apiKey = config.openRouterApiKey;
   if (!apiKey) {
@@ -127,18 +194,13 @@ async function openRouterDirectTransport(config, req, signal) {
   return parseCompletionResponse(res, text, started);
 }
 
-/**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
- * @param {ChatCompletionRequest} req
- * @param {{ userToken?: string, installId?: string }} [opts]
- */
-async function proxyTransport(config, req, opts = {}, signal) {
+async function proxyTransport(config, req, opts = {}, signal, logiMode = 'free') {
   const url = config.proxyUrl;
   if (!url) throw new Error('LOGI_NO_PROXY_URL');
   const authToken = opts.userToken || config.proxyAuthToken;
   if (!authToken) throw new Error('LOGI_NO_PROXY_AUTH');
   const started = Date.now();
-  const body = buildRequestBody(config, req);
+  const body = buildRequestBody(config, req, req.models);
 
   const { res, text } = await fetchWithRetry(
     url,
@@ -148,6 +210,7 @@ async function proxyTransport(config, req, opts = {}, signal) {
         'Content-Type': 'application/json',
         Accept: 'application/json',
         Authorization: `Bearer ${authToken}`,
+        'X-SFOC-Logi-Mode': logiMode,
         ...(opts.installId ? { 'X-SFOC-Install-Id': opts.installId } : {})
       },
       body: JSON.stringify(body)
@@ -167,15 +230,13 @@ async function proxyTransport(config, req, opts = {}, signal) {
   return normalizeCompletionPayload(data, started);
 }
 
-/**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
- * @param {ChatCompletionRequest} req
- */
-function buildRequestBody(config, req) {
+function buildRequestBody(config, req, explicitModels) {
   const models = (
-    Array.isArray(req.models) && req.models.length
-      ? req.models
-      : resolveLogiModelChain(config, req.model)
+    Array.isArray(explicitModels) && explicitModels.length
+      ? explicitModels
+      : Array.isArray(req.models) && req.models.length
+        ? req.models
+        : resolveLogiModelChain(config, req.model)
   ).slice(0, OPENROUTER_MAX_MODELS_PER_REQUEST);
 
   const body = {
@@ -190,12 +251,6 @@ function buildRequestBody(config, req) {
   return body;
 }
 
-/**
- * @param {string} url
- * @param {RequestInit} init
- * @param {AbortSignal} [externalSignal]
- * @returns {Promise<{ res: Response, text: string }>}
- */
 async function fetchWithRetry(url, init, externalSignal) {
   let lastError = null;
 
@@ -241,12 +296,6 @@ async function fetchWithRetry(url, init, externalSignal) {
   throw normalizeFetchError(lastError || new Error('LOGI_NETWORK'));
 }
 
-/**
- * @param {string} url
- * @param {RequestInit} init
- * @param {number} timeoutMs
- * @param {AbortSignal} [externalSignal]
- */
 async function fetchWithTimeout(url, init, timeoutMs, externalSignal) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -270,21 +319,12 @@ function throwAbortError() {
   throw err;
 }
 
-/**
- * @param {unknown} err
- * @param {AbortSignal} [signal]
- */
 function isUserAbortError(err, signal) {
   if (signal?.aborted) return true;
   const msg = String(err?.message || err || '');
   return err?.name === 'AbortError' && msg.includes('LOGI_CANCELLED');
 }
 
-/**
- * @param {Response} res
- * @param {string} text
- * @param {number} started
- */
 function parseCompletionResponse(res, text, started) {
   if (!res.ok) {
     if (isProxyBlockHttp(res.status, text, res.headers.get('content-type'))) {
@@ -299,10 +339,6 @@ function parseCompletionResponse(res, text, started) {
   return normalizeCompletionPayload(data, started);
 }
 
-/**
- * @param {unknown} data
- * @param {number} started
- */
 function normalizeCompletionPayload(data, started) {
   const choice = data?.choices?.[0];
   const message = choice?.message || data?.message || {};
@@ -328,10 +364,6 @@ function normalizeCompletionPayload(data, started) {
   };
 }
 
-/**
- * @param {string} text
- * @param {string} code
- */
 function parseJsonOrThrow(text, code) {
   try {
     return text ? JSON.parse(text) : null;
@@ -340,9 +372,6 @@ function parseJsonOrThrow(text, code) {
   }
 }
 
-/**
- * @param {string} text
- */
 function safeParseJson(text) {
   try {
     return text ? JSON.parse(text) : null;
@@ -351,11 +380,6 @@ function safeParseJson(text) {
   }
 }
 
-/**
- * @param {number} status
- * @param {string} text
- * @param {string | null} contentType
- */
 function isProxyBlockHttp(status, text, contentType) {
   const body = String(text || '');
   const type = String(contentType || '').toLowerCase();
@@ -373,25 +397,16 @@ function isProxyBlockHttp(status, text, contentType) {
   );
 }
 
-/**
- * @param {unknown} err
- */
 function isProxyBlockError(err) {
   const msg = String(err?.message || err || '');
   return msg.includes('LOGI_PROXY_BLOCKED') || msg.includes('LOGI_OPENROUTER_HTTP_403');
 }
 
-/**
- * @param {unknown} err
- */
 function isTimeoutError(err) {
   const msg = String(err?.message || err || '');
   return err?.name === 'AbortError' || msg.includes('LOGI_TIMEOUT') || /timeout/i.test(msg);
 }
 
-/**
- * @param {unknown} err
- */
 function isNetworkError(err) {
   const msg = String(err?.message || err || '');
   return (
@@ -403,9 +418,6 @@ function isNetworkError(err) {
   );
 }
 
-/**
- * @param {unknown} err
- */
 function normalizeFetchError(err) {
   if (isProxyBlockError(err)) return new Error('LOGI_PROXY_BLOCKED');
   if (isTimeoutError(err)) return new Error('LOGI_TIMEOUT');
@@ -413,17 +425,10 @@ function normalizeFetchError(err) {
   return err instanceof Error ? err : new Error(String(err || 'LOGI_NETWORK'));
 }
 
-/**
- * @param {number} status
- */
 function isRetriableHttp(status) {
   return status === 408 || status === 429 || status === 502 || status === 503 || status === 504;
 }
 
-/**
- * Errores por los que conviene probar el siguiente lote de modelos.
- * @param {unknown} err
- */
 function isModelFailureError(err) {
   const msg = String(err?.message || err || '');
   if (
@@ -450,23 +455,17 @@ function isModelFailureError(err) {
   return /rate.?limit|unavailable|overloaded|downtime|no endpoints|provider error/i.test(msg);
 }
 
-/**
- * @param {number} ms
- */
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * @param {string} text
- */
 function truncateErr(text) {
   return String(text || '').replace(/\s+/g, ' ').slice(0, 200);
 }
 
 /**
  * @param {unknown} err
- * @returns {'LLM_PROXY_BLOCKED' | 'LLM_TIMEOUT' | 'LLM_NETWORK' | 'LLM_ERROR'}
+ * @returns {'LLM_PROXY_BLOCKED' | 'LLM_TIMEOUT' | 'LLM_NETWORK' | 'LLM_ERROR' | 'CANCELLED'}
  */
 export function classifyLlmTransportFailure(err) {
   const msg = String(err?.message || err || '');
@@ -488,3 +487,5 @@ export function classifyLlmTransportFailure(err) {
   }
   return 'LLM_ERROR';
 }
+
+export { DEFAULT_LOGI_MODELS };

@@ -1,4 +1,8 @@
-import { createChatCompletion, classifyLlmTransportFailure } from '../shared/aiTransport.js';
+import {
+  createChatCompletion,
+  classifyLlmTransportFailure,
+  testOpenRouterApiKey
+} from '../shared/aiTransport.js';
 import {
   beginLogiRequest,
   cancelLogiRequest,
@@ -7,9 +11,22 @@ import {
 import { buildLogiToolDefinitions } from '../shared/apexLogAiContext.js';
 import {
   isLogiAdvisorOperational,
+  isLogiSettingsSectionVisible,
   parseLogiAdvisorConfig,
-  DEFAULT_LOGI_ADVISOR_CONFIG
+  DEFAULT_LOGI_ADVISOR_CONFIG,
+  resolveLogiRuntime,
+  resolveAllowedLogiModes,
+  coerceLogiUserMode,
+  sanitizeLogiModesForUi,
+  getLogiModelPickerOptions,
+  isLogiModelPickerAllowed,
+  validateLogiSelectedModel
 } from '../shared/apexLogAiAdvisorConfig.js';
+import {
+  loadLogiUserSettings,
+  saveLogiUserSettings,
+  sanitizeLogiUserSettingsForUi
+} from '../shared/logiUserSettings.js';
 import { readLogiAdvisorCache, readLogiAdvisorCacheFresh } from '../shared/logiAdvisorCache.js';
 import { bootstrapLogiAdvisorViaProxy } from '../shared/logiAdvisorBootstrap.js';
 import { getTelemetryEnabled } from '../shared/extensionSettings.js';
@@ -62,9 +79,28 @@ ${hasOrg ? '- You may propose org_query (read-only); the user must approve it on
 
 /**
  * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
  */
-function logiTransportLabel(config) {
+function logiTransportLabel(config, runtime) {
+  if (runtime?.transport === 'openrouter_direct' && runtime?.apiKeySource === 'user') return 'byok';
   return config?.transport === 'proxy' && config?.proxyUrl ? 'proxy' : 'direct';
+}
+
+/**
+ * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} parsedConfig
+ */
+async function buildLogiRuntimeContext(parsedConfig) {
+  const userSettings = await loadLogiUserSettings();
+  const coercedMode = coerceLogiUserMode(parsedConfig, userSettings.logiMode);
+  if (coercedMode !== userSettings.logiMode) {
+    await saveLogiUserSettings({ logiMode: coercedMode });
+    userSettings.logiMode = coercedMode;
+  }
+
+  return {
+    userSettings,
+    runtime: resolveLogiRuntime(parsedConfig, userSettings)
+  };
 }
 
 /**
@@ -130,11 +166,27 @@ export function isReadOnlySalesforceQuery(queryText) {
 /**
  * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  */
-export function sanitizeConfigForUi(config) {
+/**
+ * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {object} [extras]
+ */
+export function sanitizeConfigForUi(config, extras = {}) {
+  const runtime = /** @type {import('../shared/apexLogAiAdvisorConfig.js').LogiRuntime | undefined} */ (
+    extras.runtime
+  );
+  const userSettings = extras.userSettings
+    ? sanitizeLogiUserSettingsForUi(
+        /** @type {import('./logiUserSettings.js').ReturnType<typeof import('./logiUserSettings.js').normalizeLogiUserSettings>} */ (
+          extras.userSettings
+        )
+      )
+    : null;
+  const effectiveMode = runtime?.mode || 'free';
   return {
     enabled: config.enabled,
     beta: config.beta,
     showButton: config.showButton,
+    showLogiSettings: isLogiSettingsSectionVisible(config),
     requireTelemetry: config.requireTelemetry,
     maxIterationsPerChat: config.maxIterationsPerChat,
     maxChatsPerDay: config.maxChatsPerDay,
@@ -143,7 +195,19 @@ export function sanitizeConfigForUi(config) {
     personaName: config.personaName,
     allowedOrgQuery: config.allowedOrgQuery,
     quickActions: config.quickActions,
-    operational: isLogiAdvisorOperational(config)
+    operational: isLogiAdvisorOperational(config),
+    allowedModes: resolveAllowedLogiModes(config),
+    modes: sanitizeLogiModesForUi(config),
+    logiMode: effectiveMode,
+    requestedMode: runtime?.requestedMode || effectiveMode,
+    premiumActive: Boolean(runtime?.premiumActive),
+    modeFallback: Boolean(runtime?.modeFallback),
+    fallbackReason: runtime?.fallbackReason || null,
+    modelPickerAllowed: isLogiModelPickerAllowed(config, runtime?.requestedMode || effectiveMode, runtime),
+    modelPickerOptions: runtime
+      ? getLogiModelPickerOptions(config, runtime.requestedMode, runtime)
+      : [],
+    userSettings
   };
 }
 
@@ -163,15 +227,24 @@ export async function handleLogiAdvisorBootstrap(message = {}) {
 export async function handleLogiAdvisorGetConfig() {
   await bootstrapLogiAdvisorViaProxy();
   const config = await readLogiAdvisorCacheFresh();
+  const parsedConfig = parseLogiAdvisorConfig(config);
   const telemetryEnabled = await getTelemetryEnabled();
-  if (config.requireTelemetry && !telemetryEnabled) {
+  if (parsedConfig.requireTelemetry && !telemetryEnabled) {
     return {
       ok: true,
-      config: sanitizeConfigForUi({ ...config, enabled: false, showButton: false }),
+      config: sanitizeConfigForUi({ ...parsedConfig, enabled: false, showButton: false }),
       telemetryRequired: true
     };
   }
-  return { ok: true, config: sanitizeConfigForUi(config), telemetryRequired: false };
+  const ctx = await buildLogiRuntimeContext(parsedConfig);
+  return {
+    ok: true,
+    config: sanitizeConfigForUi(parsedConfig, {
+      runtime: ctx.runtime,
+      userSettings: ctx.userSettings
+    }),
+    telemetryRequired: false
+  };
 }
 
 /**
@@ -298,15 +371,31 @@ export async function handleLogiAdvisorChat(message) {
 
   try {
     const installId = await getOrCreateTelemetryInstallId();
+    const ctx = await buildLogiRuntimeContext(parsedConfig);
+    const selectedModelRaw =
+      typeof message.selectedModel === 'string' ? message.selectedModel.trim() : '';
+    const selectedModel =
+      selectedModelRaw && selectedModelRaw !== '__auto__'
+        ? validateLogiSelectedModel(parsedConfig, selectedModelRaw)
+        : ctx.runtime.selectedModel;
+
+    if (selectedModel && selectedModel !== ctx.userSettings.logiSelectedPremiumModel) {
+      await saveLogiUserSettings({ logiSelectedPremiumModel: selectedModel });
+    }
+
+    const runtime = resolveLogiRuntime(parsedConfig, ctx.userSettings, selectedModel);
+
     const result = await withServiceWorkerKeepalive(() =>
       createChatCompletion(
         parsedConfig,
         {
           messages: apiMessages,
           tools: buildLogiToolDefinitions({ allowOrgQuery }),
-          max_tokens: 2048
+          max_tokens: 2048,
+          model: selectedModel || undefined,
+          models: runtime.models
         },
-        { signal, installId }
+        { signal, installId, runtime }
       )
     );
 
@@ -316,7 +405,12 @@ export async function handleLogiAdvisorChat(message) {
       iteration,
       logId: message.logId,
       isNewChat: message.isNewChat === true,
-      sessionKey
+      sessionKey,
+      actualTransport: logiTransportLabel(parsedConfig, runtime),
+      logiMode: runtime.mode,
+      requestedMode: runtime.requestedMode,
+      modeFallback: result.modeFallback || runtime.modeFallback,
+      modelSelected: selectedModel || ''
     });
 
     await captureAiGeneration({
@@ -371,7 +465,11 @@ export async function handleLogiAdvisorChat(message) {
       pendingOrgQuery,
       finishReason: result.finish_reason,
       iteration,
-      iterationsRemaining
+      iterationsRemaining,
+      logiMode: runtime.mode,
+      requestedMode: runtime.requestedMode,
+      modeFallback: result.modeFallback || runtime.modeFallback,
+      modelUsed: result.model || runtime.models[0]
     };
   } catch (e) {
     const reason = classifyLlmTransportFailure(e);
@@ -454,5 +552,61 @@ async function withServiceWorkerKeepalive(fn) {
     return await fn();
   } finally {
     clearInterval(timer);
+  }
+}
+
+/**
+ * @param {object} message
+ */
+export async function handleLogiAdvisorSaveSettings(message) {
+  await bootstrapLogiAdvisorViaProxy();
+  const config = parseLogiAdvisorConfig(await readLogiAdvisorCacheFresh());
+  if (!isLogiSettingsSectionVisible(config)) {
+    return { ok: false, reason: 'LOGI_SETTINGS_DISABLED' };
+  }
+
+  /** @type {Record<string, unknown>} */
+  const patch = {};
+  if (message.logiMode != null) patch.logiMode = message.logiMode;
+  if (message.logiByokOpenRouterKey !== undefined) {
+    patch.logiByokOpenRouterKey = message.logiByokOpenRouterKey;
+  }
+  if (Array.isArray(message.logiByokModels)) patch.logiByokModels = message.logiByokModels;
+  if (message.logiSelectedPremiumModel !== undefined) {
+    patch.logiSelectedPremiumModel = message.logiSelectedPremiumModel;
+  }
+
+  const saved = await saveLogiUserSettings(patch);
+  const coerced = coerceLogiUserMode(config, saved.logiMode);
+  if (coerced !== saved.logiMode) {
+    await saveLogiUserSettings({ logiMode: coerced });
+    saved.logiMode = coerced;
+  }
+
+  const ctx = await buildLogiRuntimeContext(config);
+  return {
+    ok: true,
+    userSettings: sanitizeLogiUserSettingsForUi(saved),
+    config: sanitizeConfigForUi(config, {
+      runtime: ctx.runtime,
+      userSettings: saved
+    })
+  };
+}
+
+/**
+ * @param {object} message
+ */
+export async function handleLogiAdvisorTestByok(message) {
+  const key =
+    typeof message.apiKey === 'string' && message.apiKey.trim()
+      ? message.apiKey.trim()
+      : (await loadLogiUserSettings()).logiByokOpenRouterKey;
+  if (!key) return { ok: false, reason: 'NO_KEY' };
+  try {
+    await testOpenRouterApiKey(key);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: 'BYOK_TEST_FAILED', error: String(e?.message || e) };
   }
 }

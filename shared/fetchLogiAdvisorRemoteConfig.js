@@ -1,5 +1,12 @@
 import { LOGI_ADVISOR_FLAG } from './apexLogAiAdvisorConfig.js';
 
+export class LogiFlagDisabledError extends Error {
+  constructor() {
+    super('LOGI_FLAG_DISABLED');
+    this.name = 'LogiFlagDisabledError';
+  }
+}
+
 /**
  * @param {string} proxyUrl
  * @returns {string}
@@ -50,6 +57,9 @@ export async function fetchLogiAdvisorRemoteConfig(opts) {
   }
 
   if (!res.ok) {
+    if (res.status === 403 && data?.error === 'flag_disabled') {
+      throw new LogiFlagDisabledError();
+    }
     const msg = data?.error || data?.message || res.statusText;
     throw new Error(`LOGI_CONFIG_FETCH_HTTP_${res.status}: ${msg}`);
   }
