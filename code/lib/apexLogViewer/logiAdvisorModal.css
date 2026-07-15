@@ -145,30 +145,10 @@
 .logi-advisor-quick-toolbar {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 4px;
-  padding-right: 8px;
-}
-
-.logi-advisor-quick-io-btn {
-  flex-shrink: 0;
-  padding: 4px 8px;
-  font: inherit;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--alb-muted, #94a3b8);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-}
-
-.logi-advisor-quick-io-btn:hover {
-  color: var(--alb-accent, #38bdf8);
-  background: rgba(56, 189, 248, 0.08);
-  border-color: rgba(56, 189, 248, 0.25);
+  padding: 0 16px 8px;
 }
 
 .logi-advisor-quick-toggle {
@@ -176,7 +156,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  flex: 1;
+  width: 100%;
   min-width: 0;
   padding: 10px 16px;
   font: inherit;
@@ -212,16 +192,47 @@
   margin-top: 0.15rem;
 }
 
+.logi-advisor-quick-panel {
+  overflow: hidden;
+  max-height: 360px;
+  opacity: 1;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+.logi-advisor-quick-section--collapsed .logi-advisor-quick-panel {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.logi-advisor-quick-io-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alb-muted, #94a3b8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.logi-advisor-quick-io-btn:hover {
+  color: var(--alb-accent, #38bdf8);
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
 .logi-advisor-quick {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 0 16px 12px;
   flex-shrink: 0;
-  overflow: hidden;
-  max-height: 260px;
-  opacity: 1;
-  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
 }
 
 .logi-advisor-chip-wrap {
@@ -267,15 +278,6 @@
   color: #fde68a;
   border-color: rgba(251, 191, 36, 0.55);
 }
-
-.logi-advisor-quick-section--collapsed .logi-advisor-quick {
-  max-height: 0;
-  opacity: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  pointer-events: none;
-}
-
 .logi-advisor-chip {
   display: flex;
   align-items: center;
@@ -1148,6 +1150,64 @@ html[data-ui-theme='light'] .logi-advisor-approval-query {
   line-height: 1.4;
 }
 
+.logi-advisor-edit-label-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 16px 10px;
+}
+
+.logi-advisor-edit-label-row[hidden] {
+  display: none;
+}
+
+.logi-advisor-edit-label-row > span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--alb-muted, #94a3b8);
+}
+
+.logi-advisor-edit-label-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--alb-text, #e2e8f0);
+  background: #0f172a;
+  border: 1px solid var(--alb-border, #334155);
+  border-radius: 8px;
+}
+
+.logi-advisor-edit-label-input:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
+}
+
+.logi-advisor-edit-danger {
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #fecaca;
+  background: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+.logi-advisor-edit-danger:hover {
+  color: #fff;
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(248, 113, 113, 0.55);
+}
+
+.logi-advisor-edit-danger[hidden],
+.logi-advisor-edit-secondary[hidden] {
+  display: none;
+}
+
 .logi-advisor-edit-textarea {
   flex: 1;
   min-height: 240px;
@@ -1180,6 +1240,7 @@ html[data-ui-theme='light'] .logi-advisor-approval-query {
 .logi-advisor-edit-actions {
   display: flex;
   gap: 8px;
+  margin-left: auto;
 }
 
 .logi-advisor-edit-primary,

@@ -36,6 +36,7 @@ import { mountLogiSettingsPanel } from './logiSettingsPanel.js';
 import {
   LOGI_QUICK_ACTION_PROMPTS_KEY,
   importLogiQuickActionPromptStore,
+  normalizeLogiQuickActionFullStore,
   normalizeLogiQuickActionPromptStore
 } from '../shared/logiQuickActionPrompts.js';
 
@@ -438,7 +439,7 @@ function wireOrgsBackup() {
         apexTestRunProfiles: normalizeApexTestRunProfileList(
           local?.[APEX_TEST_RUN_PROFILES_STORAGE_KEY]
         ),
-        logiQuickActionPrompts: normalizeLogiQuickActionPromptStore(
+        logiQuickActionPrompts: normalizeLogiQuickActionFullStore(
           local?.[LOGI_QUICK_ACTION_PROMPTS_KEY]
         ),
         telemetryInstallId

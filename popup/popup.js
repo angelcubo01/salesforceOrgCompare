@@ -321,6 +321,19 @@ function toggleAliasEditor(li, org) {
   aliasInput.focus();
 }
 
+function showOrgsLoading() {
+  const ul = document.getElementById('savedList');
+  if (!ul) return;
+  ul.innerHTML = '';
+  const li = el('li', 'row orgs-loading-row');
+  li.setAttribute('aria-busy', 'true');
+  const inner = el('div', 'orgs-loading-inner');
+  inner.appendChild(el('span', 'orgs-loading-spinner'));
+  inner.appendChild(el('span', 'orgs-loading-text', t('popup.loadingOrgs')));
+  li.appendChild(inner);
+  ul.appendChild(li);
+}
+
 function renderSaved(orgs) {
   window.__lastOrgs = orgs;
   const ul = document.getElementById('savedList');
@@ -411,6 +424,7 @@ async function refreshDetected(savedOrgs) {
 }
 
 async function refresh() {
+  showOrgsLoading();
   const savedOrgs = await refreshSaved();
   await refreshDetected(savedOrgs);
 }

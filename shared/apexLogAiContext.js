@@ -587,6 +587,7 @@ Respond with:
  * @param {'es' | 'en'} lang
  */
 export function getDefaultQuickActionUserMessage(actionId, lang = 'es') {
+  if (isLogiCustomQuickActionId(actionId)) return '';
   const map = lang === 'en' ? QUICK_ACTION_USER_MESSAGES.en : QUICK_ACTION_USER_MESSAGES.es;
   return map[actionId] || map.debug_errors;
 }
@@ -610,13 +611,27 @@ export function quickActionUserMessage(actionId, lang = 'es', customPrompts = nu
  * @param {string} actionId
  * @returns {boolean}
  */
+export function isLogiCustomQuickActionId(actionId) {
+  return /^custom_[a-z0-9]{6,24}$/i.test(String(actionId || '').trim());
+}
+
+/**
+ * @param {string} actionId
+ * @returns {boolean}
+ */
 export function isLogiQuickActionId(actionId) {
-  return [
-    'debug_errors',
-    'explain_flow',
-    'soql_dml',
-    'test_failure',
-    'limits',
-    'suggest_fix'
-  ].includes(actionId);
+  const id = String(actionId || '').trim();
+  if (
+    [
+      'debug_errors',
+      'explain_flow',
+      'soql_dml',
+      'test_failure',
+      'limits',
+      'suggest_fix'
+    ].includes(id)
+  ) {
+    return true;
+  }
+  return isLogiCustomQuickActionId(id);
 }

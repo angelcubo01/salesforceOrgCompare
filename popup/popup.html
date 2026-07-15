@@ -70,7 +70,14 @@
     <section>
       <h3 data-i18n="popup.savedOrgs">Tus entornos</h3>
       <p class="section-hint" data-i18n="popup.savedOrgsHint">Arrastra el asa ⋮⋮ solo dentro del mismo grupo (o entre entornos sin grupo). Ese orden se usa en los desplegables de la aplicación.</p>
-      <ul id="savedList" class="list"></ul>
+      <ul id="savedList" class="list">
+        <li class="row orgs-loading-row" id="savedListLoading" aria-busy="true">
+          <div class="orgs-loading-inner">
+            <span class="orgs-loading-spinner" aria-hidden="true"></span>
+            <span class="orgs-loading-text" data-i18n="popup.loadingOrgs">Cargando entornos…</span>
+          </div>
+        </li>
+      </ul>
     </section>
 
     <section>

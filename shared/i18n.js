@@ -51,6 +51,7 @@ const translations = {
     'popup.detectedOrg': 'Entorno en esta pestaña',
     'popup.noDetected': 'No se ha detectado ningún entorno Salesforce',
     'popup.noSavedOrgs': 'Aún no hay entornos guardados',
+    'popup.loadingOrgs': 'Cargando entornos…',
     'popup.dragToSort': 'Arrastrar para ordenar',
     'popup.sandbox': '(sandbox)',
     'popup.production': '(producción)',
@@ -1050,6 +1051,14 @@ const translations = {
     'apexLogViewer.logi.quickActionEditEmpty': 'El texto no puede estar vacío.',
     'apexLogViewer.logi.quickActionsExport': 'Exportar',
     'apexLogViewer.logi.quickActionsImport': 'Importar',
+    'apexLogViewer.logi.quickActionsAdd': 'Añadir',
+    'apexLogViewer.logi.quickActionCreateTitle': 'Nueva acción rápida',
+    'apexLogViewer.logi.quickActionLabel': 'Nombre visible',
+    'apexLogViewer.logi.quickActionLabelPlaceholder': 'Ej. Revisar validaciones',
+    'apexLogViewer.logi.quickActionDelete': 'Eliminar',
+    'apexLogViewer.logi.quickActionDeleteConfirm': '¿Eliminar esta acción personalizada?',
+    'apexLogViewer.logi.quickActionCreateSaved': 'Acción creada.',
+    'apexLogViewer.logi.quickActionCreateLimit': 'Has alcanzado el máximo de acciones personalizadas.',
     'apexLogViewer.logi.thinking': 'Pensando…',
     'apexLogViewer.logi.thinkingWait1': 'Analizando la información del log…',
     'apexLogViewer.logi.thinkingWait2': 'Sigo trabajando en tu respuesta…',
@@ -1087,7 +1096,7 @@ const translations = {
     'apexLogViewer.logi.error.proxyBlocked':
       'Tu red corporativa bloquea OpenRouter. Configura Logi con transporte proxy o pide a IT que permita el acceso.',
     'apexLogViewer.logi.error.timeout':
-      'La IA tardó demasiado en responder. Inténtalo de nuevo; si el log es muy grande, pregunta por una sección concreta.',
+      'Lo siento, pero no te puedo ayudar con eso.',
     'apexLogViewer.logi.error.network':
       'No se pudo conectar con la IA. Comprueba tu conexión o VPN e inténtalo de nuevo.',
     'apexLogViewer.logi.error.llm': 'No se pudo obtener respuesta de la IA.',
@@ -2420,6 +2429,7 @@ const translations = {
     'popup.detectedOrg': 'Org detected in this tab',
     'popup.noDetected': 'No Salesforce org detected',
     'popup.noSavedOrgs': 'No saved orgs',
+    'popup.loadingOrgs': 'Loading environments…',
     'popup.dragToSort': 'Drag to reorder',
     'popup.sandbox': '(Sandbox)',
     'popup.production': '(Production)',
@@ -3434,6 +3444,14 @@ const translations = {
     'apexLogViewer.logi.quickActionEditEmpty': 'Text cannot be empty.',
     'apexLogViewer.logi.quickActionsExport': 'Export',
     'apexLogViewer.logi.quickActionsImport': 'Import',
+    'apexLogViewer.logi.quickActionsAdd': 'Add',
+    'apexLogViewer.logi.quickActionCreateTitle': 'New quick action',
+    'apexLogViewer.logi.quickActionLabel': 'Display name',
+    'apexLogViewer.logi.quickActionLabelPlaceholder': 'E.g. Review validations',
+    'apexLogViewer.logi.quickActionDelete': 'Delete',
+    'apexLogViewer.logi.quickActionDeleteConfirm': 'Delete this custom action?',
+    'apexLogViewer.logi.quickActionCreateSaved': 'Action created.',
+    'apexLogViewer.logi.quickActionCreateLimit': 'You reached the maximum number of custom actions.',
     'apexLogViewer.logi.thinking': 'Thinking…',
     'apexLogViewer.logi.thinkingWait1': 'Analyzing log information…',
     'apexLogViewer.logi.thinkingWait2': 'Still working on your answer…',
@@ -3470,7 +3488,7 @@ const translations = {
     'apexLogViewer.logi.error.proxyBlocked':
       'Your corporate network blocks OpenRouter. Configure Logi with proxy transport or ask IT to allow access.',
     'apexLogViewer.logi.error.timeout':
-      'The AI took too long to respond. Try again; for very large logs, ask about a specific section.',
+      "I'm sorry, but I can't help you with that.",
     'apexLogViewer.logi.error.network':
       'Could not connect to the AI. Check your connection or VPN and try again.',
     'apexLogViewer.logi.error.llm': 'Could not get a response from the AI.',

@@ -342,3 +342,10 @@ html[data-ui-theme="light"] .popup-open-overlay-spinner {
 html[data-ui-theme="light"] .popup-open-overlay-text {
   color: var(--sfoc-light-text);
 }
+html[data-ui-theme="light"] .orgs-loading-spinner {
+  border-color: #cbd5e1;
+  border-top-color: #2563eb;
+}
+html[data-ui-theme="light"] .orgs-loading-text {
+  color: var(--sfoc-light-muted, #64748b);
+}

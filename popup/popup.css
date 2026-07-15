@@ -805,3 +805,29 @@ body.popup-opening-app > .popup-telemetry-notice {
   color: #e0e0e0;
 }
 
+.orgs-loading-row {
+  justify-content: center;
+  border: none;
+  background: transparent;
+  pointer-events: none;
+}
+.orgs-loading-inner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+.orgs-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #3f3f46;
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: popup-open-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.orgs-loading-text {
+  font-size: 13px;
+  color: #888;
+}
+
