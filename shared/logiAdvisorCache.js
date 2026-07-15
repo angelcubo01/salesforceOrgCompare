@@ -16,11 +16,19 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
 /**
  * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  */
+function sanitizeLogiAdvisorConfigForStorage(config) {
+  return config ? { ...config, proxyAuthToken: null } : config;
+}
+
+/**
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ */
 export async function writeLogiAdvisorCache(config) {
-  memoryCache = config;
+  const sanitized = sanitizeLogiAdvisorConfigForStorage(config);
+  memoryCache = sanitized;
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-      await chrome.storage.local.set({ [LOGI_ADVISOR_STORAGE_KEY]: config });
+      await chrome.storage.local.set({ [LOGI_ADVISOR_STORAGE_KEY]: sanitized });
     }
   } catch {
     /* ignore */

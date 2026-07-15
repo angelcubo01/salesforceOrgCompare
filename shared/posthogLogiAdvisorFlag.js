@@ -46,22 +46,15 @@ function dispatchLogiAdvisorReady(config) {
 /**
  * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} cached
  * @param {unknown} rawPosthogPayload
- * @returns {{ proxyUrl: string, proxyAuthToken: string } | null}
+ * @returns {string | null}
  */
-function resolveProxyCredentials(cached, rawPosthogPayload) {
-  const fromCache =
-    cached?.proxyUrl && cached?.proxyAuthToken
-      ? { proxyUrl: cached.proxyUrl, proxyAuthToken: cached.proxyAuthToken }
-      : null;
-  if (fromCache) return fromCache;
+function resolveProxyUrl(cached, rawPosthogPayload) {
+  if (cached?.proxyUrl) return cached.proxyUrl.trim();
 
   if (!isUsableFeatureFlagPayload(rawPosthogPayload)) return null;
   const o = /** @type {Record<string, unknown>} */ (normalizeFeatureFlagPayload(rawPosthogPayload));
   const proxyUrl = typeof o.proxyUrl === 'string' ? o.proxyUrl.trim() : '';
-  const proxyAuthToken =
-    typeof o.proxyAuthToken === 'string' ? o.proxyAuthToken.trim() : '';
-  if (proxyUrl && proxyAuthToken) return { proxyUrl, proxyAuthToken };
-  return null;
+  return proxyUrl || null;
 }
 
 /**
@@ -74,9 +67,8 @@ async function fetchLogiConfigViaProxy(cached, rawPosthogPayload) {
     return normalizeFeatureFlagPayload(rawPosthogPayload);
   }
 
-  const proxy = resolveProxyCredentials(cached, rawPosthogPayload);
+  const proxyUrl = resolveProxyUrl(cached, rawPosthogPayload) || cached?.proxyUrl || LOGI_PROXY_BOOTSTRAP_URL;
   const installId = await getOrCreateTelemetryInstallId();
-  const proxyUrl = proxy?.proxyUrl || cached?.proxyUrl || LOGI_PROXY_BOOTSTRAP_URL;
   if (!proxyUrl || !installId) {
     return null;
   }
@@ -84,9 +76,7 @@ async function fetchLogiConfigViaProxy(cached, rawPosthogPayload) {
   try {
     const remote = await fetchLogiAdvisorRemoteConfig({
       proxyUrl,
-      proxyAuthToken: proxy?.proxyAuthToken || '',
-      installId,
-      bootstrap: !proxy?.proxyAuthToken
+      installId
     });
     if (POSTHOG_DEBUG) {
       console.log('[posthog] logi advisor remote config loaded via proxy');

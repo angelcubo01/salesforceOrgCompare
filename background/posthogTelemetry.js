@@ -33,6 +33,7 @@ import {
   shouldReportAsBug,
   toError
 } from '../shared/errorTelemetryPolicy.js';
+import { sanitizeExceptionContext } from '../shared/sanitizeExceptionContext.js';
 import { resolveTelemetryUserLabel, resolveSfUserContextForOrg } from './telemetryUserResolver.js';
 import { orgFieldsForTelemetry } from '../shared/telemetryOrgContext.js';
 import { buildSfocAiUserProperties } from '../shared/posthogAiUserContext.js';
@@ -485,6 +486,7 @@ export async function maybeReportInitialTelemetryPreference() {
 
 /**
  * Envía `$exception` al Capture API (service worker).
+ * No respeta `telemetryEnabled`: los errores técnicos se envían siempre (P0-001 transparencia).
  * @param {unknown} error
  * @param {Record<string, string | number | boolean>} [context]
  */
@@ -500,6 +502,7 @@ export async function sendPosthogException(error, context = {}) {
   const ctx = await telemetryContext();
   const installId = await getOrCreateTelemetryInstallId();
   const handled = context.error_handled === 1 || context.error_handled === true;
+  const safeContext = sanitizeExceptionContext(context);
 
   return postCaptureException(installId, {
     ...audienceParamsForEvent(ctx.audience),
@@ -510,7 +513,7 @@ export async function sendPosthogException(error, context = {}) {
     $exception_fingerprint: buildPosthogExceptionFingerprint(err),
     $exception_list: buildPosthogExceptionList(err, { handled }),
     ...bugExceptionContext(context),
-    ...context
+    ...safeContext
   });
 }
 

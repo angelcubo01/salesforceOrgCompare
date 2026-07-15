@@ -81,6 +81,11 @@ export function buildPosthogExceptionFingerprint(err) {
 export function buildPosthogExceptionList(error, opts = {}) {
   const err = error instanceof Error ? error : new Error(String(error ?? 'unknown'));
   const handled = opts.handled === true;
+  const stack = err.stack ? String(err.stack).slice(0, 8000) : '';
+  const stackErr =
+    stack && stack !== err.stack
+      ? Object.assign(new Error(err.message), { name: err.name, stack })
+      : err;
   return [
     {
       type: String(err.name || 'Error').slice(0, 128),
@@ -91,7 +96,7 @@ export function buildPosthogExceptionList(error, opts = {}) {
       },
       stacktrace: {
         type: 'raw',
-        frames: parseJavascriptStackFrames(err.stack)
+        frames: parseJavascriptStackFrames(stackErr.stack)
       }
     }
   ];

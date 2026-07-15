@@ -47,6 +47,7 @@ import { onDeployStatusOrgChange } from '../ui/deployStatusPanel.js';
 import { t } from '../../shared/i18n.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { hideSidebarSearchResults } from '../ui/searchSetup.js';
+import { refreshActiveToolOnOrgChange } from './orgChangeRefresh.js';
 
 export function wireSelectors() {
   const left = document.getElementById('leftOrg');
@@ -66,77 +67,7 @@ export function wireSelectors() {
     hideSidebarSearchResults();
     syncCompareUrlFromState(state, { method: 'push' });
     renderEditor({ leftChanged: true, rightChanged: false, prevLeftOrgId: prevLeft });
-    if (getSelectedArtifactType() === 'GeneratePackageXml') {
-      refreshGeneratePackageXmlTypes();
-    }
-    if (getSelectedArtifactType() === 'MetadataTypeCompare') {
-      invalidateMetadataTypeComparePanel();
-      void refreshMetadataTypeComparePanel();
-    }
-    if (getSelectedArtifactType() === 'ApexTests') {
-      void refreshApexTestsPanel();
-    }
-    if (getSelectedArtifactType() === 'FieldDependency') {
-      resetFieldDependencyToInitial();
-    }
-    if (getSelectedArtifactType() === 'DependencyExplorer') {
-      resetDependencyExplorerPanel();
-    }
-    if (getSelectedArtifactType() === 'AnonymousApex') {
-      void refreshAnonymousApexPanel();
-    }
-    if (getSelectedArtifactType() === 'QueryExplorer') {
-      void refreshQueryExplorerPanel();
-    }
-    if (getSelectedArtifactType() === 'ObjectDescribe') {
-      void refreshObjectDescribePanel();
-    }
-    if (getSelectedArtifactType() === 'DataWorkbench') {
-      void refreshDataWorkbenchPanel();
-    }
-    if (getSelectedArtifactType() === 'OrgLimits') {
-      void refreshOrgLimitsPanel();
-    }
-    if (getSelectedArtifactType() === 'EnvironmentStatus') {
-      void reloadEnvironmentStatusIfActive();
-    }
-    if (getSelectedArtifactType() === 'PermissionDiff') {
-      void refreshPermissionDiffPanel();
-    }
-    if (getSelectedArtifactType() === 'DebugLogBrowser') {
-      void refreshDebugLogBrowserPanel();
-    }
-    if (getSelectedArtifactType() === 'SetupAuditTrail') {
-      void refreshSetupAuditTrailPanel();
-    }
-    if (getSelectedArtifactType() === 'FieldHistory') {
-      void refreshFieldHistoryPanel();
-    }
-    if (getSelectedArtifactType() === 'QuickEdit') {
-      void refreshQuickEditPanel();
-    }
-    if (getSelectedArtifactType() === 'LightningQuickEdit') {
-      void refreshLightningQuickEditPanel();
-    }
-    if (getSelectedArtifactType() === 'ApexCoverageCompare') {
-      void refreshApexCoverageComparePanel();
-    }
-    if (getSelectedArtifactType() === 'CustomSettingsCompare') {
-      void refreshCustomSettingsComparePanel();
-    }
-    if (getSelectedArtifactType() === 'CustomMetadataCompare') {
-      void refreshCustomMetadataComparePanel();
-    }
-    if (getSelectedArtifactType() === 'RecordCompare') {
-      void refreshRecordComparePanel();
-    }
-    if (getSelectedArtifactType() === 'MetadataTypeCompare') {
-      invalidateMetadataTypeComparePanel();
-      void refreshMetadataTypeComparePanel();
-    }
-    if (getSelectedArtifactType() === 'DeployStatus') {
-      onDeployStatusOrgChange();
-    }
+    refreshActiveToolOnOrgChange('left');
   });
   right.addEventListener('change', () => {
     if (state.selectedItem) {
@@ -149,49 +80,7 @@ export function wireSelectors() {
     syncTelemetryUserFromOrgState();
     syncCompareUrlFromState(state, { method: 'push' });
     renderEditor({ leftChanged: false, rightChanged: true, prevRightOrgId: prevRight });
-    if (getSelectedArtifactType() === 'FieldDependency') {
-      resetFieldDependencyToInitial();
-    }
-    if (getSelectedArtifactType() === 'DependencyExplorer') {
-      resetDependencyExplorerPanel();
-    }
-    if (getSelectedArtifactType() === 'AnonymousApex') {
-      void refreshAnonymousApexPanel();
-    }
-    if (getSelectedArtifactType() === 'QueryExplorer') {
-      void refreshQueryExplorerPanel();
-    }
-    if (getSelectedArtifactType() === 'OrgLimits') {
-      void refreshOrgLimitsPanel();
-    }
-    if (getSelectedArtifactType() === 'EnvironmentStatus') {
-      void reloadEnvironmentStatusIfActive();
-    }
-    if (getSelectedArtifactType() === 'PermissionDiff') {
-      void refreshPermissionDiffPanel();
-    }
-    if (getSelectedArtifactType() === 'DebugLogBrowser') {
-      void refreshDebugLogBrowserPanel();
-    }
-    if (getSelectedArtifactType() === 'SetupAuditTrail') {
-      void refreshSetupAuditTrailPanel();
-    }
-    if (getSelectedArtifactType() === 'ApexCoverageCompare') {
-      void refreshApexCoverageComparePanel();
-    }
-    if (getSelectedArtifactType() === 'CustomSettingsCompare') {
-      void refreshCustomSettingsComparePanel();
-    }
-    if (getSelectedArtifactType() === 'CustomMetadataCompare') {
-      void refreshCustomMetadataComparePanel();
-    }
-    if (getSelectedArtifactType() === 'RecordCompare') {
-      void refreshRecordComparePanel();
-    }
-    if (getSelectedArtifactType() === 'MetadataTypeCompare') {
-      invalidateMetadataTypeComparePanel();
-      void refreshMetadataTypeComparePanel();
-    }
+    refreshActiveToolOnOrgChange('right');
   });
 
   if (leftReauth) {

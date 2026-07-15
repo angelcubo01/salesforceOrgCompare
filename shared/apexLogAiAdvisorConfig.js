@@ -388,7 +388,7 @@ export function resolveLogiRuntime(config, userSettings, selectedModelOverride =
     transport = config.transport === 'proxy' && config.proxyUrl ? 'proxy' : 'openrouter_direct';
     apiKeySource = 'platform';
     openRouterApiKey = config.openRouterApiKey;
-  } else if (config.proxyUrl && config.proxyAuthToken) {
+  } else if (config.proxyUrl) {
     transport = 'proxy';
     apiKeySource = 'platform';
   }
@@ -463,10 +463,7 @@ export function parseLogiAdvisorConfig(raw) {
       : null;
   const proxyUrl =
     typeof o.proxyUrl === 'string' && o.proxyUrl.trim() ? o.proxyUrl.trim() : null;
-  const proxyAuthToken =
-    typeof o.proxyAuthToken === 'string' && o.proxyAuthToken.trim()
-      ? o.proxyAuthToken.trim()
-      : null;
+  const proxyAuthToken = null;
   const models = parseModelChain(o, DEFAULT_LOGI_MODELS);
   const modes = parseLogiModesConfig(o.modes);
 
@@ -506,9 +503,9 @@ export function isLogiAdvisorOperational(config) {
   const allowed = resolveAllowedLogiModes(config);
   if (!allowed.length) return false;
   if (config.transport === 'proxy') {
-    return Boolean(config.proxyUrl && config.proxyAuthToken);
+    return Boolean(config.proxyUrl);
   }
-  return Boolean(config.openRouterApiKey || (config.proxyUrl && config.proxyAuthToken));
+  return Boolean(config.openRouterApiKey || config.proxyUrl);
 }
 
 /**

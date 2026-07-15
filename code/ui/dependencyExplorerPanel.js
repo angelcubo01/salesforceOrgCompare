@@ -12,6 +12,7 @@ import {
   compareCategories
 } from '../../shared/dependencyExplorer.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
+import { escapeHtml } from '../../shared/htmlEscape.js';
 import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
 
 /** @type {{ id: string, name: string, displayName: string, type: string, seedTypeId: string } | null} */
@@ -494,7 +495,7 @@ function renderCategoriesCompare(compared) {
             : t('depExplorer.onlyRight');
       const statusClass =
         row.status === 'leftOnly' ? 'left-only' : row.status === 'rightOnly' ? 'right-only' : '';
-      tr.innerHTML = `<td>${row.name}</td><td><span class="dep-explorer-item-status ${statusClass}">${statusLabel}</span></td>`;
+      tr.innerHTML = `<td>${escapeHtml(row.name)}</td><td><span class="dep-explorer-item-status ${statusClass}">${statusLabel}</span></td>`;
       tbody.appendChild(tr);
     }
     table.appendChild(tbody);

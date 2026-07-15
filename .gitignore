@@ -28,8 +28,7 @@ node_modules/
 services/logi-proxy/.dev.vars
 shared/telemetryConfig.js
 
-# Tests (local development, not published)
-tests/
+# Test artifacts (tests/ is versioned)
 coverage/
 *.lcov
 
@@ -52,4 +51,5 @@ ehthumbs.db
 
 services/*
 
-scripts/*
+# Scripts (herramientas locales, no publicados en el repo)
+scripts/

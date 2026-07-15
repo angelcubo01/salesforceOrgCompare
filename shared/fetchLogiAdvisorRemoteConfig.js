@@ -1,4 +1,5 @@
 import { LOGI_ADVISOR_FLAG } from './apexLogAiAdvisorConfig.js';
+import { getProxyJwt } from './logiProxySession.js';
 
 export class LogiFlagDisabledError extends Error {
   constructor() {
@@ -15,38 +16,48 @@ export function buildLogiAdvisorConfigUrl(proxyUrl) {
   const raw = String(proxyUrl || '').trim().replace(/\/+$/, '');
   if (!raw) return '';
   if (/\/v1\/advisor-config$/i.test(raw)) return raw;
-  const base = raw.replace(/\/v1\/chat$/i, '');
+  const base = raw.replace(/\/v1\/chat$/i, '').replace(/\/v1\/session$/i, '');
   return `${base}/v1/advisor-config`;
 }
 
 /**
  * Obtiene el payload remoto desencriptado vía logi-proxy (PostHog personal API key en servidor).
- * @param {{ proxyUrl: string, proxyAuthToken?: string, installId?: string, bootstrap?: boolean, signal?: AbortSignal }} opts
+ * @param {{ proxyUrl: string, installId: string, jwtToken?: string, signal?: AbortSignal }} opts
  * @returns {Promise<unknown>}
  */
 export async function fetchLogiAdvisorRemoteConfig(opts) {
   const url = buildLogiAdvisorConfigUrl(opts.proxyUrl);
-  const token = String(opts.proxyAuthToken || '').trim();
   const installId = String(opts.installId || '').trim();
-  const bootstrap = opts.bootstrap === true || !token;
   if (!url) {
     throw new Error('LOGI_CONFIG_FETCH_NO_PROXY');
   }
-  if (!token && !installId) {
+  if (!installId) {
     throw new Error('LOGI_CONFIG_FETCH_NO_AUTH');
   }
 
-  const headers = {
-    Accept: 'application/json',
-    ...(installId ? { 'X-SFOC-Install-Id': installId } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  let jwt = String(opts.jwtToken || '').trim();
+  if (!jwt) {
+    jwt = await getProxyJwt(opts.proxyUrl, installId, { signal: opts.signal });
+  }
+
+  const fetchOnce = async (token) => {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+        'X-SFOC-Install-Id': installId
+      },
+      signal: opts.signal
+    });
+    return res;
   };
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers,
-    signal: opts.signal
-  });
+  let res = await fetchOnce(jwt);
+  if (res.status === 401) {
+    jwt = await getProxyJwt(opts.proxyUrl, installId, { signal: opts.signal, forceRenew: true });
+    res = await fetchOnce(jwt);
+  }
 
   const text = await res.text();
   let data;

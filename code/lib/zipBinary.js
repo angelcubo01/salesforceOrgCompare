@@ -1,3 +1,14 @@
+/** Decodifica zipBase64 de retrieve SOAP a Uint8Array. */
+export function decodeZipBase64(zipBase64) {
+  const binaryString = atob(String(zipBase64 || ''));
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
 /** Lectura ZIP con APIs estándar (sin librería externa). */
 
 const ZIP_SIG_EOCD = 0x06054b50;

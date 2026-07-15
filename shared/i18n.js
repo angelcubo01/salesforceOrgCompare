@@ -111,9 +111,9 @@ const translations = {
       'Modo claro u oscuro del comparador y herramientas. Al cambiarlo, el editor adopta el tema SFOC claro u oscuro; puedes elegir otro tema de editor después.',
     'settings.uiThemeDark': 'Oscuro',
     'settings.uiThemeLight': 'Claro',
-    'settings.telemetryEnabled': 'Enviar telemetría anónima de uso',
+    'settings.telemetryEnabled': 'Telemetría de uso',
     'settings.telemetryEnabledHint':
-      'Estadísticas anónimas de uso (herramienta, entorno de referencia). Nunca credenciales ni código. Puedes desactivarlo en cualquier momento.',
+      'Estadísticas anónimas de uso (herramienta, entorno de referencia). Los errores técnicos de la extensión se envían de forma anónima para mejorar la estabilidad, incluso con esta opción desactivada. Nunca credenciales ni código.',
     'settings.codeEditorPersistEnabled': 'Recordar tu trabajo en Quick Edit y los editores Apex y Lightning',
     'settings.codeEditorPersistEnabledHint':
       'Guarda el contenido de los editores Apex y Lightning solo en el almacenamiento local de la extensión en este navegador. No se envía a ningún servidor.',
@@ -2487,9 +2487,9 @@ const translations = {
       'Light or dark UI for the compare view and tools. Changing appearance also sets the editor to the matching SFOC light or dark theme; you can pick a different editor theme later.',
     'settings.uiThemeDark': 'Dark',
     'settings.uiThemeLight': 'Light',
-    'settings.telemetryEnabled': 'Send anonymous usage telemetry',
+    'settings.telemetryEnabled': 'Usage telemetry',
     'settings.telemetryEnabledHint':
-      'Anonymous usage statistics (tool, reference org). Never credentials or code. You can turn this off anytime.',
+      'Anonymous usage statistics (tool, reference org). Technical extension errors are still sent anonymously to improve stability, even when this is off. Never credentials or code.',
     'settings.codeEditorPersistEnabled': 'Remember your work in Quick Edit and the Apex and Lightning editors',
     'settings.codeEditorPersistEnabledHint':
       'Stores Apex and Lightning editor content only in this extension’s local browser storage. Nothing is sent to any server.',

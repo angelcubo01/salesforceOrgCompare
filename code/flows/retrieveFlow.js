@@ -1,7 +1,7 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from '../ui/toast.js';
-import { readZipFirstUsableFile, normalizeRetrieveZipPath, readZipAllTextFiles } from '../lib/zipBinary.js';
+import { readZipFirstUsableFile, normalizeRetrieveZipPath, readZipAllTextFiles, decodeZipBase64 } from '../lib/zipBinary.js';
 import { beginFileViewerLoading, endFileViewerLoading, updateOrgSelectorsLockedState } from '../ui/viewerChrome.js';
 import { getTotalDiffLines, buildAlignedDiff, applyDiffDecorations } from '../editor/diffUtils.js';
 import { languageForFileName } from '../editor/monaco.js';
@@ -61,12 +61,7 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel, ret
       }
       return null;
     }
-    const binaryString = atob(res.zipBase64);
-    const len = binaryString.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
+    const bytes = decodeZipBase64(res.zipBase64);
     const allFiles = await readZipAllTextFiles(bytes);
     if (!isCompareRetrieveActive(retrieveGeneration)) return null;
     if (!allFiles.length) {
@@ -103,12 +98,7 @@ export async function retrieveMetadataWithZipFromOrg(orgId, item, sideLabel, ret
     return null;
   }
 
-  const binaryString = atob(res.zipBase64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  const bytes = decodeZipBase64(res.zipBase64);
 
   const extracted = await readZipFirstUsableFile(bytes);
   if (!isCompareRetrieveActive(retrieveGeneration)) return null;

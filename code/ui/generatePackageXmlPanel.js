@@ -11,6 +11,11 @@ import { handleArtifactTypeSelectChange } from './searchSetup.js';
 import { syncListActiveHighlight } from './listUi.js';
 import { t } from '../../shared/i18n.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
+import {
+  escapeXmlText as escapeXml,
+  memberLinesForSet,
+  buildPackageXmlFromSelection
+} from '../../shared/packageXmlBuilder.js';
 /** @type {Array<{ xmlName: string, label: string, directoryName: string, inFolder: boolean }>} */
 let describeCache = [];
 /** Últimos registros listMetadata del tipo actual (para depurar / futuro). */
@@ -22,47 +27,8 @@ let currentListType = '';
 /** Selección global: tipo → nombres completos de miembro, o `*` = comodín para todo el tipo. */
 const selectedByType = new Map();
 
-function escapeXml(s) {
-  return String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-/** Líneas `<members>…</members>` para un bloque `<types>` (comodín `*` excluye el resto). */
-function memberLinesForSet(set) {
-  if (!set || set.size === 0) return [];
-  if (set.has('*')) {
-    return ['        <members>*</members>'];
-  }
-  return Array.from(set)
-    .sort((a, b) => a.localeCompare(b))
-    .map((m) => `        <members>${escapeXml(m)}</members>`);
-}
-
 function buildPackageXml() {
-  const ver = packageApiVersion || '60.0';
-  const lines = [];
-  lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  lines.push('<Package xmlns="http://soap.sforce.com/2006/04/metadata">');
-
-  const types = Array.from(selectedByType.keys()).sort((a, b) => a.localeCompare(b));
-  for (const typeName of types) {
-    const set = selectedByType.get(typeName);
-    const memberLines = memberLinesForSet(set);
-    if (!memberLines.length) continue;
-    lines.push('    <types>');
-    for (const ml of memberLines) {
-      lines.push(ml);
-    }
-    lines.push(`        <name>${escapeXml(typeName)}</name>`);
-    lines.push('    </types>');
-  }
-
-  lines.push(`    <version>${escapeXml(ver)}</version>`);
-  lines.push('</Package>');
-  return lines.join('\n');
+  return buildPackageXmlFromSelection(selectedByType, packageApiVersion || '60.0');
 }
 
 function updateXmlOutput() {

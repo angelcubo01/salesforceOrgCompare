@@ -44,9 +44,7 @@ export async function bootstrapLogiAdvisorViaProxy(opts = {}) {
 
       const remote = await fetchLogiAdvisorRemoteConfig({
         proxyUrl,
-        proxyAuthToken: cached.proxyAuthToken || '',
-        installId,
-        bootstrap: !cached.proxyAuthToken
+        installId
       });
 
       if (!isUsableFeatureFlagPayload(remote)) {

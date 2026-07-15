@@ -8,6 +8,7 @@ import {
   OPENROUTER_MAX_MODELS_PER_REQUEST,
   resolveLogiModelChain
 } from './apexLogAiAdvisorConfig.js';
+import { getProxyJwt } from './logiProxySession.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
@@ -197,37 +198,54 @@ async function openRouterDirectTransport(config, req, signal) {
 async function proxyTransport(config, req, opts = {}, signal, logiMode = 'free') {
   const url = config.proxyUrl;
   if (!url) throw new Error('LOGI_NO_PROXY_URL');
-  const authToken = opts.userToken || config.proxyAuthToken;
-  if (!authToken) throw new Error('LOGI_NO_PROXY_AUTH');
-  const started = Date.now();
-  const body = buildRequestBody(config, req, req.models);
-
-  const { res, text } = await fetchWithRetry(
-    url,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        Authorization: `Bearer ${authToken}`,
-        'X-SFOC-Logi-Mode': logiMode,
-        ...(opts.installId ? { 'X-SFOC-Install-Id': opts.installId } : {})
-      },
-      body: JSON.stringify(body)
-    },
-    signal
-  );
-
-  const data = parseJsonOrThrow(text, 'LOGI_PROXY_PARSE');
-  if (!res.ok) {
-    const msg = data?.error || data?.message || res.statusText;
-    if (isProxyBlockHttp(res.status, text, res.headers.get('content-type'))) {
-      throw new Error('LOGI_PROXY_BLOCKED');
-    }
-    throw new Error(`LOGI_PROXY_HTTP_${res.status}: ${msg}`);
+  const installId = String(opts.installId || '').trim();
+  let authToken = opts.userToken ? String(opts.userToken).trim() : '';
+  if (!authToken) {
+    if (!installId) throw new Error('LOGI_NO_PROXY_AUTH');
+    authToken = await getProxyJwt(url, installId, { signal });
   }
 
-  return normalizeCompletionPayload(data, started);
+  const runOnce = async (token) => {
+    const started = Date.now();
+    const body = buildRequestBody(config, req, req.models);
+    const { res, text } = await fetchWithRetry(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+          'X-SFOC-Logi-Mode': logiMode,
+          ...(installId ? { 'X-SFOC-Install-Id': installId } : {})
+        },
+        body: JSON.stringify(body)
+      },
+      signal
+    );
+
+    const data = parseJsonOrThrow(text, 'LOGI_PROXY_PARSE');
+    if (!res.ok) {
+      const msg = data?.error || data?.message || res.statusText;
+      if (isProxyBlockHttp(res.status, text, res.headers.get('content-type'))) {
+        throw new Error('LOGI_PROXY_BLOCKED');
+      }
+      throw new Error(`LOGI_PROXY_HTTP_${res.status}: ${msg}`);
+    }
+
+    return normalizeCompletionPayload(data, started);
+  };
+
+  try {
+    return await runOnce(authToken);
+  } catch (e) {
+    const msg = String(e?.message || e || '');
+    if (/LOGI_PROXY_HTTP_401/.test(msg) && installId && !opts.userToken) {
+      const renewed = await getProxyJwt(url, installId, { signal, forceRenew: true });
+      return runOnce(renewed);
+    }
+    throw e;
+  }
 }
 
 function buildRequestBody(config, req, explicitModels) {

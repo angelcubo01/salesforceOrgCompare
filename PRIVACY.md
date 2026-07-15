@@ -8,6 +8,8 @@ Salesforce Org Compare is a browser extension that helps you compare and work wi
 
 The extension communicates **only between your browser and Salesforce** for org operations (metadata retrieve, SOQL, deploy, etc.). Salesforce org data is not routed through our servers for processing.
 
+**Exception — Logi AI advisor (optional):** When you use the Apex log AI advisor, log excerpts and chat messages you send are transmitted to **OpenRouter** (directly with your own API key, or via our Cloudflare Worker proxy for free-tier models). This is separate from normal metadata compare operations.
+
 ## Session authentication
 
 - The extension reads your Salesforce session cookie (`sid`) at runtime to call Salesforce APIs on your behalf.
@@ -22,17 +24,27 @@ The following may be stored in `chrome.storage.local` on your device:
 - UI settings (theme, language, layout)
 - Locally cached metadata and comparison state
 - Extension configuration (export/import supported from settings)
+- Optional BYOK OpenRouter API keys for Logi (if you configure them)
 
-This data stays on your device unless you explicitly export it.
+Short-lived JWT session tokens for the Logi proxy may be stored in `chrome.storage.session` (cleared when the browser session ends). Legacy shared proxy tokens are no longer stored in the extension.
 
-## Optional telemetry
+This data stays on your device unless you explicitly export it or send it through Logi/OpenRouter as described above.
 
-When enabled (and you can opt out in extension settings), anonymous usage events may be sent to **PostHog (EU)** to help improve the product. This includes:
+## Telemetry and error reporting
 
-- Feature usage and navigation patterns
-- Error reports for debugging (sanitized; no Salesforce record payloads)
+### Usage telemetry (opt-out)
 
-Telemetry does **not** include Account, Contact, or other Salesforce record data.
+When enabled in **Settings → Usage telemetry**, anonymous usage events are sent to **PostHog (EU)**. This includes feature usage and navigation patterns. You can disable this at any time.
+
+Usage telemetry does **not** include Account, Contact, or other Salesforce record payloads.
+
+### Technical error reports (always on when PostHog is configured)
+
+Sanitized technical error reports (`$exception`) are sent to PostHog to improve stability **even when usage telemetry is disabled**. These reports exclude credentials, session tokens, and chat/log content; only error type, message, and truncated stack traces from extension code are included.
+
+### Session replay
+
+Session replay may be enabled remotely via PostHog feature flags for a subset of users. When active, it records extension UI interactions (not Salesforce page content).
 
 ## Permissions
 
@@ -44,7 +56,7 @@ Telemetry does **not** include Account, Contact, or other Salesforce record data
 | `alarms` | Background refresh and scheduled tasks |
 | `notifications` | Optional status notifications |
 
-Host permissions are limited to Salesforce domains, the project website, PostHog EU, and Salesforce trust status API.
+Host permissions include Salesforce domains, the project website, PostHog EU, the Logi proxy Worker (`sfoc-logi-proxy.angelpicadocuadrado.workers.dev`), OpenRouter (BYOK), and the Salesforce trust status API.
 
 ## Verification
 

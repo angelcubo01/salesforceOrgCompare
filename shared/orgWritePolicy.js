@@ -1,5 +1,8 @@
 /**
  * Políticas de escritura por org (deploy, DML, REST mutaciones).
+ *
+ * Cubierto por assertOrgWriteAllowed: deploy, DML, REST write, anonymous apex (prod permitido).
+ * Fuera de alcance (permisos Salesforce del usuario): debug logs, trace flags, deleteAll logs.
  */
 
 /** Acciones permitidas en producción (no aplicar bloqueo de deploy). */

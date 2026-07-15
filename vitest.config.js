@@ -8,9 +8,15 @@ export default defineConfig({
     globals: false,
     coverage: {
       provider: 'v8',
-      include: ['shared/**/*.js', 'code/lib/**/*.js', 'code/editor/diffUtils.js'],
-      // compareDeepLink cubierto por tests/compareDeepLink.test.js
-      exclude: ['**/*.test.js', 'vendor/**']
+      include: [
+        'shared/**/*.js',
+        'code/lib/**/*.js',
+        'code/editor/diffUtils.js',
+        'code/flows/**/*.js',
+        'background/**/*.js',
+        'services/logi-proxy/src/**/*.js'
+      ],
+      exclude: ['**/*.test.js', 'vendor/**', 'background/config.js']
     }
   }
 });
