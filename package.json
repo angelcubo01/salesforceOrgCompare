@@ -9,7 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:logi-proxy": "vitest run tests/logiProxy*.test.js",
+    "test:logi-proxy": "vitest run --config vitest.logi-proxy.config.js",
     "posthog:survey": "node scripts/createPosthogCsatSurvey.mjs",
     "posthog:survey:update": "node scripts/createPosthogCsatSurvey.mjs",
     "posthog:replay-flag": "node scripts/createPosthogSessionReplayFlag.mjs",

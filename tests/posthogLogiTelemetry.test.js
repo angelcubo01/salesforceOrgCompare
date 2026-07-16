@@ -1,11 +1,26 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '../tests/setup.js';
-import { captureLogiUsage } from '../background/posthogLogiTelemetry.js';
 import { LOGI_USAGE_EVENT } from '../shared/logiTelemetryConstants.js';
 
 describe('captureLogiUsage', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
   it('envía logi_usage chat_turn al endpoint PostHog', async () => {
     await chrome.storage.local.set({ soc_extension_config: { telemetryEnabled: true } });
+
+    vi.doMock('../shared/telemetryConfig.js', () => ({
+      POSTHOG_API_KEY: 'phc_test_key_for_unit_tests',
+      POSTHOG_HOST: 'https://eu.i.posthog.com',
+      POSTHOG_DEBUG: false,
+      POSTHOG_CSAT_SURVEY_ID: ''
+    }));
+    vi.doMock('../shared/posthogConfigured.js', () => ({
+      isPosthogApiConfigured: () => true,
+      isPosthogCsatConfigured: () => false
+    }));
+
     /** @type {{ url: string, body: Record<string, unknown> } | null} */
     let captured = null;
     const origFetch = globalThis.fetch;
@@ -18,6 +33,7 @@ describe('captureLogiUsage', () => {
     };
 
     try {
+      const { captureLogiUsage } = await import('../background/posthogLogiTelemetry.js');
       const ok = await captureLogiUsage({
         action: 'chat_turn',
         sfoc_log_id: 'test-log-id',
@@ -43,6 +59,18 @@ describe('captureLogiUsage', () => {
 
   it('actualiza person properties también en summarize', async () => {
     await chrome.storage.local.set({ soc_extension_config: { telemetryEnabled: true } });
+
+    vi.doMock('../shared/telemetryConfig.js', () => ({
+      POSTHOG_API_KEY: 'phc_test_key_for_unit_tests',
+      POSTHOG_HOST: 'https://eu.i.posthog.com',
+      POSTHOG_DEBUG: false,
+      POSTHOG_CSAT_SURVEY_ID: ''
+    }));
+    vi.doMock('../shared/posthogConfigured.js', () => ({
+      isPosthogApiConfigured: () => true,
+      isPosthogCsatConfigured: () => false
+    }));
+
     /** @type {{ url: string, body: Record<string, unknown> } | null} */
     let captured = null;
     const origFetch = globalThis.fetch;
@@ -55,6 +83,7 @@ describe('captureLogiUsage', () => {
     };
 
     try {
+      const { captureLogiUsage } = await import('../background/posthogLogiTelemetry.js');
       const ok = await captureLogiUsage({
         action: 'summarize',
         sfoc_summary: true,

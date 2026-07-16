@@ -10,6 +10,7 @@ import {
   writeLogiAdvisorCache
 } from './logiAdvisorCache.js';
 import { fetchLogiAdvisorRemoteConfig, LogiFlagDisabledError } from './fetchLogiAdvisorRemoteConfig.js';
+import { applyQuotaBonuses } from './logiQuotaBonus.js';
 import { isUsableFeatureFlagPayload } from './posthogFlagPayload.js';
 import { getOrCreateTelemetryInstallId } from './telemetryInstallId.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
@@ -29,10 +30,20 @@ function keepCachedOrDisabled(cached) {
 }
 
 /**
+ * @param {unknown} remotePayload
+ * @param {unknown} quotaBonus
+ */
+function parseConfigWithQuotaBonus(remotePayload, quotaBonus) {
+  const config = parseLogiAdvisorConfig(remotePayload);
+  return applyQuotaBonuses(config, quotaBonus);
+}
+
+/**
  * Carga config Logi desde logi-proxy.
- * - Sin caché operativa → siempre fetch (primera vez).
- * - Con caché operativa fresca → no llama a advisor-config.
- * - Si el fetch falla → no borra una config operativa previa.
+ * - force:true (settings / abrir log) → siempre GET /v1/advisor-config.
+ * - Sin force y con caché operativa → reutiliza cache hasta el próximo force.
+ * - Si el fetch falla de forma transitoria → no borra una config operativa previa.
+ * - Si el proxy responde flag_disabled (fuera de cohort) → limpia caché.
  * @param {{ force?: boolean }} [opts]
  * @returns {Promise<import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig | null>}
  */
@@ -64,7 +75,7 @@ export async function bootstrapLogiAdvisorViaProxy(opts = {}) {
           proxyUrl: Boolean(proxyUrl),
           installId: Boolean(installId)
         });
-        return keepCachedOrDisabled(cached);
+        return force ? clearLogiAdvisorCache({ fromRemote: false }) : keepCachedOrDisabled(cached);
       }
 
       const remote = await fetchLogiAdvisorRemoteConfig({
@@ -72,30 +83,29 @@ export async function bootstrapLogiAdvisorViaProxy(opts = {}) {
         installId
       });
 
-      if (!isUsableFeatureFlagPayload(remote)) {
+      if (!isUsableFeatureFlagPayload(remote.payload)) {
         console.warn('[logi] proxy devolvió payload no usable', { proxyUrl });
-        return keepCachedOrDisabled(cached);
+        return force ? clearLogiAdvisorCache({ fromRemote: false }) : keepCachedOrDisabled(cached);
       }
 
-      const config = parseLogiAdvisorConfig(remote);
+      const config = parseConfigWithQuotaBonus(remote.payload, remote.quotaBonus);
       if (!isLogiAdvisorOperational(config)) {
         console.warn('[logi] payload del proxy no es operacional', {
           enabled: config.enabled,
           showButton: config.showButton,
           transport: config.transport
         });
-        return keepCachedOrDisabled(cached);
+        return force ? clearLogiAdvisorCache({ fromRemote: false }) : keepCachedOrDisabled(cached);
       }
       await writeLogiAdvisorCache(config, { fromRemote: true });
       return config;
     } catch (err) {
       if (err instanceof LogiFlagDisabledError) {
-        console.warn('[logi] feature flag desactivado en PostHog');
-        // Flag off: clear, but do not TTL-lock (fromRemote false → next open retries).
+        console.warn('[logi] feature flag desactivado en PostHog (fuera de cohort o flag off)');
         return clearLogiAdvisorCache({ fromRemote: false });
       }
       console.warn('[logi] bootstrap proxy falló', err);
-      return keepCachedOrDisabled(cached);
+      return force ? clearLogiAdvisorCache({ fromRemote: false }) : keepCachedOrDisabled(cached);
     } finally {
       bootstrapInFlight = null;
     }

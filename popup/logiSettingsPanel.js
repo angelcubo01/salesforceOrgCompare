@@ -192,6 +192,8 @@ async function refreshLogiUsageBars() {
 
 export async function refreshLogiSettingsPanel() {
   try {
+    // Force advisor-config on every settings entry; cache serves chat/usage until next entry.
+    await send('aiAdvisor:bootstrap', { force: true });
     const res = await send('aiAdvisor:getConfig');
     if (res?.ok && res.config) applyLogiConfig(res.config);
   } catch {

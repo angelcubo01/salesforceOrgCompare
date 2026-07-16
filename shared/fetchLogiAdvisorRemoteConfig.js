@@ -1,5 +1,6 @@
 import { LOGI_ADVISOR_FLAG } from './apexLogAiAdvisorConfig.js';
 import { getProxyJwt } from './logiProxySession.js';
+import { parseQuotaBonus, ZERO_QUOTA_BONUS } from './logiQuotaBonus.js';
 
 export class LogiFlagDisabledError extends Error {
   constructor() {
@@ -7,6 +8,10 @@ export class LogiFlagDisabledError extends Error {
     this.name = 'LogiFlagDisabledError';
   }
 }
+
+/**
+ * @typedef {{ payload: unknown, quotaBonus: import('./logiQuotaBonus.js').LogiQuotaBonus }} LogiRemoteConfigResult
+ */
 
 /**
  * @param {string} proxyUrl
@@ -21,9 +26,25 @@ export function buildLogiAdvisorConfigUrl(proxyUrl) {
 }
 
 /**
+ * @param {unknown} data
+ * @returns {unknown}
+ */
+function unwrapAdvisorPayload(data) {
+  const payload = data?.payload ?? data?.config ?? data;
+  if (payload == null) {
+    throw new Error('LOGI_CONFIG_FETCH_EMPTY');
+  }
+  if (typeof payload === 'object' && payload.key === LOGI_ADVISOR_FLAG && payload.payload != null) {
+    return payload.payload;
+  }
+  return payload;
+}
+
+/**
  * Obtiene el payload remoto desencriptado vía logi-proxy (PostHog personal API key en servidor).
+ * Incluye quotaBonus por person properties cuando el proxy lo envía.
  * @param {{ proxyUrl: string, installId: string, jwtToken?: string, signal?: AbortSignal }} opts
- * @returns {Promise<unknown>}
+ * @returns {Promise<LogiRemoteConfigResult>}
  */
 export async function fetchLogiAdvisorRemoteConfig(opts) {
   const url = buildLogiAdvisorConfigUrl(opts.proxyUrl);
@@ -79,12 +100,18 @@ export async function fetchLogiAdvisorRemoteConfig(opts) {
     throw new Error(String(data.error || 'LOGI_CONFIG_FETCH_FAILED'));
   }
 
-  const payload = data?.payload ?? data?.config ?? data;
-  if (payload == null) {
-    throw new Error('LOGI_CONFIG_FETCH_EMPTY');
-  }
-  if (typeof payload === 'object' && payload.key === LOGI_ADVISOR_FLAG && payload.payload != null) {
-    return payload.payload;
-  }
+  const payload = unwrapAdvisorPayload(data);
+  const quotaBonus = parseQuotaBonus(data?.quotaBonus);
+  return { payload, quotaBonus };
+}
+
+/**
+ * Compat: solo el payload (sin bonus). Preferir fetchLogiAdvisorRemoteConfig.
+ * @param {{ proxyUrl: string, installId: string, jwtToken?: string, signal?: AbortSignal }} opts
+ */
+export async function fetchLogiAdvisorRemotePayload(opts) {
+  const { payload } = await fetchLogiAdvisorRemoteConfig(opts);
   return payload;
 }
+
+export { ZERO_QUOTA_BONUS };

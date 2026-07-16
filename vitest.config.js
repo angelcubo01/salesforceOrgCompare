@@ -4,6 +4,12 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.js'],
+    // logi-proxy vive bajo services/* (gitignored); correrlo con `npm run test:logi-proxy` en local.
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      'tests/logiProxy*.test.js'
+    ],
     setupFiles: ['tests/setup.js'],
     globals: false,
     coverage: {

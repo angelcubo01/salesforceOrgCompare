@@ -26,9 +26,22 @@ describe('parseLogiAdvisorConfig', () => {
     expect(cfg.maxIterationsPerChat).toBe(15);
   });
 
-  it('clamps iteration limits', () => {
-    const cfg = parseLogiAdvisorConfig({ maxIterationsPerChat: 999 });
-    expect(cfg.maxIterationsPerChat).toBe(200);
+  it('clamps iteration limits al tope ampliado (base + bonus)', () => {
+    const cfg = parseLogiAdvisorConfig({ maxIterationsPerChat: 999_999 });
+    expect(cfg.maxIterationsPerChat).toBe(200_000);
+  });
+
+  it('permite 0 en límites (cuota efectiva tras bonus negativo)', () => {
+    const cfg = parseLogiAdvisorConfig({
+      maxIterationsPerChat: 0,
+      maxChatsPerDay: 0,
+      maxChatsPerMonth: 0,
+      maxChatsPerUser: 0
+    });
+    expect(cfg.maxIterationsPerChat).toBe(0);
+    expect(cfg.maxChatsPerDay).toBe(0);
+    expect(cfg.maxChatsPerMonth).toBe(0);
+    expect(cfg.maxChatsPerUser).toBe(0);
   });
 
   it('acepta límites altos del servidor sin recortarlos', () => {

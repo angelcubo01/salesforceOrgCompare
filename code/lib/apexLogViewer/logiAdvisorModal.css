@@ -54,6 +54,11 @@
   white-space: nowrap;
 }
 
+/* display:inline-flex above overrides the UA [hidden] rule without this. */
+.logi-advisor-btn[hidden] {
+  display: none !important;
+}
+
 .logi-advisor-btn-icon {
   flex-shrink: 0;
   opacity: 0.95;

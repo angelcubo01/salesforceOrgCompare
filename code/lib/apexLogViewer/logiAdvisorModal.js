@@ -3,8 +3,7 @@ import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { renderLogiMarkdown } from '../../../shared/logiMarkdown.js';
 import { getCurrentLang, t } from '../../../shared/i18n.js';
 import { bg } from '../../core/bridge.js';
-import { bootstrapLogiAdvisor, getCachedLogiAdvisorConfig, LOGI_ADVISOR_READY_EVENT } from '../../../shared/posthogLogiAdvisorFlag.js';
-import { isLogiAdvisorOperational } from '../../../shared/apexLogAiAdvisorConfig.js';
+import { LOGI_ADVISOR_READY_EVENT } from '../../../shared/posthogLogiAdvisorFlag.js';
 import { formatLogiModelLabel } from '../../../shared/logiModelLabels.js';
 import { LOGI_ADVISOR_STORAGE_KEY } from '../../../shared/logiAdvisorCache.js';
 import {
@@ -890,15 +889,11 @@ function isModalBusy(modal) {
  * @param {object} opts
  */
 async function ensureLogiAdvisorConfigLoaded() {
-  // Force one network refresh when we don't already have an operational in-page config.
-  const pageCfg = getCachedLogiAdvisorConfig();
-  const needForce = !isLogiAdvisorOperational(pageCfg);
-  await Promise.allSettled([
-    bg({ type: 'aiAdvisor:bootstrap', force: needForce }),
-    bootstrapLogiAdvisor({ force: needForce })
-  ]);
+  // SW bootstrap is authoritative (cohort gate + quotaBonus).
+  const boot = await bg({ type: 'aiAdvisor:bootstrap', force: true });
   customQuickActionPrompts = await loadLogiQuickActionPrompts();
   customQuickActions = getLogiCustomQuickActionsSnapshot();
+  return boot;
 }
 
 export async function mountLogiAdvisor(opts) {
@@ -922,7 +917,9 @@ export async function mountLogiAdvisor(opts) {
     }
   });
 
-  await refreshConfig();
+  // Hide until force bootstrap settles — avoid flashing from a stale cache / CSS override.
+  btnEl.hidden = true;
+  setLogiResumeButtonVisible(false);
 
   try {
     await ensureLogiAdvisorConfigLoaded();
@@ -972,24 +969,25 @@ export async function openLogiAdvisor(ctx) {
 }
 
 async function refreshConfig() {
-  const fromPage = getCachedLogiAdvisorConfig();
   const res = await bg({ type: 'aiAdvisor:getConfig' });
   advisorConfig = res?.config || null;
 
   const telemetryRequired = res?.telemetryRequired === true;
-  const pageOperational = isLogiAdvisorOperational(fromPage);
-  const pageShow =
-    fromPage.enabled && fromPage.showButton && pageOperational && !telemetryRequired;
-  const swShow =
-    advisorConfig?.enabled &&
-    advisorConfig?.showButton &&
-    advisorConfig?.operational &&
-    !telemetryRequired;
+  // Require operational + enabled + showButton. Never show on stale/disabled payloads.
+  const show = Boolean(
+    advisorConfig?.enabled === true &&
+      advisorConfig?.showButton === true &&
+      advisorConfig?.operational === true &&
+      !telemetryRequired
+  );
 
-  if (!btnEl) return;
-  const show = Boolean(pageShow || swShow);
-  btnEl.hidden = !show;
-  btnEl.textContent = t('apexLogViewer.logi.button');
+  if (!btnEl) {
+    btnEl = document.getElementById('logiAdvisorBtn');
+  }
+  if (btnEl) {
+    btnEl.hidden = !show;
+    btnEl.textContent = t('apexLogViewer.logi.button');
+  }
   setLogiResumeButtonVisible(show);
 }
 

@@ -4,7 +4,11 @@ import {
   isDistinctIdInCohort,
   isLogiAdvisorFlagEnabledForDistinctId,
   LOGI_FLAG_DISABLED,
-  fetchAdvisorConfigPayload
+  fetchAdvisorConfigPayload,
+  fetchPersonQuotaBonus,
+  parseQuotaBonusFromPersonProperties,
+  QUOTA_BONUS_PERSON_PROPS,
+  ZERO_QUOTA_BONUS
 } from '../services/logi-proxy/src/posthog.js';
 
 const FLAG_WITH_COHORT = {
@@ -162,5 +166,74 @@ describe('fetchAdvisorConfigPayload', () => {
 
     expect(result).toBe(LOGI_FLAG_DISABLED);
     expect(fetchMock.mock.calls.some(([u]) => String(u).includes('/persons/?distinct_id='))).toBe(true);
+  });
+});
+
+describe('parseQuotaBonusFromPersonProperties', () => {
+  it('reads sfoc_quota_bonus_* keys', () => {
+    expect(
+      parseQuotaBonusFromPersonProperties({
+        [QUOTA_BONUS_PERSON_PROPS.day]: 10,
+        [QUOTA_BONUS_PERSON_PROPS.month]: -5,
+        [QUOTA_BONUS_PERSON_PROPS.user]: 0,
+        [QUOTA_BONUS_PERSON_PROPS.iterations]: 5
+      })
+    ).toEqual({ day: 10, month: -5, user: 0, iterations: 5 });
+  });
+});
+
+describe('fetchPersonQuotaBonus', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns zeros when person is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ results: [] })
+      }))
+    );
+
+    const bonus = await fetchPersonQuotaBonus(
+      { POSTHOG_PERSONAL_API_KEY: 'phx_test', POSTHOG_PROJECT_ID: '191202' },
+      '9f714351-1446-4c09-8a72-37aec34a91f1'
+    );
+    expect(bonus).toEqual(ZERO_QUOTA_BONUS);
+  });
+
+  it('maps person properties to quotaBonus', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url) => {
+        const u = String(url);
+        if (u.includes('/persons/?distinct_id=')) {
+          return {
+            ok: true,
+            json: async () => ({
+              results: [
+                {
+                  uuid: 'person-uuid-1',
+                  properties: {
+                    sfoc_quota_bonus_day: 10,
+                    sfoc_quota_bonus_month: -5,
+                    sfoc_quota_bonus_user: 100,
+                    sfoc_quota_bonus_iterations: 5
+                  }
+                }
+              ]
+            })
+          };
+        }
+        throw new Error(`unexpected fetch: ${u}`);
+      })
+    );
+
+    const bonus = await fetchPersonQuotaBonus(
+      { POSTHOG_PERSONAL_API_KEY: 'phx_test', POSTHOG_PROJECT_ID: '191202' },
+      '9f714351-1446-4c09-8a72-37aec34a91f1'
+    );
+    expect(bonus).toEqual({ day: 10, month: -5, user: 100, iterations: 5 });
   });
 });

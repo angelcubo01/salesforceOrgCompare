@@ -46,7 +46,7 @@ describe('logiAdvisorCache', () => {
     expect(canSkipLogiAdvisorRemoteFetch(entry)).toBe(true);
   });
 
-  it('skips remote fetch only for fresh operational fromRemote cache', () => {
+  it('skips remote fetch for operational fromRemote cache (until force refresh)', () => {
     const at = Date.now() - 1000;
     const entry = unwrapCacheRaw({
       config: {
@@ -73,7 +73,7 @@ describe('logiAdvisorCache', () => {
     expect(canSkipLogiAdvisorRemoteFetch(entry)).toBe(true);
   });
 
-  it('does not skip when TTL expired', () => {
+  it('still skips when TTL expired if cache is operational (refresh only on force)', () => {
     const at = Date.now() - LOGI_ADVISOR_CACHE_TTL_MS - 1000;
     expect(
       canSkipLogiAdvisorRemoteFetch({
@@ -87,7 +87,7 @@ describe('logiAdvisorCache', () => {
         cachedAt: at,
         fromRemote: true
       })
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('keeps memory entry with fromRemote after set', async () => {

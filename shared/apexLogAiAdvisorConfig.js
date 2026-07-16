@@ -476,10 +476,12 @@ export function parseLogiAdvisorConfig(raw) {
     showButton: o.showButton === true,
     showLogiSettings: o.showLogiSettings === true,
     requireTelemetry: o.requireTelemetry !== false,
-    maxIterationsPerChat: clampInt(o.maxIterationsPerChat, 10, 1, 200),
-    maxChatsPerUser: clampInt(o.maxChatsPerUser, 20, 1, Number.MAX_SAFE_INTEGER),
-    maxChatsPerDay: clampInt(o.maxChatsPerDay, 5, 1, 1000),
-    maxChatsPerMonth: clampInt(o.maxChatsPerMonth, 50, 1, 10000),
+    // min 0: quotaBonus negativo puede dejar el efectivo en 0 (ver logiQuotaBonus.js).
+    // max amplios: tras bonus la config cacheada se re-parsea sin recortar el extra.
+    maxIterationsPerChat: clampInt(o.maxIterationsPerChat, 10, 0, 200_000),
+    maxChatsPerUser: clampInt(o.maxChatsPerUser, 20, 0, Number.MAX_SAFE_INTEGER),
+    maxChatsPerDay: clampInt(o.maxChatsPerDay, 5, 0, Number.MAX_SAFE_INTEGER),
+    maxChatsPerMonth: clampInt(o.maxChatsPerMonth, 50, 0, Number.MAX_SAFE_INTEGER),
     model: models[0],
     models,
     modes,

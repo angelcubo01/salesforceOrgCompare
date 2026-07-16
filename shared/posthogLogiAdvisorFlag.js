@@ -15,6 +15,7 @@ import {
 } from './logiAdvisorCache.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
 import { fetchLogiAdvisorRemoteConfig, LogiFlagDisabledError } from './fetchLogiAdvisorRemoteConfig.js';
+import { applyQuotaBonuses, ZERO_QUOTA_BONUS } from './logiQuotaBonus.js';
 import {
   isEncryptedPosthogPayload,
   isUsableFeatureFlagPayload,
@@ -63,15 +64,12 @@ function resolveProxyUrl(cached, rawPosthogPayload) {
 }
 
 /**
+ * Siempre llama al proxy cuando hay URL: el quotaBonus por usuario solo llega por ahí.
  * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} cached
  * @param {unknown} rawPosthogPayload
- * @returns {Promise<unknown>}
+ * @returns {Promise<{ payload: unknown, quotaBonus: import('./logiQuotaBonus.js').LogiQuotaBonus } | null>}
  */
 async function fetchLogiConfigViaProxy(cached, rawPosthogPayload) {
-  if (isUsableFeatureFlagPayload(rawPosthogPayload)) {
-    return normalizeFeatureFlagPayload(rawPosthogPayload);
-  }
-
   const proxyUrl = resolveProxyUrl(cached, rawPosthogPayload) || cached?.proxyUrl || LOGI_PROXY_BOOTSTRAP_URL;
   const installId = await getOrCreateTelemetryInstallId();
   if (!proxyUrl || !installId) {
@@ -84,13 +82,15 @@ async function fetchLogiConfigViaProxy(cached, rawPosthogPayload) {
       installId
     });
     if (POSTHOG_DEBUG) {
-      console.log('[posthog] logi advisor remote config loaded via proxy');
+      console.log('[posthog] logi advisor remote config loaded via proxy', {
+        quotaBonus: remote.quotaBonus
+      });
     }
     return remote;
   } catch (e) {
     if (e instanceof LogiFlagDisabledError) {
       if (POSTHOG_DEBUG) console.log('[posthog] logi advisor flag disabled (proxy)');
-      return null;
+      throw e;
     }
     if (POSTHOG_DEBUG) {
       console.warn('[posthog] logi advisor remote config fetch failed', e);
@@ -125,12 +125,15 @@ function isLogiAdvisorFlagActive(ph, _rawPayload) {
 
 /**
  * @param {unknown} resolvedPayload
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} cached
+ * @param {unknown} [quotaBonus]
  * @returns {Promise<import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig>}
  */
-async function commitLogiAdvisorConfig(resolvedPayload, cached) {
+async function commitLogiAdvisorConfig(resolvedPayload, quotaBonus = ZERO_QUOTA_BONUS) {
   if (isUsableFeatureFlagPayload(resolvedPayload)) {
-    const parsed = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(resolvedPayload));
+    const parsed = applyQuotaBonuses(
+      parseLogiAdvisorConfig(normalizeFeatureFlagPayload(resolvedPayload)),
+      quotaBonus
+    );
     if (isLogiAdvisorOperational(parsed)) {
       cachedConfig = parsed;
       await writeLogiAdvisorCache(cachedConfig, { fromRemote: true });
@@ -152,6 +155,7 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
   const telemetryEnabled = await getTelemetryEnabled();
   const cacheEntry = await readLogiAdvisorCacheEntry();
   const cached = cacheEntry.config;
+  const force = opts.force === true;
 
   if (!telemetryEnabled) {
     if (isLogiAdvisorOperational(cached)) {
@@ -164,7 +168,7 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
     });
   }
 
-  if (!opts.force && canSkipLogiAdvisorRemoteFetch(cacheEntry)) {
+  if (!force && canSkipLogiAdvisorRemoteFetch(cacheEntry)) {
     cachedConfig = cached;
     return cached;
   }
@@ -174,7 +178,7 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
 
   if (ph) {
     flagsOk = await ensureFeatureFlagsLoaded(ph, {
-      force: opts.force === true,
+      force,
       timeoutMs: opts.timeoutMs ?? 8000
     });
     if (typeof ph.getFeatureFlagPayload === 'function') {
@@ -184,6 +188,34 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
 
   const flagActive = isLogiAdvisorFlagActive(ph, rawPayload);
 
+  // Proxy is authoritative for remote-config + cohort (403 → flag_disabled).
+  const canReachProxy = Boolean(
+    resolveProxyUrl(cached, rawPayload) || cached?.proxyUrl || LOGI_PROXY_BOOTSTRAP_URL
+  );
+  if (canReachProxy && (force || flagActive || !ph || !flagsOk)) {
+    try {
+      const remote = await fetchLogiConfigViaProxy(cached, rawPayload);
+      if (remote && isUsableFeatureFlagPayload(remote.payload)) {
+        if (flagsOk && ph && !flagActive) {
+          // SDK: out of cohort. Never enable from a leaked proxy payload.
+          return clearLogiAdvisorCache({ fromRemote: true }).then((disabled) => {
+            cachedConfig = disabled;
+            return disabled;
+          });
+        }
+        return commitLogiAdvisorConfig(remote.payload, remote.quotaBonus);
+      }
+    } catch (e) {
+      if (e instanceof LogiFlagDisabledError) {
+        return clearLogiAdvisorCache({ fromRemote: true }).then((disabled) => {
+          cachedConfig = disabled;
+          return disabled;
+        });
+      }
+      // Transient proxy error — fall through.
+    }
+  }
+
   if (ph && flagsOk && !flagActive) {
     if (POSTHOG_DEBUG) console.log('[posthog] logi advisor flag disabled');
     return clearLogiAdvisorCache({ fromRemote: true }).then((disabled) => {
@@ -192,31 +224,27 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
     });
   }
 
-  if (flagActive && isUsableFeatureFlagPayload(rawPayload)) {
+  if (flagActive && isUsableFeatureFlagPayload(rawPayload) && !isEncryptedPosthogPayload(rawPayload)) {
     const parsed = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(rawPayload));
     if (isLogiAdvisorOperational(parsed)) {
       cachedConfig = parsed;
       await writeLogiAdvisorCache(cachedConfig, { fromRemote: true });
-      if (POSTHOG_DEBUG) console.log('[posthog] logi advisor loaded from flag payload');
+      if (POSTHOG_DEBUG) console.log('[posthog] logi advisor loaded from flag payload (no quotaBonus)');
       return cachedConfig;
     }
   }
 
-  const shouldTryProxy =
-    flagActive &&
-    (!ph ||
-      !flagsOk ||
-      isEncryptedPosthogPayload(rawPayload) ||
-      !isUsableFeatureFlagPayload(rawPayload));
-
-  if (shouldTryProxy) {
-    const remote = await fetchLogiConfigViaProxy(cached, rawPayload);
-    if (isUsableFeatureFlagPayload(remote)) {
-      return commitLogiAdvisorConfig(remote, cached);
+  // Force refresh must not keep a stale operational cache (cohort may have changed).
+  if (force) {
+    if (POSTHOG_DEBUG) {
+      console.log('[posthog] logi advisor force refresh failed; clearing cache', { flagsOk, flagActive });
     }
+    return clearLogiAdvisorCache({ fromRemote: false }).then((disabled) => {
+      cachedConfig = disabled;
+      return disabled;
+    });
   }
 
-  // Prefer a still-valid operational cache over disabling on transient failures.
   if (isLogiAdvisorOperational(cached) && cached.proxyUrl) {
     cachedConfig = cached;
     return cached;

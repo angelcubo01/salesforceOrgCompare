@@ -226,7 +226,9 @@ export async function handleLogiAdvisorBootstrap(message = {}) {
  * @param {object} message
  */
 export async function handleLogiAdvisorGetConfig() {
-  const config = await bootstrapLogiAdvisorViaProxy();
+  // Read-only: entry points (settings / open log) call bootstrap with force first.
+  // Avoid re-bootstrap here — it can revive a stale operational cache via canSkip.
+  const config = await readLogiAdvisorCache();
   const parsedConfig = parseLogiAdvisorConfig(config);
   const telemetryEnabled = await getTelemetryEnabled();
   if (parsedConfig.requireTelemetry && !telemetryEnabled) {
@@ -234,6 +236,17 @@ export async function handleLogiAdvisorGetConfig() {
       ok: true,
       config: sanitizeConfigForUi({ ...parsedConfig, enabled: false, showButton: false }),
       telemetryRequired: true
+    };
+  }
+  if (!isLogiAdvisorOperational(parsedConfig) || parsedConfig.enabled !== true) {
+    return {
+      ok: true,
+      config: sanitizeConfigForUi({
+        ...parsedConfig,
+        enabled: false,
+        showButton: false
+      }),
+      telemetryRequired: false
     };
   }
   const ctx = await buildLogiRuntimeContext(parsedConfig);
@@ -523,7 +536,7 @@ export async function handleLogiAdvisorChat(message, hooks = {}) {
  * @param {object} message
  */
 export async function handleLogiAdvisorCheckUsageLimits() {
-  await bootstrapLogiAdvisorViaProxy();
+  // Do not bootstrap here — use the cache populated by settings/log force refresh.
   const config = await readLogiAdvisorCache();
   const parsed = parseLogiAdvisorConfig(config);
   const usage = await readLogiUsageSnapshot();
@@ -536,6 +549,9 @@ export async function handleLogiAdvisorCheckUsageLimits() {
     user: Math.max(0, maxUser - Number(usage.chatsTotal || 0))
   };
   const max = { today: maxToday, month: maxMonth, user: maxUser };
+  if (!isLogiAdvisorOperational(parsed) || parsed.enabled !== true) {
+    return { ok: false, reason: 'LOGI_DISABLED', usage, remaining, max };
+  }
   const limitCheck = await checkLogiUsageLimits({ isNewChat: true });
   if (!limitCheck.ok) {
     return { ok: false, reason: limitCheck.reason, usage, remaining, max };

@@ -6,7 +6,8 @@ import {
 
 export const LOGI_ADVISOR_STORAGE_KEY = 'sfocLogiAdvisorCache';
 
-/** How long a successful advisor-config fetch stays valid without re-hitting the proxy. */
+/** How long a successful advisor-config fetch is considered "fresh" (telemetry/debug only).
+ *  Refresh is driven by force:true on settings / open-log — not by this TTL. */
 export const LOGI_ADVISOR_CACHE_TTL_MS = 15 * 60 * 1000;
 
 /**
@@ -83,13 +84,12 @@ export function isLogiAdvisorCacheFresh(cachedAt, ttlMs = LOGI_ADVISOR_CACHE_TTL
 }
 
 /**
- * Skip proxy only with a fresh, operational remote config.
- * Never skip for disabled/default — that was locking Logi out for the whole TTL.
+ * Skip proxy when we already have an operational remote config.
+ * Entry points (settings / open log) pass force:true to refresh; other calls reuse cache.
  * @param {LogiAdvisorCacheEntry | null | undefined} entry
  */
 export function canSkipLogiAdvisorRemoteFetch(entry) {
   if (!entry || entry.fromRemote !== true) return false;
-  if (!isLogiAdvisorCacheFresh(entry.cachedAt)) return false;
   return isLogiAdvisorOperational(entry.config);
 }
 
