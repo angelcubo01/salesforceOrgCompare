@@ -170,7 +170,6 @@ import {
 import { DEBUG_LOGS } from './config.js';
 import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
 import { captureLogiUsage } from './posthogLogiTelemetry.js';
-import { buildLogiErrorMetrics } from '../shared/logiAiMetrics.js';
 import { sendPosthogException, sendPosthogOperationalFailure, maybeSendFirstOrgConnectedTelemetry } from './posthogTelemetry.js';
 import { classifyError, toError } from '../shared/errorTelemetryPolicy.js';
 import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
@@ -261,6 +260,7 @@ import { featureControlBlockedResponse } from './featureControlsGuard.js';
 import {
   handleLogiAdvisorBootstrap,
   handleLogiAdvisorChat,
+  handleLogiAdvisorSummarize,
   handleLogiAdvisorCancel,
   handleLogiAdvisorCheckUsageLimits,
   handleLogiAdvisorGetConfig,
@@ -2946,6 +2946,14 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'aiAdvisor:summarize': {
+            try {
+              reply(await handleLogiAdvisorSummarize(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
           case 'aiAdvisor:cancel': {
             try {
               reply(handleLogiAdvisorCancel(message));
@@ -3021,11 +3029,6 @@ export function installMessageHandlers() {
                 orgId,
                 detail: q.slice(0, 120)
               });
-              await captureLogiUsage({
-                action: 'org_query_approved',
-                sfoc_org_query_variant: String(variant || 'rest-soql').slice(0, 32),
-                sfoc_log_id: String(message.logId || '').slice(0, 64)
-              });
               reply({
                 ok: true,
                 records: slimQueryRecords(records, 50),
@@ -3033,16 +3036,6 @@ export function installMessageHandlers() {
                 done
               });
             } catch (e) {
-              await captureLogiUsage({
-                action: 'error',
-                ...buildLogiErrorMetrics(e, {
-                  reason: 'ORG_QUERY_FAILED',
-                  errorSource: 'org_query',
-                  orgQueryVariant: variant,
-                  errorCode: String(e?.message || e || 'ORG_QUERY_FAILED').slice(0, 64)
-                }),
-                sfoc_log_id: String(message.logId || '').slice(0, 64)
-              });
               reply(queryExplorerCatchErrorPayload(e));
             }
             break;

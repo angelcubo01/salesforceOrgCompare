@@ -1,4 +1,10 @@
 import { formatLogiModelLabel } from '../shared/logiModelLabels.js';
+import {
+  DEFAULT_LOGI_LANGUAGE,
+  formatLogiLanguageLabel,
+  LOGI_LANGUAGES,
+  normalizeLogiLanguage
+} from '../shared/logiLanguages.js';
 import { LOGI_ADVISOR_READY_EVENT } from '../shared/posthogLogiAdvisorFlag.js';
 
 /** @type {Record<string, unknown> | null} */
@@ -10,6 +16,25 @@ function send(type, payload = {}) {
 
 function t(key) {
   return typeof window.__settingsT === 'function' ? window.__settingsT(key) : key;
+}
+
+/**
+ * @param {Record<string, unknown>} config
+ */
+function renderLanguageSelect(config) {
+  const sel = document.getElementById('settingsLogiLanguage');
+  if (!sel) return;
+  const current = normalizeLogiLanguage(
+    config.userSettings?.logiLanguage || config.logiLanguage || DEFAULT_LOGI_LANGUAGE
+  );
+  sel.innerHTML = '';
+  for (const lang of LOGI_LANGUAGES) {
+    const opt = document.createElement('option');
+    opt.value = lang.code;
+    opt.textContent = formatLogiLanguageLabel(lang);
+    opt.selected = lang.code === current;
+    sel.appendChild(opt);
+  }
 }
 
 /**
@@ -63,6 +88,76 @@ function renderByokPanel(config) {
 }
 
 /**
+ * @param {number} used
+ * @param {number} max
+ */
+function usagePercent(used, max) {
+  const m = Math.max(0, Number(max) || 0);
+  if (m <= 0) return 0;
+  return Math.min(100, Math.round((Math.max(0, Number(used) || 0) / m) * 100));
+}
+
+/**
+ * @param {{ usage?: Record<string, number>, max?: Record<string, number> } | null} usageRes
+ */
+function renderUsageBars(usageRes) {
+  const section = document.getElementById('settingsLogiUsage');
+  const list = document.getElementById('settingsLogiUsageList');
+  if (!section || !list) return;
+
+  const max = usageRes?.max || {};
+  const usage = usageRes?.usage || {};
+  const rows = [
+    {
+      key: 'today',
+      label: t('settings.logi.usageDay'),
+      used: Number(usage.chatsToday) || 0,
+      max: Number(max.today) || 0
+    },
+    {
+      key: 'month',
+      label: t('settings.logi.usageMonth'),
+      used: Number(usage.chatsMonth) || 0,
+      max: Number(max.month) || 0
+    },
+    {
+      key: 'user',
+      label: t('settings.logi.usageUser'),
+      used: Number(usage.chatsTotal) || 0,
+      max: Number(max.user) || 0
+    }
+  ].filter((row) => row.max > 0);
+
+  if (!rows.length) {
+    section.hidden = true;
+    list.innerHTML = '';
+    return;
+  }
+
+  section.hidden = false;
+  list.innerHTML = rows
+    .map((row) => {
+      const pct = usagePercent(row.used, row.max);
+      const fillClass =
+        pct >= 100
+          ? 'settings-logi-usage-fill settings-logi-usage-fill--full'
+          : pct >= 80
+            ? 'settings-logi-usage-fill settings-logi-usage-fill--warn'
+            : 'settings-logi-usage-fill';
+      return `<div class="settings-logi-usage-row" data-usage="${row.key}">
+        <div class="settings-logi-usage-meta">
+          <span>${row.label}: ${row.used} / ${row.max}</span>
+          <span class="settings-logi-usage-pct">${pct}%</span>
+        </div>
+        <div class="settings-logi-usage-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${row.label}">
+          <div class="${fillClass}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+    })
+    .join('');
+}
+
+/**
  * @param {Record<string, unknown>} config
  */
 function applyLogiConfig(config) {
@@ -71,9 +166,28 @@ function applyLogiConfig(config) {
   if (!section) return;
   const visible = config.showLogiSettings === true && config.enabled === true;
   section.hidden = !visible;
-  if (!visible) return;
+  if (!visible) {
+    const usageSection = document.getElementById('settingsLogiUsage');
+    if (usageSection) usageSection.hidden = true;
+    return;
+  }
+  renderLanguageSelect(config);
   renderModeCards(config);
   renderByokPanel(config);
+  void refreshLogiUsageBars();
+}
+
+async function refreshLogiUsageBars() {
+  try {
+    const res = await send('aiAdvisor:checkUsageLimits');
+    if (res?.usage && res?.max) {
+      renderUsageBars(res);
+    } else {
+      renderUsageBars(null);
+    }
+  } catch {
+    renderUsageBars(null);
+  }
 }
 
 export async function refreshLogiSettingsPanel() {
@@ -98,11 +212,15 @@ export function mountLogiSettingsPanel(translateFn) {
     const status = document.getElementById('settingsLogiStatus');
     const modeInput = document.querySelector('input[name="settingsLogiMode"]:checked');
     const mode = modeInput?.value || 'free';
+    const langSel = document.getElementById('settingsLogiLanguage');
     const keyInput = document.getElementById('settingsLogiByokKey');
     const modelsSel = document.getElementById('settingsLogiByokModels');
 
     /** @type {Record<string, unknown>} */
-    const patch = { logiMode: mode };
+    const patch = {
+      logiMode: mode,
+      logiLanguage: normalizeLogiLanguage(langSel?.value || DEFAULT_LOGI_LANGUAGE)
+    };
     if (keyInput?.value?.trim()) patch.logiByokOpenRouterKey = keyInput.value.trim();
     if (modelsSel) {
       patch.logiByokModels = Array.from(modelsSel.selectedOptions).map((o) => o.value);

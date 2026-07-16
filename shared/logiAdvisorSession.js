@@ -2,7 +2,7 @@ import { isLogiQuickActionId } from './apexLogAiContext.js';
 
 export const LOGI_SESSION_STORAGE_KEY = 'sfocLogiAdvisorSessions';
 
-/** @typedef {{ role: string, content?: string, quickActionId?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} LogiChatMessage */
+/** @typedef {{ role: string, content?: string, quickActionId?: string, displayText?: string, lineRef?: { startLine: number, endLine: number, logId: string }, tool_calls?: object[], tool_call_id?: string, name?: string }} LogiChatMessage */
 
 /**
  * @typedef {object} LogiAdvisorSession
@@ -119,6 +119,21 @@ function normalizeSession(raw) {
           if (msg.content != null) out.content = String(msg.content);
           if (msg.quickActionId != null && isLogiQuickActionId(String(msg.quickActionId))) {
             out.quickActionId = String(msg.quickActionId);
+          }
+          if (msg.displayText != null && String(msg.displayText).trim()) {
+            out.displayText = String(msg.displayText).trim();
+          }
+          if (msg.lineRef && typeof msg.lineRef === 'object') {
+            const lr = /** @type {Record<string, unknown>} */ (msg.lineRef);
+            const startLine = Math.floor(Number(lr.startLine));
+            const endLine = Math.floor(Number(lr.endLine));
+            if (Number.isFinite(startLine) && Number.isFinite(endLine) && startLine >= 1 && endLine >= 1) {
+              out.lineRef = {
+                startLine: Math.min(startLine, endLine),
+                endLine: Math.max(startLine, endLine),
+                logId: String(lr.logId || 'log').trim().slice(0, 64) || 'log'
+              };
+            }
           }
           if (Array.isArray(msg.tool_calls)) out.tool_calls = msg.tool_calls;
           if (msg.tool_call_id != null) out.tool_call_id = String(msg.tool_call_id);

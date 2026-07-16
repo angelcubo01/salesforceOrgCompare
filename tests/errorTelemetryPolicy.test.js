@@ -97,4 +97,28 @@ describe('errorTelemetryPolicy', () => {
     expect(classifyError(new Error('An unknown exception occurred'))).toBe('operational');
     expect(shouldReportAsBug(new Error('Failed to fetch'))).toBe(false);
   });
+
+  it('issues activos PostHog 2026-07: sesión, Monaco dispose y retrieve timeout', () => {
+    expect(classifyError(new Error('Session expired or invalid'), { error_handled: 1 })).toBe(
+      'operational'
+    );
+    expect(
+      classifyError(
+        new Error('TextModel got disposed before DiffEditorWidget model got reset'),
+        {
+          filename:
+            'chrome-extension://id/vendor/monaco-editor/min/vs/editor/editor.main.js'
+        }
+      )
+    ).toBe('benign');
+    const timeout = new Error(
+      'Metadata retrieve agotó el tiempo de espera tras 90 intentos (package.xml).'
+    );
+    timeout.stack =
+      'Error: Metadata retrieve agotó…\n    at we (chrome-extension://id/shared/metadataRetrieve.js:1:1)\n    at anonymous (async chrome-extension://id/background/messageHandlers.js:1:1)';
+    expect(classifyError(timeout, { error_handled: 1, artifact_type: 'Retrieve' })).toBe(
+      'operational'
+    );
+    expect(shouldReportAsBug(timeout, { error_handled: 1 })).toBe(false);
+  });
 });

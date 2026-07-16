@@ -4,12 +4,18 @@
 
 /** @typedef {'free' | 'byok'} LogiUserMode */
 
+import {
+  DEFAULT_LOGI_LANGUAGE,
+  normalizeLogiLanguage
+} from './logiLanguages.js';
+
 export const LOGI_USER_SETTINGS_KEY = 'sfoc_logi_user_settings';
 
 export const LOGI_USER_MODES = Object.freeze(['free', 'byok']);
 
 const DEFAULTS = Object.freeze({
   logiMode: /** @type {LogiUserMode} */ ('free'),
+  logiLanguage: DEFAULT_LOGI_LANGUAGE,
   logiByokOpenRouterKey: null,
   logiByokModels: /** @type {string[]} */ ([]),
   logiSelectedPremiumModel: null
@@ -66,6 +72,7 @@ export function normalizeLogiUserSettings(partial) {
   const record = /** @type {Record<string, unknown>} */ (src);
   return {
     logiMode: normalizeLogiUserMode(record.logiMode),
+    logiLanguage: normalizeLogiLanguage(record.logiLanguage),
     logiByokOpenRouterKey: normalizeOptionalKey(record.logiByokOpenRouterKey),
     logiByokModels: normalizeModelList(record.logiByokModels),
     logiSelectedPremiumModel: normalizeOptionalKey(record.logiSelectedPremiumModel)
@@ -117,6 +124,7 @@ export function resetLogiUserSettingsForTests() {
 export function sanitizeLogiUserSettingsForUi(settings) {
   return {
     logiMode: settings.logiMode,
+    logiLanguage: normalizeLogiLanguage(settings.logiLanguage),
     hasByokKey: Boolean(settings.logiByokOpenRouterKey),
     logiByokModels: [...(settings.logiByokModels || [])],
     logiSelectedPremiumModel: settings.logiSelectedPremiumModel

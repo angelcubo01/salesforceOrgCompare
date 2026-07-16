@@ -5,7 +5,7 @@
   "description": "Chrome extension to compare Salesforce org metadata",
   "type": "module",
   "scripts": {
-    "pretest": "node scripts/ensureTelemetryConfig.mjs",
+    "pretest": "node tests/ensureTelemetryConfig.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

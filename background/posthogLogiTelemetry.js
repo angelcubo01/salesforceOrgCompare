@@ -53,7 +53,7 @@ export async function captureLogiUsage(payload) {
       ...buildSfocAiUserProperties(installId)
     };
 
-    if (action === 'llm_response') {
+    if (action === 'chat_turn' || action === 'summarize') {
       const snap = await readLogiUsageSnapshot();
       if (base.sfoc_model) personProperties.sfoc_ai_last_model = String(base.sfoc_model).slice(0, 120);
       personProperties.sfoc_ai_last_used_at = new Date().toISOString();

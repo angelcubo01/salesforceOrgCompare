@@ -27,7 +27,8 @@ import {
   saveLogiUserSettings,
   sanitizeLogiUserSettingsForUi
 } from '../shared/logiUserSettings.js';
-import { readLogiAdvisorCache, readLogiAdvisorCacheFresh } from '../shared/logiAdvisorCache.js';
+import { getLogiLanguageOption, normalizeLogiLanguage } from '../shared/logiLanguages.js';
+import { readLogiAdvisorCache } from '../shared/logiAdvisorCache.js';
 import { bootstrapLogiAdvisorViaProxy } from '../shared/logiAdvisorBootstrap.js';
 import { getTelemetryEnabled } from '../shared/extensionSettings.js';
 import { captureAiGeneration } from './posthogAiTelemetry.js';
@@ -35,6 +36,7 @@ import { captureLogiUsage } from './posthogLogiTelemetry.js';
 import { buildLogiAiMetrics, buildLogiErrorMetrics, hashLogiSessionKey } from '../shared/logiAiMetrics.js';
 import {
   checkLogiUsageLimits,
+  readLogiUsageSnapshot,
   readSessionIterationByKey,
   recordLogiUsage,
   reserveSessionIterationByKey
@@ -46,35 +48,33 @@ const DML_DDL_RE =
   /\b(INSERT|UPDATE|DELETE|UPSERT|MERGE|UNDELETE|CREATE|ALTER|DROP|TRUNCATE)\b/i;
 
 /**
- * @param {'es' | 'en'} lang
+ * System prompt for Logi chat. Preferred reply language comes from Logi settings (not app UI lang).
+ * @param {string} preferredLangCode
  * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {boolean} hasOrg
  */
-export function buildLogiSystemPrompt(lang, config, hasOrg) {
+export function buildLogiSystemPrompt(preferredLangCode, config, hasOrg) {
   const persona = config.personaName || 'Logi';
-  const es = `Eres ${persona}, experto en Salesforce Apex y debug logs. Eres directo y práctico.
-- Explica con ejemplos citando números de línea del log cuando sea posible.
-- Nunca inventes datos de la org; usa org_query solo si necesitas verificar algo en Salesforce.
-- Si el usuario escribe en otro idioma, responde en ese idioma.
-- Usa herramientas fetch_log_lines y fetch_parsed_section para profundizar antes de suponer.
-- Si una herramienta devuelve error, retryable, insufficient o datos vacíos, NO respondas todavía al usuario: corrige parámetros o la consulta y vuelve a llamar a la herramienta (hasta 2-3 reintentos razonables).
-- org_query fallida: analiza el error de Salesforce, corrige SOQL/SOSL (objeto, campos, variant) y propón org_query de nuevo.
-- fetch_log_lines / fetch_parsed_section insuficientes: amplía rango, prueba sección o líneas adyacentes, luego reintenta.
-- Solo responde al usuario cuando tengas evidencia suficiente o hayas agotado reintentos útiles; entonces explica qué probaste.
-${hasOrg ? '- Puedes proponer org_query (solo lectura); el usuario debe aprobarla en pantalla antes de ejecutar nada.' : '- No hay org conectada: no uses org_query. Responde solo con el log y el contexto disponible.'}`;
+  const lang = getLogiLanguageOption(preferredLangCode);
+  const langLabel = `${lang.nameEn} (${lang.nativeName})`;
 
-  const en = `You are ${persona}, an expert in Salesforce Apex and debug logs. Be direct and practical.
-- Explain with examples citing log line numbers when possible.
-- Never invent org data; use org_query only when you need to verify something in Salesforce.
-- If the user writes in another language, reply in that language.
-- Use fetch_log_lines and fetch_parsed_section tools to dig deeper before assuming.
+  return `You are ${persona}, an expert in Salesforce Apex and debug logs. Be direct and practical.
+- Default reply language: ${langLabel} [code=${lang.code}]. Write all user-facing answers in this language.
+- If the user writes in a different language, switch and reply in the user's language for that turn (and subsequent turns in that language until they switch again).
+- Explain with examples citing log line numbers when possible (e.g. L123).
+- Never invent org data; use org_query / get_apex_source / describe_sobject_fields only when you need to verify something in Salesforce.
+- Use local tools: fetch_log_lines, fetch_parsed_section, search_log, get_stack_around, get_hotspots, and highlight_log_lines to dig deeper before assuming.
 - If a tool returns error, retryable, insufficient, or empty data, do NOT answer the user yet: fix parameters or the query and call the tool again (up to 2-3 reasonable retries).
-- Failed org_query: read the Salesforce error, fix SOQL/SOSL (object, fields, variant), and propose org_query again.
-- Insufficient fetch_log_lines / fetch_parsed_section: widen the range, try another section or adjacent lines, then retry.
+- Failed org_query / get_apex_source / describe_sobject_fields: read the error, fix parameters, and propose again (user must approve).
+- Insufficient fetch_log_lines / fetch_parsed_section / search_log / get_stack_around: widen the range, try another section or query, then retry.
 - Only answer when you have enough evidence or useful retries are exhausted; then explain what you tried.
-${hasOrg ? '- You may propose org_query (read-only); the user must approve it on screen before anything runs.' : '- No org connected: do not use org_query. Answer using only the log and available context.'}`;
-
-  return lang === 'en' ? en : es;
+${hasOrg ? '- You may propose org_query, get_apex_source, and describe_sobject_fields (read-only); the user must approve them on screen before anything runs.' : '- No org connected: do not use org_query, get_apex_source, or describe_sobject_fields. Answer using only the log and available context.'}
+- Formatting (Markdown, easy to scan):
+  - Prefer short sections with ## / ### headings (e.g. Findings, Evidence, Recommendations).
+  - Use bullets for lists; **bold** key terms and outcomes; \`inline code\` for API names, classes, methods, SOQL.
+  - Use GFM tables for comparisons (≤5 columns). Always put the separator row immediately under the header (no blank line). Prefer leading/trailing pipes. Put SOQL or text with | inside \`backticks\` so pipes do not break the table.
+  - Do not wrap the whole answer in a code fence. Use fenced code only for multi-line snippets.
+  - Keep answers scannable: lead with the conclusion, then evidence with line refs, then next steps.`;
 }
 
 /**
@@ -189,6 +189,7 @@ export function sanitizeConfigForUi(config, extras = {}) {
     showLogiSettings: isLogiSettingsSectionVisible(config),
     requireTelemetry: config.requireTelemetry,
     maxIterationsPerChat: config.maxIterationsPerChat,
+    maxChatsPerUser: config.maxChatsPerUser,
     maxChatsPerDay: config.maxChatsPerDay,
     maxChatsPerMonth: config.maxChatsPerMonth,
     model: config.model,
@@ -225,8 +226,7 @@ export async function handleLogiAdvisorBootstrap(message = {}) {
  * @param {object} message
  */
 export async function handleLogiAdvisorGetConfig() {
-  await bootstrapLogiAdvisorViaProxy();
-  const config = await readLogiAdvisorCacheFresh();
+  const config = await bootstrapLogiAdvisorViaProxy();
   const parsedConfig = parseLogiAdvisorConfig(config);
   const telemetryEnabled = await getTelemetryEnabled();
   if (parsedConfig.requireTelemetry && !telemetryEnabled) {
@@ -249,10 +249,10 @@ export async function handleLogiAdvisorGetConfig() {
 
 /**
  * @param {object} message
+ * @param {{ onDelta?: (text: string) => void }} [hooks]
  */
-export async function handleLogiAdvisorChat(message) {
-  await bootstrapLogiAdvisorViaProxy();
-  const config = await readLogiAdvisorCacheFresh();
+export async function handleLogiAdvisorChat(message, hooks = {}) {
+  const config = await bootstrapLogiAdvisorViaProxy();
   const parsedConfig = parseLogiAdvisorConfig(config);
 
   if (!isLogiAdvisorOperational(parsedConfig)) {
@@ -332,9 +332,11 @@ export async function handleLogiAdvisorChat(message) {
     sfoc_iteration: iteration,
     sfoc_is_new_chat: message.isNewChat === true
   };
-  await trackLogi('chat_turn_started', telemetryCtx);
 
-  const lang = message.lang === 'en' ? 'en' : 'es';
+  const settingsForLang = await loadLogiUserSettings();
+  const preferredLang = normalizeLogiLanguage(
+    message.logiLanguage != null ? message.logiLanguage : settingsForLang.logiLanguage
+  );
   const hasOrg = Boolean(message.orgId);
   const allowOrgQuery = parsedConfig.allowedOrgQuery && hasOrg;
   const requestId = typeof message.requestId === 'string' ? message.requestId.trim() : '';
@@ -342,7 +344,7 @@ export async function handleLogiAdvisorChat(message) {
 
   /** @type {object[]} */
   const messages = Array.isArray(message.messages) ? message.messages : [];
-  const systemContent = buildLogiSystemPrompt(lang, parsedConfig, hasOrg);
+  const systemContent = buildLogiSystemPrompt(preferredLang, parsedConfig, hasOrg);
   const contextBlock =
     message.initialContext != null
       ? `\n\nLog context (structured summary):\n${JSON.stringify(message.initialContext)}`
@@ -395,7 +397,12 @@ export async function handleLogiAdvisorChat(message) {
           model: selectedModel || undefined,
           models: runtime.models
         },
-        { signal, installId, runtime }
+        {
+          signal,
+          installId,
+          runtime,
+          onDelta: typeof hooks.onDelta === 'function' ? hooks.onDelta : undefined
+        }
       )
     );
 
@@ -425,8 +432,6 @@ export async function handleLogiAdvisorChat(message) {
       context: { sessionKey, isNewChat: message.isNewChat === true }
     });
 
-    await trackLogi('llm_response', { ...telemetryCtx, ...aiMetrics });
-
     /** @type {object | null} */
     let pendingOrgQuery = null;
     const localToolCalls = [];
@@ -434,7 +439,7 @@ export async function handleLogiAdvisorChat(message) {
 
     for (const tc of result.tool_calls || []) {
       const name = tc?.function?.name;
-      if (name === 'org_query') {
+      if (name === 'org_query' || name === 'get_apex_source' || name === 'describe_sobject_fields') {
         orgToolCalls.push(tc);
       } else {
         localToolCalls.push(tc);
@@ -449,12 +454,37 @@ export async function handleLogiAdvisorChat(message) {
       } catch {
         args = {};
       }
-      pendingOrgQuery = {
-        toolCallId: tc.id,
-        variant: args.variant || 'rest-soql',
-        queryText: String(args.query_text || ''),
-        reason: String(args.reason || '')
-      };
+      const toolName = tc?.function?.name || 'org_query';
+      if (toolName === 'get_apex_source') {
+        const apexType = args.type === 'ApexTrigger' ? 'ApexTrigger' : 'ApexClass';
+        const apexName = String(args.name || '').replace(/'/g, "\\'");
+        pendingOrgQuery = {
+          toolCallId: tc.id,
+          toolName,
+          variant: 'tooling-soql',
+          queryText: `SELECT Id, Name, Body FROM ${apexType} WHERE Name = '${apexName}' LIMIT 1`,
+          reason: String(args.reason || ''),
+          apexName: String(args.name || ''),
+          apexType
+        };
+      } else if (toolName === 'describe_sobject_fields') {
+        pendingOrgQuery = {
+          toolCallId: tc.id,
+          toolName,
+          variant: 'describe',
+          queryText: String(args.sobject || ''),
+          reason: String(args.reason || ''),
+          sobject: String(args.sobject || '')
+        };
+      } else {
+        pendingOrgQuery = {
+          toolCallId: tc.id,
+          toolName: 'org_query',
+          variant: args.variant || 'rest-soql',
+          queryText: String(args.query_text || ''),
+          reason: String(args.reason || '')
+        };
+      }
     }
 
     return {
@@ -469,7 +499,8 @@ export async function handleLogiAdvisorChat(message) {
       logiMode: runtime.mode,
       requestedMode: runtime.requestedMode,
       modeFallback: result.modeFallback || runtime.modeFallback,
-      modelUsed: result.model || runtime.models[0]
+      modelUsed: result.model || runtime.models[0],
+      aiMetrics
     };
   } catch (e) {
     const reason = classifyLlmTransportFailure(e);
@@ -492,11 +523,24 @@ export async function handleLogiAdvisorChat(message) {
  * @param {object} message
  */
 export async function handleLogiAdvisorCheckUsageLimits() {
+  await bootstrapLogiAdvisorViaProxy();
+  const config = await readLogiAdvisorCache();
+  const parsed = parseLogiAdvisorConfig(config);
+  const usage = await readLogiUsageSnapshot();
+  const maxToday = Number(parsed.maxChatsPerDay) || 0;
+  const maxMonth = Number(parsed.maxChatsPerMonth) || 0;
+  const maxUser = Number(parsed.maxChatsPerUser) || 0;
+  const remaining = {
+    today: Math.max(0, maxToday - Number(usage.chatsToday || 0)),
+    month: Math.max(0, maxMonth - Number(usage.chatsMonth || 0)),
+    user: Math.max(0, maxUser - Number(usage.chatsTotal || 0))
+  };
+  const max = { today: maxToday, month: maxMonth, user: maxUser };
   const limitCheck = await checkLogiUsageLimits({ isNewChat: true });
   if (!limitCheck.ok) {
-    return { ok: false, reason: limitCheck.reason };
+    return { ok: false, reason: limitCheck.reason, usage, remaining, max };
   }
-  return { ok: true };
+  return { ok: true, usage, remaining, max };
 }
 
 /**
@@ -521,6 +565,215 @@ export async function handleLogiAdvisorGetSessionIteration(message) {
     iteration,
     iterationsRemaining: Math.max(0, max - iteration)
   };
+}
+
+/**
+ * System prompt for one-shot log summaries (no chat, no org_query).
+ * @param {string} preferredLangCode
+ * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ */
+export function buildLogiSummarySystemPrompt(preferredLangCode, config) {
+  const persona = config.personaName || 'Logi';
+  const lang = getLogiLanguageOption(preferredLangCode);
+  const langLabel = `${lang.nameEn} (${lang.nativeName})`;
+
+  return `You are ${persona}. Write a short, human summary of a Salesforce Apex debug log for a developer or support engineer who already has the log open.
+
+Goal: explain what this execution did and what matters — not restate fields they can already see in the UI.
+
+Write the summary in ${langLabel} [code=${lang.code}].
+
+Tone and style:
+- Plain language, descriptive and concrete. Prefer "the queueable finished without errors in about 4 seconds" over "Outcome: No error (hasError: false)".
+- Sound like a colleague briefing someone, not a status report or API dump.
+- Use Markdown lightly: a short lead paragraph, then 4–8 bullets. Optional ## headings only if they help (e.g. What happened, Issues, Performance). No tables. No code fences around the whole answer.
+
+What to cover (only when relevant):
+- What ran (class / trigger / entry point) and the practical outcome (success, failure, partial).
+- The interesting story: main steps, important SOQL/DML, callouts, or business logic worth noticing.
+- Real problems: exceptions, failed validations, HTTP errors, risky patterns (SOQL/DML in loops, repeated queries, near governor limits) with line numbers when useful (e.g. L123).
+- Duration only if it is notable (slow, unexpectedly fast for the work done, or tied to a bottleneck).
+
+Hard avoid — do NOT include:
+- An "Execution Summary" / metadata block (Execution Label, Execution Range, hasError, isTest, Outcome flags, "lines 3–17502 = entire log", "What this tells us" that only repeats the same facts).
+- Restating structured context fields verbatim (booleans, JSON keys, full line ranges of the whole log).
+- Padding that says nothing new ("the job completed successfully because no errors were recorded").
+- Questions, CTAs, or "if you want I can…".
+
+If the log is uneventful: 2–4 sentences saying what ran, that it completed cleanly, and one useful observation (e.g. volume of SOQL/DML or notable duration) — then stop.
+
+Tools: do NOT use org_query. Use fetch_log_lines / fetch_parsed_section / search_log only if the structured context is insufficient to write a useful summary.`;
+}
+
+/**
+ * One-shot summary turn (local tools only, counts as a new chat against usage limits).
+ * @param {object} message
+ */
+export async function handleLogiAdvisorSummarize(message) {
+  const config = await bootstrapLogiAdvisorViaProxy();
+  const parsedConfig = parseLogiAdvisorConfig(config);
+
+  if (!isLogiAdvisorOperational(parsedConfig)) {
+    await trackLogiConfigError('LOGI_DISABLED', {
+      sfoc_log_id: String(message.logId || '').slice(0, 64)
+    });
+    return { ok: false, reason: 'LOGI_DISABLED' };
+  }
+
+  const telemetryEnabled = await getTelemetryEnabled();
+  if (parsedConfig.requireTelemetry && !telemetryEnabled) {
+    await trackLogiConfigError('TELEMETRY_REQUIRED', {
+      sfoc_log_id: String(message.logId || '').slice(0, 64)
+    });
+    return { ok: false, reason: 'TELEMETRY_REQUIRED' };
+  }
+
+  const orgId = String(message.orgId || '').trim();
+  const logId = String(message.logId || '').trim();
+  const sessionKey =
+    typeof message.sessionKey === 'string' && message.sessionKey.trim()
+      ? message.sessionKey.trim()
+      : buildLogiSessionKey({
+          orgId,
+          logId,
+          title: message.title,
+          instanceUrl: message.instanceUrl
+        });
+
+  const skipIterationReserve = message.skipIterationReserve === true;
+  const isFirstSummaryTurn = !skipIterationReserve;
+
+  if (isFirstSummaryTurn) {
+    const limitCheck = await checkLogiUsageLimits({ isNewChat: true });
+    if (!limitCheck.ok) {
+      await trackLogiLimit(limitCheck.reason, {
+        sfoc_log_id: logId.slice(0, 64),
+        sfoc_session_key: hashLogiSessionKey(sessionKey)
+      });
+      return { ok: false, reason: limitCheck.reason };
+    }
+    await recordLogiUsage({ isNewChat: true });
+  }
+
+  const settingsForLang = await loadLogiUserSettings();
+  const preferredLang = normalizeLogiLanguage(
+    message.logiLanguage != null ? message.logiLanguage : settingsForLang.logiLanguage
+  );
+  const requestId = typeof message.requestId === 'string' ? message.requestId.trim() : '';
+  const signal = beginLogiRequest(requestId);
+
+  /** @type {object[]} */
+  const messages = Array.isArray(message.messages) ? message.messages : [];
+  const systemContent = buildLogiSummarySystemPrompt(preferredLang, parsedConfig);
+  const contextBlock =
+    message.initialContext != null
+      ? `\n\nLog context (structured summary):\n${JSON.stringify(message.initialContext)}`
+      : '';
+
+  const userPrompt = 'Summarize this Apex debug log now. Be concise and factual.';
+
+  const apiMessages = [
+    { role: 'system', content: systemContent + contextBlock },
+    ...(messages.length
+      ? messages
+          .filter((m) => m && (m.role === 'user' || m.role === 'assistant' || m.role === 'tool'))
+          .map((m) => {
+            if (m.role === 'tool') {
+              return {
+                role: 'tool',
+                tool_call_id: m.tool_call_id,
+                content: m.content != null ? String(m.content) : ''
+              };
+            }
+            const out = {
+              role: m.role,
+              content: m.content != null ? String(m.content) : ''
+            };
+            if (m.tool_calls) out.tool_calls = m.tool_calls;
+            return out;
+          })
+      : [{ role: 'user', content: userPrompt }])
+  ];
+
+  const telemetryCtx = {
+    sfoc_log_id: logId.slice(0, 64),
+    sfoc_session_key: hashLogiSessionKey(sessionKey),
+    sfoc_is_new_chat: isFirstSummaryTurn,
+    sfoc_mode: 'summary'
+  };
+
+  try {
+    const installId = await getOrCreateTelemetryInstallId();
+    const ctx = await buildLogiRuntimeContext(parsedConfig);
+    const runtime = resolveLogiRuntime(parsedConfig, ctx.userSettings);
+
+    const result = await withServiceWorkerKeepalive(() =>
+      createChatCompletion(
+        parsedConfig,
+        {
+          messages: apiMessages,
+          tools: buildLogiToolDefinitions({ allowOrgQuery: false }),
+          max_tokens: 1200,
+          models: runtime.models
+        },
+        { signal, installId, runtime }
+      )
+    );
+
+    await recordLogiUsage({ llmCalls: 1 });
+
+    const aiMetrics = buildLogiAiMetrics(result, parsedConfig, {
+      iteration: 0,
+      logId: message.logId,
+      isNewChat: isFirstSummaryTurn,
+      sessionKey,
+      actualTransport: logiTransportLabel(parsedConfig, runtime),
+      logiMode: runtime.mode,
+      requestedMode: runtime.requestedMode,
+      modeFallback: result.modeFallback || runtime.modeFallback,
+      modelSelected: ''
+    });
+
+    await captureAiGeneration({
+      model: result.model || parsedConfig.model,
+      latencyMs: result.latencyMs,
+      usage: result.usage,
+      cost: result.cost,
+      logId: message.logId,
+      iteration: 0,
+      result,
+      config: parsedConfig,
+      context: { sessionKey, isNewChat: isFirstSummaryTurn, mode: 'summary' }
+    });
+
+    const localToolCalls = (result.tool_calls || []).filter(
+      (tc) => tc?.function?.name && tc.function.name !== 'org_query'
+    );
+
+    return {
+      ok: true,
+      content: result.content || '',
+      tool_calls: localToolCalls,
+      localToolCalls,
+      pendingOrgQuery: null,
+      finishReason: result.finish_reason,
+      logiMode: runtime.mode,
+      modelUsed: result.model || runtime.models[0],
+      aiMetrics: { ...aiMetrics, sfoc_summary: true }
+    };
+  } catch (e) {
+    const reason = classifyLlmTransportFailure(e);
+    if (reason !== 'CANCELLED') {
+      await trackLogiLlmError(e, parsedConfig, telemetryCtx);
+    }
+    return {
+      ok: false,
+      reason,
+      error: String(e?.message || e || 'Unknown error')
+    };
+  } finally {
+    finishLogiRequest(requestId);
+  }
 }
 
 /**
@@ -559,15 +812,16 @@ async function withServiceWorkerKeepalive(fn) {
  * @param {object} message
  */
 export async function handleLogiAdvisorSaveSettings(message) {
-  await bootstrapLogiAdvisorViaProxy();
-  const config = parseLogiAdvisorConfig(await readLogiAdvisorCacheFresh());
-  if (!isLogiSettingsSectionVisible(config)) {
+  const config = await bootstrapLogiAdvisorViaProxy();
+  const parsedConfig = parseLogiAdvisorConfig(config);
+  if (!isLogiSettingsSectionVisible(parsedConfig)) {
     return { ok: false, reason: 'LOGI_SETTINGS_DISABLED' };
   }
 
   /** @type {Record<string, unknown>} */
   const patch = {};
   if (message.logiMode != null) patch.logiMode = message.logiMode;
+  if (message.logiLanguage != null) patch.logiLanguage = message.logiLanguage;
   if (message.logiByokOpenRouterKey !== undefined) {
     patch.logiByokOpenRouterKey = message.logiByokOpenRouterKey;
   }
@@ -577,17 +831,17 @@ export async function handleLogiAdvisorSaveSettings(message) {
   }
 
   const saved = await saveLogiUserSettings(patch);
-  const coerced = coerceLogiUserMode(config, saved.logiMode);
+  const coerced = coerceLogiUserMode(parsedConfig, saved.logiMode);
   if (coerced !== saved.logiMode) {
     await saveLogiUserSettings({ logiMode: coerced });
     saved.logiMode = coerced;
   }
 
-  const ctx = await buildLogiRuntimeContext(config);
+  const ctx = await buildLogiRuntimeContext(parsedConfig);
   return {
     ok: true,
     userSettings: sanitizeLogiUserSettingsForUi(saved),
-    config: sanitizeConfigForUi(config, {
+    config: sanitizeConfigForUi(parsedConfig, {
       runtime: ctx.runtime,
       userSettings: saved
     })

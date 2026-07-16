@@ -214,6 +214,204 @@ export function fetchParsedSection(parsed, section, limit = 30) {
 }
 
 /**
+ * Search raw log text line by line.
+ * @param {string} rawText
+ * @param {string} query
+ * @param {{ maxResults?: number, caseSensitive?: boolean }} [opts]
+ */
+export function searchLog(rawText, query, opts = {}) {
+  const q = String(query ?? '');
+  if (!q.trim()) {
+    return { matches: [], truncated: false, error: 'empty_query' };
+  }
+  const maxResults = Math.min(40, Math.max(1, Math.floor(Number(opts.maxResults) || 20)));
+  const caseSensitive = opts.caseSensitive === true;
+  const needle = caseSensitive ? q : q.toLowerCase();
+  const lines = String(rawText || '').split(/\r?\n/);
+  /** @type {{ line: number, text: string }[]} */
+  const matches = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const rawLine = lines[i];
+    const hay = caseSensitive ? rawLine : rawLine.toLowerCase();
+    if (!hay.includes(needle)) continue;
+    matches.push({
+      line: i + 1,
+      text: truncateText(redactPii(rawLine), 240)
+    });
+    if (matches.length > maxResults) break;
+  }
+  const truncated = matches.length > maxResults;
+  return {
+    matches: truncated ? matches.slice(0, maxResults) : matches,
+    truncated
+  };
+}
+
+/**
+ * @param {object} item
+ * @param {number} start
+ * @param {number} end
+ */
+function lineOverlapsRange(item, start, end) {
+  const line = Number(item?.line);
+  if (Number.isFinite(line) && line >= start && line <= end) return true;
+  const startLine = Number(item?.startLine);
+  const endLine = Number(item?.endLine);
+  if (Number.isFinite(startLine) && Number.isFinite(endLine)) {
+    return startLine <= end && endLine >= start;
+  }
+  return false;
+}
+
+/**
+ * Raw lines around a center line plus overlapping issues/executions from parsed.
+ * @param {string} rawText
+ * @param {object | null | undefined} parsed
+ * @param {number} line
+ * @param {{ radius?: number, reason?: string }} [opts]
+ */
+export function getStackAround(rawText, parsed, line, opts = {}) {
+  const center = Math.max(1, Math.floor(Number(line) || 1));
+  const radius = Math.min(40, Math.max(0, Math.floor(Number(opts.radius) || 15)));
+  const start = Math.max(1, center - radius);
+  const end = center + radius;
+  const fetched = fetchLogLines(rawText, start, end, radius * 2 + 1);
+  const rangeStart = fetched.startLine;
+  const rangeEnd = fetched.endLine;
+
+  const nearby_issues = (parsed?.issues || [])
+    .filter((issue) => lineOverlapsRange(issue, rangeStart, rangeEnd))
+    .slice(0, 20)
+    .map((issue) => ({
+      line: issue.line,
+      type: issue.type,
+      message: truncateText(redactPii(issue.message || issue.text || issue.summary || ''), 200),
+      severity: issue.severity
+    }));
+
+  const nearby_executions = (parsed?.executions || [])
+    .filter((exec) => lineOverlapsRange(exec, rangeStart, rangeEnd))
+    .slice(0, 15)
+    .map((e) => ({
+      id: e.id,
+      label: truncateText(e.label || e.codeUnitLabel || '', 80),
+      hasError: e.hasError,
+      durationMs: e.durationMs,
+      startLine: e.startLine,
+      endLine: e.endLine
+    }));
+
+  return {
+    center_line: center,
+    lines: fetched.lines.map((text, idx) => ({
+      line: rangeStart + idx,
+      text: truncateText(text, 240)
+    })),
+    nearby_issues,
+    nearby_executions
+  };
+}
+
+/**
+ * @param {object} a
+ * @param {object} b
+ */
+function soqlImpactScore(a) {
+  const rows = Number(a?.rows) || 0;
+  const time = Number(a?.timeMs ?? a?.elapsed ?? a?.durationMs) || 0;
+  return rows * 1000 + time;
+}
+
+/**
+ * Top SOQL/DML/profiling/duplicates hotspots from parsed log.
+ * @param {object | null | undefined} parsed
+ * @param {{ reason?: string }} [opts]
+ */
+export function getHotspots(parsed, opts = {}) {
+  void opts;
+  const limit = 10;
+  if (!parsed) {
+    return {
+      soql: [],
+      dml: [],
+      profiling: [],
+      soqlDuplicates: [],
+      empty: true
+    };
+  }
+
+  const soql = [...(parsed.soql || [])]
+    .sort((a, b) => soqlImpactScore(b) - soqlImpactScore(a))
+    .slice(0, limit)
+    .map((q) => ({
+      line: q.line,
+      text: truncateText(q.text || q.query, 180),
+      rows: q.rows,
+      timeMs: q.timeMs ?? q.elapsed ?? q.durationMs,
+      countsTowardSoqlLimit: q.countsTowardSoqlLimit
+    }));
+
+  const dml = [...(parsed.dml || [])]
+    .sort((a, b) => {
+      const rowsDiff = (Number(b?.rows) || 0) - (Number(a?.rows) || 0);
+      if (rowsDiff) return rowsDiff;
+      return (
+        (Number(b?.timeMs ?? b?.elapsed ?? b?.durationMs) || 0) -
+        (Number(a?.timeMs ?? a?.elapsed ?? a?.durationMs) || 0)
+      );
+    })
+    .slice(0, limit)
+    .map((d) => ({
+      line: d.line,
+      type: d.type,
+      object: d.object || d.sobject,
+      rows: d.rows,
+      timeMs: d.timeMs ?? d.elapsed ?? d.durationMs
+    }));
+
+  const profilingSrc = parsed.profiling || {};
+  /** @type {object[]} */
+  const profilingFlat = [];
+  for (const kind of ['soql', 'dml', 'methods']) {
+    for (const entry of profilingSrc[kind] || []) {
+      profilingFlat.push({
+        kind,
+        location: truncateText(entry.location || '', 120),
+        detail: truncateText(redactPii(entry.detail || ''), 160),
+        apexLine: entry.apexLine,
+        executions: entry.executions,
+        totalMs: entry.totalMs
+      });
+    }
+  }
+  profilingFlat.sort((a, b) => (Number(b.totalMs) || 0) - (Number(a.totalMs) || 0));
+  const profiling = profilingFlat.slice(0, limit);
+
+  const soqlDuplicates = [...(parsed.soqlDuplicates || [])]
+    .sort((a, b) => (Number(b?.count) || 0) - (Number(a?.count) || 0))
+    .slice(0, limit)
+    .map((g) => ({
+      count: g.count,
+      query: truncateText(g.query || g.text, 120)
+    }));
+
+  return { soql, dml, profiling, soqlDuplicates };
+}
+
+/**
+ * UI bridge: signal the client to highlight a line range.
+ * @param {number} startLine
+ * @param {number} endLine
+ * @param {string} [_reason]
+ */
+export function highlightLogLines(startLine, endLine, _reason) {
+  void _reason;
+  const start = Math.max(1, Math.floor(Number(startLine) || 1));
+  const end = Math.max(start, Math.floor(Number(endLine) || start));
+  return { ok: true, start_line: start, end_line: end, action: 'highlight' };
+}
+
+/**
  * Añade señales de reintento a resultados de herramientas locales del log.
  * @param {string} toolName
  * @param {unknown} result
@@ -269,6 +467,87 @@ export function enrichLocalToolResult(toolName, result, lang = 'es') {
         : 'Rango truncado (máx. 80 líneas). Pide el siguiente bloque o un rango más estrecho alrededor del stack trace.';
     } else {
       out.ok = true;
+    }
+    return out;
+  }
+
+  if (toolName === 'search_log') {
+    if (out.error === 'empty_query') {
+      out.ok = false;
+      out.retryable = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'Empty query. Call search_log again with a non-empty query string (exception type, class name, SOQL fragment, etc.).'
+        : 'Consulta vacía. Vuelve a llamar search_log con un query no vacío (tipo de excepción, clase, fragmento SOQL, etc.).';
+    } else if (!Array.isArray(out.matches) || out.matches.length === 0) {
+      out.ok = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'No matches. Try a shorter substring, toggle case_sensitive, or use fetch_parsed_section / get_hotspots before answering.'
+        : 'Sin coincidencias. Prueba un substring más corto, case_sensitive, o usa fetch_parsed_section / get_hotspots antes de responder.';
+    } else if (out.truncated === true) {
+      out.ok = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'Results truncated. Narrow the query or call get_stack_around / fetch_log_lines on specific match lines.'
+        : 'Resultados truncados. Acota el query o usa get_stack_around / fetch_log_lines en líneas concretas.';
+    } else {
+      out.ok = true;
+    }
+    return out;
+  }
+
+  if (toolName === 'get_stack_around') {
+    const lines = Array.isArray(out.lines) ? out.lines : [];
+    if (lines.length === 0) {
+      out.ok = false;
+      out.retryable = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'No lines around center. Check line (1-based) and retry get_stack_around with a valid line or larger radius.'
+        : 'Sin líneas alrededor del centro. Revisa line (base 1) y reintenta get_stack_around con una línea válida o mayor radius.';
+    } else {
+      out.ok = true;
+      if (
+        (!Array.isArray(out.nearby_issues) || out.nearby_issues.length === 0) &&
+        (!Array.isArray(out.nearby_executions) || out.nearby_executions.length === 0)
+      ) {
+        out.insufficient = true;
+        out.retry_hint = es
+          ? 'No overlapping issues/executions. Widen radius, search_log for EXCEPTION, or fetch_parsed_section → issues.'
+          : 'Sin issues/executions solapados. Amplía radius, usa search_log para EXCEPTION o fetch_parsed_section → issues.';
+      }
+    }
+    return out;
+  }
+
+  if (toolName === 'get_hotspots') {
+    const soql = Array.isArray(out.soql) ? out.soql : [];
+    const dml = Array.isArray(out.dml) ? out.dml : [];
+    const profiling = Array.isArray(out.profiling) ? out.profiling : [];
+    const dups = Array.isArray(out.soqlDuplicates) ? out.soqlDuplicates : [];
+    if (out.empty || (soql.length === 0 && dml.length === 0 && profiling.length === 0 && dups.length === 0)) {
+      out.ok = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'No hotspots found. Use fetch_parsed_section on soql/dml/limits or search_log for SOQL_EXECUTE / DML_BEGIN.'
+        : 'Sin hotspots. Usa fetch_parsed_section en soql/dml/limits o search_log para SOQL_EXECUTE / DML_BEGIN.';
+    } else {
+      out.ok = true;
+    }
+    return out;
+  }
+
+  if (toolName === 'highlight_log_lines') {
+    if (out.action === 'highlight' && out.start_line != null) {
+      out.ok = true;
+    } else {
+      out.ok = false;
+      out.retryable = true;
+      out.insufficient = true;
+      out.retry_hint = es
+        ? 'Highlight failed. Pass valid start_line and end_line (1-based) and call highlight_log_lines again.'
+        : 'Highlight fallido. Pasa start_line y end_line válidos (base 1) y vuelve a llamar highlight_log_lines.';
     }
     return out;
   }
@@ -379,30 +658,143 @@ export function buildLogiToolDefinitions({ allowOrgQuery = true } = {}) {
           required: ['section', 'reason']
         }
       }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'search_log',
+        description:
+          'Search raw Apex log text line by line for a substring. Returns matching line numbers and truncated text. If empty or truncated, refine the query or follow up with get_stack_around / fetch_log_lines.',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Substring to find in the raw log' },
+            max_results: {
+              type: 'integer',
+              description: 'Max matches to return (default 20, max 40)'
+            },
+            case_sensitive: {
+              type: 'boolean',
+              description: 'Case-sensitive match (default false)'
+            }
+          },
+          required: ['query']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_stack_around',
+        description:
+          'Fetch raw log lines around a center line plus any overlapping issues/executions from the parsed log. Use after locating an exception or key line.',
+        parameters: {
+          type: 'object',
+          properties: {
+            line: { type: 'integer', description: 'Center line (1-based)' },
+            radius: {
+              type: 'integer',
+              description: 'Lines before/after center (default 15, max 40)'
+            },
+            reason: { type: 'string' }
+          },
+          required: ['line', 'reason']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_hotspots',
+        description:
+          'Return top SOQL (by rows/time), DML, cumulative profiling entries, and soqlDuplicates from the parsed log (~10 each). Prefer this for performance analysis.',
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string' }
+          },
+          required: ['reason']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'highlight_log_lines',
+        description:
+          'UI bridge: ask the viewer to highlight a log line range for the user. Does not return log content; use after identifying important lines.',
+        parameters: {
+          type: 'object',
+          properties: {
+            start_line: { type: 'integer', description: 'Start line (1-based)' },
+            end_line: { type: 'integer', description: 'End line (1-based)' },
+            reason: { type: 'string' }
+          },
+          required: ['start_line', 'end_line', 'reason']
+        }
+      }
     }
   ];
 
   if (allowOrgQuery) {
-    tools.push({
-      type: 'function',
-      function: {
-        name: 'org_query',
-        description:
-          'Run a read-only SOQL/SOSL query against the Salesforce org. Requires explicit user approval. If it fails or returns no useful data, fix the query and call org_query again.',
-        parameters: {
-          type: 'object',
-          properties: {
-            variant: {
-              type: 'string',
-              enum: ['rest-soql', 'tooling-soql', 'rest-sosl']
+    tools.push(
+      {
+        type: 'function',
+        function: {
+          name: 'org_query',
+          description:
+            'Run a read-only SOQL/SOSL query against the Salesforce org. Requires explicit user approval. If it fails or returns no useful data, fix the query and call org_query again.',
+          parameters: {
+            type: 'object',
+            properties: {
+              variant: {
+                type: 'string',
+                enum: ['rest-soql', 'tooling-soql', 'rest-sosl']
+              },
+              query_text: { type: 'string' },
+              reason: { type: 'string' }
             },
-            query_text: { type: 'string' },
-            reason: { type: 'string' }
-          },
-          required: ['variant', 'query_text', 'reason']
+            required: ['variant', 'query_text', 'reason']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_apex_source',
+          description:
+            'Read-only Tooling query for ApexClass or ApexTrigger Body by API name. Requires explicit user approval before running.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Apex class or trigger API name' },
+              type: {
+                type: 'string',
+                enum: ['ApexClass', 'ApexTrigger']
+              },
+              reason: { type: 'string' }
+            },
+            required: ['name', 'type', 'reason']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'describe_sobject_fields',
+          description:
+            'Describe fields on an sObject in the connected org. Requires explicit user approval before running.',
+          parameters: {
+            type: 'object',
+            properties: {
+              sobject: { type: 'string', description: 'sObject API name (e.g. Account)' },
+              reason: { type: 'string' }
+            },
+            required: ['sobject', 'reason']
+          }
         }
       }
-    });
+    );
   }
 
   return tools;
@@ -493,7 +885,49 @@ Responde con:
 - Causa raíz más probable.
 - Fix recomendado (pasos verificables, pseudocódigo o snippet Apex breve si aporta).
 - Cómo validar el fix (test, escenario manual, qué revisar en el siguiente log).
-- Riesgos o efectos secundarios del cambio.`
+- Riesgos o efectos secundarios del cambio.`,
+
+    callouts: `Analiza los callouts HTTP de este log de Apex.
+
+Antes de responder:
+1. fetch_parsed_section → "callouts" (y "userDebug" si aporta contexto).
+2. search_log o get_stack_around alrededor de callouts con status ≥ 400 o lentos.
+3. highlight_log_lines en el callout más relevante si ayuda al usuario a verlo en el visor.
+
+Responde con:
+- Lista de callouts (método, endpoint, status, tiempo si consta) priorizando fallos.
+- Causa probable de errores HTTP o timeouts (sin inventar cuerpos de respuesta).
+- Relación con el flujo Apex (antes/después de DML, en bucle, etc.).
+- Recomendaciones concretas (reintentos, timeouts, bulk, mocks en tests).
+- Cita números de línea del log.`,
+
+    validations: `Revisa reglas de validación y fallos de validación en este log.
+
+Antes de responder:
+1. fetch_parsed_section → "validations" e "issues".
+2. get_stack_around o fetch_log_lines alrededor de validaciones fallidas y del DML asociado.
+3. Si hace falta contexto de campos, puedes proponer describe_sobject_fields (requiere aprobación).
+
+Responde con:
+- Qué reglas fallaron o se evaluaron (objeto, campo, mensaje, línea).
+- Si el fallo es de negocio esperado o un bug de datos/código.
+- Cadena: entrada → DML → validación → resultado.
+- Pasos para corregir datos, regla o código Apex.
+- Cita líneas del log.`,
+
+    hotspots: `Identifica hotspots de rendimiento en este log (SOQL, DML, profiling, duplicados).
+
+Antes de responder:
+1. get_hotspots (obligatorio) para top SOQL/DML/profiling/soqlDuplicates.
+2. fetch_parsed_section → "limits" si el consumo de gobernadores es relevante.
+3. get_stack_around o fetch_log_lines en las 2–3 operaciones más costosas; highlight_log_lines si conviene.
+
+Responde con:
+- Top operaciones por impacto (filas, tiempo, repeticiones).
+- Patrones: SOQL/DML en bucle, consultas duplicadas, métodos lentos.
+- Relación con límites de gobernador.
+- Recomendaciones priorizadas (bulkificación, selectividad, caché).
+- Líneas del log en cada hallazgo.`
   },
   en: {
     debug_errors: `Analyze errors and exceptions in this Apex debug log.
@@ -578,7 +1012,49 @@ Respond with:
 - Most likely root cause.
 - Recommended fix (verifiable steps, brief pseudocode or Apex snippet if useful).
 - How to validate the fix (test, manual scenario, what to check in the next log).
-- Risks or side effects of the change.`
+- Risks or side effects of the change.`,
+
+    callouts: `Analyze HTTP callouts in this Apex debug log.
+
+Before answering:
+1. fetch_parsed_section → "callouts" (and "userDebug" if useful).
+2. search_log or get_stack_around around callouts with status ≥ 400 or slow ones.
+3. highlight_log_lines on the most relevant callout if it helps the user see it in the viewer.
+
+Respond with:
+- Callout list (method, endpoint, status, time if present), prioritizing failures.
+- Likely cause of HTTP errors or timeouts (do not invent response bodies).
+- Relationship to the Apex flow (before/after DML, in a loop, etc.).
+- Concrete recommendations (retries, timeouts, bulk, test mocks).
+- Cite log line numbers.`,
+
+    validations: `Review validation rules and validation failures in this log.
+
+Before answering:
+1. fetch_parsed_section → "validations" and "issues".
+2. get_stack_around or fetch_log_lines around failed validations and related DML.
+3. If field context is needed, you may propose describe_sobject_fields (requires approval).
+
+Respond with:
+- Which rules failed or ran (object, field, message, line).
+- Whether the failure is expected business behavior or a data/code bug.
+- Chain: entry → DML → validation → outcome.
+- Steps to fix data, the rule, or Apex code.
+- Cite log lines.`,
+
+    hotspots: `Identify performance hotspots in this log (SOQL, DML, profiling, duplicates).
+
+Before answering:
+1. get_hotspots (required) for top SOQL/DML/profiling/soqlDuplicates.
+2. fetch_parsed_section → "limits" if governor usage matters.
+3. get_stack_around or fetch_log_lines on the 2–3 costliest operations; highlight_log_lines if helpful.
+
+Respond with:
+- Top operations by impact (rows, time, repetitions).
+- Patterns: SOQL/DML in loops, duplicate queries, slow methods.
+- Relationship to governor limits.
+- Prioritized recommendations (bulkification, selectivity, caching).
+- Log line numbers for each finding.`
   }
 };
 
@@ -628,7 +1104,10 @@ export function isLogiQuickActionId(actionId) {
       'soql_dml',
       'test_failure',
       'limits',
-      'suggest_fix'
+      'suggest_fix',
+      'callouts',
+      'validations',
+      'hotspots'
     ].includes(id)
   ) {
     return true;

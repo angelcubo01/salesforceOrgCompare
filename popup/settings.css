@@ -476,3 +476,84 @@ html[data-ui-theme='light'] .settings-secondary:hover {
   padding-top: 12px;
   border-top: 1px dashed #334155;
 }
+
+.settings-logi-usage {
+  margin: 14px 0 4px;
+  padding: 12px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.settings-logi-usage-title {
+  margin: 0 0 4px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.settings-logi-usage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.settings-logi-usage-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-logi-usage-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+}
+
+.settings-logi-usage-pct {
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-logi-usage-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #1e293b;
+  overflow: hidden;
+}
+
+.settings-logi-usage-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: #38bdf8;
+  transition: width 0.25s ease;
+}
+
+.settings-logi-usage-fill--warn {
+  background: #fbbf24;
+}
+
+.settings-logi-usage-fill--full {
+  background: #f87171;
+}
+
+html[data-ui-theme='light'] .settings-logi-usage {
+  border-color: var(--sfoc-light-border);
+  background: var(--sfoc-light-bg-elevated);
+}
+
+html[data-ui-theme='light'] .settings-logi-usage-title {
+  color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme='light'] .settings-logi-usage-meta {
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme='light'] .settings-logi-usage-track {
+  background: #e2e8f0;
+}

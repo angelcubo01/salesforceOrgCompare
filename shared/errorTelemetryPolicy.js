@@ -97,6 +97,7 @@ export function isSalesforceOrNetworkOperationalText(text) {
     hay.includes('Metadata retrieve finished without ZIP') ||
     hay.includes('Metadata SOAP call failed') ||
     hay.includes('Metadata retrieve agotó el tiempo de espera') ||
+    hay.includes('Deploy agotó el tiempo de espera') ||
     hay.includes('package.xml sin bloques')
   ) {
     return true;

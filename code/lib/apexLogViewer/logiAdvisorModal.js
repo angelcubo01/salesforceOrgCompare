@@ -1,3 +1,4 @@
+import { mountLogiResume, setLogiResumeButtonVisible } from './logiResumePanel.js';
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { renderLogiMarkdown } from '../../../shared/logiMarkdown.js';
 import { getCurrentLang, t } from '../../../shared/i18n.js';
@@ -19,7 +20,12 @@ import {
   fetchParsedSection,
   formatOrgQueryToolResult,
   getDefaultQuickActionUserMessage,
-  quickActionUserMessage
+  getHotspots,
+  getStackAround,
+  highlightLogLines,
+  quickActionUserMessage,
+  searchLog,
+  truncateText
 } from '../../../shared/apexLogAiContext.js';
 import { hashLogiSessionKey } from '../../../shared/logiAiMetrics.js';
 import {
@@ -44,6 +50,34 @@ function trackLogiUi(action, props = {}) {
   void bg({ type: 'telemetry:logiUsage', action, ...props }).catch(() => {});
 }
 
+/**
+ * @param {string} sessionKey
+ * @param {object | null | undefined} res
+ */
+function rememberTurnAiMetrics(sessionKey, res) {
+  if (!res?.ok || !res.aiMetrics || typeof res.aiMetrics !== 'object') return;
+  getRuntime(sessionKey).lastAiMetrics = /** @type {Record<string, string | number | boolean>} */ (
+    res.aiMetrics
+  );
+}
+
+/**
+ * One product event per visible successful chat turn.
+ * @param {string} sessionKey
+ * @param {object} [payload]
+ */
+function emitChatTurnSuccess(sessionKey, payload = {}) {
+  const rt = getRuntime(sessionKey);
+  const metrics = rt.lastAiMetrics || {};
+  trackLogiUi('chat_turn', {
+    ...metrics,
+    sfoc_log_id: String(payload.logId || metrics.sfoc_log_id || '').slice(0, 64),
+    sfoc_session_key: hashLogiSessionKey(sessionKey),
+    ...(Number.isFinite(Number(rt.iteration)) ? { sfoc_iteration: Math.floor(Number(rt.iteration)) } : {})
+  });
+  rt.lastAiMetrics = null;
+}
+
 const LOGI_AVATAR_SVG = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 5a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm10 0v4h4M8 13h8M8 17h5"/></svg>`;
 
 const THINKING_BUBBLE_HTML = `<div class="logi-advisor-msg logi-advisor-msg--assistant logi-advisor-msg--thinking" aria-live="polite">
@@ -58,11 +92,17 @@ const THINKING_BUBBLE_HTML = `<div class="logi-advisor-msg logi-advisor-msg--ass
 </div>`;
 
 const QUICK_ACTIONS_COLLAPSED_KEY = 'sfocLogiQuickActionsCollapsed';
+const LOGI_PANEL_LAYOUT_KEY = 'sfocLogiPanelLayout';
+const LOGI_PRIVACY_ACK_KEY = 'sfocLogiPrivacyAck';
 const THINKING_ROTATE_MS = 10_000;
 /** Tiempo máximo de un turno Logi (ms) antes de mostrar disculpa al usuario. */
 const LOGI_TURN_TIMEOUT_MS = 120_000;
+const LOGI_PANEL_WIDTH_DEFAULT = 480;
+const LOGI_PANEL_WIDTH_MIN = 360;
+const LOGI_PANEL_WIDTH_MAX = 1400;
 
 const PENCIL_ICON_SVG = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm1.414 1.06a.25.25 0 0 0-.354 0L10.086 4.5l1.414 1.414 1.988-1.988a.25.25 0 0 0 0-.354l-1.061-1.06Z"/></svg>`;
+const QUICK_ACTIONS_ICON_SVG = `<svg class="logi-advisor-quick-toggle-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M13 2 4.5 13.5h6L9 22l10-14h-6L13 2z"/></svg>`;
 
 const CUSTOM_ACTION_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2.5a1.25 1.25 0 0 1 1.18.83l.55 1.54 1.54.55a1.25 1.25 0 0 1 0 2.36l-1.54.55-.55 1.54a1.25 1.25 0 0 1-2.36 0l-.55-1.54-1.54-.55a1.25 1.25 0 0 1 0-2.36l1.54-.55.55-1.54A1.25 1.25 0 0 1 12 2.5Z"/><path fill="currentColor" opacity="0.45" d="M6.5 14.5h11v7h-11z"/></svg>`;
 
@@ -115,16 +155,33 @@ const QUICK_ACTION_META = {
   suggest_fix: {
     tone: 'emerald',
     icon: `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>`
+  },
+  callouts: {
+    tone: 'sky',
+    icon: `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M20.5 6h-2.2l-1-2H6.7l-1 2H3.5C2.67 6 2 6.67 2 7.5v11c0 .83.67 1.5 1.5 1.5h17c.83 0 1.5-.67 1.5-1.5v-11c0-.83-.67-1.5-1.5-1.5zM12 17.5A4.5 4.5 0 1 1 12 8.5a4.5 4.5 0 0 1 0 9zm0-7.2a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4z"/></svg>`
+  },
+  validations: {
+    tone: 'amber',
+    icon: `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2 4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3zm-1.06 14.54L7.4 13l1.41-1.41 2.12 2.12 4.24-4.24L16.6 11l-5.66 5.54z"/></svg>`
+  },
+  hotspots: {
+    tone: 'orange',
+    icon: `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2C8.5 6.2 7 9.2 7 12a5 5 0 0 0 10 0c0-2.8-1.5-5.8-5-10zm0 14.5A2.5 2.5 0 0 1 9.5 14c0-1.2.7-2.6 2.5-5.1 1.8 2.5 2.5 3.9 2.5 5.1A2.5 2.5 0 0 1 12 16.5z"/></svg>`
   }
 };
 
-/** @typedef {{ id: string, text: string, quickActionId?: string }} QueuedMessage */
+/** @typedef {{ startLine: number, endLine: number, logId: string }} LogiLineRef */
 
-/** @typedef {{ role: string, content?: string, quickActionId?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
+/** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: LogiLineRef, displayText?: string }} QueuedMessage */
+
+/** @typedef {{ role: string, content?: string, quickActionId?: string, lineRef?: LogiLineRef, displayText?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
 
 let modalEl = null;
 let quickActionEditModalEl = null;
 let btnEl = null;
+
+/** @type {LogiLineRef | null} */
+let pendingLineAttachment = null;
 /** @type {ReturnType<typeof getLogiQuickActionPromptsSnapshot> | null} */
 let customQuickActionPrompts = null;
 
@@ -146,6 +203,10 @@ let activeTurnId = null;
 let cancelRequested = false;
 /** @type {string | null} */
 let usageLimitReason = null;
+/** @type {{ remainingToday?: number, maxToday?: number } | null} */
+let usageHint = null;
+/** @type {{ mode: 'docked' | 'float', width: number }} */
+let panelLayout = { mode: 'docked', width: LOGI_PANEL_WIDTH_DEFAULT };
 
 /**
  * @typedef {object} SessionRuntime
@@ -155,6 +216,7 @@ let usageLimitReason = null;
  * @property {boolean} isNewChat
  * @property {boolean} processing
  * @property {string} thinkingStatus
+ * @property {string} thinkingReason
  * @property {'default' | 'tools' | 'org'} thinkingMode
  * @property {string | null} activeRequestId
  * @property {string | null} activeTurnId
@@ -164,6 +226,7 @@ let usageLimitReason = null;
  * @property {ReturnType<typeof setTimeout> | null} turnTimeoutTimer
  * @property {string | null} usageLimitReason
  * @property {object | null} lastCtx
+ * @property {Record<string, string | number | boolean> | null} lastAiMetrics
  */
 
 /** @type {Map<string, SessionRuntime>} */
@@ -190,6 +253,7 @@ function createRuntime() {
     isNewChat: true,
     processing: false,
     thinkingStatus: '',
+    thinkingReason: '',
     thinkingMode: 'default',
     activeRequestId: null,
     activeTurnId: null,
@@ -198,7 +262,8 @@ function createRuntime() {
     turnDeadline: null,
     turnTimeoutTimer: null,
     usageLimitReason: null,
-    lastCtx: null
+    lastCtx: null,
+    lastAiMetrics: null
   };
 }
 
@@ -248,7 +313,95 @@ function normalizeQueueItem(item) {
   if (o.quickActionId && typeof o.quickActionId === 'string') {
     out.quickActionId = o.quickActionId;
   }
+  const lineRef = normalizeLineRef(o.lineRef);
+  if (lineRef) out.lineRef = lineRef;
+  if (typeof o.displayText === 'string' && o.displayText.trim()) {
+    out.displayText = o.displayText.trim();
+  }
   return out;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {LogiLineRef | null}
+ */
+function normalizeLineRef(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  const startLine = Math.floor(Number(o.startLine));
+  const endLine = Math.floor(Number(o.endLine));
+  if (!Number.isFinite(startLine) || !Number.isFinite(endLine) || startLine < 1 || endLine < 1) {
+    return null;
+  }
+  const a = Math.min(startLine, endLine);
+  const b = Math.max(startLine, endLine);
+  return {
+    startLine: a,
+    endLine: b,
+    logId: String(o.logId || 'log').trim().slice(0, 64) || 'log'
+  };
+}
+
+/**
+ * @param {LogiLineRef} ref
+ */
+function formatLineRefBadgeLabel(ref) {
+  const logId = String(ref.logId || 'log').slice(0, 28);
+  if (ref.startLine === ref.endLine) {
+    return t('apexLogViewer.logi.lineBadgeSingle', { logId, line: ref.startLine });
+  }
+  return t('apexLogViewer.logi.lineBadgeRange', {
+    logId,
+    start: ref.startLine,
+    end: ref.endLine
+  });
+}
+
+/**
+ * @param {LogiLineRef} ref
+ * @param {string} [userNote]
+ */
+function buildLineAttachmentLlmText(ref, userNote = '') {
+  const note = String(userNote || '').trim();
+  const range =
+    ref.startLine === ref.endLine ? `L${ref.startLine}` : `L${ref.startLine}–L${ref.endLine}`;
+  const base = `Analyze these Apex debug log lines: ${range} (log id: ${ref.logId}). Use fetch_log_lines for that range before answering.`;
+  return note ? `${base}\n\nUser note: ${note}` : base;
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+function renderLineAttachmentBadge(modal) {
+  const mount = modal.querySelector('#logiAdvisorLineAttach');
+  if (!mount) return;
+  if (!pendingLineAttachment) {
+    mount.hidden = true;
+    mount.innerHTML = '';
+    return;
+  }
+  const label = formatLineRefBadgeLabel(pendingLineAttachment);
+  const removeLabel = t('apexLogViewer.logi.lineBadgeRemove');
+  mount.hidden = false;
+  mount.innerHTML = `
+    <span class="logi-advisor-line-badge" title="${escapeHtml(label)}">
+      <span class="logi-advisor-line-badge-label">${escapeHtml(label)}</span>
+      <button type="button" class="logi-advisor-line-badge-remove" id="logiAdvisorLineAttachClear" aria-label="${escapeHtml(removeLabel)}" title="${escapeHtml(removeLabel)}">×</button>
+    </span>`;
+  mount.querySelector('#logiAdvisorLineAttachClear')?.addEventListener('click', () => {
+    pendingLineAttachment = null;
+    renderLineAttachmentBadge(modal);
+    const inputEl = modal.querySelector('#logiAdvisorInput');
+    if (inputEl) inputEl.placeholder = t('apexLogViewer.logi.inputPlaceholder');
+  });
+}
+
+/**
+ * @param {object} ctx
+ * @returns {LogiLineRef | null}
+ */
+function lineAttachmentFromCtx(ctx) {
+  return normalizeLineRef(ctx?.lineAttachment);
 }
 
 /**
@@ -272,6 +425,7 @@ function finishTurnUi(sessionKey, turnId, modal) {
   stopThinkingRotation();
   rt.processing = false;
   rt.thinkingStatus = '';
+  rt.thinkingReason = '';
   rt.thinkingMode = 'default';
   rt.activeTurnId = null;
   rt.activeRequestId = null;
@@ -348,7 +502,8 @@ function handleTurnTimeout(sessionKey, turnId, modal) {
     sessionKey
   );
   finishTurnUi(sessionKey, turnId, modal);
-  trackLogiUi('turn_timeout', {
+  trackLogiUi('error', {
+    sfoc_error_reason: 'TURN_TIMEOUT',
     sfoc_session_key: hashLogiSessionKey(sessionKey),
     sfoc_timeout_ms: LOGI_TURN_TIMEOUT_MS
   });
@@ -385,7 +540,7 @@ function ensureThinkingRotation(modal) {
     const keys = THINKING_MESSAGE_KEYS[mode] || THINKING_MESSAGE_KEYS.default;
     const key = keys[thinkingRotateIndex % keys.length] || keys[0];
     const el = modal.querySelector('.logi-advisor-thinking-text');
-    if (el) el.textContent = t(key);
+    if (el) el.textContent = formatThinkingLabel(t(key), rt.thinkingReason);
     return;
   }
 
@@ -413,13 +568,23 @@ function ensureThinkingRotation(modal) {
     const key = keys[thinkingRotateIndex % keys.length];
     const el = modal.querySelector('.logi-advisor-thinking-text');
     if (el) {
-      el.textContent = t(key);
+      el.textContent = formatThinkingLabel(t(key), rtNow.thinkingReason);
     }
     thinkingRotateIndex += 1;
   };
 
   tick();
   thinkingRotateTimer = setInterval(tick, THINKING_ROTATE_MS);
+}
+
+/**
+ * @param {string} base
+ * @param {string} [reason]
+ */
+function formatThinkingLabel(base, reason) {
+  const r = truncateText(String(reason || '').trim(), 72);
+  if (!r) return base;
+  return `${base} · ${r}`;
 }
 
 /**
@@ -492,18 +657,50 @@ function editQueueItem(modal, itemId) {
   const current = normalizeQueueItem(rt.messageQueue[idx]);
   if (!current) return;
 
-  const edited = window.prompt(t('apexLogViewer.logi.queueEditPrompt'), current.text);
-  if (edited === null) return;
-  const trimmed = edited.trim();
-  if (!trimmed) {
-    removeQueueItem(modal, itemId);
-    return;
-  }
-  current.text = trimmed;
-  rt.messageQueue[idx] = current;
-  bindSession(sessionKey);
-  renderQueuePanel(modal);
-  void persistRuntime(sessionKey);
+  const listEl = modal.querySelector('#logiAdvisorQueueList');
+  const li = listEl?.querySelector(`[data-queue-id="${CSS.escape(itemId)}"]`)?.closest('li');
+  if (!li) return;
+
+  const saveLabel = t('apexLogViewer.logi.queueEditSave');
+  const cancelLabel = t('apexLogViewer.logi.queueEditCancel');
+  li.classList.add('logi-advisor-queue-item--editing');
+  li.innerHTML = `
+    <textarea class="logi-advisor-queue-edit-input" rows="2" aria-label="${escapeHtml(t('apexLogViewer.logi.queueEditPrompt'))}">${escapeHtml(current.text)}</textarea>
+    <span class="logi-advisor-queue-item-actions">
+      <button type="button" class="logi-advisor-queue-edit-save" data-queue-id="${escapeHtml(itemId)}">${escapeHtml(saveLabel)}</button>
+      <button type="button" class="logi-advisor-queue-edit-cancel" data-queue-id="${escapeHtml(itemId)}">${escapeHtml(cancelLabel)}</button>
+    </span>`;
+
+  const input = li.querySelector('.logi-advisor-queue-edit-input');
+  input?.focus();
+  input?.setSelectionRange(input.value.length, input.value.length);
+
+  const finish = (save) => {
+    if (save) {
+      const trimmed = String(input?.value || '').trim();
+      if (!trimmed) {
+        removeQueueItem(modal, itemId);
+        return;
+      }
+      current.text = trimmed;
+      rt.messageQueue[idx] = current;
+      bindSession(sessionKey);
+      void persistRuntime(sessionKey);
+    }
+    renderQueuePanel(modal);
+  };
+
+  li.querySelector('.logi-advisor-queue-edit-save')?.addEventListener('click', () => finish(true));
+  li.querySelector('.logi-advisor-queue-edit-cancel')?.addEventListener('click', () => finish(false));
+  input?.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
+      ev.preventDefault();
+      finish(true);
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      finish(false);
+    }
+  });
 }
 
 /**
@@ -693,19 +890,37 @@ function isModalBusy(modal) {
  * @param {object} opts
  */
 async function ensureLogiAdvisorConfigLoaded() {
+  // Force one network refresh when we don't already have an operational in-page config.
+  const pageCfg = getCachedLogiAdvisorConfig();
+  const needForce = !isLogiAdvisorOperational(pageCfg);
   await Promise.allSettled([
-    bg({ type: 'aiAdvisor:bootstrap', force: true }),
-    bootstrapLogiAdvisor({ force: true })
+    bg({ type: 'aiAdvisor:bootstrap', force: needForce }),
+    bootstrapLogiAdvisor({ force: needForce })
   ]);
   customQuickActionPrompts = await loadLogiQuickActionPrompts();
   customQuickActions = getLogiCustomQuickActionsSnapshot();
 }
 
 export async function mountLogiAdvisor(opts) {
-  const { getParsed, getRawContent, payload } = opts;
+  const { getParsed, getRawContent, payload, switchToSummary } = opts;
   currentAdvisorPayload = payload || null;
   btnEl = document.getElementById('logiAdvisorBtn');
   if (!btnEl) return;
+
+  mountLogiResume({
+    getParsed,
+    getRawContent,
+    payload: payload || {},
+    switchToSummary,
+    openAskLogi: (askCtx) => {
+      void openLogiModal({
+        getParsed,
+        getRawContent,
+        payload: payload || {},
+        prefill: askCtx?.prefill
+      });
+    }
+  });
 
   await refreshConfig();
 
@@ -748,6 +963,14 @@ export async function mountLogiAdvisor(opts) {
   });
 }
 
+/**
+ * Public entry to open Ask Logi (used by resume CTA and selection).
+ * @param {object} ctx
+ */
+export async function openLogiAdvisor(ctx) {
+  return openLogiModal(ctx);
+}
+
 async function refreshConfig() {
   const fromPage = getCachedLogiAdvisorConfig();
   const res = await bg({ type: 'aiAdvisor:getConfig' });
@@ -764,8 +987,10 @@ async function refreshConfig() {
     !telemetryRequired;
 
   if (!btnEl) return;
-  btnEl.hidden = !(pageShow || swShow);
+  const show = Boolean(pageShow || swShow);
+  btnEl.hidden = !show;
   btnEl.textContent = t('apexLogViewer.logi.button');
+  setLogiResumeButtonVisible(show);
 }
 
 function getSelectedLogiModel() {
@@ -856,6 +1081,7 @@ function ensureModal() {
   modalEl.innerHTML = `
     <div class="logi-advisor-backdrop" data-close="1"></div>
     <div class="logi-advisor-dialog" role="dialog" aria-modal="true" aria-labelledby="logiAdvisorTitle">
+      <div class="logi-advisor-resize" id="logiAdvisorResize" aria-hidden="true"></div>
       <header class="logi-advisor-header">
         <span class="logi-advisor-avatar">${LOGI_AVATAR_SVG}</span>
         <div class="logi-advisor-header-text">
@@ -866,11 +1092,17 @@ function ensureModal() {
             <select id="logiAdvisorModel" class="logi-advisor-model-select" hidden></select>
           </div>
         </div>
-        <button type="button" class="logi-advisor-close" data-close="1" aria-label="Close">×</button>
+        <div class="logi-advisor-header-actions">
+          <button type="button" class="logi-advisor-header-btn" id="logiAdvisorDockToggle"></button>
+          <button type="button" class="logi-advisor-close" data-close="1" aria-label="Close">×</button>
+        </div>
       </header>
       <div class="logi-advisor-quick-section" id="logiAdvisorQuickSection">
         <button type="button" class="logi-advisor-quick-toggle" id="logiAdvisorQuickToggle" aria-expanded="true">
-          <span class="logi-advisor-quick-toggle-label" id="logiAdvisorQuickToggleLabel"></span>
+          <span class="logi-advisor-quick-toggle-lead">
+            ${QUICK_ACTIONS_ICON_SVG}
+            <span class="logi-advisor-quick-toggle-label" id="logiAdvisorQuickToggleLabel"></span>
+          </span>
           <span class="logi-advisor-quick-toggle-chevron" aria-hidden="true"></span>
         </button>
         <div class="logi-advisor-quick-panel" id="logiAdvisorQuickPanel">
@@ -884,8 +1116,9 @@ function ensureModal() {
         </div>
       </div>
       <div class="logi-advisor-messages ph-no-capture" id="logiAdvisorMessages"></div>
-      <div class="logi-advisor-privacy" id="logiAdvisorPrivacy"></div>
+      <div class="logi-advisor-privacy" id="logiAdvisorPrivacy" hidden></div>
       <footer class="logi-advisor-footer">
+        <div class="logi-advisor-line-attach" id="logiAdvisorLineAttach" hidden></div>
         <div class="logi-advisor-input-row">
           <textarea id="logiAdvisorInput" class="logi-advisor-input" rows="2"></textarea>
           <button type="button" id="logiAdvisorSend" class="logi-advisor-send"></button>
@@ -895,13 +1128,23 @@ function ensureModal() {
           <span class="logi-advisor-queue-summary" id="logiAdvisorQueueSummary"></span>
           <ul class="logi-advisor-queue-list" id="logiAdvisorQueueList"></ul>
         </div>
-        <span class="logi-advisor-iterations" id="logiAdvisorIterations"></span>
+        <div class="logi-advisor-footer-meta">
+          <span class="logi-advisor-iterations" id="logiAdvisorIterations"></span>
+          <span class="logi-advisor-chats-remaining" id="logiAdvisorChatsRemaining" hidden></span>
+        </div>
       </footer>
     </div>`;
   document.body.appendChild(modalEl);
 
+  void loadPanelLayout().then(() => applyPanelLayout(modalEl));
+
   modalEl.querySelectorAll('[data-close]').forEach((el) => {
-    el.addEventListener('click', () => closeLogiModal());
+    el.addEventListener('click', () => {
+      if (panelLayout.mode === 'docked' && el.classList.contains('logi-advisor-backdrop')) {
+        return;
+      }
+      closeLogiModal();
+    });
   });
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
@@ -948,6 +1191,11 @@ function ensureModal() {
   modalEl.querySelector('#logiAdvisorStop')?.addEventListener('click', () => {
     void cancelActiveGeneration(modalEl);
   });
+  modalEl.querySelector('#logiAdvisorDockToggle')?.addEventListener('click', () => {
+    void togglePanelMode(modalEl);
+  });
+  wirePanelResize(modalEl);
+  wireMessagesDelegation(modalEl);
   modalEl.querySelector('#logiAdvisorQueue')?.addEventListener('click', (e) => {
     const target = e.target;
     if (!(target instanceof HTMLElement)) return;
@@ -979,8 +1227,398 @@ export function closeLogiModal() {
 }
 
 /**
+ * @returns {boolean}
+ */
+export function isLogiAdvisorButtonVisible() {
+  return Boolean(btnEl && !btnEl.hidden);
+}
+
+async function loadPanelLayout() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const bag = await chrome.storage.local.get(LOGI_PANEL_LAYOUT_KEY);
+      const raw = bag[LOGI_PANEL_LAYOUT_KEY];
+      if (raw && typeof raw === 'object') {
+        const mode = raw.mode === 'float' ? 'float' : 'docked';
+        const width = clampPanelWidth(Number(raw.width) || LOGI_PANEL_WIDTH_DEFAULT);
+        panelLayout = { mode, width };
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+async function savePanelLayout() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      await chrome.storage.local.set({ [LOGI_PANEL_LAYOUT_KEY]: { ...panelLayout } });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * @param {number} width
+ */
+function clampPanelWidth(width) {
+  const n = Number(width);
+  if (!Number.isFinite(n)) return LOGI_PANEL_WIDTH_DEFAULT;
+  return Math.min(LOGI_PANEL_WIDTH_MAX, Math.max(LOGI_PANEL_WIDTH_MIN, Math.round(n)));
+}
+
+/**
  * @param {HTMLElement} modal
- * @param {string} [sessionKey]
+ */
+function applyPanelLayout(modal) {
+  const docked = panelLayout.mode === 'docked';
+  modal.classList.toggle('logi-advisor-modal--docked', docked);
+  modal.style.setProperty('--logi-panel-width', `${clampPanelWidth(panelLayout.width)}px`);
+  const toggle = modal.querySelector('#logiAdvisorDockToggle');
+  if (toggle) {
+    toggle.textContent = docked ? t('apexLogViewer.logi.float') : t('apexLogViewer.logi.dock');
+    toggle.setAttribute(
+      'aria-label',
+      docked ? t('apexLogViewer.logi.float') : t('apexLogViewer.logi.dock')
+    );
+  }
+  const backdrop = modal.querySelector('.logi-advisor-backdrop');
+  if (backdrop) {
+    if (docked) backdrop.removeAttribute('data-close');
+    else backdrop.setAttribute('data-close', '1');
+  }
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+async function togglePanelMode(modal) {
+  panelLayout.mode = panelLayout.mode === 'docked' ? 'float' : 'docked';
+  applyPanelLayout(modal);
+  await savePanelLayout();
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+function wirePanelResize(modal) {
+  const handle = modal.querySelector('#logiAdvisorResize');
+  if (!handle) return;
+  let dragging = false;
+  let startX = 0;
+  let startWidth = 0;
+
+  const onMove = (ev) => {
+    if (!dragging) return;
+    const delta = startX - ev.clientX;
+    const next = clampPanelWidth(startWidth + delta);
+    panelLayout.width = next;
+    modal.style.setProperty('--logi-panel-width', `${next}px`);
+  };
+
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    modal.classList.remove('logi-advisor-modal--resizing');
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    void savePanelLayout();
+  };
+
+  handle.addEventListener('pointerdown', (ev) => {
+    if (panelLayout.mode !== 'docked') return;
+    dragging = true;
+    startX = ev.clientX;
+    startWidth = clampPanelWidth(panelLayout.width);
+    modal.classList.add('logi-advisor-modal--resizing');
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    ev.preventDefault();
+  });
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+function wireMessagesDelegation(modal) {
+  const mount = modal.querySelector('#logiAdvisorMessages');
+  if (!mount || mount.dataset.logiDelegated === '1') return;
+  mount.dataset.logiDelegated = '1';
+
+  mount.addEventListener('click', (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+
+    const lineRef = target.closest('.logi-md-line-ref');
+    if (lineRef instanceof HTMLElement) {
+      dispatchLogiLineHighlight(lineRef);
+      return;
+    }
+
+    const copyCode = target.closest('[data-logi-copy-code]');
+    if (copyCode instanceof HTMLElement) {
+      const pre = copyCode.parentElement?.querySelector('pre code');
+      const text = pre?.textContent || '';
+      if (text && navigator.clipboard?.writeText) void navigator.clipboard.writeText(text);
+      return;
+    }
+
+    const actionBtn = target.closest('[data-logi-msg-action]');
+    if (actionBtn instanceof HTMLElement) {
+      const action = actionBtn.getAttribute('data-logi-msg-action');
+      const idx = Number(actionBtn.getAttribute('data-msg-index'));
+      void handleMessageAction(modal, action, idx);
+      return;
+    }
+
+    const chip = target.closest('[data-logi-suggest-action]');
+    if (chip instanceof HTMLElement) {
+      const actionId = chip.getAttribute('data-logi-suggest-action');
+      if (!actionId) return;
+      const lang = getCurrentLang() === 'en' ? 'en' : 'es';
+      void enqueueUserMessage(
+        quickActionUserMessage(actionId, lang, customQuickActionPrompts),
+        modal,
+        { quickActionId: actionId }
+      );
+    }
+  });
+}
+
+/**
+ * @param {HTMLElement} el
+ */
+function dispatchLogiLineHighlight(el) {
+  const start =
+    Number(el.getAttribute('data-start-line') || el.getAttribute('data-line')) || 0;
+  const end = Number(el.getAttribute('data-end-line') || start) || start;
+  if (!Number.isFinite(start) || start < 1) return;
+  try {
+    window.dispatchEvent(
+      new CustomEvent('sfoc-logi-highlight-lines', {
+        detail: { startLine: start, endLine: end > 0 ? end : start }
+      })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * @param {HTMLElement} modal
+ * @param {string | null} action
+ * @param {number} msgIndex
+ */
+async function handleMessageAction(modal, action, msgIndex) {
+  const rt = getModalRuntime(modal);
+  if (!rt || !Number.isFinite(msgIndex) || msgIndex < 0) return;
+  const msg = rt.messages[msgIndex];
+  if (!msg || msg.role !== 'assistant') return;
+  const text = String(msg.content || '');
+
+  if (action === 'copy') {
+    if (text && navigator.clipboard?.writeText) void navigator.clipboard.writeText(text);
+    return;
+  }
+  if (action === 'quote') {
+    const input = modal.querySelector('#logiAdvisorInput');
+    if (input) {
+      const quoted = text
+        .split('\n')
+        .map((line) => `> ${line}`)
+        .join('\n');
+      input.value = input.value ? `${input.value.trim()}\n\n${quoted}` : quoted;
+      input.focus();
+    }
+    return;
+  }
+  if (action === 'regenerate') {
+    let lastUserIdx = -1;
+    for (let i = msgIndex - 1; i >= 0; i -= 1) {
+      if (rt.messages[i]?.role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    if (lastUserIdx < 0) return;
+    const lastUser = rt.messages[lastUserIdx];
+    if (!lastUser?.content) return;
+    rt.messages = rt.messages.slice(0, lastUserIdx);
+    bindSession(modal._sessionKey || boundSessionKey);
+    renderMessages(modal);
+    await persistSession(modal);
+    if (lastUser.lineRef) {
+      await enqueueUserMessage(lastUser.displayText || '', modal, {
+        lineRef: lastUser.lineRef,
+        quickActionId: lastUser.quickActionId
+      });
+    } else {
+      await enqueueUserMessage(lastUser.content, modal, {
+        quickActionId: lastUser.quickActionId
+      });
+    }
+  }
+}
+
+/**
+ * @param {object | null | undefined} parsed
+ * @returns {string[]}
+ */
+function getEmptySuggestActionIds(parsed) {
+  /** @type {string[]} */
+  const ids = [];
+  if (parsed?.issues?.length) ids.push('debug_errors');
+  if (
+    Number(parsed?.meta?.failedExecutionCount) > 0 ||
+    parsed?.meta?.isTestLog === true ||
+    (parsed?.executions || []).some((e) => e?.hasError)
+  ) {
+    ids.push('test_failure');
+  }
+  const highLimits = (parsed?.limits || []).some((entry) => {
+    const used = Number(entry.used ?? entry.value);
+    const max = Number(entry.max ?? entry.limit);
+    return Number.isFinite(used) && Number.isFinite(max) && max > 0 && used / max >= 0.7;
+  });
+  if (highLimits) ids.push('limits');
+  const soqlDmlCount = (parsed?.soql?.length || 0) + (parsed?.dml?.length || 0);
+  if (soqlDmlCount >= 5) ids.push('soql_dml');
+  if (!ids.length) ids.push('explain_flow');
+  return [...new Set(ids)].slice(0, 4);
+}
+
+/**
+ * @param {string} content
+ * @param {object | null | undefined} parsed
+ * @returns {string[]}
+ */
+function getFollowUpActionIds(content, parsed) {
+  const lower = String(content || '').toLowerCase();
+  /** @type {string[]} */
+  const ids = [];
+  if (/error|exception|fail|nullpointer|suger|fix|correcci/i.test(lower)) {
+    ids.push('suggest_fix');
+  }
+  if (/soql|dml|query|consulta/i.test(lower) || (parsed?.soql?.length || 0) >= 3) {
+    ids.push('soql_dml');
+  }
+  if (/limit|governor|l[ií]mite/i.test(lower)) {
+    ids.push('limits');
+  }
+  if (!ids.includes('suggest_fix') && parsed?.issues?.length) ids.push('suggest_fix');
+  if (!ids.length) ids.push('explain_flow');
+  return [...new Set(ids)].slice(0, 3);
+}
+
+/**
+ * @param {string} actionId
+ * @param {'empty' | 'followUp'} kind
+ */
+function getSuggestChipLabel(actionId, kind) {
+  const emptyMap = {
+    debug_errors: 'apexLogViewer.logi.emptySuggestDebugErrors',
+    test_failure: 'apexLogViewer.logi.emptySuggestTestFailure',
+    limits: 'apexLogViewer.logi.emptySuggestLimits',
+    soql_dml: 'apexLogViewer.logi.emptySuggestSoqlDml',
+    explain_flow: 'apexLogViewer.logi.emptySuggestExplainFlow'
+  };
+  const followMap = {
+    suggest_fix: 'apexLogViewer.logi.followUpSuggestFix',
+    soql_dml: 'apexLogViewer.logi.followUpSoqlDml',
+    limits: 'apexLogViewer.logi.followUpLimits',
+    explain_flow: 'apexLogViewer.logi.followUpExplainFlow',
+    debug_errors: 'apexLogViewer.logi.followUpDebugErrors'
+  };
+  const key = kind === 'empty' ? emptyMap[actionId] : followMap[actionId];
+  if (key) return t(key);
+  return getQuickActionLabels()[actionId] || actionId;
+}
+
+/**
+ * @param {ChatMessage[]} sessionMessages
+ */
+function isGreetingOnlyChat(sessionMessages) {
+  return !sessionMessages.some((m) => m.role === 'user');
+}
+
+async function readPrivacyAck() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const bag = await chrome.storage.local.get(LOGI_PRIVACY_ACK_KEY);
+      return bag[LOGI_PRIVACY_ACK_KEY] === true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+async function writePrivacyAck(acked) {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      await chrome.storage.local.set({ [LOGI_PRIVACY_ACK_KEY]: Boolean(acked) });
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+async function renderPrivacyNotice(modal) {
+  const privacyEl = modal.querySelector('#logiAdvisorPrivacy');
+  if (!privacyEl) return;
+  const acked = await readPrivacyAck();
+  if (acked) {
+    privacyEl.hidden = true;
+    privacyEl.innerHTML = '';
+    return;
+  }
+  privacyEl.hidden = false;
+  privacyEl.innerHTML = `
+    <div>${escapeHtml(t('apexLogViewer.logi.privacyNotice'))}</div>
+    <div class="logi-advisor-privacy-actions">
+      <label class="logi-advisor-privacy-ack">
+        <input type="checkbox" id="logiAdvisorPrivacyAck" />
+        ${escapeHtml(t('apexLogViewer.logi.privacyAck'))}
+      </label>
+      <button type="button" class="logi-advisor-privacy-dismiss" id="logiAdvisorPrivacyDismiss">${escapeHtml(t('apexLogViewer.logi.privacyDismiss'))}</button>
+    </div>`;
+  privacyEl.querySelector('#logiAdvisorPrivacyDismiss')?.addEventListener('click', () => {
+    const checked = /** @type {HTMLInputElement | null} */ (
+      privacyEl.querySelector('#logiAdvisorPrivacyAck')
+    )?.checked;
+    if (checked) void writePrivacyAck(true);
+    privacyEl.hidden = true;
+    privacyEl.innerHTML = '';
+  });
+}
+
+/**
+ * @param {HTMLElement} modal
+ * @param {object} [usageRes]
+ */
+function applyUsageHint(modal, usageRes) {
+  if (usageRes?.remaining?.today != null) {
+    usageHint = {
+      remainingToday: Number(usageRes.remaining.today),
+      maxToday: Number(usageRes.max?.today)
+    };
+  } else if (usageRes?.usage && usageRes?.max) {
+    const maxToday = Number(usageRes.max.today ?? usageRes.max.maxChatsPerDay);
+    const used = Number(usageRes.usage.chatsToday);
+    if (Number.isFinite(maxToday) && Number.isFinite(used)) {
+      usageHint = { remainingToday: Math.max(0, maxToday - used), maxToday };
+    }
+  }
+  updateIterationsLabel(modal);
+}
+
+/**
+ * @param {HTMLElement} modal
+ * @param {object} ctx
  */
 async function persistSession(modal, sessionKey) {
   const key = sessionKey || boundSessionKey || modal._sessionKey;
@@ -1034,18 +1672,25 @@ async function openLogiModal(ctx) {
 
   if (isNewChat) {
     const usageRes = await bg({ type: 'aiAdvisor:checkUsageLimits' });
-    if (!usageRes?.ok && isUsageLimitReason(usageRes.reason)) {
+    applyUsageHint(modal, usageRes);
+    if (!usageRes?.ok && isUsageLimitReason(usageRes?.reason)) {
       handleUsageLimit(modal, usageRes);
     }
+  } else {
+    const usageRes = await bg({ type: 'aiAdvisor:checkUsageLimits' });
+    applyUsageHint(modal, usageRes);
   }
+
+  await loadPanelLayout();
+  applyPanelLayout(modal);
 
   const titleEl = modal.querySelector('#logiAdvisorTitle');
   const betaEl = modal.querySelector('#logiAdvisorBeta');
-  const privacyEl = modal.querySelector('#logiAdvisorPrivacy');
   const sendBtn = modal.querySelector('#logiAdvisorSend');
   const stopBtn = modal.querySelector('#logiAdvisorStop');
   const inputEl = modal.querySelector('#logiAdvisorInput');
   const closeBtn = modal.querySelector('.logi-advisor-close');
+  const dockBtn = modal.querySelector('#logiAdvisorDockToggle');
 
   if (titleEl) titleEl.textContent = t('apexLogViewer.logi.title');
   if (betaEl) {
@@ -1053,15 +1698,25 @@ async function openLogiModal(ctx) {
     betaEl.hidden = !advisorConfig?.beta;
   }
   updateLogiHeaderUi(modal);
-  if (privacyEl) privacyEl.textContent = t('apexLogViewer.logi.privacyNotice');
+  await renderPrivacyNotice(modal);
   if (sendBtn) sendBtn.textContent = t('apexLogViewer.logi.send');
   if (stopBtn) {
     stopBtn.textContent = t('apexLogViewer.logi.stop');
     stopBtn.setAttribute('aria-label', t('apexLogViewer.logi.stop'));
   }
+  if (dockBtn) applyPanelLayout(modal);
+  pendingLineAttachment = lineAttachmentFromCtx(ctx);
+  renderLineAttachmentBadge(modal);
   if (inputEl) {
-    inputEl.placeholder = t('apexLogViewer.logi.inputPlaceholder');
-    inputEl.value = '';
+    inputEl.placeholder = pendingLineAttachment
+      ? t('apexLogViewer.logi.inputPlaceholderWithLines')
+      : t('apexLogViewer.logi.inputPlaceholder');
+    // Keep free text empty when a line badge is attached; only use string prefill otherwise.
+    inputEl.value =
+      pendingLineAttachment || typeof ctx.prefill !== 'string' ? '' : ctx.prefill;
+    if (pendingLineAttachment || ctx.prefill) {
+      inputEl.focus();
+    }
   }
   if (closeBtn) closeBtn.setAttribute('aria-label', t('apexLogViewer.logi.close'));
 
@@ -1069,19 +1724,42 @@ async function openLogiModal(ctx) {
   customQuickActions = getLogiCustomQuickActionsSnapshot();
   renderQuickActions(modal);
   applyQuickActionsCollapsed(modal, readQuickActionsCollapsed());
+  if (stripWelcomeGreetings(rt) && sessionKey) {
+    void persistRuntime(sessionKey);
+  }
+  bindSession(sessionKey);
   syncBusyUi(modal);
-  renderMessages(modal);
   updateIterationsLabel(modal);
 
-  if (!messages.length) {
-    appendAssistantMessage(t('apexLogViewer.logi.greeting'), modal, { skipPersist: true });
-    isNewChat = true;
-    rt.isNewChat = true;
-    await persistRuntime(sessionKey);
-  }
-
   modal.hidden = false;
+  // Paint after unhiding: refreshUiIfBound skips render while modal.hidden.
+  renderMessages(modal);
   inputEl?.focus();
+}
+
+/**
+ * Remove legacy Logi welcome bubbles from the session (no longer shown).
+ * @param {SessionRuntime} rt
+ * @returns {boolean} true if messages were modified
+ */
+function stripWelcomeGreetings(rt) {
+  const before = rt.messages.length;
+  rt.messages = rt.messages.filter((m) => !(m.role === 'assistant' && isLogiWelcomeGreeting(m.content || '')));
+  return rt.messages.length !== before;
+}
+
+/**
+ * @param {string} content
+ */
+function isLogiWelcomeGreeting(content) {
+  const raw = stripInvisibleChars(content).trim();
+  if (!raw) return false;
+  if (raw === t('apexLogViewer.logi.greeting')) return true;
+  // Match both UI languages so a session opened after a language switch still strips it.
+  return (
+    raw === 'Hola, soy Logi. Puedo ayudarte a entender errores, SOQL, límites y el flujo de este log.' ||
+    raw === "Hi, I'm Logi. I can help you understand errors, SOQL, limits, and the flow of this log."
+  );
 }
 
 function readQuickActionsCollapsed() {
@@ -1113,6 +1791,7 @@ function applyQuickActionsCollapsed(modal, collapsed) {
   const label = modal.querySelector('#logiAdvisorQuickToggleLabel');
   if (!section || !toggle) return;
 
+  ensureQuickToggleLead(toggle, label);
   section.classList.toggle('logi-advisor-quick-section--collapsed', collapsed);
   toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
   toggle.setAttribute(
@@ -1120,6 +1799,19 @@ function applyQuickActionsCollapsed(modal, collapsed) {
     collapsed ? t('apexLogViewer.logi.quickActionsExpand') : t('apexLogViewer.logi.quickActionsCollapse')
   );
   if (label) label.textContent = t('apexLogViewer.logi.quickActions');
+}
+
+/**
+ * @param {Element} toggle
+ * @param {Element | null} label
+ */
+function ensureQuickToggleLead(toggle, label) {
+  if (!label || toggle.querySelector('.logi-advisor-quick-toggle-lead')) return;
+  const lead = document.createElement('span');
+  lead.className = 'logi-advisor-quick-toggle-lead';
+  lead.innerHTML = QUICK_ACTIONS_ICON_SVG;
+  label.replaceWith(lead);
+  lead.appendChild(label);
 }
 
 /**
@@ -1190,7 +1882,6 @@ function renderQuickActions(modal) {
         modal,
         { quickActionId: actionId }
       );
-      trackLogiUi('quick_action', { sfoc_quick_action: actionId });
     });
   });
   mount.querySelectorAll('.logi-advisor-chip-edit').forEach((btn) => {
@@ -1365,11 +2056,20 @@ function ensureQuickActionEditModal() {
   quickActionEditModalEl.querySelector('#logiQuickActionEditDelete')?.addEventListener('click', async () => {
     const actionId = quickActionEditModalEl.dataset.actionId;
     if (!actionId || !isLogiCustomQuickActionId(actionId)) return;
-    if (!confirm(t('apexLogViewer.logi.quickActionDeleteConfirm'))) return;
-    customQuickActionPrompts = await deleteLogiCustomQuickAction(actionId);
-    customQuickActions = getLogiCustomQuickActionsSnapshot();
-    if (modalEl) renderQuickActions(modalEl);
-    closeQuickActionEditModal();
+    const status = quickActionEditModalEl.querySelector('#logiQuickActionEditStatus');
+    const deleteBtn = quickActionEditModalEl.querySelector('#logiQuickActionEditDelete');
+    if (deleteBtn?.dataset.confirmPending === '1') {
+      customQuickActionPrompts = await deleteLogiCustomQuickAction(actionId);
+      customQuickActions = getLogiCustomQuickActionsSnapshot();
+      if (modalEl) renderQuickActions(modalEl);
+      closeQuickActionEditModal();
+      return;
+    }
+    if (deleteBtn) {
+      deleteBtn.dataset.confirmPending = '1';
+      deleteBtn.textContent = t('apexLogViewer.logi.quickActionDeleteConfirmBtn');
+    }
+    if (status) status.textContent = t('apexLogViewer.logi.quickActionDeleteConfirm');
   });
 
   quickActionEditModalEl.querySelector('#logiQuickActionEditSave')?.addEventListener('click', async () => {
@@ -1477,7 +2177,10 @@ function getQuickActionLabels() {
     soql_dml: t('apexLogViewer.logi.action.soqlDml'),
     test_failure: t('apexLogViewer.logi.action.testFailure'),
     limits: t('apexLogViewer.logi.action.limits'),
-    suggest_fix: t('apexLogViewer.logi.action.suggestFix')
+    suggest_fix: t('apexLogViewer.logi.action.suggestFix'),
+    callouts: t('apexLogViewer.logi.action.callouts'),
+    validations: t('apexLogViewer.logi.action.validations'),
+    hotspots: t('apexLogViewer.logi.action.hotspots')
   };
   for (const action of customQuickActions) {
     labels[action.id] = action.labels[lang] || action.labels.es || action.labels.en || action.id;
@@ -1503,6 +2206,19 @@ function renderUserMessageHtml(message) {
       </div>
     </div>`;
   }
+
+  const lineRef = normalizeLineRef(message.lineRef);
+  if (lineRef) {
+    const badge = formatLineRefBadgeLabel(lineRef);
+    const note = String(message.displayText || '').trim();
+    return `<div class="logi-advisor-msg logi-advisor-msg--user logi-advisor-msg--line-ref">
+      <div class="logi-advisor-msg-body logi-advisor-msg-body--line-ref">
+        <span class="logi-advisor-line-badge logi-advisor-line-badge--msg">${escapeHtml(badge)}</span>
+        ${note ? `<span class="logi-advisor-line-note">${escapeHtml(note)}</span>` : ''}
+      </div>
+    </div>`;
+  }
+
   return `<div class="logi-advisor-msg logi-advisor-msg--user"><div class="logi-advisor-msg-body">${escapeHtml(message.content || '')}</div></div>`;
 }
 
@@ -1515,20 +2231,60 @@ function renderMessages(modal) {
   const rt = getModalRuntime(modal);
   const sessionMessages = rt?.messages ?? messages;
   const showThinking = shouldShowThinking(rt);
+  const parsed = modal._ctx?.getParsed?.() || null;
+  const greetingOnly = isGreetingOnlyChat(sessionMessages);
+  const copyLabel = t('apexLogViewer.logi.copy');
+  const regenerateLabel = t('apexLogViewer.logi.regenerate');
+  const quoteLabel = t('apexLogViewer.logi.quote');
+
+  /** @type {number} */
+  let lastVisibleAssistantIndex = -1;
+  sessionMessages.forEach((m, idx) => {
+    if (
+      m.role === 'assistant' &&
+      !isLogiWelcomeGreeting(m.content || '') &&
+      isVisibleAssistantContent(m.content || '')
+    ) {
+      lastVisibleAssistantIndex = idx;
+    }
+  });
 
   mount.innerHTML = sessionMessages
-    .map((m) => {
+    .map((m, idx) => {
       if (m.role === 'user') {
         return renderUserMessageHtml(m);
       }
       if (m.role === 'assistant') {
+        if (isLogiWelcomeGreeting(m.content || '')) return '';
         const bodyHtml = formatAssistantHtml(m.content || '');
         if (!isVisibleAssistantContent(m.content || '') || !bodyHtml.trim()) return '';
+        const actions = `<div class="logi-advisor-msg-actions">
+          <button type="button" class="logi-advisor-msg-action" data-logi-msg-action="copy" data-msg-index="${idx}">${escapeHtml(copyLabel)}</button>
+          <button type="button" class="logi-advisor-msg-action" data-logi-msg-action="regenerate" data-msg-index="${idx}">${escapeHtml(regenerateLabel)}</button>
+          <button type="button" class="logi-advisor-msg-action" data-logi-msg-action="quote" data-msg-index="${idx}">${escapeHtml(quoteLabel)}</button>
+        </div>`;
+        let followUps = '';
+        if (!showThinking && idx === lastVisibleAssistantIndex && !greetingOnly) {
+          const ids = getFollowUpActionIds(m.content || '', parsed);
+          if (ids.length) {
+            followUps = `<div class="logi-advisor-followup-chips">
+              <span class="logi-advisor-suggest-label">${escapeHtml(t('apexLogViewer.logi.followUpTitle'))}</span>
+              ${ids
+                .map(
+                  (id) =>
+                    `<button type="button" class="logi-advisor-suggest-chip" data-logi-suggest-action="${escapeHtml(id)}">${escapeHtml(getSuggestChipLabel(id, 'followUp'))}</button>`
+                )
+                .join('')}
+            </div>`;
+          }
+        }
         return `<div class="logi-advisor-msg logi-advisor-msg--assistant">
           <span class="logi-advisor-msg-avatar">${LOGI_AVATAR_SVG}</span>
           <div class="logi-advisor-msg-wrap">
             <span class="logi-advisor-msg-name">Logi</span>
             <div class="logi-advisor-msg-body logi-advisor-msg-body--md">${bodyHtml}</div>
+            ${actions}
+            ${followUps}
           </div>
         </div>`;
       }
@@ -1538,6 +2294,30 @@ function renderMessages(modal) {
       return '';
     })
     .join('');
+
+  if (greetingOnly && !showThinking) {
+    const ids = getEmptySuggestActionIds(parsed);
+    if (ids.length) {
+      mount.insertAdjacentHTML(
+        'beforeend',
+        `<div class="logi-advisor-suggest-chips" id="logiAdvisorEmptySuggest">
+          <span class="logi-advisor-suggest-label">${escapeHtml(t('apexLogViewer.logi.emptySuggestTitle'))}</span>
+          ${ids
+            .map(
+              (id) =>
+                `<button type="button" class="logi-advisor-suggest-chip" data-logi-suggest-action="${escapeHtml(id)}">${escapeHtml(getSuggestChipLabel(id, 'empty'))}</button>`
+            )
+            .join('')}
+        </div>`
+      );
+    }
+  }
+
+  mount.querySelectorAll('.logi-md-pre-copy').forEach((btn) => {
+    btn.textContent = copyLabel;
+    btn.setAttribute('aria-label', copyLabel);
+  });
+
   if (showThinking) {
     mount.insertAdjacentHTML('beforeend', THINKING_BUBBLE_HTML);
     ensureThinkingRotation(modal);
@@ -1715,11 +2495,12 @@ function isMaxIterationsResponse(modal, res) {
 /**
  * @param {string} text
  * @param {HTMLElement} modal
- * @param {{ quickActionId?: string }} [opts]
+ * @param {{ quickActionId?: string, lineRef?: LogiLineRef, displayText?: string }} [opts]
  */
 async function enqueueUserMessage(text, modal, opts = {}) {
   const trimmed = String(text || '').trim();
-  if (!trimmed) return;
+  const lineRef = normalizeLineRef(opts.lineRef);
+  if (!trimmed && !lineRef) return;
 
   if (isChatBlocked()) {
     if (usageLimitReason) {
@@ -1731,9 +2512,16 @@ async function enqueueUserMessage(text, modal, opts = {}) {
   }
 
   /** @type {QueuedMessage} */
-  const queueItem = { id: createRequestId(), text: trimmed };
+  const queueItem = {
+    id: createRequestId(),
+    text: lineRef ? buildLineAttachmentLlmText(lineRef, trimmed) : trimmed
+  };
   if (opts.quickActionId) {
     queueItem.quickActionId = opts.quickActionId;
+  }
+  if (lineRef) {
+    queueItem.lineRef = lineRef;
+    if (trimmed) queueItem.displayText = trimmed;
   }
   messageQueue.push(queueItem);
   syncBusyUi(modal);
@@ -1776,12 +2564,17 @@ async function drainQueue(modal) {
   rt.activeTurnId = turnId;
   rt.activeRequestId = createRequestId();
   rt.lastCtx = modal._ctx;
+  rt.lastAiMetrics = null;
   rt.messageQueue.shift();
 
   /** @type {ChatMessage} */
   const userMessage = { role: 'user', content: next.text };
   if (next.quickActionId) {
     userMessage.quickActionId = next.quickActionId;
+  }
+  if (next.lineRef) {
+    userMessage.lineRef = next.lineRef;
+    if (next.displayText) userMessage.displayText = next.displayText;
   }
   rt.messages.push(userMessage);
 
@@ -1805,6 +2598,7 @@ async function drainQueue(modal) {
       stopThinkingRotation();
       rt.processing = false;
       rt.thinkingStatus = '';
+      rt.thinkingReason = '';
       rt.thinkingMode = 'default';
       rt.activeTurnId = null;
       rt.activeRequestId = null;
@@ -1854,6 +2648,7 @@ async function cancelActiveGeneration(modal, opts = {}) {
   stopThinkingRotation();
   rt.processing = false;
   rt.thinkingStatus = '';
+  rt.thinkingReason = '';
   rt.thinkingMode = 'default';
   rt.activeTurnId = null;
   rt.activeRequestId = null;
@@ -1866,9 +2661,6 @@ async function cancelActiveGeneration(modal, opts = {}) {
     void bg({ type: 'aiAdvisor:cancel', requestId });
   }
   if (!opts.silent) {
-    trackLogiUi('cancelled', {
-      sfoc_session_key: hashLogiSessionKey(sessionKey)
-    });
     appendAssistantMessage(t('apexLogViewer.logi.cancelled'), modal, { skipPersist: false });
   }
   await persistRuntime(sessionKey);
@@ -1914,6 +2706,7 @@ function appendAssistantMessageForSession(text, modal, sessionKey, opts = {}) {
  */
 function updateIterationsLabel(modal) {
   const el = modal.querySelector('#logiAdvisorIterations');
+  const remEl = modal.querySelector('#logiAdvisorChatsRemaining');
   const max = getMaxIterations();
   if (el) {
     el.textContent = t('apexLogViewer.logi.iterations', {
@@ -1921,16 +2714,140 @@ function updateIterationsLabel(modal) {
       max
     });
   }
+  if (remEl) {
+    if (usageHint && Number.isFinite(usageHint.remainingToday)) {
+      remEl.hidden = false;
+      remEl.textContent = t('apexLogViewer.logi.chatsRemaining', {
+        remaining: usageHint.remainingToday
+      });
+    } else {
+      remEl.hidden = true;
+      remEl.textContent = '';
+    }
+  }
 }
 
 async function onSendFromInput() {
   const modal = modalEl;
   if (!modal) return;
   const input = modal.querySelector('#logiAdvisorInput');
-  const text = input?.value?.trim();
-  if (!text) return;
+  const text = input?.value?.trim() || '';
+  const lineRef = pendingLineAttachment;
+  if (!text && !lineRef) return;
   if (input) input.value = '';
-  await enqueueUserMessage(text, modal);
+  pendingLineAttachment = null;
+  renderLineAttachmentBadge(modal);
+  if (input) input.placeholder = t('apexLogViewer.logi.inputPlaceholder');
+  await enqueueUserMessage(text, modal, lineRef ? { lineRef } : {});
+}
+
+/**
+ * Chat via streaming port when available; falls back to one-shot bg message.
+ * @param {object} payload
+ * @param {{ onDelta?: (text: string) => void }} [hooks]
+ */
+function requestLogiChat(payload, hooks = {}) {
+  const onDelta = typeof hooks.onDelta === 'function' ? hooks.onDelta : null;
+  if (!onDelta || typeof chrome === 'undefined' || !chrome.runtime?.connect) {
+    return bg({ type: 'aiAdvisor:chat', ...payload });
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    /** @type {chrome.runtime.Port | null} */
+    let port = null;
+    const finish = (res) => {
+      if (settled) return;
+      settled = true;
+      try {
+        port?.disconnect();
+      } catch {
+        /* ignore */
+      }
+      resolve(res);
+    };
+
+    try {
+      port = chrome.runtime.connect({ name: 'logi-chat-stream' });
+    } catch {
+      void bg({ type: 'aiAdvisor:chat', ...payload }).then(finish);
+      return;
+    }
+
+    port.onMessage.addListener((msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'delta' && typeof msg.text === 'string') {
+        onDelta(msg.text);
+        return;
+      }
+      if (msg.type === 'done') {
+        finish(msg.result || { ok: false, reason: 'LLM_ERROR' });
+        return;
+      }
+      if (msg.type === 'error') {
+        finish({
+          ok: false,
+          reason: msg.reason || 'LLM_ERROR',
+          error: msg.error || 'LLM_ERROR'
+        });
+      }
+    });
+
+    port.onDisconnect.addListener(() => {
+      if (settled) return;
+      // Port died mid-stream — fall back to non-streaming chat.
+      void bg({ type: 'aiAdvisor:chat', ...payload }).then(finish);
+    });
+
+    try {
+      port.postMessage({ type: 'aiAdvisor:chatStream', payload });
+    } catch {
+      void bg({ type: 'aiAdvisor:chat', ...payload }).then(finish);
+    }
+  });
+}
+
+/**
+ * @param {HTMLElement} modal
+ * @param {string} sessionKey
+ * @param {string} delta
+ */
+function appendStreamDelta(modal, sessionKey, delta) {
+  if (!delta || !modal || modal.hidden) return;
+  if (boundSessionKey !== sessionKey) return;
+  const mount = modal.querySelector('#logiAdvisorMessages');
+  if (!mount) return;
+
+  let bubble = mount.querySelector('.logi-advisor-msg--streaming');
+  if (!bubble) {
+    // Hide thinking bubble while streaming text.
+    mount.querySelector('.logi-advisor-msg--thinking')?.remove();
+    stopThinkingRotation();
+    bubble = document.createElement('div');
+    bubble.className = 'logi-advisor-msg logi-advisor-msg--assistant logi-advisor-msg--streaming';
+    bubble.innerHTML = `
+      <span class="logi-advisor-msg-avatar">${LOGI_AVATAR_SVG}</span>
+      <div class="logi-advisor-msg-wrap">
+        <span class="logi-advisor-msg-name">Logi</span>
+        <div class="logi-advisor-msg-body logi-advisor-msg-body--md" data-stream-body="1"></div>
+      </div>`;
+    mount.appendChild(bubble);
+  }
+
+  const body = bubble.querySelector('[data-stream-body]');
+  if (!body) return;
+  const prev = body.dataset.raw || '';
+  const next = prev + delta;
+  body.dataset.raw = next;
+  body.innerHTML = formatAssistantHtml(next);
+  mount.scrollTop = mount.scrollHeight;
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+function clearStreamBubble(modal) {
+  modal?.querySelector('.logi-advisor-msg--streaming')?.remove();
 }
 
 /**
@@ -1954,8 +2871,7 @@ async function runChatTurn(modal, sessionKey, requestId, turnId) {
     instanceUrl: payload.instanceUrl
   });
 
-  const res = await bg({
-    type: 'aiAdvisor:chat',
+  const chatPayload = {
     requestId,
     sessionKey,
     messages: rt.messages.filter(
@@ -1967,7 +2883,15 @@ async function runChatTurn(modal, sessionKey, requestId, turnId) {
     lang,
     isNewChat: rt.isNewChat,
     ...buildChatMessageExtras()
+  };
+
+  const res = await requestLogiChat(chatPayload, {
+    onDelta: (text) => {
+      if (!shouldApplyTurnResult(sessionKey, turnId)) return;
+      appendStreamDelta(modal, sessionKey, text);
+    }
   });
+  clearStreamBubble(modal);
   if (!shouldApplyTurnResult(sessionKey, turnId)) return;
 
   if (res?.ok) {
@@ -2004,6 +2928,7 @@ async function runChatTurn(modal, sessionKey, requestId, turnId) {
     return;
   }
 
+  rememberTurnAiMetrics(sessionKey, res);
   await processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payload, lang, requestId, turnId);
   if (shouldApplyTurnResult(sessionKey, turnId)) {
     await persistRuntime(sessionKey);
@@ -2055,6 +2980,44 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
       toolResult = JSON.stringify(
         enrichLocalToolResult(name, fetchParsedSection(parsed, args.section), lang)
       );
+    } else if (name === 'search_log') {
+      toolResult = JSON.stringify(
+        enrichLocalToolResult(
+          name,
+          searchLog(raw, args.query, {
+            maxResults: args.max_results,
+            caseSensitive: args.case_sensitive
+          }),
+          lang
+        )
+      );
+    } else if (name === 'get_stack_around') {
+      toolResult = JSON.stringify(
+        enrichLocalToolResult(
+          name,
+          getStackAround(raw, parsed, args.line, { radius: args.radius, reason: args.reason }),
+          lang
+        )
+      );
+    } else if (name === 'get_hotspots') {
+      toolResult = JSON.stringify(
+        enrichLocalToolResult(name, getHotspots(parsed, { reason: args.reason }), lang)
+      );
+    } else if (name === 'highlight_log_lines') {
+      const highlighted = highlightLogLines(args.start_line, args.end_line, args.reason);
+      try {
+        window.dispatchEvent(
+          new CustomEvent('sfoc-logi-highlight-lines', {
+            detail: {
+              startLine: highlighted.start_line,
+              endLine: highlighted.end_line
+            }
+          })
+        );
+      } catch {
+        /* ignore */
+      }
+      toolResult = JSON.stringify(enrichLocalToolResult(name, highlighted, lang));
     } else {
       toolResult = JSON.stringify(
         enrichLocalToolResult(name, { error: 'unknown_tool', retryable: false }, lang)
@@ -2075,6 +3038,7 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
 
     rt.thinkingMode = 'tools';
     rt.thinkingStatus = t('apexLogViewer.logi.thinkingTools');
+    rt.thinkingReason = truncateText(String(args.reason || ''), 80);
     await persistRuntime(sessionKey);
     refreshUiIfBound(modal, sessionKey);
 
@@ -2123,6 +3087,7 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
       finishTurnUi(sessionKey, turnId, modal);
       return;
     }
+    rememberTurnAiMetrics(sessionKey, followUp);
     await processLlmResponse(followUp, modal, sessionKey, ctx, parsed, raw, payload, lang, requestId, turnId);
     if (!shouldApplyTurnResult(sessionKey, turnId)) return;
     if (!res.pendingOrgQuery) return;
@@ -2144,6 +3109,7 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
     return;
   }
 
+  emitChatTurnSuccess(sessionKey, payload);
   finishTurnUi(sessionKey, turnId, modal);
 }
 
@@ -2181,22 +3147,14 @@ async function runPendingOrgQueryFlow(
     return;
   }
 
-  trackLogiUi('org_query_proposed', {
-    sfoc_org_query_variant: String(pending.variant || 'rest-soql').slice(0, 32),
-    sfoc_log_id: String(payload.logId || '').slice(0, 64),
-    sfoc_session_key: hashLogiSessionKey(sessionKey)
-  });
-
   const approved = await showOrgQueryApproval(pending, payload.orgId);
   if (!shouldApplyTurnResult(sessionKey, turnId)) return;
+
+  const toolName = pending.toolName || 'org_query';
 
   /** @type {string} */
   let toolContent;
   if (!approved) {
-    trackLogiUi('org_query_denied', {
-      sfoc_org_query_variant: String(pending.variant || 'rest-soql').slice(0, 32),
-      sfoc_log_id: String(payload.logId || '').slice(0, 64)
-    });
     toolContent = JSON.stringify(
       formatOrgQueryToolResult(
         {
@@ -2207,6 +3165,35 @@ async function runPendingOrgQueryFlow(
         lang
       )
     );
+  } else if (toolName === 'describe_sobject_fields') {
+    const describeRes = await bg({
+      type: 'queryExplorer:describeSobject',
+      orgId: payload.orgId,
+      objectApiName: pending.sobject || pending.queryText
+    });
+    if (describeRes?.ok && describeRes.describe) {
+      const fields = (describeRes.describe.fields || []).slice(0, 80).map((f) => ({
+        name: f.name,
+        type: f.type,
+        label: f.label,
+        nillable: f.nillable,
+        custom: f.custom
+      }));
+      toolContent = JSON.stringify({
+        ok: true,
+        sobject: pending.sobject || pending.queryText,
+        fieldCount: (describeRes.describe.fields || []).length,
+        fields,
+        truncated: (describeRes.describe.fields || []).length > 80
+      });
+    } else {
+      toolContent = JSON.stringify(
+        formatOrgQueryToolResult(
+          { ok: false, error: describeRes?.error || describeRes?.reason || 'DESCRIBE_FAILED' },
+          lang
+        )
+      );
+    }
   } else {
     const queryRes = await bg({
       type: 'aiAdvisor:runQuery',
@@ -2217,6 +3204,14 @@ async function runPendingOrgQueryFlow(
     toolContent = JSON.stringify(formatOrgQueryToolResult(queryRes, lang));
   }
 
+  /** @type {Record<string, unknown>} */
+  const toolArgs =
+    toolName === 'get_apex_source'
+      ? { name: pending.apexName, type: pending.apexType, reason: pending.reason }
+      : toolName === 'describe_sobject_fields'
+        ? { sobject: pending.sobject || pending.queryText, reason: pending.reason }
+        : { variant: pending.variant, query_text: pending.queryText, reason: pending.reason };
+
   rt.messages.push({
     role: 'assistant',
     content: '',
@@ -2225,11 +3220,8 @@ async function runPendingOrgQueryFlow(
         id: pending.toolCallId,
         type: 'function',
         function: {
-          name: 'org_query',
-          arguments: JSON.stringify({
-            variant: pending.variant,
-            query_text: pending.queryText
-          })
+          name: toolName,
+          arguments: JSON.stringify(toolArgs)
         }
       }
     ]
@@ -2237,12 +3229,13 @@ async function runPendingOrgQueryFlow(
   rt.messages.push({
     role: 'tool',
     tool_call_id: pending.toolCallId,
-    name: 'org_query',
+    name: toolName,
     content: toolContent
   });
 
   rt.thinkingMode = 'org';
   rt.thinkingStatus = t('apexLogViewer.logi.thinkingOrgQuery');
+  rt.thinkingReason = truncateText(String(pending.reason || ''), 80);
   await persistRuntime(sessionKey);
   refreshUiIfBound(modal, sessionKey);
 
@@ -2291,6 +3284,7 @@ async function runPendingOrgQueryFlow(
     finishTurnUi(sessionKey, turnId, modal);
     return;
   }
+  rememberTurnAiMetrics(sessionKey, followUp);
   await processLlmResponse(followUp, modal, sessionKey, ctx, parsed, raw, payload, lang, requestId, turnId);
 }
 
@@ -2300,17 +3294,31 @@ async function runPendingOrgQueryFlow(
  */
 function showOrgQueryApproval(pending, orgId) {
   return new Promise((resolve) => {
+    const toolName = pending.toolName || 'org_query';
+    const titleKey =
+      toolName === 'get_apex_source'
+        ? 'apexLogViewer.logi.sourceApprovalTitle'
+        : toolName === 'describe_sobject_fields'
+          ? 'apexLogViewer.logi.describeApprovalTitle'
+          : 'apexLogViewer.logi.queryApprovalTitle';
+    const displayQuery =
+      toolName === 'describe_sobject_fields'
+        ? `DESCRIBE ${pending.sobject || pending.queryText}`
+        : pending.queryText;
+    const variantLabel =
+      toolName === 'describe_sobject_fields' ? 'describe' : pending.variant || 'rest-soql';
+
     const overlay = document.createElement('div');
     overlay.className = 'logi-advisor-approval ph-no-capture';
     overlay.innerHTML = `
       <div class="logi-advisor-approval-panel" role="alertdialog" aria-modal="true">
-        <h3>${escapeHtml(t('apexLogViewer.logi.queryApprovalTitle'))}</h3>
+        <h3>${escapeHtml(t(titleKey))}</h3>
         <p class="logi-advisor-approval-reason">${escapeHtml(pending.reason || '')}</p>
         <dl class="logi-advisor-approval-meta">
           <dt>${escapeHtml(t('apexLogViewer.logi.queryOrg'))}</dt><dd>${escapeHtml(orgId)}</dd>
-          <dt>${escapeHtml(t('apexLogViewer.logi.queryVariant'))}</dt><dd>${escapeHtml(pending.variant)}</dd>
+          <dt>${escapeHtml(t('apexLogViewer.logi.queryVariant'))}</dt><dd>${escapeHtml(variantLabel)}</dd>
         </dl>
-        <pre class="logi-advisor-approval-query">${escapeHtml(pending.queryText)}</pre>
+        <pre class="logi-advisor-approval-query">${escapeHtml(displayQuery)}</pre>
         <div class="logi-advisor-approval-actions">
           <button type="button" class="logi-advisor-approval-deny">${escapeHtml(t('apexLogViewer.logi.queryDeny'))}</button>
           <button type="button" class="logi-advisor-approval-approve">${escapeHtml(t('apexLogViewer.logi.queryApprove'))}</button>

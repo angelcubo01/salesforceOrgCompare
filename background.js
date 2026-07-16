@@ -3,6 +3,7 @@
  */
 import { installApexTraceAlarmListener } from './background/apexTestTraceAlarms.js';
 import { installCookieCacheInvalidation, installMessageHandlers } from './background/messageHandlers.js';
+import { installLogiChatStreamPort } from './background/logiChatStreamPort.js';
 import { installExtensionLifecycleTelemetry } from './background/extensionLifecycleTelemetry.js';
 import {
   maybeReportInitialTelemetryPreference,
@@ -17,6 +18,7 @@ import { sendPosthogException } from './background/posthogTelemetry.js';
 
 try {
   installMessageHandlers();
+  installLogiChatStreamPort();
   void installFeatureControlsGuard();
   void loadExtensionSettings()
     .then(() => hydrateLogiAdvisorCache())

@@ -21,6 +21,8 @@ export function renderLogiMarkdown(text) {
   let listItems = [];
   /** @type {string[]} */
   let paraLines = [];
+  /** @type {string[]} */
+  let quoteLines = [];
 
   const flushPara = () => {
     if (!paraLines.length) return;
@@ -29,23 +31,35 @@ export function renderLogiMarkdown(text) {
     paraLines = [];
   };
 
+  const flushQuote = () => {
+    if (!quoteLines.length) return;
+    const body = quoteLines.map((line) => inlineMarkdown(line)).join('<br>');
+    html.push(`<blockquote class="logi-md-quote">${body}</blockquote>`);
+    quoteLines = [];
+  };
+
   const flushList = () => {
     if (!listType || !listItems.length) return;
     const tag = listType;
-    const items = listItems.map((item) => `<li>${inlineMarkdown(item)}</li>`).join('');
+    const items = listItems.map((item) => `<li class="logi-md-li">${inlineMarkdown(item)}</li>`).join('');
     html.push(`<${tag} class="logi-md-${tag}">${items}</${tag}>`);
     listType = null;
     listItems = [];
+  };
+
+  const flushBlocks = () => {
+    flushPara();
+    flushQuote();
+    flushList();
   };
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
 
     if (line.trim().startsWith('```')) {
-      flushPara();
-      flushList();
+      flushBlocks();
       if (inCode) {
-        html.push(`<pre class="logi-md-pre"><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+        html.push(renderCodeBlockHtml(codeLines.join('\n')));
         codeLines = [];
         inCode = false;
       } else {
@@ -61,8 +75,7 @@ export function renderLogiMarkdown(text) {
 
     const tableBlock = tryParseTableBlock(lines, i);
     if (tableBlock) {
-      flushPara();
-      flushList();
+      flushBlocks();
       html.push(renderTableHtml(tableBlock.header, tableBlock.aligns, tableBlock.body));
       i = tableBlock.nextIndex;
       continue;
@@ -70,30 +83,36 @@ export function renderLogiMarkdown(text) {
 
     const trimmed = line.trim();
     if (!trimmed) {
-      flushPara();
-      flushList();
+      flushBlocks();
       continue;
     }
 
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
-      flushPara();
-      flushList();
+      flushBlocks();
       html.push('<hr class="logi-md-hr">');
       continue;
     }
 
     const heading = trimmed.match(/^(#{1,4})\s+(.+)$/);
     if (heading) {
-      flushPara();
-      flushList();
+      flushBlocks();
       const level = heading[1].length;
       html.push(`<h${level} class="logi-md-h${level}">${inlineMarkdown(heading[2])}</h${level}>`);
+      continue;
+    }
+
+    const quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      flushPara();
+      flushList();
+      quoteLines.push(quote[1]);
       continue;
     }
 
     const ul = trimmed.match(/^[-*+]\s+(.+)$/);
     if (ul) {
       flushPara();
+      flushQuote();
       if (listType && listType !== 'ul') flushList();
       listType = 'ul';
       listItems.push(ul[1]);
@@ -103,35 +122,145 @@ export function renderLogiMarkdown(text) {
     const ol = trimmed.match(/^\d+\.\s+(.+)$/);
     if (ol) {
       flushPara();
+      flushQuote();
       if (listType && listType !== 'ol') flushList();
       listType = 'ol';
       listItems.push(ol[1]);
       continue;
     }
 
+    flushQuote();
     flushList();
     paraLines.push(line);
   }
 
   if (inCode) {
-    html.push(`<pre class="logi-md-pre"><code>${escapeHtml(codeLines.join('\n'))}</code></pre>`);
+    html.push(renderCodeBlockHtml(codeLines.join('\n')));
   }
-  flushPara();
-  flushList();
+  flushBlocks();
 
-  return html.join('');
+  return linkifyLogiLineRefs(html.join(''));
 }
 
 /**
+ * @param {string} code
+ */
+function renderCodeBlockHtml(code) {
+  const escaped = escapeHtml(code);
+  return `<div class="logi-md-pre-wrap"><button type="button" class="logi-md-pre-copy" data-logi-copy-code="1" aria-label="Copy">Copy</button><pre class="logi-md-pre"><code>${escaped}</code></pre></div>`;
+}
+
+/**
+ * Linkifica referencias a líneas de log en HTML ya escapado (solo nodos de texto).
+ * Patrones: L123, línea/linea/line 123, líneas/lines 40-80 (guion o en-dash).
+ * No modifica texto dentro de pre/code/button/a.
+ * @param {string} html
+ * @returns {string}
+ */
+export function linkifyLogiLineRefs(html) {
+  const raw = String(html || '');
+  if (!raw) return '';
+  /** @type {string[]} */
+  const skipStack = [];
+  return raw
+    .split(/(<[^>]+>)/g)
+    .map((part) => {
+      if (!part) return part;
+      if (part.startsWith('<')) {
+        const open = part.match(/^<\s*(pre|code|button|a)\b/i);
+        if (open) skipStack.push(open[1].toLowerCase());
+        const close = part.match(/^<\s*\/\s*(pre|code|button|a)\b/i);
+        if (close) {
+          const tag = close[1].toLowerCase();
+          for (let i = skipStack.length - 1; i >= 0; i -= 1) {
+            if (skipStack[i] === tag) {
+              skipStack.splice(i, 1);
+              break;
+            }
+          }
+        }
+        return part;
+      }
+      if (skipStack.length) return part;
+      return linkifyTextSegment(part);
+    })
+    .join('');
+}
+
+/**
+ * @param {string} text
+ */
+function linkifyTextSegment(text) {
+  const rangeRe = /\b((?:l[ií]neas?|lines?)\s+)(\d+)\s*[-–—]\s*(\d+)\b/gi;
+  const singleWordRe = /\b((?:l[ií]nea|line)\s+)(\d+)\b/gi;
+  const lPrefixRe = /\b(L)(\d+)\b/g;
+
+  let out = text.replace(rangeRe, (match, prefix, start, end) => {
+    const s = Number(start);
+    const e = Number(end);
+    if (!Number.isFinite(s) || !Number.isFinite(e) || s < 1 || e < 1) return match;
+    const a = Math.min(s, e);
+    const b = Math.max(s, e);
+    return `<button type="button" class="logi-md-line-ref" data-start-line="${a}" data-end-line="${b}">${prefix}${start}-${end}</button>`;
+  });
+
+  out = out.replace(singleWordRe, (match, prefix, line) => {
+    const n = Number(line);
+    if (!Number.isFinite(n) || n < 1) return match;
+    return `<button type="button" class="logi-md-line-ref" data-line="${n}">${prefix}${line}</button>`;
+  });
+
+  out = out.replace(lPrefixRe, (match, prefix, line) => {
+    const n = Number(line);
+    if (!Number.isFinite(n) || n < 1) return match;
+    return `<button type="button" class="logi-md-line-ref" data-line="${n}">${prefix}${line}</button>`;
+  });
+
+  return out;
+}
+
+/**
+ * Split a GFM table row on `|`, ignoring pipes inside inline `code`.
  * @param {string} line
  * @returns {string[]}
  */
 function parseTableRow(line) {
-  let trimmed = String(line || '').trim();
-  if (!trimmed.includes('|')) return [];
-  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
-  if (trimmed.endsWith('|')) trimmed = trimmed.slice(0, -1);
-  return trimmed.split('|').map((cell) => cell.trim());
+  const raw = String(line || '').trim();
+  if (!raw.includes('|')) return [];
+
+  /** @type {string[]} */
+  const cells = [];
+  let cur = '';
+  let inCode = false;
+
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (ch === '`') {
+      inCode = !inCode;
+      cur += ch;
+      continue;
+    }
+    if (ch === '|' && !inCode) {
+      cells.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  cells.push(cur.trim());
+
+  // Outer pipes produce leading/trailing empty cells.
+  if (cells.length && cells[0] === '') cells.shift();
+  if (cells.length && cells[cells.length - 1] === '') cells.pop();
+  return cells;
+}
+
+/**
+ * @param {string} cell
+ */
+function isSeparatorCell(cell) {
+  const compact = String(cell || '').replace(/\s+/g, '');
+  return /^:?-{1,}:?$/.test(compact);
 }
 
 /**
@@ -140,17 +269,19 @@ function parseTableRow(line) {
 function isTableSeparator(line) {
   const cells = parseTableRow(line);
   if (!cells.length) return false;
-  return cells.every((cell) => /^:?-{1,}:?$/.test(cell));
+  return cells.every((cell) => isSeparatorCell(cell));
 }
 
 /**
  * @param {string} line
+ * @param {{ minCells?: number }} [opts]
  */
-function isTableDataRow(line) {
+function isTableDataRow(line, opts = {}) {
+  const minCells = opts.minCells ?? 2;
   const trimmed = String(line || '').trim();
   if (!trimmed.includes('|')) return false;
   if (isTableSeparator(line)) return false;
-  return parseTableRow(line).length >= 2;
+  return parseTableRow(line).length >= minCells;
 }
 
 /**
@@ -158,29 +289,70 @@ function isTableDataRow(line) {
  * @param {number} start
  */
 function tryParseTableBlock(lines, start) {
-  if (start + 1 >= lines.length) return null;
-  if (!isTableDataRow(lines[start]) || !isTableSeparator(lines[start + 1])) return null;
+  if (!isTableDataRow(lines[start])) return null;
+
+  let sepIdx = start + 1;
+  let blanks = 0;
+  while (sepIdx < lines.length && !String(lines[sepIdx] || '').trim()) {
+    blanks += 1;
+    sepIdx += 1;
+    if (blanks > 2) return null;
+  }
+  if (sepIdx >= lines.length || !isTableSeparator(lines[sepIdx])) return null;
 
   const header = parseTableRow(lines[start]);
-  const aligns = parseTableAlignments(lines[start + 1]);
+  const aligns = parseTableAlignments(lines[sepIdx]);
+  const colCount = Math.max(header.length, aligns.length, 2);
+
   /** @type {string[][]} */
   const body = [];
-  let i = start + 2;
+  let i = sepIdx + 1;
 
   while (i < lines.length) {
     const rowLine = lines[i];
     if (!String(rowLine || '').trim()) break;
-    if (!isTableDataRow(rowLine)) break;
-    body.push(parseTableRow(rowLine));
+    // Body rows: accept any pipe row (incl. partial / streaming) that is not a new separator.
+    if (isTableSeparator(rowLine)) break;
+    if (!String(rowLine).includes('|')) break;
+    const cells = parseTableRow(rowLine);
+    if (!cells.length) break;
+    body.push(normalizeRowCells(cells, colCount));
     i += 1;
   }
 
   return {
-    header,
-    aligns,
+    header: normalizeRowCells(header, colCount),
+    aligns: normalizeAligns(aligns, colCount),
     body,
     nextIndex: i - 1
   };
+}
+
+/**
+ * @param {string[]} cells
+ * @param {number} colCount
+ */
+function normalizeRowCells(cells, colCount) {
+  if (cells.length <= colCount) {
+    const out = cells.slice();
+    while (out.length < colCount) out.push('');
+    return out;
+  }
+  // Merge overflow into the last cell (pipes in prose / mismatched columns).
+  const out = cells.slice(0, colCount - 1);
+  out.push(cells.slice(colCount - 1).join(' | '));
+  return out;
+}
+
+/**
+ * @param {Array<'left' | 'center' | 'right'>} aligns
+ * @param {number} colCount
+ */
+function normalizeAligns(aligns, colCount) {
+  /** @type {Array<'left' | 'center' | 'right'>} */
+  const out = aligns.slice(0, colCount);
+  while (out.length < colCount) out.push('left');
+  return out;
 }
 
 /**
@@ -189,7 +361,7 @@ function tryParseTableBlock(lines, start) {
  */
 function parseTableAlignments(line) {
   return parseTableRow(line).map((cell) => {
-    const t = cell.trim();
+    const t = String(cell || '').replace(/\s+/g, '');
     const left = t.startsWith(':');
     const right = t.endsWith(':');
     if (left && right) return 'center';
@@ -204,7 +376,7 @@ function parseTableAlignments(line) {
  * @param {string[][]} rows
  */
 function renderTableHtml(header, aligns, rows) {
-  const colCount = Math.max(header.length, ...rows.map((r) => r.length), 1);
+  const colCount = Math.max(header.length, aligns.length, ...rows.map((r) => r.length), 1);
 
   const ths = Array.from({ length: colCount }, (_, idx) => {
     const align = aligns[idx] || 'left';

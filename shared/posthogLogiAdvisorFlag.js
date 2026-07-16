@@ -7,7 +7,12 @@ import {
   isLogiAdvisorOperational,
   parseLogiAdvisorConfig
 } from './apexLogAiAdvisorConfig.js';
-import { readLogiAdvisorCache, writeLogiAdvisorCache, clearLogiAdvisorCache } from './logiAdvisorCache.js';
+import {
+  readLogiAdvisorCacheEntry,
+  writeLogiAdvisorCache,
+  clearLogiAdvisorCache,
+  canSkipLogiAdvisorRemoteFetch
+} from './logiAdvisorCache.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
 import { fetchLogiAdvisorRemoteConfig, LogiFlagDisabledError } from './fetchLogiAdvisorRemoteConfig.js';
 import {
@@ -128,11 +133,11 @@ async function commitLogiAdvisorConfig(resolvedPayload, cached) {
     const parsed = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(resolvedPayload));
     if (isLogiAdvisorOperational(parsed)) {
       cachedConfig = parsed;
-      await writeLogiAdvisorCache(cachedConfig);
+      await writeLogiAdvisorCache(cachedConfig, { fromRemote: true });
       return cachedConfig;
     }
   }
-  return clearLogiAdvisorCache().then((disabled) => {
+  return clearLogiAdvisorCache({ fromRemote: false }).then((disabled) => {
     cachedConfig = disabled;
     return disabled;
   });
@@ -145,13 +150,23 @@ async function commitLogiAdvisorConfig(resolvedPayload, cached) {
  */
 export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
   const telemetryEnabled = await getTelemetryEnabled();
-  const cached = await readLogiAdvisorCache();
+  const cacheEntry = await readLogiAdvisorCacheEntry();
+  const cached = cacheEntry.config;
 
   if (!telemetryEnabled) {
-    return clearLogiAdvisorCache().then((disabled) => {
+    if (isLogiAdvisorOperational(cached)) {
+      cachedConfig = cached;
+      return cached;
+    }
+    return clearLogiAdvisorCache({ fromRemote: false }).then((disabled) => {
       cachedConfig = disabled;
       return disabled;
     });
+  }
+
+  if (!opts.force && canSkipLogiAdvisorRemoteFetch(cacheEntry)) {
+    cachedConfig = cached;
+    return cached;
   }
 
   let rawPayload;
@@ -171,7 +186,7 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
 
   if (ph && flagsOk && !flagActive) {
     if (POSTHOG_DEBUG) console.log('[posthog] logi advisor flag disabled');
-    return clearLogiAdvisorCache().then((disabled) => {
+    return clearLogiAdvisorCache({ fromRemote: true }).then((disabled) => {
       cachedConfig = disabled;
       return disabled;
     });
@@ -181,7 +196,7 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
     const parsed = parseLogiAdvisorConfig(normalizeFeatureFlagPayload(rawPayload));
     if (isLogiAdvisorOperational(parsed)) {
       cachedConfig = parsed;
-      await writeLogiAdvisorCache(cachedConfig);
+      await writeLogiAdvisorCache(cachedConfig, { fromRemote: true });
       if (POSTHOG_DEBUG) console.log('[posthog] logi advisor loaded from flag payload');
       return cachedConfig;
     }
@@ -201,10 +216,16 @@ export async function loadLogiAdvisorFromPosthog(ph, opts = {}) {
     }
   }
 
+  // Prefer a still-valid operational cache over disabling on transient failures.
+  if (isLogiAdvisorOperational(cached) && cached.proxyUrl) {
+    cachedConfig = cached;
+    return cached;
+  }
+
   if (POSTHOG_DEBUG) {
     console.log('[posthog] logi advisor fallback to disabled', { flagsOk, flagActive });
   }
-  return clearLogiAdvisorCache().then((disabled) => {
+  return clearLogiAdvisorCache({ fromRemote: false }).then((disabled) => {
     cachedConfig = disabled;
     return disabled;
   });
@@ -229,7 +250,7 @@ export async function bootstrapLogiAdvisor(opts = {}) {
     dispatchLogiAdvisorReady(config);
     return config;
   } catch {
-    cachedConfig = await clearLogiAdvisorCache();
+    cachedConfig = await clearLogiAdvisorCache({ fromRemote: false });
     dispatchLogiAdvisorReady(cachedConfig);
     return cachedConfig;
   }

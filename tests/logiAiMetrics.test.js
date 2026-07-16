@@ -56,7 +56,7 @@ describe('buildLogiErrorMetrics', () => {
 describe('sanitizeLogiTelemetryProps', () => {
   it('elimina campos de contenido', () => {
     const safe = sanitizeLogiTelemetryProps({
-      action: 'llm_response',
+      action: 'chat_turn',
       sfoc_model: 'm',
       content: 'secret',
       messages: [{ role: 'user' }],

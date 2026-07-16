@@ -82,7 +82,10 @@ export const LOGI_QUICK_ACTION_IDS = Object.freeze([
   'soql_dml',
   'test_failure',
   'limits',
-  'suggest_fix'
+  'suggest_fix',
+  'callouts',
+  'validations',
+  'hotspots'
 ]);
 
 export const OPENROUTER_MAX_MODELS_PER_REQUEST = 3;
@@ -473,10 +476,10 @@ export function parseLogiAdvisorConfig(raw) {
     showButton: o.showButton === true,
     showLogiSettings: o.showLogiSettings === true,
     requireTelemetry: o.requireTelemetry !== false,
-    maxIterationsPerChat: clampInt(o.maxIterationsPerChat, 10, 1, 50),
-    maxChatsPerUser: clampInt(o.maxChatsPerUser, 20, 1, 1000),
-    maxChatsPerDay: clampInt(o.maxChatsPerDay, 5, 1, 100),
-    maxChatsPerMonth: clampInt(o.maxChatsPerMonth, 50, 1, 500),
+    maxIterationsPerChat: clampInt(o.maxIterationsPerChat, 10, 1, 200),
+    maxChatsPerUser: clampInt(o.maxChatsPerUser, 20, 1, Number.MAX_SAFE_INTEGER),
+    maxChatsPerDay: clampInt(o.maxChatsPerDay, 5, 1, 1000),
+    maxChatsPerMonth: clampInt(o.maxChatsPerMonth, 50, 1, 10000),
     model: models[0],
     models,
     modes,

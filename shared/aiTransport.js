@@ -45,6 +45,7 @@ const RETRY_DELAY_MS = 1_500;
  * @property {AbortSignal} [signal]
  * @property {import('./apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
  * @property {boolean} [forceFreeFallback]
+ * @property {(delta: string) => void} [onDelta] When set, attempts SSE streaming; falls back to non-stream on failure.
  */
 
 /**
@@ -57,6 +58,7 @@ export async function createChatCompletion(config, req, opts = {}) {
   const signal = opts.signal;
   const runtime = opts.runtime;
   const forceFree = opts.forceFreeFallback === true;
+  const onDelta = typeof opts.onDelta === 'function' ? opts.onDelta : null;
 
   const effectiveConfig = buildEffectiveTransportConfig(config, runtime, forceFree);
   const chain =
@@ -78,7 +80,27 @@ export async function createChatCompletion(config, req, opts = {}) {
     const batchReq = { ...baseReq, models: batch };
 
     try {
-      const result = await dispatchTransport(effectiveConfig, batchReq, opts, signal, runtime, forceFree);
+      let result;
+      if (onDelta) {
+        try {
+          result = await dispatchTransportStream(
+            effectiveConfig,
+            batchReq,
+            opts,
+            signal,
+            runtime,
+            forceFree,
+            onDelta
+          );
+        } catch (streamErr) {
+          if (isUserAbortError(streamErr, signal)) throw streamErr;
+          if (isProxyBlockError(streamErr)) throw streamErr;
+          // Models/proxy may not support SSE — fall back once per batch.
+          result = await dispatchTransport(effectiveConfig, batchReq, opts, signal, runtime, forceFree);
+        }
+      } else {
+        result = await dispatchTransport(effectiveConfig, batchReq, opts, signal, runtime, forceFree);
+      }
       return {
         ...result,
         modeFallback: forceFree || Boolean(runtime?.modeFallback),
@@ -139,6 +161,33 @@ async function dispatchTransport(config, batchReq, opts, signal, runtime, forceF
     if (isUserAbortError(e, signal)) throw e;
     if (config.proxyUrl && isProxyBlockError(e)) {
       return proxyTransport(config, batchReq, opts, signal, logiModeHeader);
+    }
+    throw e;
+  }
+}
+
+/**
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {ChatCompletionRequest} batchReq
+ * @param {CreateChatCompletionOpts} opts
+ * @param {AbortSignal | undefined} signal
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiRuntime | undefined} runtime
+ * @param {boolean} forceFree
+ * @param {(delta: string) => void} onDelta
+ */
+async function dispatchTransportStream(config, batchReq, opts, signal, runtime, forceFree, onDelta) {
+  const logiModeHeader = forceFree ? 'free' : runtime?.requestedMode || runtime?.mode || 'free';
+
+  if (config.transport === 'proxy' && config.proxyUrl) {
+    return proxyTransportStream(config, batchReq, opts, signal, logiModeHeader, onDelta);
+  }
+
+  try {
+    return await openRouterDirectTransportStream(config, batchReq, signal, onDelta);
+  } catch (e) {
+    if (isUserAbortError(e, signal)) throw e;
+    if (config.proxyUrl && isProxyBlockError(e)) {
+      return proxyTransportStream(config, batchReq, opts, signal, logiModeHeader, onDelta);
     }
     throw e;
   }
@@ -248,7 +297,7 @@ async function proxyTransport(config, req, opts = {}, signal, logiMode = 'free')
   }
 }
 
-function buildRequestBody(config, req, explicitModels) {
+function buildRequestBody(config, req, explicitModels, stream = false) {
   const models = (
     Array.isArray(explicitModels) && explicitModels.length
       ? explicitModels
@@ -262,11 +311,241 @@ function buildRequestBody(config, req, explicitModels) {
     messages: req.messages,
     max_tokens: req.max_tokens ?? 2048
   };
+  if (stream) body.stream = true;
   if (req.tools?.length) {
     body.tools = req.tools;
     body.tool_choice = 'auto';
   }
   return body;
+}
+
+/**
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {ChatCompletionRequest} req
+ * @param {AbortSignal | undefined} signal
+ * @param {(delta: string) => void} onDelta
+ */
+async function openRouterDirectTransportStream(config, req, signal, onDelta) {
+  const apiKey = config.openRouterApiKey;
+  if (!apiKey) {
+    throw new Error('LOGI_NO_API_KEY');
+  }
+  const started = Date.now();
+  const body = buildRequestBody(config, req, req.models, true);
+
+  const res = await fetchWithTimeout(
+    OPENROUTER_URL,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        'HTTP-Referer': 'https://salesforceorgcompare.com/',
+        'X-Title': 'Salesforce Org Compare - Logi'
+      },
+      body: JSON.stringify(body)
+    },
+    DEFAULT_TIMEOUT_MS,
+    signal
+  );
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    if (isProxyBlockHttp(res.status, text, res.headers.get('content-type'))) {
+      throw new Error('LOGI_PROXY_BLOCKED');
+    }
+    const data = safeParseJson(text);
+    const msg = data?.error?.message || data?.message || truncateErr(text);
+    throw new Error(`LOGI_OPENROUTER_HTTP_${res.status}: ${msg}`);
+  }
+
+  return consumeSseCompletion(res, started, onDelta, signal);
+}
+
+/**
+ * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {ChatCompletionRequest} req
+ * @param {CreateChatCompletionOpts} opts
+ * @param {AbortSignal | undefined} signal
+ * @param {string} logiMode
+ * @param {(delta: string) => void} onDelta
+ */
+async function proxyTransportStream(config, req, opts, signal, logiMode, onDelta) {
+  const url = config.proxyUrl;
+  if (!url) throw new Error('LOGI_NO_PROXY_URL');
+  const installId = String(opts.installId || '').trim();
+  let authToken = opts.userToken ? String(opts.userToken).trim() : '';
+  if (!authToken) {
+    if (!installId) throw new Error('LOGI_NO_PROXY_AUTH');
+    authToken = await getProxyJwt(url, installId, { signal });
+  }
+
+  const runOnce = async (token) => {
+    const started = Date.now();
+    const body = buildRequestBody(config, req, req.models, true);
+    const res = await fetchWithTimeout(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'text/event-stream',
+          Authorization: `Bearer ${token}`,
+          'X-SFOC-Logi-Mode': logiMode,
+          ...(installId ? { 'X-SFOC-Install-Id': installId } : {})
+        },
+        body: JSON.stringify(body)
+      },
+      DEFAULT_TIMEOUT_MS,
+      signal
+    );
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      if (isProxyBlockHttp(res.status, text, res.headers.get('content-type'))) {
+        throw new Error('LOGI_PROXY_BLOCKED');
+      }
+      const data = safeParseJson(text);
+      const msg = data?.error || data?.message || res.statusText;
+      throw new Error(`LOGI_PROXY_HTTP_${res.status}: ${msg}`);
+    }
+
+    const ct = String(res.headers.get('content-type') || '');
+    if (!ct.includes('text/event-stream') && !ct.includes('application/octet-stream')) {
+      // Proxy returned JSON — parse as non-stream.
+      const text = await res.text();
+      const data = parseJsonOrThrow(text, 'LOGI_PROXY_PARSE');
+      const normalized = normalizeCompletionPayload(data, started);
+      if (normalized.content) onDelta(normalized.content);
+      return normalized;
+    }
+
+    return consumeSseCompletion(res, started, onDelta, signal);
+  };
+
+  try {
+    return await runOnce(authToken);
+  } catch (e) {
+    const msg = String(e?.message || e || '');
+    if (/LOGI_PROXY_HTTP_401/.test(msg) && installId && !opts.userToken) {
+      const renewed = await getProxyJwt(url, installId, { signal, forceRenew: true });
+      return runOnce(renewed);
+    }
+    throw e;
+  }
+}
+
+/**
+ * @param {Response} res
+ * @param {number} started
+ * @param {(delta: string) => void} onDelta
+ * @param {AbortSignal | undefined} signal
+ */
+async function consumeSseCompletion(res, started, onDelta, signal) {
+  if (!res.body || typeof res.body.getReader !== 'function') {
+    throw new Error('LOGI_STREAM_UNSUPPORTED');
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let content = '';
+  let model;
+  let finishReason;
+  /** @type {Map<number, { id: string, type: string, function: { name: string, arguments: string } }>} */
+  const toolCalls = new Map();
+  /** @type {object | undefined} */
+  let usage;
+
+  const applyDelta = (data) => {
+    if (!data || typeof data !== 'object') return;
+    if (typeof data.model === 'string') model = data.model;
+    if (data.usage) usage = data.usage;
+    const choice = data.choices?.[0];
+    if (!choice) return;
+    if (choice.finish_reason) finishReason = choice.finish_reason;
+    const delta = choice.delta || {};
+    if (typeof delta.content === 'string' && delta.content) {
+      content += delta.content;
+      onDelta(delta.content);
+    }
+    if (Array.isArray(delta.tool_calls)) {
+      for (const tc of delta.tool_calls) {
+        const idx = Number.isFinite(Number(tc.index)) ? Number(tc.index) : 0;
+        const prev = toolCalls.get(idx) || {
+          id: '',
+          type: 'function',
+          function: { name: '', arguments: '' }
+        };
+        if (tc.id) prev.id = String(tc.id);
+        if (tc.type) prev.type = String(tc.type);
+        if (tc.function?.name) prev.function.name += String(tc.function.name);
+        if (tc.function?.arguments) prev.function.arguments += String(tc.function.arguments);
+        toolCalls.set(idx, prev);
+      }
+    }
+  };
+
+  while (true) {
+    if (signal?.aborted) {
+      try {
+        await reader.cancel();
+      } catch {
+        /* ignore */
+      }
+      throwAbortError();
+    }
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n');
+    buffer = parts.pop() || '';
+    for (const line of parts) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(':')) continue;
+      if (!trimmed.startsWith('data:')) continue;
+      const payload = trimmed.slice(5).trim();
+      if (payload === '[DONE]') continue;
+      try {
+        applyDelta(JSON.parse(payload));
+      } catch {
+        /* skip bad chunk */
+      }
+    }
+  }
+
+  if (buffer.trim().startsWith('data:')) {
+    const payload = buffer.trim().slice(5).trim();
+    if (payload && payload !== '[DONE]') {
+      try {
+        applyDelta(JSON.parse(payload));
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  const tool_calls = [...toolCalls.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, tc]) => tc)
+    .filter((tc) => tc.id || tc.function?.name);
+
+  return {
+    content,
+    model,
+    tool_calls: tool_calls.length ? tool_calls : undefined,
+    usage: usage
+      ? {
+          prompt_tokens: usage.prompt_tokens,
+          completion_tokens: usage.completion_tokens,
+          total_tokens: usage.total_tokens
+        }
+      : undefined,
+    cost: Number(usage?.total_cost ?? usage?.cost ?? 0) || undefined,
+    finish_reason: finishReason,
+    latencyMs: Date.now() - started
+  };
 }
 
 async function fetchWithRetry(url, init, externalSignal) {

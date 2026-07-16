@@ -25,7 +25,12 @@ import {
   renderExecutionToolbarBadge,
   shouldShowExecutionSelector
 } from './lib/apexLogViewer/executionSelector.js';
-import { mountLogiAdvisor } from './lib/apexLogViewer/logiAdvisorModal.js';
+import {
+  isLogiAdvisorButtonVisible,
+  mountLogiAdvisor,
+  openLogiAdvisor
+} from './lib/apexLogViewer/logiAdvisorModal.js';
+import { bindLogiResumeMount } from './lib/apexLogViewer/logiResumePanel.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -285,7 +290,8 @@ async function main() {
   void mountLogiAdvisor({
     getParsed: () => getScopedParsed(),
     getRawContent: () => content,
-    payload: payload || {}
+    payload: payload || {},
+    switchToSummary: () => onTabSelect('summary')
   });
 
   if (!mount) return;
@@ -439,6 +445,105 @@ async function main() {
     highlightTextLine(line);
   }
 
+  window.addEventListener('sfoc-logi-highlight-lines', (ev) => {
+    const start = Number(ev?.detail?.startLine);
+    if (Number.isFinite(start) && start > 0) jumpToLogLine(start);
+  });
+
+  /**
+   * Floating “Ask Logi” near Monaco text selection.
+   * @param {import('monaco-editor').editor.IStandaloneCodeEditor} editor
+   * @param {typeof import('monaco-editor')} monacoApi
+   */
+  function wireAskLogiSelection(editor, monacoApi) {
+    let askBtn = document.getElementById('logiAskSelectionBtn');
+    if (!askBtn) {
+      askBtn = document.createElement('button');
+      askBtn.type = 'button';
+      askBtn.id = 'logiAskSelectionBtn';
+      askBtn.className = 'logi-ask-selection-btn';
+      askBtn.hidden = true;
+      document.body.appendChild(askBtn);
+    }
+
+    const hide = () => {
+      askBtn.hidden = true;
+    };
+
+    const showNearSelection = () => {
+      if (!isLogiAdvisorButtonVisible()) {
+        hide();
+        return;
+      }
+      const model = editor.getModel();
+      const sel = editor.getSelection();
+      if (!model || !sel || sel.isEmpty()) {
+        hide();
+        return;
+      }
+      const text = model.getValueInRange(sel);
+      if (!String(text || '').trim()) {
+        hide();
+        return;
+      }
+
+      const startEditorLine = Math.min(sel.startLineNumber, sel.endLineNumber);
+      const endEditorLine = Math.max(sel.startLineNumber, sel.endLineNumber);
+      const startFileLine = startEditorLine + textFileLineOffset;
+      const endFileLine = endEditorLine + textFileLineOffset;
+
+      askBtn.textContent = t('apexLogViewer.logi.askSelection');
+      askBtn.hidden = false;
+      askBtn.onclick = () => {
+        hide();
+        void openLogiAdvisor({
+          getParsed: () => getScopedParsed(),
+          getRawContent: () => content,
+          payload: payload || {},
+          lineAttachment: {
+            startLine: startFileLine,
+            endLine: endFileLine,
+            logId: String(payload?.logId || payload?.title || 'log').slice(0, 64)
+          }
+        });
+        try {
+          window.dispatchEvent(
+            new CustomEvent('sfoc-logi-highlight-lines', {
+              detail: { startLine: startFileLine, endLine: endFileLine }
+            })
+          );
+        } catch {
+          /* ignore */
+        }
+      };
+
+      const endPos = sel.getEndPosition();
+      const coords = editor.getScrolledVisiblePosition(endPos);
+      const dom = editor.getDomNode();
+      if (!coords || !dom) {
+        hide();
+        return;
+      }
+      const rect = dom.getBoundingClientRect();
+      const top = rect.top + coords.top + coords.height + 6;
+      const left = rect.left + coords.left;
+      askBtn.style.top = `${Math.max(8, top)}px`;
+      askBtn.style.left = `${Math.max(8, left)}px`;
+    };
+
+    editor.onDidChangeCursorSelection(() => {
+      requestAnimationFrame(showNearSelection);
+    });
+    editor.onDidScrollChange(() => {
+      if (!askBtn.hidden) showNearSelection();
+    });
+    document.addEventListener('mousedown', (ev) => {
+      if (ev.target === askBtn || askBtn.contains(/** @type {Node} */ (ev.target))) return;
+      hide();
+    });
+    void monacoApi;
+  }
+
   function invalidateRenderedTabs() {
     renderedTabs.clear();
   }
@@ -475,6 +580,7 @@ async function main() {
     switch (tabId) {
       case 'summary':
         renderSummaryView(document.getElementById('apexLogSummaryMount'), parsed, jump, t, tabOpts);
+        void bindLogiResumeMount(document.getElementById('apexLogSummaryMount'));
         break;
       case 'errors':
         renderErrorsView(document.getElementById('apexLogErrorsMount'), parsed, jump, t);
@@ -540,6 +646,7 @@ async function main() {
     textEditor.setValue(content || '—');
     monaco.editor.setModelLanguage(textEditor.getModel(), 'apex');
     if (initialLine > 0) jumpToLogLine(initialLine);
+    wireAskLogiSelection(textEditor, monaco);
   } catch {
     setLoading(false);
     if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');

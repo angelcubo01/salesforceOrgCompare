@@ -128,6 +128,14 @@
         <section class="settings-card" id="settingsLogi" hidden aria-labelledby="settings-logi-heading">
           <h2 id="settings-logi-heading" class="settings-card-title" data-i18n="settings.logi.sectionTitle">Logi · IA</h2>
           <p class="settings-hint settings-hint--nomargin" data-i18n="settings.logi.lead"></p>
+          <label class="settings-label" for="settingsLogiLanguage" data-i18n="settings.logi.language"></label>
+          <select id="settingsLogiLanguage" class="settings-select settings-select--full"></select>
+          <p class="settings-hint" data-i18n="settings.logi.languageHint"></p>
+          <div id="settingsLogiUsage" class="settings-logi-usage" hidden>
+            <h3 class="settings-logi-usage-title" data-i18n="settings.logi.usageTitle">Uso</h3>
+            <p class="settings-hint settings-hint--nomargin" data-i18n="settings.logi.usageHint"></p>
+            <div class="settings-logi-usage-list" id="settingsLogiUsageList"></div>
+          </div>
           <div id="settingsLogiModes" class="settings-logi-modes"></div>
           <div id="settingsLogiByokPanel" class="settings-logi-panel" hidden>
             <label class="settings-label" for="settingsLogiByokKey" data-i18n="settings.logi.byokKey"></label>
