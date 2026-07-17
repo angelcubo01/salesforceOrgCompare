@@ -1,4 +1,4 @@
-/** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: object, quoteRef?: object, displayText?: string }} QueuedMessage */
+/** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: object, quoteRef?: object, summaryRef?: object, displayText?: string }} QueuedMessage */
 
 /**
  * @typedef {object} LogiQueueDeps
@@ -12,12 +12,13 @@
  * @property {() => string} createRequestId
  * @property {(raw: unknown) => object | null} normalizeLineRef
  * @property {(raw: unknown) => object | null} normalizeQuoteRef
+ * @property {(raw: unknown) => object | null} [normalizeSummaryRef]
  * @property {(modal: HTMLElement) => void} [syncBusyUi]
  */
 
 /**
  * @param {unknown} item
- * @param {Pick<LogiQueueDeps, 'createRequestId' | 'normalizeLineRef' | 'normalizeQuoteRef'>} deps
+ * @param {Pick<LogiQueueDeps, 'createRequestId' | 'normalizeLineRef' | 'normalizeQuoteRef' | 'normalizeSummaryRef'>} deps
  * @returns {QueuedMessage | null}
  */
 export function normalizeQueueItem(item, deps) {
@@ -38,6 +39,10 @@ export function normalizeQueueItem(item, deps) {
   if (lineRef) out.lineRef = lineRef;
   const quoteRef = deps.normalizeQuoteRef(o.quoteRef);
   if (quoteRef) out.quoteRef = quoteRef;
+  if (typeof deps.normalizeSummaryRef === 'function') {
+    const summaryRef = deps.normalizeSummaryRef(o.summaryRef);
+    if (summaryRef) out.summaryRef = summaryRef;
+  }
   if (typeof o.displayText === 'string' && o.displayText.trim()) {
     out.displayText = o.displayText.trim();
   }

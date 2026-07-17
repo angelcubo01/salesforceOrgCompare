@@ -176,6 +176,7 @@ Unit tests are maintained locally and are **not included in this public reposito
 | `shared/` | Shared APIs, i18n, feature controls |
 | `vendor/` | Third-party libraries (Monaco Editor, etc.) |
 | `scripts/` | Build and packaging scripts |
+| `docs/` | Product docs — see [MEJORAS_POR_HERRAMIENTA_3.1.2.md](docs/MEJORAS_POR_HERRAMIENTA_3.1.2.md) and [GUIA_UI_UX_COMUN.md](docs/GUIA_UI_UX_COMUN.md) |
 
 ## Third-Party Libraries
 

@@ -267,6 +267,7 @@ import {
   handleLogiAdvisorGetSessionIteration,
   handleLogiAdvisorSaveSettings,
   handleLogiAdvisorTestByok,
+  handleLogiAdvisorGetModelPricing,
   isReadOnlySalesforceQuery
 } from './logi/apexLogAiAdvisor.js';
 import { slimQueryRecords } from '../shared/logi/apexLogAiContext.js';
@@ -2973,6 +2974,14 @@ export function installMessageHandlers() {
           case 'aiAdvisor:testByok': {
             try {
               reply(await handleLogiAdvisorTestByok(message));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'aiAdvisor:getModelPricing': {
+            try {
+              reply(await handleLogiAdvisorGetModelPricing(message));
             } catch (e) {
               replyHandlerError(reply, e);
             }

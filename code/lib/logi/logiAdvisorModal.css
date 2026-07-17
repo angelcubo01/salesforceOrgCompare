@@ -1248,6 +1248,12 @@
   border-color: rgba(192, 132, 252, 0.45);
 }
 
+.logi-advisor-summary-badge {
+  color: #ecfdf5;
+  background: rgba(16, 185, 129, 0.18);
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
 .logi-advisor-line-note {
   font-size: 0.875rem;
   font-weight: 500;
@@ -1700,14 +1706,45 @@ html[data-ui-theme='light'] .logi-advisor-approval-query {
   border-color: rgba(251, 191, 36, 0.35);
 }
 
+.logi-advisor-mode-badge--byok {
+  background: rgba(52, 211, 153, 0.14);
+  color: #6ee7b7;
+  border-color: rgba(52, 211, 153, 0.4);
+}
+
+html[data-ui-theme='light'] .logi-advisor-mode-badge {
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+  border-color: rgba(14, 165, 233, 0.35);
+}
+
+html[data-ui-theme='light'] .logi-advisor-mode-badge--byok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+html[data-ui-theme='light'] .logi-advisor-model-select {
+  background: #fff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
 .logi-advisor-model-select {
   font-size: 0.72rem;
-  max-width: 180px;
-  padding: 2px 6px;
+  max-width: 200px;
+  padding: 3px 8px;
   border-radius: 6px;
   border: 1px solid #334155;
   background: #0f172a;
   color: #e2e8f0;
+  cursor: pointer;
+}
+
+.logi-advisor-model-select:hover,
+.logi-advisor-model-select:focus {
+  border-color: #38bdf8;
+  outline: none;
 }
 
 @media (max-width: 520px) {

@@ -52,6 +52,10 @@ describe('Logi system prompts language', () => {
     expect(summaryJa).toMatch(/code=ja/);
     expect(summaryJa).toMatch(/Hard avoid/);
     expect(summaryJa).toMatch(/hasError/);
-    expect(summaryJa).toMatch(/plain language/i);
+    expect(chatEs).toMatch(/Never name internal tools/);
+    expect(chatEs).toMatch(/natural language/);
+    expect(summaryJa).toMatch(/CRITICAL — reply language/);
+    expect(summaryJa).toMatch(/Do not switch to English/);
+    expect(summaryJa).toMatch(/Never name internal tools/);
   });
 });

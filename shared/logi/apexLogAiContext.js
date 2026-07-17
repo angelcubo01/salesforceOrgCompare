@@ -867,7 +867,7 @@ Responde con:
 - Patrones problemáticos: SOQL en bucle, DML parcial, consultas duplicadas, full table scan probable.
 - Consumo de límites de gobernador relacionado.
 - Recomendaciones concretas (bulkificación, caché, selectividad, índices, reducir round-trips).
-- Cita números de línea del log en cada hallazgo.`,
+- Cita líneas del log como L123 (nunca uses L-prefijo para líneas de clase Apex).`,
 
     test_failure: `Este log corresponde a una ejecución de test Apex que falló o es sospechosa.
 
@@ -878,7 +878,7 @@ Antes de responder:
 
 Responde con:
 - Qué test/clase/método falló y mensaje de error exacto.
-- Assertion o excepción con línea del log y línea Apex si aparece.
+- Assertion o excepción con línea del log (formato L123) y línea Apex si aparece ("línea N de ClassName", sin prefijo L).
 - Datos de prueba (@TestSetup, mocks) que podrían explicar el fallo.
 - Hipótesis ordenadas y cómo reproducir localmente.
 - Cambios mínimos sugeridos para estabilizar el test.`,
@@ -902,7 +902,7 @@ Responde con:
 Antes de responder:
 1. Identifica el problema dominante (error, límite, rendimiento o lógica).
 2. Usa fetch_parsed_section y fetch_log_lines para evidencia antes de sugerir código.
-3. No propongas org_query salvo que sea imprescindible para verificar un dato.
+3. No propongas consultar la org salvo que sea imprescindible para verificar un dato.
 
 Responde con:
 - Problema resumido en una frase con evidencia del log.
@@ -923,7 +923,7 @@ Responde con:
 - Causa probable de errores HTTP o timeouts (sin inventar cuerpos de respuesta).
 - Relación con el flujo Apex (antes/después de DML, en bucle, etc.).
 - Recomendaciones concretas (reintentos, timeouts, bulk, mocks en tests).
-- Cita números de línea del log.`,
+- Cita líneas del log como L123 (líneas de clase: "línea N de ClassName", sin L).`,
 
     validations: `Revisa reglas de validación y fallos de validación en este log.
 
@@ -937,7 +937,7 @@ Responde con:
 - Si el fallo es de negocio esperado o un bug de datos/código.
 - Cadena: entrada → DML → validación → resultado.
 - Pasos para corregir datos, regla o código Apex.
-- Cita líneas del log.`,
+- Cita líneas del log como L123 (no L-prefijo para líneas de clase).`,
 
     hotspots: `Identifica hotspots de rendimiento en este log (SOQL, DML, profiling, duplicados).
 
@@ -995,7 +995,7 @@ Respond with:
 - Problematic patterns: SOQL in loop, partial DML, duplicate queries, likely full scans.
 - Related governor limit consumption.
 - Concrete recommendations (bulkification, caching, selectivity, indexes, fewer round-trips).
-- Cite log line numbers for each finding.`,
+- Cite debug-log lines as L123 (never L-prefix Apex class source lines).`,
 
     test_failure: `This log is from a failed or suspicious Apex test run.
 
@@ -1030,7 +1030,7 @@ Respond with:
 Before answering:
 1. Identify the dominant issue (error, limit, performance, or logic).
 2. Use fetch_parsed_section and fetch_log_lines for evidence before suggesting code.
-3. Do not propose org_query unless essential to verify a fact.
+3. Do not propose querying the org unless essential to verify a fact.
 
 Respond with:
 - One-sentence problem summary with log evidence.
@@ -1051,7 +1051,7 @@ Respond with:
 - Likely cause of HTTP errors or timeouts (do not invent response bodies).
 - Relationship to the Apex flow (before/after DML, in a loop, etc.).
 - Concrete recommendations (retries, timeouts, bulk, test mocks).
-- Cite log line numbers.`,
+- Cite debug-log lines as L123 (class source: "line N in ClassName", no L-prefix).`,
 
     validations: `Review validation rules and validation failures in this log.
 
@@ -1065,7 +1065,7 @@ Respond with:
 - Whether the failure is expected business behavior or a data/code bug.
 - Chain: entry → DML → validation → outcome.
 - Steps to fix data, the rule, or Apex code.
-- Cite log lines.`,
+- Cite debug-log lines as L123 (no L-prefix for class source lines).`,
 
     hotspots: `Identify performance hotspots in this log (SOQL, DML, profiling, duplicates).
 

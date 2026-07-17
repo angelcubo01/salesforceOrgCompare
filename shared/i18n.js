@@ -224,6 +224,18 @@ const translations = {
     'settings.logi.byokKeyHint': 'Se guarda solo en este navegador. Nunca se envía a telemetría.',
     'settings.logi.byokKeySaved': 'Key guardada (deja vacío para mantener)',
     'settings.logi.byokModels': 'Modelos preferidos',
+    'settings.logi.byokModelsHint':
+      'El orden es la prioridad: el primero se usa en «Resumir con Logi»; el resto son fallback. Usa ↑↓ para reordenar.',
+    'settings.logi.byokModelsPricingHint':
+      'Precios OpenRouter orientativos: entrada / salida por 1M tokens (USD). Pueden cambiar.',
+    'settings.logi.modelPriceTitle': 'Coste por 1M tokens (entrada · salida)',
+    'settings.logi.modelPriceFree': 'Gratis',
+    'settings.logi.byokModelsAdd': 'Añadir',
+    'settings.logi.byokModelsAddPlaceholder': 'Añadir modelo…',
+    'settings.logi.byokModelsEmpty': 'No hay modelos en la lista. Añade al menos uno.',
+    'settings.logi.byokModelUp': 'Subir prioridad',
+    'settings.logi.byokModelDown': 'Bajar prioridad',
+    'settings.logi.byokModelRemove': 'Quitar modelo',
     'settings.logi.testByok': 'Probar conexión',
     'settings.logi.saved': 'Ajustes Logi guardados.',
     'settings.logi.saveFailed': 'No se pudieron guardar los ajustes Logi.',
@@ -1026,10 +1038,13 @@ const translations = {
     'apexLogViewer.logi.greeting':
       'Hola, soy Logi. Puedo ayudarte a entender errores, SOQL, límites y el flujo de este log.',
     'apexLogViewer.logi.beta': 'Beta',
-    'apexLogViewer.logi.modeFree': 'Free',
-    'apexLogViewer.logi.modeByok': 'BYOK',
-    'apexLogViewer.logi.modeFreeFallback': 'Free (sin créditos)',
+    'apexLogViewer.logi.modeFree': 'Gratuito',
+    'apexLogViewer.logi.modeByok': 'Tu API key',
+    'apexLogViewer.logi.modeFreeFallback': 'Gratuito (sin créditos)',
     'apexLogViewer.logi.modelAuto': 'Automático (recomendado)',
+    'apexLogViewer.logi.modelCustom': 'Otro modelo…',
+    'apexLogViewer.logi.modelCustomPrompt':
+      'ID de modelo OpenRouter (ej. anthropic/claude-sonnet-4):',
     'apexLogViewer.logi.privacyNotice':
       'Logi envía fragmentos de este log a proveedores de IA (OpenRouter) para analizarlos. No compartas logs con datos personales sensibles.',
     'apexLogViewer.logi.inputPlaceholder': 'Escribe a Logi…',
@@ -1115,6 +1130,8 @@ const translations = {
     'apexLogViewer.logi.lineBadgeRemove': 'Quitar selección de líneas',
     'apexLogViewer.logi.quoteBadge': 'Cita · {preview}',
     'apexLogViewer.logi.quoteBadgeRemove': 'Quitar cita',
+    'apexLogViewer.logi.summaryBadge': 'Resumen · {preview}',
+    'apexLogViewer.logi.summaryBadgeRemove': 'Quitar resumen',
     'apexLogViewer.logi.inputPlaceholderWithLines': 'Añade contexto o una pregunta…',
     'apexLogViewer.logi.emptySuggestTitle': 'Prueba con una de estas ideas',
     'apexLogViewer.logi.followUpTitle': 'Seguir con',
@@ -1168,7 +1185,7 @@ const translations = {
     'apexLogViewer.logi.error.proxyBlocked':
       'Tu red corporativa bloquea OpenRouter. Configura Logi con transporte proxy o pide a IT que permita el acceso.',
     'apexLogViewer.logi.error.timeout':
-      'Lo siento, pero no te puedo ayudar con eso.',
+      'Logi tardó demasiado en responder (límite de tiempo del turno). Suele pasar con límites de tasa de la IA o muchas consultas al log. Inténtalo de nuevo en unos segundos.',
     'apexLogViewer.logi.error.network':
       'No se pudo conectar con la IA. Comprueba tu conexión o VPN e inténtalo de nuevo.',
     'apexLogViewer.logi.error.llm': 'No se pudo obtener respuesta de la IA.',
@@ -2686,6 +2703,18 @@ const translations = {
     'settings.logi.byokKeyHint': 'Stored only in this browser. Never sent to telemetry.',
     'settings.logi.byokKeySaved': 'Key saved (leave blank to keep)',
     'settings.logi.byokModels': 'Preferred models',
+    'settings.logi.byokModelsHint':
+      'Order is priority: the first is used for “Summarize with Logi”; the rest are fallbacks. Use ↑↓ to reorder.',
+    'settings.logi.byokModelsPricingHint':
+      'Indicative OpenRouter prices: input / output per 1M tokens (USD). Subject to change.',
+    'settings.logi.modelPriceTitle': 'Cost per 1M tokens (input · output)',
+    'settings.logi.modelPriceFree': 'Free',
+    'settings.logi.byokModelsAdd': 'Add',
+    'settings.logi.byokModelsAddPlaceholder': 'Add model…',
+    'settings.logi.byokModelsEmpty': 'No models in the list. Add at least one.',
+    'settings.logi.byokModelUp': 'Increase priority',
+    'settings.logi.byokModelDown': 'Decrease priority',
+    'settings.logi.byokModelRemove': 'Remove model',
     'settings.logi.testByok': 'Test connection',
     'settings.logi.saved': 'Logi settings saved.',
     'settings.logi.saveFailed': 'Could not save Logi settings.',
@@ -3497,9 +3526,12 @@ const translations = {
       'Hi, I\'m Logi. I can help you understand errors, SOQL, limits, and the flow of this log.',
     'apexLogViewer.logi.beta': 'Beta',
     'apexLogViewer.logi.modeFree': 'Free',
-    'apexLogViewer.logi.modeByok': 'BYOK',
+    'apexLogViewer.logi.modeByok': 'Your API key',
     'apexLogViewer.logi.modeFreeFallback': 'Free (credits depleted)',
     'apexLogViewer.logi.modelAuto': 'Automatic (recommended)',
+    'apexLogViewer.logi.modelCustom': 'Other model…',
+    'apexLogViewer.logi.modelCustomPrompt':
+      'OpenRouter model ID (e.g. anthropic/claude-sonnet-4):',
     'apexLogViewer.logi.privacyNotice':
       'Logi sends fragments of this log to AI providers (OpenRouter) for analysis. Do not share logs with sensitive personal data.',
     'apexLogViewer.logi.inputPlaceholder': 'Write to Logi…',
@@ -3585,6 +3617,8 @@ const translations = {
     'apexLogViewer.logi.lineBadgeRemove': 'Remove line selection',
     'apexLogViewer.logi.quoteBadge': 'Quote · {preview}',
     'apexLogViewer.logi.quoteBadgeRemove': 'Remove quote',
+    'apexLogViewer.logi.summaryBadge': 'Summary · {preview}',
+    'apexLogViewer.logi.summaryBadgeRemove': 'Remove summary',
     'apexLogViewer.logi.inputPlaceholderWithLines': 'Add context or a question…',
     'apexLogViewer.logi.emptySuggestTitle': 'Try one of these ideas',
     'apexLogViewer.logi.followUpTitle': 'Follow up',
@@ -3637,7 +3671,7 @@ const translations = {
     'apexLogViewer.logi.error.proxyBlocked':
       'Your corporate network blocks OpenRouter. Configure Logi with proxy transport or ask IT to allow access.',
     'apexLogViewer.logi.error.timeout':
-      "I'm sorry, but I can't help you with that.",
+      'Logi took too long to respond (turn time limit). This often happens with AI rate limits or many log lookups. Please try again in a few seconds.',
     'apexLogViewer.logi.error.network':
       'Could not connect to the AI. Check your connection or VPN and try again.',
     'apexLogViewer.logi.error.llm': 'Could not get a response from the AI.',

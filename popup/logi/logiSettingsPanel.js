@@ -1,4 +1,5 @@
 import { formatLogiModelLabel } from '../../shared/logi/logiModelLabels.js';
+import { formatLogiModelPricingLabel } from '../../shared/logi/logiModelPricing.js';
 import {
   DEFAULT_LOGI_LANGUAGE,
   formatLogiLanguageLabel,
@@ -13,6 +14,42 @@ function send(type, payload = {}) {
 
 function t(key) {
   return typeof window.__settingsT === 'function' ? window.__settingsT(key) : key;
+}
+
+/** @type {string[]} */
+let preferredModels = [];
+/** @type {string[]} */
+let allowedModels = [];
+/** @type {Record<string, { promptPer1M: number, completionPer1M: number, source?: string, label?: string }> | null} */
+let modelPricingMap = null;
+/** True only when OpenRouter live catalog was fetched successfully. */
+let pricingLive = false;
+
+/**
+ * @param {boolean} visible
+ */
+function setPricingHintVisible(visible) {
+  const el = document.getElementById('settingsLogiByokModelsPricingHint');
+  if (el) el.hidden = !visible;
+}
+
+/**
+ * @param {string} modelId
+ * @returns {string}
+ */
+function priceLabelForModel(modelId) {
+  if (!pricingLive) return '';
+  const live = modelPricingMap?.[modelId];
+  if (!live || live.source === 'fallback') return '';
+  if (live.label) return live.label;
+  return formatLogiModelPricingLabel(
+    {
+      promptPer1M: Number(live.promptPer1M),
+      completionPer1M: Number(live.completionPer1M),
+      source: 'live'
+    },
+    { freeLabel: t('settings.logi.modelPriceFree') }
+  );
 }
 
 /**
@@ -43,7 +80,16 @@ function renderModeCards(config) {
   wrap.innerHTML = '';
   const modes = /** @type {Record<string, Record<string, unknown>>} */ (config.modes || {});
   const allowed = /** @type {string[]} */ (config.allowedModes || []);
-  const userMode = config.userSettings?.logiMode || config.logiMode || 'free';
+  let userMode = config.userSettings?.logiMode || config.logiMode || 'free';
+  // If a key is already saved but mode stayed on Free, pre-select BYOK so Save unlocks the picker.
+  if (
+    userMode === 'free' &&
+    config.userSettings?.hasByokKey === true &&
+    modes.byok?.enabled === true &&
+    allowed.includes('byok')
+  ) {
+    userMode = 'byok';
+  }
 
   for (const modeId of allowed) {
     const modeCfg = modes[modeId] || {};
@@ -60,6 +106,87 @@ function renderModeCards(config) {
   }
 }
 
+function renderPreferredModelsList() {
+  const list = document.getElementById('settingsLogiByokModelsList');
+  if (!list) return;
+  list.innerHTML = '';
+  preferredModels.forEach((id, index) => {
+    const row = document.createElement('div');
+    row.className = 'settings-logi-model-row';
+    row.setAttribute('role', 'listitem');
+    row.dataset.modelId = id;
+    const price = priceLabelForModel(id);
+    row.innerHTML = `
+      <span class="settings-logi-model-rank" aria-hidden="true">${index + 1}</span>
+      <span class="settings-logi-model-main">
+        <span class="settings-logi-model-name">${formatLogiModelLabel(id)}</span>
+        ${
+          price
+            ? `<span class="settings-logi-model-price" title="${t('settings.logi.modelPriceTitle')}">${price}</span>`
+            : ''
+        }
+      </span>
+      <span class="settings-logi-model-actions">
+        <button type="button" class="settings-logi-model-btn" data-act="up" data-index="${index}" aria-label="${t('settings.logi.byokModelUp')}" ${index === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" class="settings-logi-model-btn" data-act="down" data-index="${index}" aria-label="${t('settings.logi.byokModelDown')}" ${index >= preferredModels.length - 1 ? 'disabled' : ''}>↓</button>
+        <button type="button" class="settings-logi-model-btn settings-logi-model-btn--danger" data-act="remove" data-index="${index}" aria-label="${t('settings.logi.byokModelRemove')}">×</button>
+      </span>`;
+    list.appendChild(row);
+  });
+  if (!preferredModels.length) {
+    const empty = document.createElement('p');
+    empty.className = 'settings-hint settings-hint--nomargin';
+    empty.textContent = t('settings.logi.byokModelsEmpty');
+    list.appendChild(empty);
+  }
+  refreshAddModelSelect();
+}
+
+function refreshAddModelSelect() {
+  const addSel = document.getElementById('settingsLogiByokModelAdd');
+  const addBtn = document.getElementById('settingsLogiByokModelAddBtn');
+  if (!addSel) return;
+  const remaining = allowedModels.filter((id) => !preferredModels.includes(id));
+  addSel.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = t('settings.logi.byokModelsAddPlaceholder');
+  addSel.appendChild(placeholder);
+  for (const id of remaining) {
+    const opt = document.createElement('option');
+    opt.value = id;
+    const price = priceLabelForModel(id);
+    opt.textContent = price ? `${formatLogiModelLabel(id)} · ${price}` : formatLogiModelLabel(id);
+    addSel.appendChild(opt);
+  }
+  addSel.disabled = remaining.length === 0;
+  if (addBtn) addBtn.disabled = remaining.length === 0;
+  addSel.setAttribute('aria-label', t('settings.logi.byokModelsAdd'));
+}
+
+/**
+ * @param {number} index
+ * @param {'up' | 'down' | 'remove'} act
+ */
+function movePreferredModel(index, act) {
+  if (index < 0 || index >= preferredModels.length) return;
+  if (act === 'remove') {
+    preferredModels.splice(index, 1);
+  } else if (act === 'up' && index > 0) {
+    const tmp = preferredModels[index - 1];
+    preferredModels[index - 1] = preferredModels[index];
+    preferredModels[index] = tmp;
+  } else if (act === 'down' && index < preferredModels.length - 1) {
+    const tmp = preferredModels[index + 1];
+    preferredModels[index + 1] = preferredModels[index];
+    preferredModels[index] = tmp;
+  }
+  renderPreferredModelsList();
+}
+
+/**
+ * @param {Record<string, unknown>} config
+ */
 function renderByokPanel(config) {
   const panel = document.getElementById('settingsLogiByokPanel');
   if (!panel) return;
@@ -70,18 +197,42 @@ function renderByokPanel(config) {
   if (keyInput && config.userSettings?.hasByokKey) {
     keyInput.placeholder = t('settings.logi.byokKeySaved');
   }
-  const modelsSel = document.getElementById('settingsLogiByokModels');
-  if (!modelsSel) return;
-  modelsSel.innerHTML = '';
-  const allowed = config.modes?.byok?.allowedModels || [];
-  const selected = new Set(config.userSettings?.logiByokModels || allowed);
-  for (const id of allowed) {
-    const opt = document.createElement('option');
-    opt.value = id;
-    opt.textContent = formatLogiModelLabel(id);
-    opt.selected = selected.has(id);
-    modelsSel.appendChild(opt);
+  allowedModels = [...(config.modes?.byok?.allowedModels || [])];
+  const saved = /** @type {string[] | undefined} */ (config.userSettings?.logiByokModels);
+  const fromSaved = Array.isArray(saved)
+    ? saved.map((id) => String(id || '').trim()).filter((id) => id && allowedModels.includes(id))
+    : [];
+  preferredModels = fromSaved.length ? fromSaved : [...allowedModels];
+  pricingLive = false;
+  modelPricingMap = null;
+  setPricingHintVisible(false);
+  renderPreferredModelsList();
+  void refreshModelPricing();
+}
+
+async function refreshModelPricing() {
+  const ids = [...new Set([...preferredModels, ...allowedModels])];
+  if (!ids.length) {
+    pricingLive = false;
+    modelPricingMap = null;
+    setPricingHintVisible(false);
+    return;
   }
+  try {
+    const res = await send('aiAdvisor:getModelPricing', { modelIds: ids });
+    if (res?.ok && res.live === true && res.pricing && typeof res.pricing === 'object') {
+      modelPricingMap = res.pricing;
+      pricingLive = Object.keys(res.pricing).length > 0;
+    } else {
+      modelPricingMap = null;
+      pricingLive = false;
+    }
+  } catch {
+    modelPricingMap = null;
+    pricingLive = false;
+  }
+  setPricingHintVisible(pricingLive);
+  renderPreferredModelsList();
 }
 
 /**
@@ -206,23 +357,42 @@ export function mountLogiSettingsPanel(translateFn) {
 
   void refreshLogiSettingsPanel();
 
+  document.getElementById('settingsLogiByokModelsList')?.addEventListener('click', (e) => {
+    const btn = e.target instanceof HTMLElement ? e.target.closest('button[data-act]') : null;
+    if (!btn) return;
+    const act = btn.getAttribute('data-act');
+    const index = Number(btn.getAttribute('data-index'));
+    if (act === 'up' || act === 'down' || act === 'remove') {
+      movePreferredModel(index, act);
+    }
+  });
+
+  document.getElementById('settingsLogiByokModelAddBtn')?.addEventListener('click', () => {
+    const addSel = document.getElementById('settingsLogiByokModelAdd');
+    const id = addSel?.value?.trim();
+    if (!id || preferredModels.includes(id)) return;
+    preferredModels.push(id);
+    renderPreferredModelsList();
+    if (addSel) addSel.value = '';
+  });
+
   document.getElementById('settingsLogiSave')?.addEventListener('click', async () => {
     const status = document.getElementById('settingsLogiStatus');
     const modeInput = document.querySelector('input[name="settingsLogiMode"]:checked');
-    const mode = modeInput?.value || 'free';
+    let mode = modeInput?.value || 'free';
     const langSel = document.getElementById('settingsLogiLanguage');
     const keyInput = document.getElementById('settingsLogiByokKey');
-    const modelsSel = document.getElementById('settingsLogiByokModels');
+    const keyTrim = keyInput?.value?.trim() || '';
+    // Pasting a key always activates BYOK (even if Free radio is still selected).
+    if (keyTrim) mode = 'byok';
 
     /** @type {Record<string, unknown>} */
     const patch = {
       logiMode: mode,
-      logiLanguage: normalizeLogiLanguage(langSel?.value || DEFAULT_LOGI_LANGUAGE)
+      logiLanguage: normalizeLogiLanguage(langSel?.value || DEFAULT_LOGI_LANGUAGE),
+      logiByokModels: [...preferredModels]
     };
-    if (keyInput?.value?.trim()) patch.logiByokOpenRouterKey = keyInput.value.trim();
-    if (modelsSel) {
-      patch.logiByokModels = Array.from(modelsSel.selectedOptions).map((o) => o.value);
-    }
+    if (keyTrim) patch.logiByokOpenRouterKey = keyTrim;
 
     try {
       const res = await send('aiAdvisor:saveSettings', patch);

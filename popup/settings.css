@@ -557,3 +557,193 @@ html[data-ui-theme='light'] .settings-logi-usage-meta {
 html[data-ui-theme='light'] .settings-logi-usage-track {
   background: #e2e8f0;
 }
+
+/* Logi-styled controls (match chat panel: slate + cyan) */
+.settings-logi-select,
+.settings-logi-input {
+  width: 100%;
+  max-width: 100%;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.settings-logi-input {
+  cursor: text;
+  max-width: 28rem;
+}
+
+.settings-logi-select:hover,
+.settings-logi-select:focus,
+.settings-logi-input:hover,
+.settings-logi-input:focus {
+  border-color: #38bdf8;
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25);
+}
+
+.settings-logi-models {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 10px;
+  padding: 8px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+  min-height: 2.5rem;
+}
+
+.settings-logi-model-row {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: #0f172a;
+}
+
+.settings-logi-model-row:first-child {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.settings-logi-model-rank {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #7dd3fc;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-logi-model-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-logi-model-name {
+  font-size: 0.88rem;
+  color: #e2e8f0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-logi-model-price {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-logi-model-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.settings-logi-model-btn {
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: #cbd5e1;
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.settings-logi-model-btn:hover:not(:disabled) {
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
+
+.settings-logi-model-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.settings-logi-model-btn--danger:hover:not(:disabled) {
+  border-color: #f87171;
+  color: #fecaca;
+}
+
+.settings-logi-models-add {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+html[data-ui-theme='light'] .settings-logi-mode-card {
+  border-color: var(--sfoc-light-border);
+  background: var(--sfoc-light-bg-elevated);
+}
+
+html[data-ui-theme='light'] .settings-logi-mode-card:has(input:checked) {
+  border-color: #0284c7;
+  background: rgba(14, 165, 233, 0.08);
+}
+
+html[data-ui-theme='light'] .settings-logi-mode-title {
+  color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme='light'] .settings-logi-mode-desc {
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme='light'] .settings-logi-panel {
+  border-top-color: var(--sfoc-light-border);
+}
+
+html[data-ui-theme='light'] .settings-logi-select,
+html[data-ui-theme='light'] .settings-logi-input {
+  color: var(--sfoc-light-text);
+  background: #fff;
+  border-color: var(--sfoc-light-border);
+}
+
+html[data-ui-theme='light'] .settings-logi-models {
+  border-color: var(--sfoc-light-border);
+  background: var(--sfoc-light-bg-elevated);
+}
+
+html[data-ui-theme='light'] .settings-logi-model-row {
+  background: #fff;
+}
+
+html[data-ui-theme='light'] .settings-logi-model-row:first-child {
+  border-color: rgba(2, 132, 199, 0.45);
+  background: rgba(14, 165, 233, 0.08);
+}
+
+html[data-ui-theme='light'] .settings-logi-model-rank {
+  color: #0284c7;
+}
+
+html[data-ui-theme='light'] .settings-logi-model-name {
+  color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme='light'] .settings-logi-model-price {
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme='light'] .settings-logi-model-btn {
+  color: var(--sfoc-light-text-muted);
+  background: var(--sfoc-light-bg-elevated);
+  border-color: var(--sfoc-light-border);
+}

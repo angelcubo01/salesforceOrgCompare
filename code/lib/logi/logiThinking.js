@@ -70,7 +70,8 @@ export function formatToolActivityLabel(toolName, args, t) {
   const label = t(key, vars);
   if (label && label !== key) return truncateText(label, 80);
 
-  return truncateText(name.replace(/_/g, ' '), 80);
+  // Never surface raw tool ids (org_query, fetch_log_lines, …) to the user.
+  return truncateText(t('apexLogViewer.logi.thinkingTools'), 80);
 }
 
 /**

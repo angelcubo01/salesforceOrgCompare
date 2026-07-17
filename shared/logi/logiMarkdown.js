@@ -177,6 +177,152 @@ export function exportChatAsMarkdown(messages) {
 }
 
 /**
+ * Export chat as plain text ready to paste into a document (no Markdown syntax).
+ * @param {Array<{ role?: string, content?: string, displayText?: string }>} messages
+ * @returns {string}
+ */
+export function exportChatAsPlainText(messages) {
+  if (!Array.isArray(messages) || !messages.length) return '';
+  /** @type {string[]} */
+  const blocks = [];
+  for (const msg of messages) {
+    const role = String(msg?.role || '').toLowerCase();
+    if (role !== 'user' && role !== 'assistant') continue;
+    const label = role === 'user' ? 'User' : 'Logi';
+    let body = '';
+    if (role === 'user' && msg.displayText) {
+      body = String(msg.displayText || '').trim();
+    } else {
+      body = logiMarkdownToPlainText(String(msg.content || ''));
+    }
+    if (!body) continue;
+    blocks.push(`${label}\n${body}`);
+  }
+  return blocks.join('\n\n').trim();
+}
+
+/**
+ * Convert Logi Markdown to plain text suitable for pasting into Word/email/docs.
+ * Strips headings, emphasis, links, tables, and fences — keeps readable content.
+ * @param {string} text
+ * @returns {string}
+ */
+export function logiMarkdownToPlainText(text) {
+  let raw = decodeCommonHtmlEntities(String(text || '')).replace(/\r\n/g, '\n');
+  if (!raw.trim()) return '';
+
+  /** @type {string[]} */
+  const fences = [];
+  raw = raw.replace(/```[^\n]*\n?([\s\S]*?)```/g, (_m, code) => {
+    const i = fences.length;
+    fences.push(String(code || '').replace(/\s+$/g, ''));
+    return `\n%%LOGI_FENCE_${i}%%\n`;
+  });
+
+  const lines = raw.split('\n');
+  /** @type {string[]} */
+  const out = [];
+  /** @type {string[][]} */
+  let tableRows = [];
+
+  const flushTable = () => {
+    if (!tableRows.length) return;
+    const dataRows = tableRows.filter(
+      (row) => !row.every((cell) => /^:?-{1,}:?$/.test(String(cell || '').replace(/\s+/g, '')))
+    );
+    for (const row of dataRows) {
+      out.push(row.map((cell) => inlineMarkdownToPlain(cell)).filter(Boolean).join('\t'));
+    }
+    if (dataRows.length) out.push('');
+    tableRows = [];
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const fenceMatch = line.trim().match(/^%%LOGI_FENCE_(\d+)%%$/);
+    if (fenceMatch) {
+      flushTable();
+      const code = fences[Number(fenceMatch[1])] || '';
+      if (code) {
+        out.push(code);
+        out.push('');
+      }
+      continue;
+    }
+
+    if (isTableDataRow(line) || isTableSeparator(line)) {
+      const cells = parseTableRow(line);
+      if (cells.length) tableRows.push(cells);
+      continue;
+    }
+
+    flushTable();
+
+    const trimmed = line.trim();
+    if (!trimmed) {
+      out.push('');
+      continue;
+    }
+
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) {
+      out.push('');
+      continue;
+    }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      out.push(inlineMarkdownToPlain(heading[2]));
+      out.push('');
+      continue;
+    }
+
+    const quote = trimmed.match(/^>\s?(.*)$/);
+    if (quote) {
+      out.push(inlineMarkdownToPlain(quote[1]));
+      continue;
+    }
+
+    const ul = trimmed.match(/^[-*+]\s+(.+)$/);
+    if (ul) {
+      out.push(`• ${inlineMarkdownToPlain(ul[1])}`);
+      continue;
+    }
+
+    const ol = trimmed.match(/^(\d+)\.\s+(.+)$/);
+    if (ol) {
+      out.push(`${ol[1]}. ${inlineMarkdownToPlain(ol[2])}`);
+      continue;
+    }
+
+    out.push(inlineMarkdownToPlain(line));
+  }
+
+  flushTable();
+
+  return out
+    .join('\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function inlineMarkdownToPlain(text) {
+  let s = String(text || '');
+  s = s.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '$1');
+  s = s.replace(/(?<![A-Za-z0-9_])__([^_\n]+)__(?![A-Za-z0-9_])/g, '$1');
+  s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
+  s = s.replace(/(?<![A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])/g, '$1');
+  s = s.replace(/`([^`]+)`/g, '$1');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+/**
  * @param {string} instanceUrl
  * @param {'ApexClass' | 'ApexTrigger' | 'Flow'} kind
  * @param {string} apiName
@@ -210,11 +356,27 @@ export function buildLogiSetupUrl(instanceUrl, kind, apiName) {
 }
 
 /**
+ * LLMs often emit HTML entities as literal text (`&quot;`, `&amp;`, …).
+ * Decode a safe subset before escaping so they render as the intended characters.
+ * @param {string} text
+ * @returns {string}
+ */
+function decodeCommonHtmlEntities(text) {
+  return String(text ?? '')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/g, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
+
+/**
  * @param {string} code
  * @param {string} instanceUrl
  */
 function renderCodeBlockHtml(code, instanceUrl) {
-  const escaped = escapeHtml(code);
+  const escaped = escapeHtml(decodeCommonHtmlEntities(code));
   const setupLink = instanceUrl ? linkifySetupPatterns(escaped, instanceUrl, true) : escaped;
   return `<div class="logi-md-pre-wrap"><button type="button" class="logi-md-pre-copy" data-logi-copy-code="1" aria-label="Copy">Copy</button><pre class="logi-md-pre"><code>${setupLink}</code></pre></div>`;
 }
@@ -255,29 +417,103 @@ export function linkifyLogiLineRefs(html) {
 }
 
 /**
+ * Surrounding text suggests an Apex class/trigger source line, not a debug-log line.
+ * @param {string} text
+ * @param {number} start
+ * @param {number} end
+ * @returns {boolean}
+ */
+function isApexSourceLineContext(text, start, end) {
+  const before = text.slice(Math.max(0, start - 120), start);
+  const after = text.slice(end, Math.min(text.length, end + 80));
+  const window = `${before} ${after}`;
+
+  // Stack-trace style: "line 151, column 1"
+  if (/^\s*[,:]?\s*(column|columna)\b/i.test(after)) return true;
+
+  // Explicit Apex source phrasing
+  if (
+    /\b(en la clase|de la clase|of (the )?class|in (the )?class|en el (método|metodo|trigger|handler)|in (the )?(method|trigger|handler)|source line|línea (de|del) (código|codigo|fuente|clase|método|metodo|trigger)|class line|apex line)\b/i.test(
+      window
+    )
+  ) {
+    return true;
+  }
+
+  // "ClassName.method: line N" / "ClassName: L123"
+  if (/[A-Za-z][A-Za-z0-9_]{2,}\s*([.:]\s*[A-Za-z][A-Za-z0-9_]*)?\s*:\s*$/.test(before)) {
+    return true;
+  }
+
+  // Nearby class/trigger/method wording without an explicit "log" cue in the same clause
+  const nearbyBefore = before.slice(-80);
+  if (
+    /\b(class|clase|classes|clases|trigger|método|metodo|method|handler|apex)\b/i.test(nearbyBefore) &&
+    !/\b(log|debug\s*log)\b/i.test(nearbyBefore)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * @param {string} text
  */
 function linkifyTextSegment(text) {
-  const rangeRe = /\b((?:l[ií]neas?|lines?)\s+)(\d+)\s*[-–—]\s*(\d+)\b/gi;
-  const singleWordRe = /\b((?:l[ií]nea|line)\s+)(\d+)\b/gi;
+  // Only link unambiguous log-line citations:
+  // - L123 / L10-L20 (Logi convention for debug-log lines)
+  // - "log line 12" / "línea del log 12" / "log lines 10-20"
+  // Never link bare "line 12" / "línea 12" — those often mean Apex source lines.
+  const logWordRangeRe =
+    /\b((?:log\s+lines?|l[ií]neas?\s+del?\s+log|lines?\s+of\s+(?:the\s+)?log)\s+)(\d+)\s*[-–—]\s*(\d+)\b/gi;
+  const logWordSingleRe =
+    /\b((?:log\s+line|l[ií]nea\s+del?\s+log|line\s+of\s+(?:the\s+)?log)\s+)(\d+)\b/gi;
+  const lRangeRe = /\b(L)(\d+)\s*[-–—]\s*(L)?(\d+)\b/g;
   const lPrefixRe = /\b(L)(\d+)\b/g;
 
-  let out = text.replace(rangeRe, (match, prefix, start, end) => {
+  /**
+   * @param {string} match
+   * @param {number} offset
+   * @param {() => string} toHtml
+   */
+  const maybeLink = (match, offset, toHtml) => {
+    if (isApexSourceLineContext(text, offset, offset + match.length)) return match;
+    return toHtml();
+  };
+
+  let out = text.replace(logWordRangeRe, (match, prefix, start, end, offset) =>
+    maybeLink(match, offset, () => {
+      const s = Number(start);
+      const e = Number(end);
+      if (!Number.isFinite(s) || !Number.isFinite(e) || s < 1 || e < 1) return match;
+      const a = Math.min(s, e);
+      const b = Math.max(s, e);
+      return `<button type="button" class="logi-md-line-ref" data-start-line="${a}" data-end-line="${b}">${prefix}${start}-${end}</button>`;
+    })
+  );
+
+  out = out.replace(logWordSingleRe, (match, prefix, line, offset) =>
+    maybeLink(match, offset, () => {
+      const n = Number(line);
+      if (!Number.isFinite(n) || n < 1) return match;
+      return `<button type="button" class="logi-md-line-ref" data-line="${n}">${prefix}${line}</button>`;
+    })
+  );
+
+  // Replace on `out` but evaluate Apex context against the current string offsets.
+  out = out.replace(lRangeRe, (match, p1, start, _p2, end, offset) => {
+    if (isApexSourceLineContext(out, offset, offset + match.length)) return match;
     const s = Number(start);
     const e = Number(end);
     if (!Number.isFinite(s) || !Number.isFinite(e) || s < 1 || e < 1) return match;
     const a = Math.min(s, e);
     const b = Math.max(s, e);
-    return `<button type="button" class="logi-md-line-ref" data-start-line="${a}" data-end-line="${b}">${prefix}${start}-${end}</button>`;
+    return `<button type="button" class="logi-md-line-ref" data-start-line="${a}" data-end-line="${b}">${p1}${start}-${end}</button>`;
   });
 
-  out = out.replace(singleWordRe, (match, prefix, line) => {
-    const n = Number(line);
-    if (!Number.isFinite(n) || n < 1) return match;
-    return `<button type="button" class="logi-md-line-ref" data-line="${n}">${prefix}${line}</button>`;
-  });
-
-  out = out.replace(lPrefixRe, (match, prefix, line) => {
+  out = out.replace(lPrefixRe, (match, prefix, line, offset) => {
+    if (isApexSourceLineContext(out, offset, offset + match.length)) return match;
     const n = Number(line);
     if (!Number.isFinite(n) || n < 1) return match;
     return `<button type="button" class="logi-md-line-ref" data-line="${n}">${prefix}${line}</button>`;
@@ -319,25 +555,38 @@ function linkifySetupPatterns(text, instanceUrl, inCode = false) {
  * @param {string} instanceUrl
  */
 function inlineMarkdown(line, instanceUrl = '') {
-  let s = escapeHtml(line);
+  let s = decodeCommonHtmlEntities(line);
+
+  // Extract inline code before HTML escape / emphasis so we never double-escape
+  // and so underscores inside `Apex_Names` are not treated as italic.
+  /** @type {string[]} */
+  const codeSlots = [];
   s = s.replace(/`([^`]+)`/g, (_m, code) => {
-    const escaped = escapeHtml(code);
-    const linked = instanceUrl ? linkifySetupPatterns(escaped, instanceUrl, true) : escaped;
-    return `<code class="logi-md-code">${linked}</code>`;
+    const i = codeSlots.length;
+    let body = escapeHtml(code);
+    if (instanceUrl) body = linkifySetupPatterns(body, instanceUrl, true);
+    codeSlots.push(`<code class="logi-md-code">${body}</code>`);
+    return `\uE000${i}\uE001`;
   });
+
+  s = escapeHtml(s);
   if (instanceUrl) {
     s = linkifySetupPatterns(s, instanceUrl, false);
   }
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  // Require non-identifier boundaries so Salesforce names like ns__Field__c stay intact.
+  s = s.replace(/(?<![A-Za-z0-9_])__([^_\n]+)__(?![A-Za-z0-9_])/g, '<strong>$1</strong>');
   s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-  s = s.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+  // Same for _italic_: do not match CCEmailMessageBI_TRHan_method or ns__Field__c.
+  s = s.replace(/(?<![A-Za-z0-9_])_([^_\n]+)_(?![A-Za-z0-9_])/g, '<em>$1</em>');
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => {
     const href = String(url || '').trim();
     if (!/^https?:\/\//i.test(href)) return label;
     const safeHref = escapeHtml(href);
     return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="logi-md-link">${label}</a>`;
   });
+
+  s = s.replace(/\uE000(\d+)\uE001/g, (_m, i) => codeSlots[Number(i)] || '');
   return s;
 }
 

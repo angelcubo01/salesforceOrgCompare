@@ -1,5 +1,5 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
-import { renderLogiMarkdown } from '../../../shared/logi/logiMarkdown.js';
+import { logiMarkdownToPlainText, renderLogiMarkdown } from '../../../shared/logi/logiMarkdown.js';
 import { getCurrentLang, t } from '../../../shared/i18n.js';
 import { bg } from '../../core/bridge.js';
 import {
@@ -12,8 +12,8 @@ import {
   highlightLogLines,
   searchLog
 } from '../../../shared/logi/apexLogAiContext.js';
-import { buildLogiSessionKey, readLogiSession } from '../../../shared/logi/logiAdvisorSession.js';
-import { resolveLogiPromptLang } from '../../../shared/logi/logiPromptLang.js';
+import { buildLogiSessionKey } from '../../../shared/logi/logiAdvisorSession.js';
+import { normalizeLogiLanguage } from '../../../shared/logi/logiLanguages.js';
 import {
   clearLogiSummary,
   readLogiSummary,
@@ -232,17 +232,13 @@ export function cancelActiveResume() {
 }
 
 /**
- * Prefill Ask Logi from the summary CTA.
- * @returns {{ prefill?: string, summaryText?: string }}
+ * Open Ask Logi from the summary CTA (summary arrives as an input badge).
+ * @returns {{ summaryText?: string }}
  */
 export function getLogiResumeAskContext() {
   if (!summaryText) return {};
-  const lang = lastSummaryLang;
-  const prefill =
-    lang === 'es'
-      ? 'Profundiza en este resumen y ayúdame a investigar.'
-      : 'Please go deeper on this summary and help me investigate.';
-  return { prefill, summaryText };
+  const plain = logiMarkdownToPlainText(summaryText) || summaryText;
+  return { summaryText: plain };
 }
 
 function currentSessionKey() {
@@ -355,9 +351,9 @@ function wireResumeActions(el) {
         const ctx = getLogiResumeAskContext();
         resumeOpts?.openAskLogi?.(ctx);
       } else if (action === 'copy') {
-        const text = summaryText || '';
-        if (text && navigator.clipboard?.writeText) {
-          void navigator.clipboard.writeText(text);
+        const plain = logiMarkdownToPlainText(summaryText || '');
+        if (plain && navigator.clipboard?.writeText) {
+          void navigator.clipboard.writeText(plain);
         }
       }
     });
@@ -409,17 +405,20 @@ function mapResumeError(reason) {
 }
 
 /**
- * @param {string} sessionKey
+ * Summarize always follows Logi Settings language (not prior chat inference).
+ * @returns {Promise<string | null>} null → background loads language from storage
  */
-async function resolveSummaryLang(sessionKey) {
-  const [configRes, session] = await Promise.all([
-    bg({ type: 'aiAdvisor:getConfig' }),
-    sessionKey ? readLogiSession(sessionKey) : Promise.resolve(null)
-  ]);
-  return resolveLogiPromptLang({
-    settingsLang: configRes?.config?.userSettings?.logiLanguage,
-    messages: session?.messages
-  });
+async function resolveSummaryLang() {
+  try {
+    const configRes = await bg({ type: 'aiAdvisor:getConfig' });
+    const raw = configRes?.config?.userSettings?.logiLanguage;
+    if (raw != null && String(raw).trim() !== '') {
+      return normalizeLogiLanguage(raw);
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
 }
 
 /**
@@ -434,8 +433,8 @@ async function runSummaryLoop(requestId) {
     typeof activeSessionKey === 'string' && activeSessionKey.trim()
       ? activeSessionKey.trim()
       : buildLogiSessionKey(payload);
-  const lang = await resolveSummaryLang(sessionKey);
-  lastSummaryLang = lang;
+  const lang = await resolveSummaryLang();
+  lastSummaryLang = lang || normalizeLogiLanguage(undefined);
   const initialContext = buildInitialLogContext(parsed, {
     orgId: payload.orgId,
     logId: payload.logId,
@@ -464,7 +463,7 @@ async function runSummaryLoop(requestId) {
       logId: payload.logId,
       title: payload.title,
       instanceUrl: payload.instanceUrl,
-      logiLanguage: lang,
+      ...(lang ? { logiLanguage: lang } : {}),
       initialContext,
       messages,
       skipIterationReserve

@@ -136,11 +136,11 @@ export const DEFAULT_LOGI_MODES = Object.freeze({
     label: { es: 'Gratuito', en: 'Free' }
   },
   byok: {
-    enabled: false,
+    enabled: true,
     default: false,
     allowedModels: [...DEFAULT_LOGI_BYOK_MODELS],
     maxModelsInChain: 8,
-    allowCustomModelId: false,
+    allowCustomModelId: true,
     allowModelPickerInChat: true
   }
 });
@@ -252,11 +252,12 @@ export function parseLogiModesConfig(raw) {
 
   if (o.byok && typeof o.byok === 'object') {
     const b = /** @type {Record<string, unknown>} */ (o.byok);
-    base.byok.enabled = b.enabled === true;
+    // Opt-out: if the remote payload includes a byok block, enable unless explicitly false.
+    base.byok.enabled = b.enabled !== false;
     base.byok.default = b.default === true;
     base.byok.allowedModels = parseStringList(b.allowedModels, DEFAULT_LOGI_BYOK_MODELS, 15);
     base.byok.maxModelsInChain = clampInt(b.maxModelsInChain, 5, 1, 10);
-    base.byok.allowCustomModelId = b.allowCustomModelId === true;
+    base.byok.allowCustomModelId = b.allowCustomModelId !== false;
     base.byok.allowModelPickerInChat = b.allowModelPickerInChat !== false;
   }
 
@@ -428,7 +429,7 @@ export function resolveLogiRuntime(config, userSettings, selectedModelOverride =
  */
 export function isLogiModelPickerAllowed(config, mode, runtime) {
   const modes = config?.modes || DEFAULT_LOGI_MODES;
-  if (mode !== 'byok') return false;
+  if (mode !== 'byok' && runtime?.mode !== 'byok') return false;
   return Boolean(
     modes.byok?.enabled &&
       modes.byok?.allowModelPickerInChat &&
@@ -437,16 +438,31 @@ export function isLogiModelPickerAllowed(config, mode, runtime) {
 }
 
 /**
+ * Per-chat model picker: only the user's preferred models from Settings, in that order.
  * @param {LogiAdvisorConfig} config
  * @param {LogiUserMode} mode
  * @param {LogiRuntime} [runtime]
+ * @param {{ logiByokModels?: string[] } | null} [userSettings]
  * @returns {string[]}
  */
-export function getLogiModelPickerOptions(config, mode, runtime) {
+export function getLogiModelPickerOptions(config, mode, runtime, userSettings = null) {
   if (!isLogiModelPickerAllowed(config, mode, runtime)) return [];
   const modes = config?.modes || DEFAULT_LOGI_MODES;
-  const userModels = runtime?.models?.length ? runtime.models : modes.byok.allowedModels;
-  return userModels.slice(0, modes.byok.maxModelsInChain);
+  const allowlist = modes.byok?.allowedModels?.length
+    ? modes.byok.allowedModels
+    : DEFAULT_LOGI_BYOK_MODELS;
+  const preferred =
+    userSettings?.logiByokModels?.length > 0 ? userSettings.logiByokModels : allowlist;
+  /** @type {string[]} */
+  const out = [];
+  const seen = new Set();
+  for (const id of preferred) {
+    const s = String(id || '').trim();
+    if (!s || seen.has(s)) continue;
+    seen.add(s);
+    out.push(s);
+  }
+  return out;
 }
 
 /**
@@ -592,7 +608,8 @@ export function sanitizeLogiModesForUi(config) {
       enabled: modes.byok?.enabled === true,
       default: modes.byok?.default === true,
       allowedModels: [...(modes.byok?.allowedModels || DEFAULT_LOGI_BYOK_MODELS)],
-      allowModelPickerInChat: modes.byok?.allowModelPickerInChat !== false
+      allowModelPickerInChat: modes.byok?.allowModelPickerInChat !== false,
+      allowCustomModelId: modes.byok?.allowCustomModelId !== false
     }
   };
 }

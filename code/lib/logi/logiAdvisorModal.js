@@ -1,6 +1,6 @@
 import { mountLogiResume, setLogiResumeButtonVisible } from './logiResumePanel.js';
 import { escapeHtml } from '../../../shared/htmlEscape.js';
-import { renderLogiMarkdown, exportChatAsMarkdown } from '../../../shared/logi/logiMarkdown.js';
+import { renderLogiMarkdown, exportChatAsPlainText, logiMarkdownToPlainText } from '../../../shared/logi/logiMarkdown.js';
 import { getCurrentLang, t } from '../../../shared/i18n.js';
 import { bg } from '../../core/bridge.js';
 import { LOGI_ADVISOR_READY_EVENT } from '../../../shared/logi/posthogLogiAdvisorFlag.js';
@@ -168,9 +168,11 @@ const QUICK_ACTION_META = {
 
 /** @typedef {{ content: string }} LogiQuoteRef */
 
-/** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, displayText?: string }} QueuedMessage */
+/** @typedef {{ content: string }} LogiSummaryRef */
 
-/** @typedef {{ role: string, content?: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, displayText?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
+/** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, summaryRef?: LogiSummaryRef, displayText?: string }} QueuedMessage */
+
+/** @typedef {{ role: string, content?: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, summaryRef?: LogiSummaryRef, displayText?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
 
 let modalEl = null;
 let quickActionEditModalEl = null;
@@ -180,6 +182,8 @@ let btnEl = null;
 let pendingLineAttachment = null;
 /** @type {LogiQuoteRef | null} */
 let pendingQuoteAttachment = null;
+/** @type {LogiSummaryRef | null} */
+let pendingSummaryAttachment = null;
 /** @type {ReturnType<typeof getLogiQuickActionPromptsSnapshot> | null} */
 let customQuickActionPrompts = null;
 
@@ -248,6 +252,7 @@ function getQueueDeps() {
     createRequestId,
     normalizeLineRef,
     normalizeQuoteRef,
+    normalizeSummaryRef,
     syncBusyUi
   };
 }
@@ -420,6 +425,23 @@ function formatQuoteBadgeLabel(content) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {LogiSummaryRef | null}
+ */
+function normalizeSummaryRef(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const content = String(/** @type {Record<string, unknown>} */ (raw).content || '').trim();
+  return content ? { content } : null;
+}
+
+/**
+ * @param {string} content
+ */
+function formatSummaryBadgeLabel(content) {
+  return t('apexLogViewer.logi.summaryBadge', { preview: formatQuotePreview(content) });
+}
+
+/**
  * @param {LogiQuoteRef} ref
  * @param {string} [userNote]
  */
@@ -431,19 +453,42 @@ function buildQuoteAttachmentLlmText(ref, userNote = '') {
 }
 
 /**
+ * @param {LogiSummaryRef} ref
+ * @param {string} [userNote]
+ */
+function buildSummaryAttachmentLlmText(ref, userNote = '') {
+  const note = String(userNote || '').trim();
+  const summary = String(ref.content || '').trim();
+  const base = `The user opened Ask Logi from a Logi summary and wants to investigate further.\n\n---\n${summary}\n---`;
+  if (note) return `${base}\n\nUser follow-up: ${note}`;
+  return `${base}\n\nPlease go deeper on this summary and help investigate.`;
+}
+
+/**
  * @param {string} trimmed
  * @param {LogiLineRef | null} lineRef
  * @param {LogiQuoteRef | null} quoteRef
+ * @param {LogiSummaryRef | null} [summaryRef]
  */
-function buildQueuedMessageLlmText(trimmed, lineRef, quoteRef) {
-  if (lineRef && quoteRef) {
-    const linePart = buildLineAttachmentLlmText(lineRef, '');
-    const quotePart = buildQuoteAttachmentLlmText(quoteRef, trimmed);
-    return `${linePart}\n\n${quotePart}`;
+function buildQueuedMessageLlmText(trimmed, lineRef, quoteRef, summaryRef = null) {
+  if (!lineRef && !quoteRef && !summaryRef) return trimmed;
+  if (summaryRef && !lineRef && !quoteRef) {
+    return buildSummaryAttachmentLlmText(summaryRef, trimmed);
   }
-  if (lineRef) return buildLineAttachmentLlmText(lineRef, trimmed);
-  if (quoteRef) return buildQuoteAttachmentLlmText(quoteRef, trimmed);
-  return trimmed;
+  /** @type {string[]} */
+  const parts = [];
+  if (summaryRef) {
+    const summary = String(summaryRef.content || '').trim();
+    if (summary) {
+      parts.push(
+        `The user opened Ask Logi from a Logi summary and wants to investigate further.\n\n---\n${summary}\n---`
+      );
+    }
+  }
+  if (lineRef) parts.push(buildLineAttachmentLlmText(lineRef, ''));
+  if (quoteRef) parts.push(buildQuoteAttachmentLlmText(quoteRef, ''));
+  if (trimmed) parts.push(`User follow-up: ${trimmed}`);
+  return parts.join('\n\n');
 }
 
 /**
@@ -465,7 +510,7 @@ function updateInputPlaceholder(modal) {
   const inputEl = modal.querySelector('#logiAdvisorInput');
   if (!inputEl) return;
   inputEl.placeholder =
-    pendingLineAttachment || pendingQuoteAttachment
+    pendingLineAttachment || pendingQuoteAttachment || pendingSummaryAttachment
       ? t('apexLogViewer.logi.inputPlaceholderWithLines')
       : t('apexLogViewer.logi.inputPlaceholder');
 }
@@ -479,6 +524,16 @@ function renderInputAttachments(modal) {
 
   /** @type {string[]} */
   const badges = [];
+
+  if (pendingSummaryAttachment) {
+    const label = formatSummaryBadgeLabel(pendingSummaryAttachment.content);
+    const removeLabel = t('apexLogViewer.logi.summaryBadgeRemove');
+    badges.push(`
+      <span class="logi-advisor-line-badge logi-advisor-summary-badge" title="${escapeHtml(label)}">
+        <span class="logi-advisor-line-badge-label">${escapeHtml(label)}</span>
+        <button type="button" class="logi-advisor-line-badge-remove" id="logiAdvisorSummaryAttachClear" aria-label="${escapeHtml(removeLabel)}" title="${escapeHtml(removeLabel)}">×</button>
+      </span>`);
+  }
 
   if (pendingLineAttachment) {
     const label = formatLineRefBadgeLabel(pendingLineAttachment);
@@ -508,6 +563,13 @@ function renderInputAttachments(modal) {
 
   mount.hidden = false;
   mount.innerHTML = badges.join('');
+  mount.querySelector('#logiAdvisorSummaryAttachClear')?.addEventListener('click', () => {
+    pendingSummaryAttachment = null;
+    const rt = getModalRuntime(modal);
+    if (rt) rt.resumeSummary = null;
+    renderInputAttachments(modal);
+    updateInputPlaceholder(modal);
+  });
   mount.querySelector('#logiAdvisorLineAttachClear')?.addEventListener('click', () => {
     pendingLineAttachment = null;
     renderInputAttachments(modal);
@@ -833,7 +895,6 @@ export async function mountLogiAdvisor(opts) {
         getParsed,
         getRawContent,
         payload: payload || {},
-        prefill: askCtx?.prefill,
         summaryText: askCtx?.summaryText
       });
     }
@@ -935,7 +996,8 @@ function getSelectedLogiModel() {
   const sel = modalEl?.querySelector('#logiAdvisorModel');
   if (!sel || sel.hidden) return undefined;
   const v = String(sel.value || '').trim();
-  return v || undefined;
+  if (!v || v === '__auto__' || v === '__custom__') return undefined;
+  return v;
 }
 
 /**
@@ -947,15 +1009,20 @@ function updateLogiHeaderUi(modal) {
   const modelSel = modal.querySelector('#logiAdvisorModel');
   if (!badge || !modelSel) return;
 
-  const mode = cfg?.requestedMode || cfg?.logiMode || 'free';
   const fallback = cfg?.modeFallback === true;
+  const byokActive = cfg?.byokActive === true;
+  const effectiveMode = cfg?.logiMode || 'free';
   let badgeText = t('apexLogViewer.logi.modeFree');
-  if (mode === 'byok' && !fallback) badgeText = t('apexLogViewer.logi.modeByok');
-  else if (fallback) badgeText = t('apexLogViewer.logi.modeFreeFallback');
+  if (byokActive || (effectiveMode === 'byok' && !fallback)) {
+    badgeText = t('apexLogViewer.logi.modeByok');
+  } else if (fallback) {
+    badgeText = t('apexLogViewer.logi.modeFreeFallback');
+  }
 
   badge.textContent = badgeText;
   badge.hidden = false;
   badge.classList.toggle('logi-advisor-mode-badge--fallback', fallback);
+  badge.classList.toggle('logi-advisor-mode-badge--byok', byokActive && !fallback);
 
   const pickerAllowed = cfg?.modelPickerAllowed === true;
   modelSel.hidden = !pickerAllowed;
@@ -963,6 +1030,7 @@ function updateLogiHeaderUi(modal) {
 
   const options = cfg?.modelPickerOptions || [];
   const current = cfg?.userSettings?.logiSelectedByokModel || '';
+  const allowCustom = cfg?.modes?.byok?.allowCustomModelId !== false;
   modelSel.innerHTML = '';
   const autoOpt = document.createElement('option');
   autoOpt.value = '__auto__';
@@ -974,6 +1042,19 @@ function updateLogiHeaderUi(modal) {
     opt.textContent = formatLogiModelLabel(id);
     if (current === id) opt.selected = true;
     modelSel.appendChild(opt);
+  }
+  if (allowCustom) {
+    if (current && !options.includes(current)) {
+      const customCurrent = document.createElement('option');
+      customCurrent.value = current;
+      customCurrent.textContent = formatLogiModelLabel(current);
+      customCurrent.selected = true;
+      modelSel.appendChild(customCurrent);
+    }
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = t('apexLogViewer.logi.modelCustom');
+    modelSel.appendChild(customOpt);
   }
   if (!current) modelSel.value = '__auto__';
 }
@@ -1132,7 +1213,32 @@ function ensureModal() {
   });
 
   modalEl.querySelector('#logiAdvisorModel')?.addEventListener('change', (e) => {
-    const value = e.target?.value === '__auto__' ? null : e.target?.value || null;
+    const raw = e.target?.value || null;
+    if (raw === '__custom__') {
+      const entered = window.prompt(t('apexLogViewer.logi.modelCustomPrompt'), '');
+      const customId = typeof entered === 'string' ? entered.trim().slice(0, 120) : '';
+      if (!customId) {
+        e.target.value = '__auto__';
+        void bg({ type: 'aiAdvisor:saveSettings', logiSelectedByokModel: null }).then((res) => {
+          if (res?.config) {
+            advisorConfig = res.config;
+            updateLogiHeaderUi(modalEl);
+          }
+        });
+        return;
+      }
+      void bg({
+        type: 'aiAdvisor:saveSettings',
+        logiSelectedByokModel: customId
+      }).then((res) => {
+        if (res?.config) {
+          advisorConfig = res.config;
+          updateLogiHeaderUi(modalEl);
+        }
+      });
+      return;
+    }
+    const value = raw === '__auto__' ? null : raw;
     void bg({
       type: 'aiAdvisor:saveSettings',
       logiSelectedByokModel: value
@@ -1163,10 +1269,24 @@ function ensureModal() {
     }
   });
   modalEl.querySelector('#logiAdvisorInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+    if (e.key !== 'Enter') return;
+    const el = e.target;
+    if (!(el instanceof HTMLTextAreaElement)) return;
+
+    // Ctrl/Cmd+Enter → new line; plain Enter → send
+    if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
-      void onSendFromInput();
+      const start = el.selectionStart ?? el.value.length;
+      const end = el.selectionEnd ?? start;
+      const value = el.value;
+      el.value = `${value.slice(0, start)}\n${value.slice(end)}`;
+      el.selectionStart = el.selectionEnd = start + 1;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
     }
+    if (e.shiftKey) return; // Shift+Enter keeps a new line (native textarea)
+    e.preventDefault();
+    void onSendFromInput();
   });
 
   return modalEl;
@@ -1368,11 +1488,12 @@ async function handleMessageAction(modal, action, msgIndex) {
   const text = String(msg.content || '');
 
   if (action === 'copy') {
-    if (text && navigator.clipboard?.writeText) void navigator.clipboard.writeText(text);
+    const plain = logiMarkdownToPlainText(text);
+    if (plain && navigator.clipboard?.writeText) void navigator.clipboard.writeText(plain);
     return;
   }
   if (action === 'quote') {
-    pendingQuoteAttachment = normalizeQuoteRef({ content: text });
+    pendingQuoteAttachment = normalizeQuoteRef({ content: logiMarkdownToPlainText(text) || text });
     renderInputAttachments(modal);
     updateInputPlaceholder(modal);
     modal.querySelector('#logiAdvisorInput')?.focus();
@@ -1636,15 +1757,18 @@ async function openLogiModal(ctx) {
   if (dockBtn) applyPanelLayout(modal);
   pendingLineAttachment = lineAttachmentFromCtx(ctx);
   pendingQuoteAttachment = null;
+  pendingSummaryAttachment = normalizeSummaryRef(
+    ctx.summaryText ? { content: String(ctx.summaryText).trim() } : null
+  );
   renderInputAttachments(modal);
   if (inputEl) {
     updateInputPlaceholder(modal);
     // Keep free text empty when an attachment badge is shown; only use string prefill otherwise.
+    const hasAttachment =
+      pendingLineAttachment || pendingQuoteAttachment || pendingSummaryAttachment;
     inputEl.value =
-      pendingLineAttachment || pendingQuoteAttachment || typeof ctx.prefill !== 'string'
-        ? ''
-        : ctx.prefill;
-    if (pendingLineAttachment || pendingQuoteAttachment || ctx.prefill) {
+      hasAttachment || typeof ctx.prefill !== 'string' ? '' : ctx.prefill;
+    if (hasAttachment || ctx.prefill) {
       inputEl.focus();
     }
   }
@@ -2144,9 +2268,15 @@ function renderUserMessageHtml(message) {
 
   const lineRef = normalizeLineRef(message.lineRef);
   const quoteRef = normalizeQuoteRef(message.quoteRef);
-  if (lineRef || quoteRef) {
+  const summaryRef = normalizeSummaryRef(message.summaryRef);
+  if (lineRef || quoteRef || summaryRef) {
     const note = String(message.displayText || '').trim();
     const badges = [];
+    if (summaryRef) {
+      badges.push(
+        `<span class="logi-advisor-line-badge logi-advisor-line-badge--msg logi-advisor-summary-badge">${escapeHtml(formatSummaryBadgeLabel(summaryRef.content))}</span>`
+      );
+    }
     if (lineRef) {
       badges.push(
         `<span class="logi-advisor-line-badge logi-advisor-line-badge--msg">${escapeHtml(formatLineRefBadgeLabel(lineRef))}</span>`
@@ -2442,13 +2572,14 @@ function isMaxIterationsResponse(modal, res) {
 /**
  * @param {string} text
  * @param {HTMLElement} modal
- * @param {{ quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, displayText?: string }} [opts]
+ * @param {{ quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, summaryRef?: LogiSummaryRef, displayText?: string }} [opts]
  */
 async function enqueueUserMessage(text, modal, opts = {}) {
   const trimmed = String(text || '').trim();
   const lineRef = normalizeLineRef(opts.lineRef);
   const quoteRef = normalizeQuoteRef(opts.quoteRef);
-  if (!trimmed && !lineRef && !quoteRef) return;
+  const summaryRef = normalizeSummaryRef(opts.summaryRef);
+  if (!trimmed && !lineRef && !quoteRef && !summaryRef) return;
 
   if (isChatBlocked()) {
     if (usageLimitReason) {
@@ -2462,7 +2593,7 @@ async function enqueueUserMessage(text, modal, opts = {}) {
   /** @type {QueuedMessage} */
   const queueItem = {
     id: createRequestId(),
-    text: buildQueuedMessageLlmText(trimmed, lineRef, quoteRef)
+    text: buildQueuedMessageLlmText(trimmed, lineRef, quoteRef, summaryRef)
   };
   if (opts.quickActionId) {
     queueItem.quickActionId = opts.quickActionId;
@@ -2473,7 +2604,10 @@ async function enqueueUserMessage(text, modal, opts = {}) {
   if (quoteRef) {
     queueItem.quoteRef = quoteRef;
   }
-  if (trimmed && (lineRef || quoteRef)) {
+  if (summaryRef) {
+    queueItem.summaryRef = summaryRef;
+  }
+  if (trimmed && (lineRef || quoteRef || summaryRef)) {
     queueItem.displayText = trimmed;
   }
   messageQueue.push(queueItem);
@@ -2530,6 +2664,9 @@ async function drainQueue(modal) {
   }
   if (next.quoteRef) {
     userMessage.quoteRef = next.quoteRef;
+  }
+  if (next.summaryRef) {
+    userMessage.summaryRef = next.summaryRef;
   }
   if (next.displayText) {
     userMessage.displayText = next.displayText;
@@ -2666,15 +2803,18 @@ async function onSendFromInput() {
   const text = input?.value?.trim() || '';
   const lineRef = pendingLineAttachment;
   const quoteRef = pendingQuoteAttachment;
-  if (!text && !lineRef && !quoteRef) return;
+  const summaryRef = pendingSummaryAttachment;
+  if (!text && !lineRef && !quoteRef && !summaryRef) return;
   if (input) input.value = '';
   pendingLineAttachment = null;
   pendingQuoteAttachment = null;
+  pendingSummaryAttachment = null;
   renderInputAttachments(modal);
   updateInputPlaceholder(modal);
   await enqueueUserMessage(text, modal, {
     ...(lineRef ? { lineRef } : {}),
-    ...(quoteRef ? { quoteRef } : {})
+    ...(quoteRef ? { quoteRef } : {}),
+    ...(summaryRef ? { summaryRef } : {})
   });
 }
 
@@ -3080,8 +3220,8 @@ async function runQuickAction(modal, actionId) {
 function exportCurrentChat(modal) {
   const rt = getModalRuntime(modal);
   if (!rt?.messages?.length) return;
-  const md = exportChatAsMarkdown(rt.messages);
-  if (md && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(md);
+  const plain = exportChatAsPlainText(rt.messages);
+  if (plain && navigator.clipboard?.writeText) {
+    void navigator.clipboard.writeText(plain);
   }
 }

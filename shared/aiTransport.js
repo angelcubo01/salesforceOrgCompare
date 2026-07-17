@@ -16,6 +16,10 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1_500;
 
+/** @type {{ at: number, map: Record<string, import('./logi/logiModelPricing.js').LogiModelPricing> } | null} */
+let openRouterPricingCache = null;
+const OPENROUTER_PRICING_TTL_MS = 6 * 60 * 60 * 1000;
+
 /**
  * @typedef {object} ChatCompletionRequest
  * @property {string} [model]
@@ -215,6 +219,43 @@ export async function testOpenRouterApiKey(apiKey, signal) {
     throw new Error(`LOGI_BYOK_TEST_HTTP_${res.res.status}`);
   }
   return true;
+}
+
+/**
+ * Public OpenRouter catalog (no key required). Cached in-memory for several hours.
+ * @param {AbortSignal} [signal]
+ * @param {{ force?: boolean }} [opts]
+ * @returns {Promise<Record<string, import('./logi/logiModelPricing.js').LogiModelPricing>>}
+ */
+export async function fetchOpenRouterModelPricing(signal, opts = {}) {
+  const { parseOpenRouterModelsPricing } = await import('./logi/logiModelPricing.js');
+  if (
+    !opts.force &&
+    openRouterPricingCache &&
+    Date.now() - openRouterPricingCache.at < OPENROUTER_PRICING_TTL_MS
+  ) {
+    return openRouterPricingCache.map;
+  }
+  const res = await fetchWithRetry(
+    OPENROUTER_MODELS_URL,
+    {
+      method: 'GET',
+      headers: { Accept: 'application/json' }
+    },
+    signal
+  );
+  if (!res.res.ok) {
+    throw new Error(`LOGI_MODELS_HTTP_${res.res.status}`);
+  }
+  let json;
+  try {
+    json = JSON.parse(res.text || '{}');
+  } catch {
+    throw new Error('LOGI_MODELS_BAD_JSON');
+  }
+  const map = parseOpenRouterModelsPricing(json);
+  openRouterPricingCache = { at: Date.now(), map };
+  return map;
 }
 
 async function openRouterDirectTransport(config, req, signal) {
