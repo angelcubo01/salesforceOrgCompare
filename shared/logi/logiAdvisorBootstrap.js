@@ -11,9 +11,9 @@ import {
 } from './logiAdvisorCache.js';
 import { fetchLogiAdvisorRemoteConfig, LogiFlagDisabledError } from './fetchLogiAdvisorRemoteConfig.js';
 import { applyQuotaBonuses } from './logiQuotaBonus.js';
-import { isUsableFeatureFlagPayload } from './posthogFlagPayload.js';
-import { getOrCreateTelemetryInstallId } from './telemetryInstallId.js';
-import { getTelemetryEnabled } from './extensionSettings.js';
+import { isUsableFeatureFlagPayload } from '../posthogFlagPayload.js';
+import { getOrCreateTelemetryInstallId } from '../telemetryInstallId.js';
+import { getTelemetryEnabled } from '../extensionSettings.js';
 
 /** @type {Promise<import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig | null> | null} */
 let bootstrapInFlight = null;

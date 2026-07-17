@@ -7,8 +7,8 @@ import {
   highlightLogLines,
   quickActionUserMessage,
   searchLog
-} from '../shared/apexLogAiContext.js';
-import { LOGI_QUICK_ACTION_IDS } from '../shared/apexLogAiAdvisorConfig.js';
+} from '../shared/logi/apexLogAiContext.js';
+import { LOGI_QUICK_ACTION_IDS } from '../shared/logi/apexLogAiAdvisorConfig.js';
 
 const RAW = [
   '00:00:00.0 (1)|USER_DEBUG|[1]|DEBUG|hello world',

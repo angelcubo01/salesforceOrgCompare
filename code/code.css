@@ -1128,26 +1128,6 @@ body.modifier-pressed .list.compare-list-pinned > li[data-item-index]:hover {
   color: #93c5fd;
 }
 
-.list li.dragging {
-  opacity: 0.5;
-  background-color: #333;
-}
-.list li.drag-over {
-  border-top: 2px solid #e0e0e0;
-}
-.drag-placeholder {
-  height: 2px;
-  background: repeating-linear-gradient(
-    to right,
-    #e0e0e0,
-    #e0e0e0 8px,
-    transparent 8px,
-    transparent 16px
-  );
-  margin: 4px 0;
-  border-radius: 1px;
-}
-
 /* No Org Message */
 .no-org-message {
   position: absolute;

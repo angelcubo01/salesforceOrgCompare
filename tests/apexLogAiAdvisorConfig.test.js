@@ -3,7 +3,7 @@ import {
   DEFAULT_LOGI_ADVISOR_CONFIG,
   isLogiAdvisorOperational,
   parseLogiAdvisorConfig
-} from '../shared/apexLogAiAdvisorConfig.js';
+} from '../shared/logi/apexLogAiAdvisorConfig.js';
 
 describe('parseLogiAdvisorConfig', () => {
   it('returns defaults for invalid input', () => {

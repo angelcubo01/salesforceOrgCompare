@@ -17,8 +17,8 @@ export function addSelected(item) {
   }
   
   // Check if item already exists
-  const existingIndex = state.savedItems.findIndex(saved => 
-    saved.type === item.type && saved.key === item.key
+  const existingIndex = state.savedItems.findIndex(
+    (saved) => saved && saved.type === item.type && saved.key === item.key
   );
 
   const selected = existingIndex === -1 ? item : state.savedItems[existingIndex];
@@ -63,8 +63,8 @@ export async function addBundleFiles(type, bundleItem) {
     const item = { type, key: `${bundleItem.developerName}/${f.fileName}`, descriptor, fileName: f.fileName };
     
     // Check if item already exists
-    const existingIndex = state.savedItems.findIndex(saved => 
-      saved.type === item.type && saved.key === item.key
+    const existingIndex = state.savedItems.findIndex(
+      (saved) => saved && saved.type === item.type && saved.key === item.key
     );
     
     if (existingIndex === -1) {
@@ -78,6 +78,7 @@ export async function addBundleFiles(type, bundleItem) {
     const current = state.savedItems;
     const bundleSet = new Map();
     for (const it of current) {
+      if (!it) continue;
       if (it.type === type && typeof it.key === 'string' && it.key.startsWith(prefix)) {
         const name = it.key.slice(prefix.length);
         bundleSet.set(name, it);
@@ -86,7 +87,9 @@ export async function addBundleFiles(type, bundleItem) {
 
     if (bundleSet.size > 0) {
       // Remove all bundle items from current list
-      const remaining = current.filter(it => !(it.type === type && typeof it.key === 'string' && it.key.startsWith(prefix)));
+      const remaining = current.filter(
+        (it) => it && !(it.type === type && typeof it.key === 'string' && it.key.startsWith(prefix))
+      );
 
       // Order bundle items by file type priority (js > html > css > xml > others)
       const getFileTypeOrder = (fileName) => {

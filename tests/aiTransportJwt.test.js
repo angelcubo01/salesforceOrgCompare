@@ -5,7 +5,7 @@ import {
   getProxyJwt,
   resetLogiProxySessionForTests,
   buildLogiProxySessionUrl
-} from '../shared/logiProxySession.js';
+} from '../shared/logi/logiProxySession.js';
 import { createChatCompletion } from '../shared/aiTransport.js';
 
 const INSTALL_ID = '550e8400-e29b-41d4-a716-446655440000';

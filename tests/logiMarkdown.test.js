@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkifyLogiLineRefs, renderLogiMarkdown } from '../shared/logiMarkdown.js';
+import { linkifyLogiLineRefs, renderLogiMarkdown } from '../shared/logi/logiMarkdown.js';
 
 describe('linkifyLogiLineRefs', () => {
   it('linkifies L123 and line/línea ranges', () => {

@@ -6,11 +6,11 @@ import {
   resolveAllowedLogiModes,
   validateLogiSelectedModel,
   coerceLogiUserMode
-} from '../shared/apexLogAiAdvisorConfig.js';
+} from '../shared/logi/apexLogAiAdvisorConfig.js';
 import {
   normalizeLogiUserSettings,
   sanitizeLogiUserSettingsForUi
-} from '../shared/logiUserSettings.js';
+} from '../shared/logi/logiUserSettings.js';
 
 describe('resolveAllowedLogiModes', () => {
   it('returns free only by default payload', () => {
@@ -66,8 +66,19 @@ describe('resolveLogiRuntime', () => {
     });
     const rt = resolveLogiRuntime(baseConfig, user);
     expect(rt.mode).toBe('byok');
+    expect(rt.byokActive).toBe(true);
     expect(rt.apiKeySource).toBe('user');
     expect(rt.openRouterApiKey).toBe('sk-or-test');
+  });
+
+  it('reads legacy logiSelectedPremiumModel as byok model', () => {
+    const user = normalizeLogiUserSettings({
+      logiMode: 'byok',
+      logiByokOpenRouterKey: 'sk-or-test',
+      logiSelectedPremiumModel: 'openai/gpt-4o'
+    });
+    const rt = resolveLogiRuntime(baseConfig, user);
+    expect(rt.selectedModel).toBe('openai/gpt-4o');
   });
 
   it('coerces disallowed user mode', () => {

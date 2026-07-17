@@ -1,7 +1,7 @@
 /** @typedef {'openrouter_direct' | 'proxy'} LogiTransportMode */
 /** @typedef {'free' | 'byok'} LogiUserMode */
 
-import { isEncryptedPosthogPayload } from './posthogFlagPayload.js';
+import { isEncryptedPosthogPayload } from '../posthogFlagPayload.js';
 import { normalizeLogiUserMode } from './logiUserSettings.js';
 
 /**
@@ -55,6 +55,14 @@ import { normalizeLogiUserMode } from './logiUserSettings.js';
  * @property {string} personaName
  * @property {boolean} allowedOrgQuery
  * @property {string[]} quickActions
+ * @property {LogiQuickActionPreset[]} quickActionPresets
+ */
+
+/**
+ * @typedef {object} LogiQuickActionPreset
+ * @property {string} id
+ * @property {{ es?: string, en?: string }} [label]
+ * @property {string | { es?: string, en?: string }} [prompt]
  */
 
 /**
@@ -65,7 +73,7 @@ import { normalizeLogiUserMode } from './logiUserSettings.js';
  * @property {LogiTransportMode} transport
  * @property {'platform' | 'user' | 'none'} apiKeySource
  * @property {string | null} openRouterApiKey
- * @property {boolean} premiumActive
+ * @property {boolean} byokActive
  * @property {boolean} modeFallback
  * @property {string | null} fallbackReason
  * @property {string | null} selectedModel
@@ -158,7 +166,8 @@ export const DEFAULT_LOGI_ADVISOR_CONFIG = Object.freeze({
   systemPromptVersion: 1,
   personaName: 'Logi',
   allowedOrgQuery: true,
-  quickActions: [...LOGI_QUICK_ACTION_IDS]
+  quickActions: [...LOGI_QUICK_ACTION_IDS],
+  quickActionPresets: []
 });
 
 /**
@@ -344,7 +353,7 @@ export function resolveLogiRuntime(config, userSettings, selectedModelOverride =
   let mode = requestedMode;
   let modeFallback = false;
   let fallbackReason = null;
-  let premiumActive = false;
+  let byokActive = false;
 
   if (mode === 'byok') {
     if (!userSettings?.logiByokOpenRouterKey) {
@@ -352,17 +361,19 @@ export function resolveLogiRuntime(config, userSettings, selectedModelOverride =
       modeFallback = true;
       fallbackReason = 'BYOK_NO_KEY';
     } else {
-      premiumActive = true;
+      byokActive = true;
     }
   }
 
   const selectedRaw =
-    selectedModelOverride != null ? selectedModelOverride : userSettings?.logiSelectedPremiumModel;
+    selectedModelOverride != null
+      ? selectedModelOverride
+      : userSettings?.logiSelectedByokModel;
   let selectedModel = null;
   /** @type {string[]} */
   let modelChain;
 
-  if (mode === 'byok' && premiumActive) {
+  if (mode === 'byok' && byokActive) {
     const userModels =
       userSettings?.logiByokModels?.length > 0
         ? userSettings.logiByokModels.slice(0, modes.byok.maxModelsInChain)
@@ -403,7 +414,7 @@ export function resolveLogiRuntime(config, userSettings, selectedModelOverride =
     transport,
     apiKeySource,
     openRouterApiKey,
-    premiumActive,
+    byokActive,
     modeFallback,
     fallbackReason,
     selectedModel
@@ -418,7 +429,11 @@ export function resolveLogiRuntime(config, userSettings, selectedModelOverride =
 export function isLogiModelPickerAllowed(config, mode, runtime) {
   const modes = config?.modes || DEFAULT_LOGI_MODES;
   if (mode !== 'byok') return false;
-  return Boolean(modes.byok?.enabled && modes.byok?.allowModelPickerInChat && runtime?.premiumActive);
+  return Boolean(
+    modes.byok?.enabled &&
+      modes.byok?.allowModelPickerInChat &&
+      (runtime?.byokActive ?? runtime?.premiumActive)
+  );
 }
 
 /**
@@ -432,6 +447,45 @@ export function getLogiModelPickerOptions(config, mode, runtime) {
   const modes = config?.modes || DEFAULT_LOGI_MODES;
   const userModels = runtime?.models?.length ? runtime.models : modes.byok.allowedModels;
   return userModels.slice(0, modes.byok.maxModelsInChain);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {LogiQuickActionPreset[]}
+ */
+function parseQuickActionPresets(raw) {
+  if (!Array.isArray(raw)) return [];
+  /** @type {LogiQuickActionPreset[]} */
+  const out = [];
+  const seen = new Set();
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const rec = /** @type {Record<string, unknown>} */ (item);
+    const id = typeof rec.id === 'string' ? rec.id.trim().slice(0, 64) : '';
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    /** @type {LogiQuickActionPreset} */
+    const preset = { id };
+    if (rec.label && typeof rec.label === 'object') {
+      const l = /** @type {Record<string, unknown>} */ (rec.label);
+      preset.label = {
+        es: typeof l.es === 'string' ? l.es.trim().slice(0, 40) : undefined,
+        en: typeof l.en === 'string' ? l.en.trim().slice(0, 40) : undefined
+      };
+    }
+    if (typeof rec.prompt === 'string') {
+      preset.prompt = rec.prompt.trim().slice(0, 12_000);
+    } else if (rec.prompt && typeof rec.prompt === 'object') {
+      const p = /** @type {Record<string, unknown>} */ (rec.prompt);
+      preset.prompt = {
+        es: typeof p.es === 'string' ? p.es.trim().slice(0, 12_000) : undefined,
+        en: typeof p.en === 'string' ? p.en.trim().slice(0, 12_000) : undefined
+      };
+    }
+    out.push(preset);
+    if (out.length >= 24) break;
+  }
+  return out;
 }
 
 /**
@@ -495,7 +549,8 @@ export function parseLogiAdvisorConfig(raw) {
         ? o.personaName.trim()
         : 'Logi',
     allowedOrgQuery: o.allowedOrgQuery !== false,
-    quickActions: quickActions.length ? quickActions : [...LOGI_QUICK_ACTION_IDS]
+    quickActions: quickActions.length ? quickActions : [...LOGI_QUICK_ACTION_IDS],
+    quickActionPresets: parseQuickActionPresets(o.quickActionPresets)
   };
 }
 

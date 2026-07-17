@@ -32,13 +32,13 @@ import {
   mergeApexTestRunProfiles,
   normalizeApexTestRunProfileList
 } from '../shared/apexTestRunProfilesCore.js';
-import { mountLogiSettingsPanel } from './logiSettingsPanel.js';
+import { mountLogiSettingsPanel } from './logi/logiSettingsPanel.js';
 import {
   LOGI_QUICK_ACTION_PROMPTS_KEY,
   importLogiQuickActionPromptStore,
   normalizeLogiQuickActionFullStore,
   normalizeLogiQuickActionPromptStore
-} from '../shared/logiQuickActionPrompts.js';
+} from '../shared/logi/logiQuickActionPrompts.js';
 
 const MONACO_THEME_I18N_KEYS = {
   'sfoc-editor-dark': 'settings.monacoThemeSfocDark',

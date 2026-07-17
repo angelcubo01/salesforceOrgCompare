@@ -3,7 +3,7 @@ import {
   buildLogiAiMetrics,
   buildLogiErrorMetrics,
   sanitizeLogiTelemetryProps
-} from '../shared/logiAiMetrics.js';
+} from '../shared/logi/logiAiMetrics.js';
 import { SFOC_AI_USER_ID_PROP, buildSfocAiUserProperties } from '../shared/posthogAiUserContext.js';
 
 describe('buildSfocAiUserProperties', () => {

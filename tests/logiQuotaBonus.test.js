@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_LOGI_ADVISOR_CONFIG } from '../shared/apexLogAiAdvisorConfig.js';
+import { DEFAULT_LOGI_ADVISOR_CONFIG } from '../shared/logi/apexLogAiAdvisorConfig.js';
 import {
   applyQuotaBonuses,
   effectiveQuotaLimit,
@@ -7,7 +7,7 @@ import {
   parseQuotaBonusFromPersonProperties,
   QUOTA_BONUS_PERSON_PROPS,
   ZERO_QUOTA_BONUS
-} from '../shared/logiQuotaBonus.js';
+} from '../shared/logi/logiQuotaBonus.js';
 
 describe('parseQuotaBonus', () => {
   it('returns zeros for invalid input', () => {

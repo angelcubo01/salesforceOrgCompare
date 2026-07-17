@@ -7,8 +7,8 @@ import {
   DEFAULT_LOGI_MODELS,
   OPENROUTER_MAX_MODELS_PER_REQUEST,
   resolveLogiModelChain
-} from './apexLogAiAdvisorConfig.js';
-import { getProxyJwt } from './logiProxySession.js';
+} from './logi/apexLogAiAdvisorConfig.js';
+import { getProxyJwt } from './logi/logiProxySession.js';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
@@ -43,13 +43,13 @@ const RETRY_DELAY_MS = 1_500;
  * @property {string} [userToken]
  * @property {string} [installId]
  * @property {AbortSignal} [signal]
- * @property {import('./apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
+ * @property {import('./logi/apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
  * @property {boolean} [forceFreeFallback]
  * @property {(delta: string) => void} [onDelta] When set, attempts SSE streaming; falls back to non-stream on failure.
  */
 
 /**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {ChatCompletionRequest} req
  * @param {CreateChatCompletionOpts} [opts]
  * @returns {Promise<ChatCompletionResponse>}
@@ -124,8 +124,8 @@ export async function createChatCompletion(config, req, opts = {}) {
 }
 
 /**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
- * @param {import('./apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
  * @param {boolean} forceFree
  */
 function buildEffectiveTransportConfig(config, runtime, forceFree) {
@@ -141,11 +141,11 @@ function buildEffectiveTransportConfig(config, runtime, forceFree) {
 }
 
 /**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {ChatCompletionRequest} batchReq
  * @param {CreateChatCompletionOpts} opts
  * @param {AbortSignal | undefined} signal
- * @param {import('./apexLogAiAdvisorConfig.js').LogiRuntime | undefined} runtime
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiRuntime | undefined} runtime
  * @param {boolean} forceFree
  */
 async function dispatchTransport(config, batchReq, opts, signal, runtime, forceFree) {
@@ -167,11 +167,11 @@ async function dispatchTransport(config, batchReq, opts, signal, runtime, forceF
 }
 
 /**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {ChatCompletionRequest} batchReq
  * @param {CreateChatCompletionOpts} opts
  * @param {AbortSignal | undefined} signal
- * @param {import('./apexLogAiAdvisorConfig.js').LogiRuntime | undefined} runtime
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiRuntime | undefined} runtime
  * @param {boolean} forceFree
  * @param {(delta: string) => void} onDelta
  */
@@ -320,7 +320,7 @@ function buildRequestBody(config, req, explicitModels, stream = false) {
 }
 
 /**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {ChatCompletionRequest} req
  * @param {AbortSignal | undefined} signal
  * @param {(delta: string) => void} onDelta
@@ -364,7 +364,7 @@ async function openRouterDirectTransportStream(config, req, signal, onDelta) {
 }
 
 /**
- * @param {import('./apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('./logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {ChatCompletionRequest} req
  * @param {CreateChatCompletionOpts} opts
  * @param {AbortSignal | undefined} signal

@@ -10,8 +10,7 @@ import {
   syncTelemetryUserFromOrgState,
   pollAuthAfterReauth
 } from '../ui/orgs.js';
-import { renderSavedItems, removeAllItems } from '../ui/listUi.js';
-import { saveItemsToStorage } from '../core/persistence.js';
+import { removeAllItems } from '../ui/listUi.js';
 import { downloadAllFiles, copyAllFileNames } from '../flows/fileActions.js';
 import { getTotalDiffLines, advanceDiffIndex } from '../editor/diffUtils.js';
 import { downloadDiffHtml } from '../editor/exportDiffHtml.js';
@@ -208,129 +207,6 @@ export function setupResizable() {
       });
     }
   });
-}
-
-export function setupDragAndDrop() {
-  const list = document.getElementById('leftList');
-  if (!list) return;
-  let draggedElement = null;
-  let draggedIndex = null;
-  let placeholder = null;
-
-  list.addEventListener('dragstart', (e) => {
-    const row = e.target?.closest?.('li[data-item-index]');
-    if (!row) return;
-    draggedElement = row;
-    draggedIndex = parseInt(row.getAttribute('data-item-index'), 10);
-    if (!Number.isFinite(draggedIndex)) return;
-    row.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    
-    
-    // Create placeholder element
-    placeholder = document.createElement('div');
-    placeholder.className = 'drag-placeholder';
-    placeholder.style.display = 'none';
-    list.appendChild(placeholder);
-  });
-
-  list.addEventListener('dragend', (e) => {
-    const row = e.target?.closest?.('li[data-item-index]');
-    if (row) row.classList.remove('dragging');
-    
-    // Remove placeholder
-    if (placeholder && placeholder.parentNode) {
-      placeholder.parentNode.removeChild(placeholder);
-    }
-    placeholder = null;
-  });
-
-  list.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    
-    const afterElement = getDragAfterElement(list, e.clientY);
-    
-    if (placeholder) {
-      placeholder.style.display = 'block';
-      
-      if (afterElement == null) {
-        list.appendChild(placeholder);
-      } else {
-        list.insertBefore(placeholder, afterElement);
-      }
-    }
-  });
-
-  list.addEventListener('drop', (e) => {
-    e.preventDefault();
-    
-    if (draggedElement && draggedIndex !== null && placeholder) {
-      // Find the placeholder position among actual list items
-      const listItems = Array.from(list.children).filter(child => child.tagName === 'LI');
-      const placeholderIndex = Array.from(list.children).indexOf(placeholder);
-      
-      // Calculate new index based on placeholder position
-      let newIndex = placeholderIndex;
-      
-      // Adjust index if moving down (placeholder is after the dragged item)
-      if (placeholderIndex > draggedIndex) {
-        newIndex = placeholderIndex - 1;
-      }
-      
-      if (newIndex !== draggedIndex && newIndex >= 0 && newIndex < state.savedItems.length) {
-        // Get the current display order of items
-        const displayOrder = Array.from(list.children)
-          .filter((child) => child.tagName === 'LI')
-          .map((li) => {
-            const displayIndex = parseInt(li.getAttribute('data-item-index'), 10);
-            return Number.isFinite(displayIndex) ? state.savedItems[displayIndex] : null;
-          })
-          .filter(Boolean);
-        
-        // Reorder the items in the display order
-        const draggedItem = displayOrder[draggedIndex];
-        displayOrder.splice(draggedIndex, 1);
-        displayOrder.splice(newIndex, 0, draggedItem);
-        
-        // Update state with new order
-        state.savedItems = displayOrder;
-        
-        // Save the new order
-        saveItemsToStorage();
-        
-        // Re-render the list with new order (preserve manual order)
-        renderSavedItems(true);
-      }
-    }
-    
-    // Remove placeholder
-    if (placeholder && placeholder.parentNode) {
-      placeholder.parentNode.removeChild(placeholder);
-    }
-    placeholder = null;
-  });
-
-  function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('li:not(.dragging)')];
-    
-    return draggableElements.reduce((closest, child) => {
-      const box = child.getBoundingClientRect();
-      const offset = y - box.top - box.height / 2;
-      
-      if (offset < 0 && offset > closest.offset) {
-        return { offset: offset, element: child };
-      } else {
-        return closest;
-      }
-    }, { offset: Number.NEGATIVE_INFINITY }).element;
-  }
-
-  function updateItemIndices() {
-    document.querySelectorAll('.list li').forEach((li, index) => {
-      li.setAttribute('data-item-index', index);
-    });
-  }
 }
 
 export function setupDownloadAll() {

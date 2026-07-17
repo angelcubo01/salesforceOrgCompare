@@ -120,7 +120,8 @@ export function buildInitialLogContext(parsed, ctx = {}) {
       text: truncateText(redactPii(d.text || d.message), 160)
     }));
 
-  return {
+  /** @type {Record<string, unknown>} */
+  const out = {
     meta: {
       sizeBytes: parsed.meta?.sizeBytes,
       durationMs: parsed.meta?.durationMs,
@@ -147,6 +148,12 @@ export function buildInitialLogContext(parsed, ctx = {}) {
       query: truncateText(g.query || g.text, 120)
     }))
   };
+  const resumeSummary =
+    typeof ctx.resumeSummary === 'string' ? ctx.resumeSummary.trim() : '';
+  if (resumeSummary) {
+    out.resumeSummary = truncateText(resumeSummary, 8000);
+  }
+  return out;
 }
 
 /**
@@ -781,6 +788,22 @@ export function buildLogiToolDefinitions({ allowOrgQuery = true } = {}) {
       {
         type: 'function',
         function: {
+          name: 'get_flow_metadata',
+          description:
+            'Read-only Tooling query for FlowDefinition and active Flow version metadata by API name (DeveloperName). Requires explicit user approval before running.',
+          parameters: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Flow API name (DeveloperName)' },
+              reason: { type: 'string' }
+            },
+            required: ['name', 'reason']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'describe_sobject_fields',
           description:
             'Describe fields on an sObject in the connected org. Requires explicit user approval before running.',
@@ -823,6 +846,7 @@ Antes de responder:
 1. fetch_parsed_section → "executions", "timeline" y "userDebug".
 2. fetch_log_lines en los bloques CODE_UNIT_STARTED / FINISHED más relevantes.
 3. Identifica el punto de entrada (trigger, batch, schedulable, test, API).
+4. Si aparecen flows de Salesforce, usa get_flow_metadata (con aprobación) para contrastar con la definición en la org.
 
 Responde con:
 - Punto de entrada y contexto (usuario, test, async).
@@ -950,6 +974,7 @@ Before answering:
 1. fetch_parsed_section → "executions", "timeline", and "userDebug".
 2. fetch_log_lines on the most relevant CODE_UNIT_STARTED / FINISHED blocks.
 3. Identify the entry point (trigger, batch, schedulable, test, API).
+4. If Salesforce flows appear, use get_flow_metadata (with approval) to compare against the org definition.
 
 Respond with:
 - Entry point and context (user, test, async).

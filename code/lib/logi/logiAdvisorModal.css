@@ -1242,6 +1242,12 @@
   max-width: 100%;
 }
 
+.logi-advisor-quote-badge {
+  color: #f3e8ff;
+  background: rgba(168, 85, 247, 0.18);
+  border-color: rgba(192, 132, 252, 0.45);
+}
+
 .logi-advisor-line-note {
   font-size: 0.875rem;
   font-weight: 500;

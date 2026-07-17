@@ -122,6 +122,35 @@ export function openTabHelpModal(t, focusTabId) {
 
 /**
  * @param {(key: string) => string} t
+ * @param {string} tabId
+ * @param {string} titleKey
+ */
+export function openCustomTabHelp(t, tabId, titleKey) {
+  const modal = ensureModal();
+  const titleEl = modal.querySelector('#apexLogHelpTitle');
+  const bodyEl = modal.querySelector('#apexLogHelpBody');
+  if (!titleEl || !bodyEl) return;
+
+  const closeBtn = modal.querySelector('.apex-log-help-close');
+  if (closeBtn) closeBtn.setAttribute('aria-label', t('apexLogViewer.help.close'));
+
+  titleEl.textContent = `${t(titleKey)} — ${t('apexLogViewer.help.panelButton')}`;
+  const sections = TAB_HELP_SECTION_ORDER.map((sectionId) => {
+    const body = t(tabHelpSectionKey(tabId, sectionId));
+    if (!body || body === tabHelpSectionKey(tabId, sectionId)) return '';
+    const title = t(TAB_HELP_SECTION_TITLE_KEYS[sectionId]);
+    return `<section class="apex-log-help-block">
+      <h4 class="apex-log-help-block-title">${escapeHtml(title)}</h4>
+      ${renderHelpBody(body)}
+    </section>`;
+  }).join('');
+  bodyEl.innerHTML = `<article class="apex-log-help-detail" id="apex-log-help-${tabId}">${sections}</article>`;
+  modal.hidden = false;
+  bodyEl.scrollTop = 0;
+}
+
+/**
+ * @param {(key: string) => string} t
  * @param {ApexLogTabId} tabId
  */
 export function openTabHelpForTab(t, tabId) {

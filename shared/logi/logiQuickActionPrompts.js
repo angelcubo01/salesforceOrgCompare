@@ -1,6 +1,8 @@
 import { isLogiCustomQuickActionId, isLogiQuickActionId } from './apexLogAiContext.js';
 import { LOGI_QUICK_ACTION_IDS } from './apexLogAiAdvisorConfig.js';
 
+/** @typedef {import('./apexLogAiAdvisorConfig.js').LogiQuickActionPreset} LogiQuickActionPreset */
+
 export const LOGI_QUICK_ACTION_PROMPTS_KEY = 'sfoc_logi_quick_action_prompts';
 export const LOGI_CUSTOM_QUICK_ACTIONS_MAX = 24;
 
@@ -18,6 +20,9 @@ export const LOGI_CUSTOM_QUICK_ACTIONS_MAX = 24;
 
 /** @type {LogiQuickActionFullStore} */
 let cache = { customActions: [], prompts: { es: {}, en: {} } };
+
+/** @type {LogiQuickActionPreset[]} */
+let remotePresets = [];
 
 /**
  * @param {unknown} labels
@@ -117,6 +122,69 @@ function cloneFullStore(store) {
     })),
     prompts: clonePromptStore(store.prompts)
   };
+}
+
+/**
+ * @param {LogiQuickActionPreset[]} presets
+ */
+function normalizeRemotePresets(presets) {
+  if (!Array.isArray(presets)) return [];
+  return presets
+    .filter((p) => p && typeof p.id === 'string' && p.id.trim())
+    .slice(0, LOGI_CUSTOM_QUICK_ACTIONS_MAX);
+}
+
+/**
+ * Apply server presets into the in-memory store without overwriting user-saved prompts.
+ * @param {LogiQuickActionPreset[]} presets
+ */
+export function mergeLogiQuickActionPresets(presets) {
+  remotePresets = normalizeRemotePresets(presets);
+  for (const preset of remotePresets) {
+    const id = preset.id.trim();
+    const isBuiltin = LOGI_QUICK_ACTION_IDS.includes(id);
+    const isCustom = isLogiCustomQuickActionId(id);
+    if (!isBuiltin && !isCustom) continue;
+
+    if (!isBuiltin && isCustom) {
+      const exists = cache.customActions.some((a) => a.id === id);
+      if (!exists) {
+        const labels = normalizeCustomLabels(preset.label || {});
+        cache.customActions.push({ id, labels });
+      } else {
+        const idx = cache.customActions.findIndex((a) => a.id === id);
+        if (idx >= 0 && preset.label) {
+          const cur = cache.customActions[idx];
+          cache.customActions[idx] = {
+            id,
+            labels: normalizeCustomLabels({
+              es: preset.label?.es || cur.labels.es,
+              en: preset.label?.en || cur.labels.en
+            })
+          };
+        }
+      }
+    }
+
+    for (const lang of /** @type {LogiPromptLang[]} */ (['es', 'en'])) {
+      if (cache.prompts[lang][id]) continue;
+      let text = '';
+      if (typeof preset.prompt === 'string') {
+        text = preset.prompt.trim();
+      } else if (preset.prompt && typeof preset.prompt === 'object') {
+        text = String(preset.prompt[lang] || preset.prompt.es || preset.prompt.en || '').trim();
+      }
+      if (text) cache.prompts[lang][id] = text.slice(0, 12_000);
+    }
+  }
+}
+
+/**
+ * @param {LogiQuickActionPreset[]} presets
+ */
+export async function applyLogiQuickActionPresets(presets) {
+  mergeLogiQuickActionPresets(presets);
+  return clonePromptStore(cache.prompts);
 }
 
 async function persistStore() {
@@ -262,4 +330,5 @@ export function buildLogiQuickActionPromptsExport() {
 /** Para tests. */
 export function resetLogiQuickActionPromptsForTests() {
   cache = { customActions: [], prompts: { es: {}, en: {} } };
+  remotePresets = [];
 }

@@ -18,7 +18,7 @@ const DEFAULTS = Object.freeze({
   logiLanguage: DEFAULT_LOGI_LANGUAGE,
   logiByokOpenRouterKey: null,
   logiByokModels: /** @type {string[]} */ ([]),
-  logiSelectedPremiumModel: null
+  logiSelectedByokModel: null
 });
 
 /** @type {typeof DEFAULTS} */
@@ -75,7 +75,9 @@ export function normalizeLogiUserSettings(partial) {
     logiLanguage: normalizeLogiLanguage(record.logiLanguage),
     logiByokOpenRouterKey: normalizeOptionalKey(record.logiByokOpenRouterKey),
     logiByokModels: normalizeModelList(record.logiByokModels),
-    logiSelectedPremiumModel: normalizeOptionalKey(record.logiSelectedPremiumModel)
+    logiSelectedByokModel: normalizeOptionalKey(
+      record.logiSelectedByokModel ?? record.logiSelectedPremiumModel
+    )
   };
 }
 
@@ -127,6 +129,6 @@ export function sanitizeLogiUserSettingsForUi(settings) {
     logiLanguage: normalizeLogiLanguage(settings.logiLanguage),
     hasByokKey: Boolean(settings.logiByokOpenRouterKey),
     logiByokModels: [...(settings.logiByokModels || [])],
-    logiSelectedPremiumModel: settings.logiSelectedPremiumModel
+    logiSelectedByokModel: settings.logiSelectedByokModel
   };
 }

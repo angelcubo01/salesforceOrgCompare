@@ -3,7 +3,7 @@
  */
 import { installApexTraceAlarmListener } from './background/apexTestTraceAlarms.js';
 import { installCookieCacheInvalidation, installMessageHandlers } from './background/messageHandlers.js';
-import { installLogiChatStreamPort } from './background/logiChatStreamPort.js';
+import { installLogiChatStreamPort } from './background/logi/logiChatStreamPort.js';
 import { installExtensionLifecycleTelemetry } from './background/extensionLifecycleTelemetry.js';
 import {
   maybeReportInitialTelemetryPreference,
@@ -11,8 +11,8 @@ import {
 } from './background/posthogTelemetry.js';
 import { ensureTelemetryInstallId } from './shared/telemetryInstallId.js';
 import { installFeatureControlsGuard } from './background/featureControlsGuard.js';
-import { hydrateLogiAdvisorCache } from './shared/logiAdvisorCache.js';
-import { bootstrapLogiAdvisorViaProxy } from './shared/logiAdvisorBootstrap.js';
+import { hydrateLogiAdvisorCache } from './shared/logi/logiAdvisorCache.js';
+import { bootstrapLogiAdvisorViaProxy } from './shared/logi/logiAdvisorBootstrap.js';
 import { loadExtensionSettings } from './shared/extensionSettings.js';
 import { sendPosthogException } from './background/posthogTelemetry.js';
 

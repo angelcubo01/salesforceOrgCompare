@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { getDefaultQuickActionUserMessage, quickActionUserMessage } from '../shared/apexLogAiContext.js';
+import { getDefaultQuickActionUserMessage, quickActionUserMessage } from '../shared/logi/apexLogAiContext.js';
 import {
   createLogiCustomQuickAction,
   deleteLogiCustomQuickAction,
@@ -9,7 +9,7 @@ import {
   resetLogiQuickActionPromptsForTests,
   saveLogiQuickActionPrompt,
   importLogiQuickActionPromptStore
-} from '../shared/logiQuickActionPrompts.js';
+} from '../shared/logi/logiQuickActionPrompts.js';
 
 describe('quickActionUserMessage', () => {
   it('returns default prompt when no custom store', () => {

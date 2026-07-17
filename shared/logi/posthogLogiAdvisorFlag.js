@@ -1,5 +1,5 @@
-import { POSTHOG_DEBUG } from './telemetryConfig.js';
-import { ensureFeatureFlagsLoaded } from './posthogFeatureFlagLoader.js';
+import { POSTHOG_DEBUG } from '../telemetryConfig.js';
+import { ensureFeatureFlagsLoaded } from '../posthogFeatureFlagLoader.js';
 import {
   DEFAULT_LOGI_ADVISOR_CONFIG,
   LOGI_ADVISOR_FLAG,
@@ -13,15 +13,15 @@ import {
   clearLogiAdvisorCache,
   canSkipLogiAdvisorRemoteFetch
 } from './logiAdvisorCache.js';
-import { getTelemetryEnabled } from './extensionSettings.js';
+import { getTelemetryEnabled } from '../extensionSettings.js';
 import { fetchLogiAdvisorRemoteConfig, LogiFlagDisabledError } from './fetchLogiAdvisorRemoteConfig.js';
 import { applyQuotaBonuses, ZERO_QUOTA_BONUS } from './logiQuotaBonus.js';
 import {
   isEncryptedPosthogPayload,
   isUsableFeatureFlagPayload,
   normalizeFeatureFlagPayload
-} from './posthogFlagPayload.js';
-import { getOrCreateTelemetryInstallId } from './telemetryInstallId.js';
+} from '../posthogFlagPayload.js';
+import { getOrCreateTelemetryInstallId } from '../telemetryInstallId.js';
 
 export const LOGI_ADVISOR_READY_EVENT = 'sfoc:logi-advisor-ready';
 

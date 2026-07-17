@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '../tests/setup.js';
-import { LOGI_USAGE_EVENT } from '../shared/logiTelemetryConstants.js';
+import { LOGI_USAGE_EVENT } from '../shared/logi/logiTelemetryConstants.js';
 
 describe('captureLogiUsage', () => {
   beforeEach(() => {
@@ -33,7 +33,7 @@ describe('captureLogiUsage', () => {
     };
 
     try {
-      const { captureLogiUsage } = await import('../background/posthogLogiTelemetry.js');
+      const { captureLogiUsage } = await import('../background/logi/posthogLogiTelemetry.js');
       const ok = await captureLogiUsage({
         action: 'chat_turn',
         sfoc_log_id: 'test-log-id',
@@ -83,7 +83,7 @@ describe('captureLogiUsage', () => {
     };
 
     try {
-      const { captureLogiUsage } = await import('../background/posthogLogiTelemetry.js');
+      const { captureLogiUsage } = await import('../background/logi/posthogLogiTelemetry.js');
       const ok = await captureLogiUsage({
         action: 'summarize',
         sfoc_summary: true,

@@ -44,6 +44,7 @@ function applyRetrieveZipStatusClasses(li, status) {
 }
 
 function appendMetadataTypeCompareStatusBadge(li, item) {
+  if (!item) return;
   if (item.descriptor?.source !== 'retrieveZipFile') return;
   const parentKey = item.descriptor?.parentKey;
   if (!parentKey) return;
@@ -72,6 +73,7 @@ function getListFilterQuery() {
 
 /** @param {import('../core/state.js').state.savedItems[0]} item */
 function itemSearchHaystack(item) {
+  if (!item) return '';
   const parts = [item.type, item.key, item.fileName || ''];
   if (item.descriptor?.relativePath) parts.push(item.descriptor.relativePath);
   if (item.descriptor?.name) parts.push(item.descriptor.name);
@@ -673,6 +675,7 @@ export function renderSavedItems(preserveOrder = true) {
   const pinnedItems = [];
   const unpinnedItems = [];
   for (const item of itemsToRender) {
+    if (!item) continue;
     if (isPinned(item)) pinnedItems.push(item);
     else unpinnedItems.push(item);
   }
@@ -681,6 +684,7 @@ export function renderSavedItems(preserveOrder = true) {
   const pinnedBundles = new Map();
   const pinnedStandalone = [];
   for (const item of pinnedItems) {
+    if (!item) continue;
     const bundleKey = getLwcAuraBundleKey(item);
     if (bundleKey) {
       if (!pinnedBundles.has(bundleKey)) pinnedBundles.set(bundleKey, []);
@@ -737,6 +741,7 @@ export function renderSavedItems(preserveOrder = true) {
   const seenBundle = new Set();
 
   itemsToRender.forEach((item) => {
+    if (!item) return;
     if (
       item.descriptor?.source === 'retrieveZipFile' ||
       item.descriptor?.source === 'retrieveZipSummary'
@@ -875,7 +880,6 @@ export function renderSavedItems(preserveOrder = true) {
 
 export function createListItem(item, displayIndex) {
   const li = document.createElement('li');
-  li.draggable = true;
   li.setAttribute('data-item-index', displayIndex);
   li.appendChild(createChevronSpacer());
 

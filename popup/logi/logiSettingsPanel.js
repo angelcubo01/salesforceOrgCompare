@@ -1,14 +1,11 @@
-import { formatLogiModelLabel } from '../shared/logiModelLabels.js';
+import { formatLogiModelLabel } from '../../shared/logi/logiModelLabels.js';
 import {
   DEFAULT_LOGI_LANGUAGE,
   formatLogiLanguageLabel,
   LOGI_LANGUAGES,
   normalizeLogiLanguage
-} from '../shared/logiLanguages.js';
-import { LOGI_ADVISOR_READY_EVENT } from '../shared/posthogLogiAdvisorFlag.js';
-
-/** @type {Record<string, unknown> | null} */
-let lastConfig = null;
+} from '../../shared/logi/logiLanguages.js';
+import { LOGI_ADVISOR_READY_EVENT } from '../../shared/logi/posthogLogiAdvisorFlag.js';
 
 function send(type, payload = {}) {
   return chrome.runtime.sendMessage({ type, ...payload });
@@ -161,7 +158,6 @@ function renderUsageBars(usageRes) {
  * @param {Record<string, unknown>} config
  */
 function applyLogiConfig(config) {
-  lastConfig = config;
   const section = document.getElementById('settingsLogi');
   if (!section) return;
   const visible = config.showLogiSettings === true && config.enabled === true;

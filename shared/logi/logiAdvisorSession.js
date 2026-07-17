@@ -2,7 +2,7 @@ import { isLogiQuickActionId } from './apexLogAiContext.js';
 
 export const LOGI_SESSION_STORAGE_KEY = 'sfocLogiAdvisorSessions';
 
-/** @typedef {{ role: string, content?: string, quickActionId?: string, displayText?: string, lineRef?: { startLine: number, endLine: number, logId: string }, tool_calls?: object[], tool_call_id?: string, name?: string }} LogiChatMessage */
+/** @typedef {{ role: string, content?: string, quickActionId?: string, displayText?: string, lineRef?: { startLine: number, endLine: number, logId: string }, quoteRef?: { content: string }, tool_calls?: object[], tool_call_id?: string, name?: string }} LogiChatMessage */
 
 /**
  * @typedef {object} LogiAdvisorSession
@@ -135,6 +135,12 @@ function normalizeSession(raw) {
               };
             }
           }
+          if (msg.quoteRef && typeof msg.quoteRef === 'object') {
+            const content = String(
+              /** @type {Record<string, unknown>} */ (msg.quoteRef).content || ''
+            ).trim();
+            if (content) out.quoteRef = { content };
+          }
           if (Array.isArray(msg.tool_calls)) out.tool_calls = msg.tool_calls;
           if (msg.tool_call_id != null) out.tool_call_id = String(msg.tool_call_id);
           if (msg.name != null) out.name = String(msg.name);
@@ -181,6 +187,54 @@ function pruneSessions(store) {
     .forEach((key) => {
       delete store[key];
     });
+}
+
+/**
+ * @param {string} key
+ */
+export function describeLogiSessionKey(key) {
+  const parts = String(key || '').split('::');
+  if (parts.length >= 2) {
+    const logPart = parts[1];
+    if (logPart && logPart !== '__anonymous__') {
+      if (logPart === 'local' && parts[2]) return `local:${parts[2]}`;
+      return logPart;
+    }
+  }
+  return String(key || '').slice(0, 48);
+}
+
+/**
+ * @param {{ orgId?: string, limit?: number }} [opts]
+ * @returns {Promise<Array<{ key: string, session: LogiAdvisorSession, label: string }>>}
+ */
+export async function listLogiSessions(opts = {}) {
+  const limit = Math.max(1, Math.min(40, Number(opts.limit) || 20));
+  const orgId = String(opts.orgId || '').trim();
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const bag = await chrome.storage.local.get(LOGI_SESSION_STORAGE_KEY);
+      const store = bag[LOGI_SESSION_STORAGE_KEY];
+      if (!store || typeof store !== 'object') return [];
+      /** @type {Array<{ key: string, session: LogiAdvisorSession, label: string }>} */
+      const entries = [];
+      for (const [key, raw] of Object.entries(store)) {
+        const session = normalizeSession(raw);
+        if (!session) continue;
+        if (orgId && !key.startsWith(`${orgId}::`) && !key.startsWith('_::')) continue;
+        entries.push({
+          key,
+          session,
+          label: describeLogiSessionKey(key)
+        });
+      }
+      entries.sort((a, b) => (b.session.updatedAt || 0) - (a.session.updatedAt || 0));
+      return entries.slice(0, limit);
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
 }
 
 /**

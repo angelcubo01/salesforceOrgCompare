@@ -169,7 +169,7 @@ import {
 } from './caches.js';
 import { DEBUG_LOGS } from './config.js';
 import { appendTelemetryOptInLog, appendTelemetryOptOutLog, appendUsageLog, escapeSoqlLiteral } from './usageLog.js';
-import { captureLogiUsage } from './posthogLogiTelemetry.js';
+import { captureLogiUsage } from './logi/posthogLogiTelemetry.js';
 import { sendPosthogException, sendPosthogOperationalFailure, maybeSendFirstOrgConnectedTelemetry } from './posthogTelemetry.js';
 import { classifyError, toError } from '../shared/errorTelemetryPolicy.js';
 import { resolveTelemetryUserLabel } from './telemetryUserResolver.js';
@@ -268,8 +268,8 @@ import {
   handleLogiAdvisorSaveSettings,
   handleLogiAdvisorTestByok,
   isReadOnlySalesforceQuery
-} from './apexLogAiAdvisor.js';
-import { slimQueryRecords } from '../shared/apexLogAiContext.js';
+} from './logi/apexLogAiAdvisor.js';
+import { slimQueryRecords } from '../shared/logi/apexLogAiContext.js';
 
 /**
  * @param {(response: object) => void} reply

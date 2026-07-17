@@ -2,13 +2,13 @@ import {
   createChatCompletion,
   classifyLlmTransportFailure,
   testOpenRouterApiKey
-} from '../shared/aiTransport.js';
+} from '../../shared/aiTransport.js';
 import {
   beginLogiRequest,
   cancelLogiRequest,
   finishLogiRequest
 } from './logiAdvisorRequests.js';
-import { buildLogiToolDefinitions } from '../shared/apexLogAiContext.js';
+import { buildLogiToolDefinitions } from '../../shared/logi/apexLogAiContext.js';
 import {
   isLogiAdvisorOperational,
   isLogiSettingsSectionVisible,
@@ -21,19 +21,19 @@ import {
   getLogiModelPickerOptions,
   isLogiModelPickerAllowed,
   validateLogiSelectedModel
-} from '../shared/apexLogAiAdvisorConfig.js';
+} from '../../shared/logi/apexLogAiAdvisorConfig.js';
 import {
   loadLogiUserSettings,
   saveLogiUserSettings,
   sanitizeLogiUserSettingsForUi
-} from '../shared/logiUserSettings.js';
-import { getLogiLanguageOption, normalizeLogiLanguage } from '../shared/logiLanguages.js';
-import { readLogiAdvisorCache } from '../shared/logiAdvisorCache.js';
-import { bootstrapLogiAdvisorViaProxy } from '../shared/logiAdvisorBootstrap.js';
-import { getTelemetryEnabled } from '../shared/extensionSettings.js';
-import { captureAiGeneration } from './posthogAiTelemetry.js';
+} from '../../shared/logi/logiUserSettings.js';
+import { getLogiLanguageOption, normalizeLogiLanguage } from '../../shared/logi/logiLanguages.js';
+import { readLogiAdvisorCache, readLogiAdvisorCacheEntry } from '../../shared/logi/logiAdvisorCache.js';
+import { bootstrapLogiAdvisorViaProxy } from '../../shared/logi/logiAdvisorBootstrap.js';
+import { getTelemetryEnabled } from '../../shared/extensionSettings.js';
+import { captureAiGeneration } from '../posthogAiTelemetry.js';
 import { captureLogiUsage } from './posthogLogiTelemetry.js';
-import { buildLogiAiMetrics, buildLogiErrorMetrics, hashLogiSessionKey } from '../shared/logiAiMetrics.js';
+import { buildLogiAiMetrics, buildLogiErrorMetrics, hashLogiSessionKey } from '../../shared/logi/logiAiMetrics.js';
 import {
   checkLogiUsageLimits,
   readLogiUsageSnapshot,
@@ -41,16 +41,31 @@ import {
   recordLogiUsage,
   reserveSessionIterationByKey
 } from './logiAdvisorUsage.js';
-import { buildLogiSessionKey } from '../shared/logiAdvisorSession.js';
-import { getOrCreateTelemetryInstallId } from '../shared/telemetryInstallId.js';
+import { buildLogiSessionKey } from '../../shared/logi/logiAdvisorSession.js';
+import { getOrCreateTelemetryInstallId } from '../../shared/telemetryInstallId.js';
 
 const DML_DDL_RE =
   /\b(INSERT|UPDATE|DELETE|UPSERT|MERGE|UNDELETE|CREATE|ALTER|DROP|TRUNCATE)\b/i;
 
 /**
+ * @param {object} message
+ * @param {unknown} settingsLang
+ */
+function resolvePreferredLogiLanguage(message, settingsLang) {
+  const raw =
+    message.logiLanguage != null && message.logiLanguage !== ''
+      ? message.logiLanguage
+      : message.lang;
+  if (raw != null && raw !== '') {
+    return normalizeLogiLanguage(raw);
+  }
+  return normalizeLogiLanguage(settingsLang);
+}
+
+/**
  * System prompt for Logi chat. Preferred reply language comes from Logi settings (not app UI lang).
  * @param {string} preferredLangCode
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {boolean} hasOrg
  */
 export function buildLogiSystemPrompt(preferredLangCode, config, hasOrg) {
@@ -62,13 +77,13 @@ export function buildLogiSystemPrompt(preferredLangCode, config, hasOrg) {
 - Default reply language: ${langLabel} [code=${lang.code}]. Write all user-facing answers in this language.
 - If the user writes in a different language, switch and reply in the user's language for that turn (and subsequent turns in that language until they switch again).
 - Explain with examples citing log line numbers when possible (e.g. L123).
-- Never invent org data; use org_query / get_apex_source / describe_sobject_fields only when you need to verify something in Salesforce.
+- Never invent org data; use org_query / get_apex_source / get_flow_metadata / describe_sobject_fields only when you need to verify something in Salesforce.
 - Use local tools: fetch_log_lines, fetch_parsed_section, search_log, get_stack_around, get_hotspots, and highlight_log_lines to dig deeper before assuming.
 - If a tool returns error, retryable, insufficient, or empty data, do NOT answer the user yet: fix parameters or the query and call the tool again (up to 2-3 reasonable retries).
-- Failed org_query / get_apex_source / describe_sobject_fields: read the error, fix parameters, and propose again (user must approve).
+- Failed org_query / get_apex_source / get_flow_metadata / describe_sobject_fields: read the error, fix parameters, and propose again (user must approve).
 - Insufficient fetch_log_lines / fetch_parsed_section / search_log / get_stack_around: widen the range, try another section or query, then retry.
 - Only answer when you have enough evidence or useful retries are exhausted; then explain what you tried.
-${hasOrg ? '- You may propose org_query, get_apex_source, and describe_sobject_fields (read-only); the user must approve them on screen before anything runs.' : '- No org connected: do not use org_query, get_apex_source, or describe_sobject_fields. Answer using only the log and available context.'}
+${hasOrg ? '- You may propose org_query, get_apex_source, get_flow_metadata, and describe_sobject_fields (read-only); the user must approve them on screen before anything runs.' : '- No org connected: do not use org_query, get_apex_source, get_flow_metadata, or describe_sobject_fields. Answer using only the log and available context.'}
 - Formatting (Markdown, easy to scan):
   - Prefer short sections with ## / ### headings (e.g. Findings, Evidence, Recommendations).
   - Use bullets for lists; **bold** key terms and outcomes; \`inline code\` for API names, classes, methods, SOQL.
@@ -78,8 +93,8 @@ ${hasOrg ? '- You may propose org_query, get_apex_source, and describe_sobject_f
 }
 
 /**
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiRuntime} [runtime]
  */
 function logiTransportLabel(config, runtime) {
   if (runtime?.transport === 'openrouter_direct' && runtime?.apiKeySource === 'user') return 'byok';
@@ -87,7 +102,7 @@ function logiTransportLabel(config, runtime) {
 }
 
 /**
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} parsedConfig
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} parsedConfig
  */
 async function buildLogiRuntimeContext(parsedConfig) {
   const userSettings = await loadLogiUserSettings();
@@ -136,7 +151,7 @@ async function trackLogiConfigError(reason, ctx) {
 
 /**
  * @param {unknown} err
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {object} ctx
  */
 async function trackLogiLlmError(err, config, ctx) {
@@ -164,14 +179,14 @@ export function isReadOnlySalesforceQuery(queryText) {
 }
 
 /**
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  */
 /**
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  * @param {object} [extras]
  */
 export function sanitizeConfigForUi(config, extras = {}) {
-  const runtime = /** @type {import('../shared/apexLogAiAdvisorConfig.js').LogiRuntime | undefined} */ (
+  const runtime = /** @type {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiRuntime | undefined} */ (
     extras.runtime
   );
   const userSettings = extras.userSettings
@@ -196,12 +211,13 @@ export function sanitizeConfigForUi(config, extras = {}) {
     personaName: config.personaName,
     allowedOrgQuery: config.allowedOrgQuery,
     quickActions: config.quickActions,
+    quickActionPresets: config.quickActionPresets,
     operational: isLogiAdvisorOperational(config),
     allowedModes: resolveAllowedLogiModes(config),
     modes: sanitizeLogiModesForUi(config),
     logiMode: effectiveMode,
     requestedMode: runtime?.requestedMode || effectiveMode,
-    premiumActive: Boolean(runtime?.premiumActive),
+    byokActive: Boolean(runtime?.byokActive ?? runtime?.premiumActive),
     modeFallback: Boolean(runtime?.modeFallback),
     fallbackReason: runtime?.fallbackReason || null,
     modelPickerAllowed: isLogiModelPickerAllowed(config, runtime?.requestedMode || effectiveMode, runtime),
@@ -250,12 +266,19 @@ export async function handleLogiAdvisorGetConfig() {
     };
   }
   const ctx = await buildLogiRuntimeContext(parsedConfig);
+  const cacheEntry = await readLogiAdvisorCacheEntry();
   return {
     ok: true,
     config: sanitizeConfigForUi(parsedConfig, {
       runtime: ctx.runtime,
       userSettings: ctx.userSettings
     }),
+    cacheMeta: {
+      cachedAt: cacheEntry.cachedAt,
+      fromRemote: cacheEntry.fromRemote,
+      transport: parsedConfig.transport || null,
+      proxyConfigured: Boolean(parsedConfig.proxyUrl)
+    },
     telemetryRequired: false
   };
 }
@@ -347,9 +370,7 @@ export async function handleLogiAdvisorChat(message, hooks = {}) {
   };
 
   const settingsForLang = await loadLogiUserSettings();
-  const preferredLang = normalizeLogiLanguage(
-    message.logiLanguage != null ? message.logiLanguage : settingsForLang.logiLanguage
-  );
+  const preferredLang = resolvePreferredLogiLanguage(message, settingsForLang.logiLanguage);
   const hasOrg = Boolean(message.orgId);
   const allowOrgQuery = parsedConfig.allowedOrgQuery && hasOrg;
   const requestId = typeof message.requestId === 'string' ? message.requestId.trim() : '';
@@ -394,8 +415,8 @@ export async function handleLogiAdvisorChat(message, hooks = {}) {
         ? validateLogiSelectedModel(parsedConfig, selectedModelRaw)
         : ctx.runtime.selectedModel;
 
-    if (selectedModel && selectedModel !== ctx.userSettings.logiSelectedPremiumModel) {
-      await saveLogiUserSettings({ logiSelectedPremiumModel: selectedModel });
+    if (selectedModel && selectedModel !== ctx.userSettings.logiSelectedByokModel) {
+      await saveLogiUserSettings({ logiSelectedByokModel: selectedModel });
     }
 
     const runtime = resolveLogiRuntime(parsedConfig, ctx.userSettings, selectedModel);
@@ -452,7 +473,7 @@ export async function handleLogiAdvisorChat(message, hooks = {}) {
 
     for (const tc of result.tool_calls || []) {
       const name = tc?.function?.name;
-      if (name === 'org_query' || name === 'get_apex_source' || name === 'describe_sobject_fields') {
+      if (name === 'org_query' || name === 'get_apex_source' || name === 'get_flow_metadata' || name === 'describe_sobject_fields') {
         orgToolCalls.push(tc);
       } else {
         localToolCalls.push(tc);
@@ -479,6 +500,16 @@ export async function handleLogiAdvisorChat(message, hooks = {}) {
           reason: String(args.reason || ''),
           apexName: String(args.name || ''),
           apexType
+        };
+      } else if (toolName === 'get_flow_metadata') {
+        const flowName = String(args.name || '').replace(/'/g, "\\'");
+        pendingOrgQuery = {
+          toolCallId: tc.id,
+          toolName,
+          variant: 'tooling-soql',
+          queryText: `SELECT Id, DeveloperName, MasterLabel, ActiveVersionId, Description FROM FlowDefinition WHERE DeveloperName = '${flowName}' LIMIT 1`,
+          reason: String(args.reason || ''),
+          flowName: String(args.name || '')
         };
       } else if (toolName === 'describe_sobject_fields') {
         pendingOrgQuery = {
@@ -586,7 +617,7 @@ export async function handleLogiAdvisorGetSessionIteration(message) {
 /**
  * System prompt for one-shot log summaries (no chat, no org_query).
  * @param {string} preferredLangCode
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  */
 export function buildLogiSummarySystemPrompt(preferredLangCode, config) {
   const persona = config.personaName || 'Logi';
@@ -672,9 +703,7 @@ export async function handleLogiAdvisorSummarize(message) {
   }
 
   const settingsForLang = await loadLogiUserSettings();
-  const preferredLang = normalizeLogiLanguage(
-    message.logiLanguage != null ? message.logiLanguage : settingsForLang.logiLanguage
-  );
+  const preferredLang = resolvePreferredLogiLanguage(message, settingsForLang.logiLanguage);
   const requestId = typeof message.requestId === 'string' ? message.requestId.trim() : '';
   const signal = beginLogiRequest(requestId);
 
@@ -842,8 +871,10 @@ export async function handleLogiAdvisorSaveSettings(message) {
     patch.logiByokOpenRouterKey = message.logiByokOpenRouterKey;
   }
   if (Array.isArray(message.logiByokModels)) patch.logiByokModels = message.logiByokModels;
-  if (message.logiSelectedPremiumModel !== undefined) {
-    patch.logiSelectedPremiumModel = message.logiSelectedPremiumModel;
+  if (message.logiSelectedByokModel !== undefined) {
+    patch.logiSelectedByokModel = message.logiSelectedByokModel;
+  } else if (message.logiSelectedPremiumModel !== undefined) {
+    patch.logiSelectedByokModel = message.logiSelectedPremiumModel;
   }
 
   const saved = await saveLogiUserSettings(patch);

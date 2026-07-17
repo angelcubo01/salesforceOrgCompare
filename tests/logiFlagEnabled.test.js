@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isLogiAdvisorFlagEnabled } from '../shared/posthogLogiAdvisorFlag.js';
+import { isLogiAdvisorFlagEnabled } from '../shared/logi/posthogLogiAdvisorFlag.js';
 
 describe('isLogiAdvisorFlagEnabled', () => {
   it('returns false without posthog client', () => {

@@ -349,10 +349,6 @@ html[data-ui-theme="light"] .retrieve-zip-status-badge--rightOnly {
   color: #1d4ed8;
 }
 
-html[data-ui-theme="light"] .list li.dragging {
-  background-color: #cbd5e1;
-}
-
 html[data-ui-theme="light"] .pinned-separator {
   border-top-color: var(--sfoc-light-border) !important;
   background: transparent !important;

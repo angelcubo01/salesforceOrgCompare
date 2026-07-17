@@ -7,8 +7,8 @@ import {
   quickActionUserMessage,
   redactPii,
   truncateText
-} from '../shared/apexLogAiContext.js';
-import { isReadOnlySalesforceQuery } from '../background/apexLogAiAdvisor.js';
+} from '../shared/logi/apexLogAiContext.js';
+import { isReadOnlySalesforceQuery } from '../background/logi/apexLogAiAdvisor.js';
 
 describe('apexLogAiContext', () => {
   it('truncates long text', () => {

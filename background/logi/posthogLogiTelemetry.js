@@ -1,13 +1,13 @@
-import { loadExtensionSettings } from '../shared/extensionSettings.js';
-import { getOrCreateTelemetryInstallId } from '../shared/telemetryInstallId.js';
-import { buildSfocAiUserProperties } from '../shared/posthogAiUserContext.js';
-import { sanitizeLogiTelemetryProps } from '../shared/logiAiMetrics.js';
-import { LOGI_FEATURE } from '../shared/logiTelemetryConstants.js';
-import { POSTHOG_DEBUG } from '../shared/telemetryConfig.js';
+import { loadExtensionSettings } from '../../shared/extensionSettings.js';
+import { getOrCreateTelemetryInstallId } from '../../shared/telemetryInstallId.js';
+import { buildSfocAiUserProperties } from '../../shared/posthogAiUserContext.js';
+import { sanitizeLogiTelemetryProps } from '../../shared/logi/logiAiMetrics.js';
+import { LOGI_FEATURE } from '../../shared/logi/logiTelemetryConstants.js';
+import { POSTHOG_DEBUG } from '../../shared/telemetryConfig.js';
 import { readLogiUsageSnapshot } from './logiAdvisorUsage.js';
-import { sendPosthogLogiUsage } from './posthogTelemetry.js';
+import { sendPosthogLogiUsage } from '../posthogTelemetry.js';
 
-export { LOGI_USAGE_EVENT, LOGI_FEATURE } from '../shared/logiTelemetryConstants.js';
+export { LOGI_USAGE_EVENT, LOGI_FEATURE } from '../../shared/logi/logiTelemetryConstants.js';
 
 /** @returns {Promise<boolean>} */
 export async function isLogiTelemetryEnabled() {

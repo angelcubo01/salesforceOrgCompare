@@ -1,6 +1,6 @@
 # Salesforce Org Compare
 
-[![Version](https://img.shields.io/badge/version-3.0.0-blue)](manifest.json)
+[![Version](https://img.shields.io/badge/version-3.1.1-blue)](manifest.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-salesforceorgcompare.com-0176d3)](https://salesforceorgcompare.com/)
 

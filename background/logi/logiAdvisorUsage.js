@@ -1,4 +1,4 @@
-import { readLogiAdvisorCache } from '../shared/logiAdvisorCache.js';
+import { readLogiAdvisorCache } from '../../shared/logi/logiAdvisorCache.js';
 
 const USAGE_STORAGE_KEY = 'sfocAiAdvisorUsage';
 const SESSION_ITERATIONS_KEY = 'sfocLogiSessionIterations';
@@ -135,7 +135,7 @@ export async function resetLogiUsageForTests() {
 
 /**
  * @param {number} iteration
- * @param {import('../shared/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
+ * @param {import('../shared/logi/apexLogAiAdvisorConfig.js').LogiAdvisorConfig} config
  */
 export function isIterationAllowed(iteration, config) {
   const max = config?.maxIterationsPerChat ?? 10;

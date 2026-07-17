@@ -5,9 +5,9 @@ import {
   getLogiLanguageOption,
   LOGI_LANGUAGES,
   normalizeLogiLanguage
-} from '../shared/logiLanguages.js';
-import { normalizeLogiUserSettings } from '../shared/logiUserSettings.js';
-import { buildLogiSystemPrompt, buildLogiSummarySystemPrompt } from '../background/apexLogAiAdvisor.js';
+} from '../shared/logi/logiLanguages.js';
+import { normalizeLogiUserSettings } from '../shared/logi/logiUserSettings.js';
+import { buildLogiSystemPrompt, buildLogiSummarySystemPrompt } from '../background/logi/apexLogAiAdvisor.js';
 
 describe('logiLanguages', () => {
   it('lists 15 main languages and defaults to English', () => {

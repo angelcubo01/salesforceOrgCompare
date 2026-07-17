@@ -1,13 +1,20 @@
-import { escapeHtml } from './htmlEscape.js';
+import { escapeHtml } from '../htmlEscape.js';
+import { normalizeLightningSetupBase } from '../dependencyExplorer.js';
+
+/**
+ * @typedef {{ instanceUrl?: string }} LogiMarkdownOptions
+ */
 
 /**
  * Renderiza markdown básico de Logi a HTML seguro (sin scripts ni HTML arbitrario).
  * @param {string} text
+ * @param {LogiMarkdownOptions} [opts]
  * @returns {string}
  */
-export function renderLogiMarkdown(text) {
+export function renderLogiMarkdown(text, opts = {}) {
   const raw = String(text || '');
   if (!raw.trim()) return '';
+  const instanceUrl = typeof opts.instanceUrl === 'string' ? opts.instanceUrl.trim() : '';
 
   const lines = raw.replace(/\r\n/g, '\n').split('\n');
   /** @type {string[]} */
@@ -26,14 +33,14 @@ export function renderLogiMarkdown(text) {
 
   const flushPara = () => {
     if (!paraLines.length) return;
-    const body = paraLines.map((line) => inlineMarkdown(line)).join('<br>');
+    const body = paraLines.map((line) => inlineMarkdown(line, instanceUrl)).join('<br>');
     html.push(`<p class="logi-md-p">${body}</p>`);
     paraLines = [];
   };
 
   const flushQuote = () => {
     if (!quoteLines.length) return;
-    const body = quoteLines.map((line) => inlineMarkdown(line)).join('<br>');
+    const body = quoteLines.map((line) => inlineMarkdown(line, instanceUrl)).join('<br>');
     html.push(`<blockquote class="logi-md-quote">${body}</blockquote>`);
     quoteLines = [];
   };
@@ -41,7 +48,9 @@ export function renderLogiMarkdown(text) {
   const flushList = () => {
     if (!listType || !listItems.length) return;
     const tag = listType;
-    const items = listItems.map((item) => `<li class="logi-md-li">${inlineMarkdown(item)}</li>`).join('');
+    const items = listItems
+      .map((item) => `<li class="logi-md-li">${inlineMarkdown(item, instanceUrl)}</li>`)
+      .join('');
     html.push(`<${tag} class="logi-md-${tag}">${items}</${tag}>`);
     listType = null;
     listItems = [];
@@ -59,7 +68,7 @@ export function renderLogiMarkdown(text) {
     if (line.trim().startsWith('```')) {
       flushBlocks();
       if (inCode) {
-        html.push(renderCodeBlockHtml(codeLines.join('\n')));
+        html.push(renderCodeBlockHtml(codeLines.join('\n'), instanceUrl));
         codeLines = [];
         inCode = false;
       } else {
@@ -73,10 +82,10 @@ export function renderLogiMarkdown(text) {
       continue;
     }
 
-    const tableBlock = tryParseTableBlock(lines, i);
+    const tableBlock = tryParseTableBlock(lines, i, instanceUrl);
     if (tableBlock) {
       flushBlocks();
-      html.push(renderTableHtml(tableBlock.header, tableBlock.aligns, tableBlock.body));
+      html.push(renderTableHtml(tableBlock.header, tableBlock.aligns, tableBlock.body, instanceUrl));
       i = tableBlock.nextIndex;
       continue;
     }
@@ -97,7 +106,9 @@ export function renderLogiMarkdown(text) {
     if (heading) {
       flushBlocks();
       const level = heading[1].length;
-      html.push(`<h${level} class="logi-md-h${level}">${inlineMarkdown(heading[2])}</h${level}>`);
+      html.push(
+        `<h${level} class="logi-md-h${level}">${inlineMarkdown(heading[2], instanceUrl)}</h${level}>`
+      );
       continue;
     }
 
@@ -135,7 +146,7 @@ export function renderLogiMarkdown(text) {
   }
 
   if (inCode) {
-    html.push(renderCodeBlockHtml(codeLines.join('\n')));
+    html.push(renderCodeBlockHtml(codeLines.join('\n'), instanceUrl));
   }
   flushBlocks();
 
@@ -143,17 +154,73 @@ export function renderLogiMarkdown(text) {
 }
 
 /**
- * @param {string} code
+ * @param {Array<{ role?: string, content?: string, displayText?: string, quickActionId?: string }>} messages
+ * @returns {string}
  */
-function renderCodeBlockHtml(code) {
+export function exportChatAsMarkdown(messages) {
+  if (!Array.isArray(messages) || !messages.length) return '';
+  const lines = ['# Logi chat export', ''];
+  for (const msg of messages) {
+    const role = String(msg?.role || '').toLowerCase();
+    if (role !== 'user' && role !== 'assistant') continue;
+    const label = role === 'user' ? 'User' : 'Logi';
+    let body = String(msg.content || '').trim();
+    if (role === 'user' && msg.quickActionId) {
+      body = `[Quick action: ${msg.quickActionId}]${body ? `\n\n${body}` : ''}`;
+    } else if (role === 'user' && msg.displayText) {
+      body = `${msg.displayText}${body ? `\n\n${body}` : ''}`;
+    }
+    if (!body) continue;
+    lines.push(`## ${label}`, '', body, '');
+  }
+  return lines.join('\n').trim();
+}
+
+/**
+ * @param {string} instanceUrl
+ * @param {'ApexClass' | 'ApexTrigger' | 'Flow'} kind
+ * @param {string} apiName
+ * @returns {string | null}
+ */
+export function buildLogiSetupUrl(instanceUrl, kind, apiName) {
+  const name = String(apiName || '').trim();
+  if (!name) return null;
+  const lightning = normalizeLightningSetupBase(instanceUrl);
+  const classic = String(instanceUrl || '').replace(/\/$/, '');
+  const encodedName = encodeURIComponent(name);
+  if (kind === 'ApexClass') {
+    if (lightning) {
+      return `${lightning}/lightning/setup/ApexClasses/page?address=${encodeURIComponent(`/apex/${name}`)}`;
+    }
+    return classic ? `${classic}/01p` : null;
+  }
+  if (kind === 'ApexTrigger') {
+    if (lightning) {
+      return `${lightning}/lightning/setup/ApexTriggers/page?address=${encodeURIComponent(`/apex/${name}`)}`;
+    }
+    return classic ? `${classic}/01q` : null;
+  }
+  if (kind === 'Flow') {
+    if (lightning) {
+      return `${lightning}/lightning/setup/Flows/page?address=${encodeURIComponent(`/flow/${name}`)}`;
+    }
+    return classic ? `${classic}/300` : null;
+  }
+  return null;
+}
+
+/**
+ * @param {string} code
+ * @param {string} instanceUrl
+ */
+function renderCodeBlockHtml(code, instanceUrl) {
   const escaped = escapeHtml(code);
-  return `<div class="logi-md-pre-wrap"><button type="button" class="logi-md-pre-copy" data-logi-copy-code="1" aria-label="Copy">Copy</button><pre class="logi-md-pre"><code>${escaped}</code></pre></div>`;
+  const setupLink = instanceUrl ? linkifySetupPatterns(escaped, instanceUrl, true) : escaped;
+  return `<div class="logi-md-pre-wrap"><button type="button" class="logi-md-pre-copy" data-logi-copy-code="1" aria-label="Copy">Copy</button><pre class="logi-md-pre"><code>${setupLink}</code></pre></div>`;
 }
 
 /**
  * Linkifica referencias a líneas de log en HTML ya escapado (solo nodos de texto).
- * Patrones: L123, línea/linea/line 123, líneas/lines 40-80 (guion o en-dash).
- * No modifica texto dentro de pre/code/button/a.
  * @param {string} html
  * @returns {string}
  */
@@ -220,6 +287,61 @@ function linkifyTextSegment(text) {
 }
 
 /**
+ * @param {string} text escaped HTML text
+ * @param {string} instanceUrl
+ * @param {boolean} [inCode]
+ */
+function linkifySetupPatterns(text, instanceUrl, inCode = false) {
+  if (!instanceUrl) return text;
+  const openLabel = inCode ? '↗' : 'Open in Salesforce';
+  const linkClass = inCode ? 'logi-md-setup-link logi-md-setup-link--inline' : 'logi-md-setup-link';
+
+  const replaceTyped = (
+    /** @type {RegExp} */ re,
+    /** @type {'ApexClass' | 'ApexTrigger' | 'Flow'} */ kind
+  ) =>
+    text.replace(re, (match, apiName) => {
+      const href = buildLogiSetupUrl(instanceUrl, kind, apiName);
+      if (!href) return match;
+      const safeHref = escapeHtml(href);
+      const safeName = escapeHtml(apiName);
+      return `${match} <a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="${linkClass}" title="${safeName}">${openLabel}</a>`;
+    });
+
+  let out = replaceTyped(/\bApexClass\/([A-Za-z][A-Za-z0-9_]*)\b/g, 'ApexClass');
+  out = replaceTyped(/\bApexTrigger\/([A-Za-z][A-Za-z0-9_]*)\b/g, 'ApexTrigger');
+  out = replaceTyped(/\bFlow\/([A-Za-z][A-Za-z0-9_]*)\b/g, 'Flow');
+  return out;
+}
+
+/**
+ * @param {string} line
+ * @param {string} instanceUrl
+ */
+function inlineMarkdown(line, instanceUrl = '') {
+  let s = escapeHtml(line);
+  s = s.replace(/`([^`]+)`/g, (_m, code) => {
+    const escaped = escapeHtml(code);
+    const linked = instanceUrl ? linkifySetupPatterns(escaped, instanceUrl, true) : escaped;
+    return `<code class="logi-md-code">${linked}</code>`;
+  });
+  if (instanceUrl) {
+    s = linkifySetupPatterns(s, instanceUrl, false);
+  }
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
+  s = s.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
+  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => {
+    const href = String(url || '').trim();
+    if (!/^https?:\/\//i.test(href)) return label;
+    const safeHref = escapeHtml(href);
+    return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="logi-md-link">${label}</a>`;
+  });
+  return s;
+}
+
+/**
  * Split a GFM table row on `|`, ignoring pipes inside inline `code`.
  * @param {string} line
  * @returns {string[]}
@@ -249,7 +371,6 @@ function parseTableRow(line) {
   }
   cells.push(cur.trim());
 
-  // Outer pipes produce leading/trailing empty cells.
   if (cells.length && cells[0] === '') cells.shift();
   if (cells.length && cells[cells.length - 1] === '') cells.pop();
   return cells;
@@ -287,8 +408,9 @@ function isTableDataRow(line, opts = {}) {
 /**
  * @param {string[]} lines
  * @param {number} start
+ * @param {string} instanceUrl
  */
-function tryParseTableBlock(lines, start) {
+function tryParseTableBlock(lines, start, instanceUrl = '') {
   if (!isTableDataRow(lines[start])) return null;
 
   let sepIdx = start + 1;
@@ -311,7 +433,6 @@ function tryParseTableBlock(lines, start) {
   while (i < lines.length) {
     const rowLine = lines[i];
     if (!String(rowLine || '').trim()) break;
-    // Body rows: accept any pipe row (incl. partial / streaming) that is not a new separator.
     if (isTableSeparator(rowLine)) break;
     if (!String(rowLine).includes('|')) break;
     const cells = parseTableRow(rowLine);
@@ -338,7 +459,6 @@ function normalizeRowCells(cells, colCount) {
     while (out.length < colCount) out.push('');
     return out;
   }
-  // Merge overflow into the last cell (pipes in prose / mismatched columns).
   const out = cells.slice(0, colCount - 1);
   out.push(cells.slice(colCount - 1).join(' | '));
   return out;
@@ -374,14 +494,15 @@ function parseTableAlignments(line) {
  * @param {string[]} header
  * @param {Array<'left' | 'center' | 'right'>} aligns
  * @param {string[][]} rows
+ * @param {string} instanceUrl
  */
-function renderTableHtml(header, aligns, rows) {
+function renderTableHtml(header, aligns, rows, instanceUrl = '') {
   const colCount = Math.max(header.length, aligns.length, ...rows.map((r) => r.length), 1);
 
   const ths = Array.from({ length: colCount }, (_, idx) => {
     const align = aligns[idx] || 'left';
     const cls = align !== 'left' ? ` class="logi-md-ta-${align}"` : '';
-    return `<th${cls}>${inlineMarkdown(header[idx] || '')}</th>`;
+    return `<th${cls}>${inlineMarkdown(header[idx] || '', instanceUrl)}</th>`;
   }).join('');
 
   const trs = rows
@@ -389,7 +510,7 @@ function renderTableHtml(header, aligns, rows) {
       const tds = Array.from({ length: colCount }, (_, idx) => {
         const align = aligns[idx] || 'left';
         const cls = align !== 'left' ? ` class="logi-md-ta-${align}"` : '';
-        return `<td${cls}>${inlineMarkdown(row[idx] || '')}</td>`;
+        return `<td${cls}>${inlineMarkdown(row[idx] || '', instanceUrl)}</td>`;
       }).join('');
       return `<tr>${tds}</tr>`;
     })
@@ -398,23 +519,4 @@ function renderTableHtml(header, aligns, rows) {
   const tbody = trs ? `<tbody>${trs}</tbody>` : '<tbody></tbody>';
 
   return `<div class="logi-md-table-wrap"><table class="logi-md-table"><thead><tr>${ths}</tr></thead>${tbody}</table></div>`;
-}
-
-/**
- * @param {string} line
- */
-function inlineMarkdown(line) {
-  let s = escapeHtml(line);
-  s = s.replace(/`([^`]+)`/g, '<code class="logi-md-code">$1</code>');
-  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
-  s = s.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '<em>$1</em>');
-  s = s.replace(/(?<!_)_([^_]+)_(?!_)/g, '<em>$1</em>');
-  s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label, url) => {
-    const href = String(url || '').trim();
-    if (!/^https?:\/\//i.test(href)) return label;
-    const safeHref = escapeHtml(href);
-    return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" class="logi-md-link">${label}</a>`;
-  });
-  return s;
 }

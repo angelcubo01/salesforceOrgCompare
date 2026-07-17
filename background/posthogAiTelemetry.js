@@ -1,4 +1,4 @@
-import { buildLogiAiMetrics } from '../shared/logiAiMetrics.js';
+import { buildLogiAiMetrics } from '../shared/logi/logiAiMetrics.js';
 
 /**
  * @param {object} opts

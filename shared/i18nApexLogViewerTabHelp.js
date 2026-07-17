@@ -153,6 +153,14 @@ export const apexLogViewerTabHelpEs = {
     "Cambia entre Validaciones y Workflow||Busca por nombre de regla",
   'apexLogViewer.help.platform.tips':
     "Los fallos de validación también se listan en Errores",
+  'apexLogViewer.help.logi.purpose':
+    "Asistente de IA para entender errores, SOQL, límites y el flujo de ejecución de este log Apex.",
+  'apexLogViewer.help.logi.shows':
+    "Chat con acciones rápidas (errores, hotspots, callouts, etc.)||Resumen one-shot antes del chat||Indicador de iteraciones y chats restantes",
+  'apexLogViewer.help.logi.actions':
+    "Adjunta líneas del visor Texto o citas desde la selección||Aprueba consultas SOQL, código Apex o Flows cuando Logi lo pida||Exporta la conversación o cambia entre chats recientes del mismo log",
+  'apexLogViewer.help.logi.tips':
+    "Activa la telemetría en Ajustes si Logi no aparece||En modo BYOK usas tu API key de OpenRouter||Las consultas a la org son siempre de solo lectura y requieren tu aprobación",
 };
 
 export const apexLogViewerTabHelpEn = {
@@ -308,4 +316,12 @@ export const apexLogViewerTabHelpEn = {
     "Switch between Validations and Workflow||Search by rule name",
   'apexLogViewer.help.platform.tips':
     "Validation failures are also listed in Errors",
+  'apexLogViewer.help.logi.purpose':
+    "AI assistant to understand errors, SOQL, limits, and the execution flow of this Apex log.",
+  'apexLogViewer.help.logi.shows':
+    "Chat with quick actions (errors, hotspots, callouts, etc.)||One-shot summary before chat||Iteration counter and remaining chats today",
+  'apexLogViewer.help.logi.actions':
+    "Attach lines from the Text tab or quotes from the selection||Approve SOQL, Apex code, or Flow reads when Logi asks||Export the conversation or switch between recent chats for the same log",
+  'apexLogViewer.help.logi.tips':
+    "Enable telemetry in Settings if Logi does not appear||In BYOK mode you use your OpenRouter API key||Org queries are read-only and always require your approval",
 };

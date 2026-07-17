@@ -1,17 +1,17 @@
 import { mountLogiResume, setLogiResumeButtonVisible } from './logiResumePanel.js';
 import { escapeHtml } from '../../../shared/htmlEscape.js';
-import { renderLogiMarkdown } from '../../../shared/logiMarkdown.js';
+import { renderLogiMarkdown, exportChatAsMarkdown } from '../../../shared/logi/logiMarkdown.js';
 import { getCurrentLang, t } from '../../../shared/i18n.js';
 import { bg } from '../../core/bridge.js';
-import { LOGI_ADVISOR_READY_EVENT } from '../../../shared/posthogLogiAdvisorFlag.js';
-import { formatLogiModelLabel } from '../../../shared/logiModelLabels.js';
-import { LOGI_ADVISOR_STORAGE_KEY } from '../../../shared/logiAdvisorCache.js';
+import { LOGI_ADVISOR_READY_EVENT } from '../../../shared/logi/posthogLogiAdvisorFlag.js';
+import { formatLogiModelLabel } from '../../../shared/logi/logiModelLabels.js';
+import { LOGI_ADVISOR_STORAGE_KEY } from '../../../shared/logi/logiAdvisorCache.js';
 import {
   buildLogiSessionKey,
   LOGI_SESSION_STORAGE_KEY,
   readLogiSession,
   writeLogiSession
-} from '../../../shared/logiAdvisorSession.js';
+} from '../../../shared/logi/logiAdvisorSession.js';
 import {
   buildInitialLogContext,
   enrichLocalToolResult,
@@ -25,8 +25,8 @@ import {
   quickActionUserMessage,
   searchLog,
   truncateText
-} from '../../../shared/apexLogAiContext.js';
-import { hashLogiSessionKey } from '../../../shared/logiAiMetrics.js';
+} from '../../../shared/logi/apexLogAiContext.js';
+import { resolveLogiPromptLang } from '../../../shared/logi/logiPromptLang.js';
 import {
   buildLogiQuickActionPromptsExport,
   createLogiCustomQuickAction,
@@ -35,11 +35,29 @@ import {
   getLogiQuickActionPromptsSnapshot,
   importLogiQuickActionPromptStore,
   loadLogiQuickActionPrompts,
+  applyLogiQuickActionPresets,
   LOGI_QUICK_ACTION_PROMPTS_KEY,
   saveLogiCustomQuickActionLabels,
   saveLogiQuickActionPrompt
-} from '../../../shared/logiQuickActionPrompts.js';
-import { isLogiCustomQuickActionId } from '../../../shared/apexLogAiContext.js';
+} from '../../../shared/logi/logiQuickActionPrompts.js';
+import { isLogiCustomQuickActionId } from '../../../shared/logi/apexLogAiContext.js';
+import {
+  ensureThinkingRotation,
+  formatToolActivityLabel,
+  stopThinkingRotation
+} from './logiThinking.js';
+import {
+  editQueueItem,
+  normalizeQueueItem,
+  removeQueueItem,
+  renderQueuePanel
+} from './logiQueue.js';
+import {
+  applyUsageHint as applyUsageHintUi,
+  updateIterationsLabel as updateIterationsLabelUi
+} from './logiUsageUi.js';
+import { runPendingOrgQueryFlow, showOrgQueryApproval } from './logiOrgApproval.js';
+import { executeLocalToolCalls } from './logiToolRunner.js';
 
 /**
  * @param {string} action
@@ -93,7 +111,6 @@ const THINKING_BUBBLE_HTML = `<div class="logi-advisor-msg logi-advisor-msg--ass
 const QUICK_ACTIONS_COLLAPSED_KEY = 'sfocLogiQuickActionsCollapsed';
 const LOGI_PANEL_LAYOUT_KEY = 'sfocLogiPanelLayout';
 const LOGI_PRIVACY_ACK_KEY = 'sfocLogiPrivacyAck';
-const THINKING_ROTATE_MS = 10_000;
 /** Tiempo máximo de un turno Logi (ms) antes de mostrar disculpa al usuario. */
 const LOGI_TURN_TIMEOUT_MS = 120_000;
 const LOGI_PANEL_WIDTH_DEFAULT = 480;
@@ -106,29 +123,6 @@ const QUICK_ACTIONS_ICON_SVG = `<svg class="logi-advisor-quick-toggle-icon" view
 const CUSTOM_ACTION_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 2.5a1.25 1.25 0 0 1 1.18.83l.55 1.54 1.54.55a1.25 1.25 0 0 1 0 2.36l-1.54.55-.55 1.54a1.25 1.25 0 0 1-2.36 0l-.55-1.54-1.54-.55a1.25 1.25 0 0 1 0-2.36l1.54-.55.55-1.54A1.25 1.25 0 0 1 12 2.5Z"/><path fill="currentColor" opacity="0.45" d="M6.5 14.5h11v7h-11z"/></svg>`;
 
 const LADYBUG_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 3.5c-.9 0-1.65.55-1.94 1.32C8.4 4.45 7.05 4.8 5.8 5.55 4.55 6.3 3.65 7.45 3.2 8.85 2.45 9.2 1.9 9.95 1.9 10.85c0 .95.65 1.75 1.55 1.98.75 2.35 2.95 4.07 5.55 4.07h6c2.6 0 4.8-1.72 5.55-4.07.9-.23 1.55-1.03 1.55-1.98 0-.9-.55-1.65-1.3-2-.45-1.4-1.35-2.55-2.6-3.3-1.25-.75-2.6-1.1-4.26-1.27C13.65 4.05 12.9 3.5 12 3.5Z"/><path fill="currentColor" opacity="0.35" d="M12 7.5v11"/><circle cx="8.25" cy="11.25" r="1.35" fill="currentColor" opacity="0.45"/><circle cx="15.75" cy="11.25" r="1.35" fill="currentColor" opacity="0.45"/><circle cx="9.75" cy="14.75" r="1.1" fill="currentColor" opacity="0.45"/><circle cx="14.25" cy="14.75" r="1.1" fill="currentColor" opacity="0.45"/><circle cx="12" cy="17.25" r="1.1" fill="currentColor" opacity="0.45"/></svg>`;
-
-/** @type {Record<'default' | 'tools' | 'org', string[]>} */
-const THINKING_MESSAGE_KEYS = {
-  default: [
-    'apexLogViewer.logi.thinking',
-    'apexLogViewer.logi.thinkingWait1',
-    'apexLogViewer.logi.thinkingWait2',
-    'apexLogViewer.logi.thinkingWait3',
-    'apexLogViewer.logi.thinkingWait4'
-  ],
-  tools: [
-    'apexLogViewer.logi.thinkingTools',
-    'apexLogViewer.logi.thinkingToolsWait1',
-    'apexLogViewer.logi.thinkingToolsWait2',
-    'apexLogViewer.logi.thinkingToolsWait3'
-  ],
-  org: [
-    'apexLogViewer.logi.thinkingOrgQuery',
-    'apexLogViewer.logi.thinkingOrgWait1',
-    'apexLogViewer.logi.thinkingOrgWait2',
-    'apexLogViewer.logi.thinkingOrgWait3'
-  ]
-};
 
 const QUICK_ACTION_META = {
   debug_errors: {
@@ -171,9 +165,11 @@ const QUICK_ACTION_META = {
 
 /** @typedef {{ startLine: number, endLine: number, logId: string }} LogiLineRef */
 
-/** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: LogiLineRef, displayText?: string }} QueuedMessage */
+/** @typedef {{ content: string }} LogiQuoteRef */
 
-/** @typedef {{ role: string, content?: string, quickActionId?: string, lineRef?: LogiLineRef, displayText?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
+/** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, displayText?: string }} QueuedMessage */
+
+/** @typedef {{ role: string, content?: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, displayText?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
 
 let modalEl = null;
 let quickActionEditModalEl = null;
@@ -181,6 +177,8 @@ let btnEl = null;
 
 /** @type {LogiLineRef | null} */
 let pendingLineAttachment = null;
+/** @type {LogiQuoteRef | null} */
+let pendingQuoteAttachment = null;
 /** @type {ReturnType<typeof getLogiQuickActionPromptsSnapshot> | null} */
 let customQuickActionPrompts = null;
 
@@ -234,15 +232,77 @@ const sessionRuntimes = new Map();
 let boundSessionKey = null;
 /** @type {ReturnType<typeof setInterval> | null} */
 let sessionPollTimer = null;
-/** @type {ReturnType<typeof setInterval> | null} */
-let thinkingRotateTimer = null;
-/** @type {string | null} */
-let thinkingRotateSessionKey = null;
-/** @type {'default' | 'tools' | 'org' | null} */
-let thinkingRotateMode = null;
-let thinkingRotateIndex = 0;
 /** @type {object | null} */
 let currentAdvisorPayload = null;
+
+function getQueueDeps() {
+  return {
+    t,
+    escapeHtml,
+    getRuntime,
+    bindSession,
+    persistRuntime,
+    getModalRuntime,
+    messageQueue,
+    createRequestId,
+    normalizeLineRef,
+    normalizeQuoteRef,
+    syncBusyUi
+  };
+}
+
+function getThinkingDeps() {
+  return {
+    t,
+    getRuntime,
+    getSessionKey: (modal) => modal._sessionKey || boundSessionKey,
+    shouldShowThinking
+  };
+}
+
+function getUsageUiDeps() {
+  return {
+    t,
+    getIteration: () => iteration,
+    getMaxIterations,
+    getUsageHint: () => usageHint,
+    setUsageHint: (hint) => {
+      usageHint = hint;
+    }
+  };
+}
+
+function getOrgFlowDeps() {
+  return {
+    t,
+    bg,
+    getRuntime,
+    bindSession,
+    persistRuntime,
+    refreshUiIfBound,
+    shouldApplyTurnResult,
+    finishTurnUi,
+    appendAssistantMessageForSession,
+    applyIterationState,
+    isMaxIterationsResponse,
+    hasTurnTimedOut,
+    clearTurnTimeout,
+    rememberTurnAiMetrics,
+    processLlmResponse,
+    mapErrorReason,
+    buildChatMessageExtras,
+    showOrgQueryApproval: (pending, orgId) =>
+      showOrgQueryApproval(pending, orgId, { t, escapeHtml })
+  };
+}
+
+function updateIterationsLabel(modal) {
+  updateIterationsLabelUi(modal, getUsageUiDeps());
+}
+
+function applyUsageHint(modal, usageRes) {
+  applyUsageHintUi(modal, usageRes, getUsageUiDeps());
+}
 
 function createRuntime() {
   return {
@@ -262,7 +322,8 @@ function createRuntime() {
     turnTimeoutTimer: null,
     usageLimitReason: null,
     lastCtx: null,
-    lastAiMetrics: null
+    lastAiMetrics: null,
+    resumeSummary: null
   };
 }
 
@@ -292,32 +353,6 @@ function bindSession(sessionKey) {
   activeTurnId = rt.activeTurnId;
   cancelRequested = rt.cancelRequested;
   usageLimitReason = rt.usageLimitReason;
-}
-
-/**
- * @param {unknown} item
- * @returns {QueuedMessage | null}
- */
-function normalizeQueueItem(item) {
-  if (typeof item === 'string') {
-    const text = item.trim();
-    return text ? { id: createRequestId(), text } : null;
-  }
-  if (!item || typeof item !== 'object') return null;
-  const o = /** @type {Record<string, unknown>} */ (item);
-  const text = String(o.text || '').trim();
-  if (!text) return null;
-  /** @type {QueuedMessage} */
-  const out = { id: String(o.id || createRequestId()), text };
-  if (o.quickActionId && typeof o.quickActionId === 'string') {
-    out.quickActionId = o.quickActionId;
-  }
-  const lineRef = normalizeLineRef(o.lineRef);
-  if (lineRef) out.lineRef = lineRef;
-  if (typeof o.displayText === 'string' && o.displayText.trim()) {
-    out.displayText = o.displayText.trim();
-  }
-  return out;
 }
 
 /**
@@ -357,6 +392,60 @@ function formatLineRefBadgeLabel(ref) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {LogiQuoteRef | null}
+ */
+function normalizeQuoteRef(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const content = String(/** @type {Record<string, unknown>} */ (raw).content || '').trim();
+  return content ? { content } : null;
+}
+
+/**
+ * @param {string} content
+ */
+function formatQuotePreview(content) {
+  const flat = String(content || '').replace(/\s+/g, ' ').trim();
+  if (!flat) return '';
+  const max = 56;
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}
+
+/**
+ * @param {string} content
+ */
+function formatQuoteBadgeLabel(content) {
+  return t('apexLogViewer.logi.quoteBadge', { preview: formatQuotePreview(content) });
+}
+
+/**
+ * @param {LogiQuoteRef} ref
+ * @param {string} [userNote]
+ */
+function buildQuoteAttachmentLlmText(ref, userNote = '') {
+  const note = String(userNote || '').trim();
+  const quoted = String(ref.content || '').trim();
+  const base = `The user quoted this previous assistant message:\n\n---\n${quoted}\n---`;
+  return note ? `${base}\n\nUser follow-up: ${note}` : base;
+}
+
+/**
+ * @param {string} trimmed
+ * @param {LogiLineRef | null} lineRef
+ * @param {LogiQuoteRef | null} quoteRef
+ */
+function buildQueuedMessageLlmText(trimmed, lineRef, quoteRef) {
+  if (lineRef && quoteRef) {
+    const linePart = buildLineAttachmentLlmText(lineRef, '');
+    const quotePart = buildQuoteAttachmentLlmText(quoteRef, trimmed);
+    return `${linePart}\n\n${quotePart}`;
+  }
+  if (lineRef) return buildLineAttachmentLlmText(lineRef, trimmed);
+  if (quoteRef) return buildQuoteAttachmentLlmText(quoteRef, trimmed);
+  return trimmed;
+}
+
+/**
  * @param {LogiLineRef} ref
  * @param {string} [userNote]
  */
@@ -371,27 +460,62 @@ function buildLineAttachmentLlmText(ref, userNote = '') {
 /**
  * @param {HTMLElement} modal
  */
-function renderLineAttachmentBadge(modal) {
+function updateInputPlaceholder(modal) {
+  const inputEl = modal.querySelector('#logiAdvisorInput');
+  if (!inputEl) return;
+  inputEl.placeholder =
+    pendingLineAttachment || pendingQuoteAttachment
+      ? t('apexLogViewer.logi.inputPlaceholderWithLines')
+      : t('apexLogViewer.logi.inputPlaceholder');
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+function renderInputAttachments(modal) {
   const mount = modal.querySelector('#logiAdvisorLineAttach');
   if (!mount) return;
-  if (!pendingLineAttachment) {
+
+  /** @type {string[]} */
+  const badges = [];
+
+  if (pendingLineAttachment) {
+    const label = formatLineRefBadgeLabel(pendingLineAttachment);
+    const removeLabel = t('apexLogViewer.logi.lineBadgeRemove');
+    badges.push(`
+      <span class="logi-advisor-line-badge" title="${escapeHtml(label)}">
+        <span class="logi-advisor-line-badge-label">${escapeHtml(label)}</span>
+        <button type="button" class="logi-advisor-line-badge-remove" id="logiAdvisorLineAttachClear" aria-label="${escapeHtml(removeLabel)}" title="${escapeHtml(removeLabel)}">×</button>
+      </span>`);
+  }
+
+  if (pendingQuoteAttachment) {
+    const label = formatQuoteBadgeLabel(pendingQuoteAttachment.content);
+    const removeLabel = t('apexLogViewer.logi.quoteBadgeRemove');
+    badges.push(`
+      <span class="logi-advisor-line-badge logi-advisor-quote-badge" title="${escapeHtml(label)}">
+        <span class="logi-advisor-line-badge-label">${escapeHtml(label)}</span>
+        <button type="button" class="logi-advisor-line-badge-remove" id="logiAdvisorQuoteAttachClear" aria-label="${escapeHtml(removeLabel)}" title="${escapeHtml(removeLabel)}">×</button>
+      </span>`);
+  }
+
+  if (!badges.length) {
     mount.hidden = true;
     mount.innerHTML = '';
     return;
   }
-  const label = formatLineRefBadgeLabel(pendingLineAttachment);
-  const removeLabel = t('apexLogViewer.logi.lineBadgeRemove');
+
   mount.hidden = false;
-  mount.innerHTML = `
-    <span class="logi-advisor-line-badge" title="${escapeHtml(label)}">
-      <span class="logi-advisor-line-badge-label">${escapeHtml(label)}</span>
-      <button type="button" class="logi-advisor-line-badge-remove" id="logiAdvisorLineAttachClear" aria-label="${escapeHtml(removeLabel)}" title="${escapeHtml(removeLabel)}">×</button>
-    </span>`;
+  mount.innerHTML = badges.join('');
   mount.querySelector('#logiAdvisorLineAttachClear')?.addEventListener('click', () => {
     pendingLineAttachment = null;
-    renderLineAttachmentBadge(modal);
-    const inputEl = modal.querySelector('#logiAdvisorInput');
-    if (inputEl) inputEl.placeholder = t('apexLogViewer.logi.inputPlaceholder');
+    renderInputAttachments(modal);
+    updateInputPlaceholder(modal);
+  });
+  mount.querySelector('#logiAdvisorQuoteAttachClear')?.addEventListener('click', () => {
+    pendingQuoteAttachment = null;
+    renderInputAttachments(modal);
+    updateInputPlaceholder(modal);
   });
 }
 
@@ -401,16 +525,6 @@ function renderLineAttachmentBadge(modal) {
  */
 function lineAttachmentFromCtx(ctx) {
   return normalizeLineRef(ctx?.lineAttachment);
-}
-
-/**
- * @param {SessionRuntime} rt
- * @returns {QueuedMessage[]}
- */
-function getQueueItems(rt) {
-  return (rt.messageQueue || [])
-    .map((item) => normalizeQueueItem(item))
-    .filter(Boolean);
 }
 
 /**
@@ -508,200 +622,6 @@ function handleTurnTimeout(sessionKey, turnId, modal) {
   });
 }
 
-function stopThinkingRotation() {
-  if (thinkingRotateTimer) {
-    clearInterval(thinkingRotateTimer);
-    thinkingRotateTimer = null;
-  }
-  thinkingRotateSessionKey = null;
-  thinkingRotateMode = null;
-  thinkingRotateIndex = 0;
-}
-
-/**
- * @param {HTMLElement} modal
- */
-function ensureThinkingRotation(modal) {
-  const sessionKey = modal._sessionKey || boundSessionKey;
-  if (!sessionKey) return;
-  const rt = getRuntime(sessionKey);
-  if (!shouldShowThinking(rt)) {
-    stopThinkingRotation();
-    return;
-  }
-
-  const mode = rt.thinkingMode || 'default';
-  if (
-    thinkingRotateTimer &&
-    thinkingRotateSessionKey === sessionKey &&
-    thinkingRotateMode === mode
-  ) {
-    const keys = THINKING_MESSAGE_KEYS[mode] || THINKING_MESSAGE_KEYS.default;
-    const key = keys[thinkingRotateIndex % keys.length] || keys[0];
-    const el = modal.querySelector('.logi-advisor-thinking-text');
-    if (el) el.textContent = formatThinkingLabel(t(key), rt.thinkingReason);
-    return;
-  }
-
-  stopThinkingRotation();
-  thinkingRotateSessionKey = sessionKey;
-  thinkingRotateMode = mode;
-  thinkingRotateIndex = 0;
-
-  const tick = () => {
-    if (!modal.isConnected) {
-      stopThinkingRotation();
-      return;
-    }
-    const rtNow = getRuntime(sessionKey);
-    if (!shouldShowThinking(rtNow)) {
-      stopThinkingRotation();
-      return;
-    }
-    const currentMode = rtNow.thinkingMode || 'default';
-    if (currentMode !== thinkingRotateMode) {
-      ensureThinkingRotation(modal);
-      return;
-    }
-    const keys = THINKING_MESSAGE_KEYS[currentMode] || THINKING_MESSAGE_KEYS.default;
-    const key = keys[thinkingRotateIndex % keys.length];
-    const el = modal.querySelector('.logi-advisor-thinking-text');
-    if (el) {
-      el.textContent = formatThinkingLabel(t(key), rtNow.thinkingReason);
-    }
-    thinkingRotateIndex += 1;
-  };
-
-  tick();
-  thinkingRotateTimer = setInterval(tick, THINKING_ROTATE_MS);
-}
-
-/**
- * @param {string} base
- * @param {string} [reason]
- */
-function formatThinkingLabel(base, reason) {
-  const r = truncateText(String(reason || '').trim(), 72);
-  if (!r) return base;
-  return `${base} · ${r}`;
-}
-
-/**
- * @param {HTMLElement} modal
- */
-function renderQueuePanel(modal) {
-  const wrap = modal.querySelector('#logiAdvisorQueue');
-  const summaryEl = modal.querySelector('#logiAdvisorQueueSummary');
-  const listEl = modal.querySelector('#logiAdvisorQueueList');
-  if (!wrap || !listEl) return;
-
-  const rt = getModalRuntime(modal);
-  const items = getQueueItems(rt || /** @type {SessionRuntime} */ ({ messageQueue }));
-
-  if (!items.length) {
-    wrap.hidden = true;
-    if (summaryEl) summaryEl.textContent = '';
-    listEl.innerHTML = '';
-    return;
-  }
-
-  wrap.hidden = false;
-  if (summaryEl) {
-    summaryEl.textContent = t('apexLogViewer.logi.queue', { count: items.length });
-  }
-
-  listEl.innerHTML = items
-    .map((item) => {
-      const preview = item.text.length > 96 ? `${item.text.slice(0, 96)}…` : item.text;
-      const editLabel = t('apexLogViewer.logi.queueEdit');
-      const removeLabel = t('apexLogViewer.logi.queueRemove');
-      return `<li class="logi-advisor-queue-item">
-        <span class="logi-advisor-queue-item-text" title="${escapeHtml(item.text)}">${escapeHtml(preview)}</span>
-        <span class="logi-advisor-queue-item-actions">
-          <button type="button" class="logi-advisor-queue-edit" data-queue-id="${escapeHtml(item.id)}" title="${escapeHtml(editLabel)}">${escapeHtml(editLabel)}</button>
-          <button type="button" class="logi-advisor-queue-remove" data-queue-id="${escapeHtml(item.id)}" title="${escapeHtml(removeLabel)}">${escapeHtml(removeLabel)}</button>
-        </span>
-      </li>`;
-    })
-    .join('');
-}
-
-/**
- * @param {HTMLElement} modal
- * @param {string} itemId
- */
-function removeQueueItem(modal, itemId) {
-  const sessionKey = modal._sessionKey || boundSessionKey;
-  if (!sessionKey) return;
-  const rt = getRuntime(sessionKey);
-  const idx = rt.messageQueue.findIndex((q) => normalizeQueueItem(q)?.id === itemId);
-  if (idx < 0) return;
-  rt.messageQueue.splice(idx, 1);
-  bindSession(sessionKey);
-  renderQueuePanel(modal);
-  syncBusyUi(modal);
-  void persistRuntime(sessionKey);
-}
-
-/**
- * @param {HTMLElement} modal
- * @param {string} itemId
- */
-function editQueueItem(modal, itemId) {
-  const sessionKey = modal._sessionKey || boundSessionKey;
-  if (!sessionKey) return;
-  const rt = getRuntime(sessionKey);
-  const idx = rt.messageQueue.findIndex((q) => normalizeQueueItem(q)?.id === itemId);
-  if (idx < 0) return;
-  const current = normalizeQueueItem(rt.messageQueue[idx]);
-  if (!current) return;
-
-  const listEl = modal.querySelector('#logiAdvisorQueueList');
-  const li = listEl?.querySelector(`[data-queue-id="${CSS.escape(itemId)}"]`)?.closest('li');
-  if (!li) return;
-
-  const saveLabel = t('apexLogViewer.logi.queueEditSave');
-  const cancelLabel = t('apexLogViewer.logi.queueEditCancel');
-  li.classList.add('logi-advisor-queue-item--editing');
-  li.innerHTML = `
-    <textarea class="logi-advisor-queue-edit-input" rows="2" aria-label="${escapeHtml(t('apexLogViewer.logi.queueEditPrompt'))}">${escapeHtml(current.text)}</textarea>
-    <span class="logi-advisor-queue-item-actions">
-      <button type="button" class="logi-advisor-queue-edit-save" data-queue-id="${escapeHtml(itemId)}">${escapeHtml(saveLabel)}</button>
-      <button type="button" class="logi-advisor-queue-edit-cancel" data-queue-id="${escapeHtml(itemId)}">${escapeHtml(cancelLabel)}</button>
-    </span>`;
-
-  const input = li.querySelector('.logi-advisor-queue-edit-input');
-  input?.focus();
-  input?.setSelectionRange(input.value.length, input.value.length);
-
-  const finish = (save) => {
-    if (save) {
-      const trimmed = String(input?.value || '').trim();
-      if (!trimmed) {
-        removeQueueItem(modal, itemId);
-        return;
-      }
-      current.text = trimmed;
-      rt.messageQueue[idx] = current;
-      bindSession(sessionKey);
-      void persistRuntime(sessionKey);
-    }
-    renderQueuePanel(modal);
-  };
-
-  li.querySelector('.logi-advisor-queue-edit-save')?.addEventListener('click', () => finish(true));
-  li.querySelector('.logi-advisor-queue-edit-cancel')?.addEventListener('click', () => finish(false));
-  input?.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) {
-      ev.preventDefault();
-      finish(true);
-    } else if (ev.key === 'Escape') {
-      ev.preventDefault();
-      finish(false);
-    }
-  });
-}
-
 /**
  * @param {string} [sessionKey]
  */
@@ -719,7 +639,7 @@ function syncGlobalsToRuntime(sessionKey = boundSessionKey) {
 }
 
 /**
- * @param {import('../../../shared/logiAdvisorSession.js').LogiAdvisorSession | null | undefined} saved
+ * @param {import('../../../shared/logi/logiAdvisorSession.js').LogiAdvisorSession | null | undefined} saved
  * @param {SessionRuntime} rt
  */
 function applySavedToRuntime(saved, rt) {
@@ -912,7 +832,8 @@ export async function mountLogiAdvisor(opts) {
         getParsed,
         getRawContent,
         payload: payload || {},
-        prefill: askCtx?.prefill
+        prefill: askCtx?.prefill,
+        summaryText: askCtx?.summaryText
       });
     }
   });
@@ -958,6 +879,19 @@ export async function mountLogiAdvisor(opts) {
       console.error('[logi] open modal failed', err);
     });
   });
+
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.key.toLowerCase() !== 'l') return;
+    if (!btnEl || btnEl.hidden) return;
+    e.preventDefault();
+    void openLogiModal({
+      getParsed,
+      getRawContent,
+      payload: payload || {}
+    }).catch((err) => {
+      console.error('[logi] open modal failed', err);
+    });
+  });
 }
 
 /**
@@ -971,6 +905,11 @@ export async function openLogiAdvisor(ctx) {
 async function refreshConfig() {
   const res = await bg({ type: 'aiAdvisor:getConfig' });
   advisorConfig = res?.config || null;
+  if (advisorConfig?.quickActionPresets?.length) {
+    await applyLogiQuickActionPresets(advisorConfig.quickActionPresets);
+    customQuickActionPrompts = getLogiQuickActionPromptsSnapshot();
+    customQuickActions = getLogiCustomQuickActionsSnapshot();
+  }
 
   const telemetryRequired = res?.telemetryRequired === true;
   // Require operational + enabled + showButton. Never show on stale/disabled payloads.
@@ -1022,7 +961,7 @@ function updateLogiHeaderUi(modal) {
   if (!pickerAllowed) return;
 
   const options = cfg?.modelPickerOptions || [];
-  const current = cfg?.userSettings?.logiSelectedPremiumModel || '';
+  const current = cfg?.userSettings?.logiSelectedByokModel || '';
   modelSel.innerHTML = '';
   const autoOpt = document.createElement('option');
   autoOpt.value = '__auto__';
@@ -1044,15 +983,28 @@ function buildChatMessageExtras() {
 }
 
 /**
- * @param {Record<string, import('../../../shared/logiAdvisorSession.js').LogiAdvisorSession> | undefined} store
+ * @param {Record<string, import('../../../shared/logi/logiAdvisorSession.js').LogiAdvisorSession> | undefined} store
  */
 async function onLogiSessionsStorageChanged(store) {
   if (!store || !currentAdvisorPayload || !modalEl) return;
   const sessionKey = buildLogiSessionKey(currentAdvisorPayload);
   const saved = store[sessionKey];
-  if (!saved || saved.pending) return;
+  if (!saved) return;
 
   const rt = getRuntime(sessionKey);
+
+  if (saved.pending) {
+    rt.processing = true;
+    rt.thinkingStatus = saved.thinkingStatus || rt.thinkingStatus || '';
+    if (modalEl._sessionKey === sessionKey && !modalEl.hidden) {
+      bindSession(sessionKey);
+      renderMessages(modalEl);
+      syncBusyUi(modalEl);
+      updateIterationsLabel(modalEl);
+    }
+    return;
+  }
+
   if (!rt.processing) return;
 
   applySavedToRuntime(saved, rt);
@@ -1091,6 +1043,7 @@ function ensureModal() {
           </div>
         </div>
         <div class="logi-advisor-header-actions">
+          <button type="button" class="logi-advisor-header-btn" id="logiAdvisorExportChat" hidden></button>
           <button type="button" class="logi-advisor-header-btn" id="logiAdvisorDockToggle"></button>
           <button type="button" class="logi-advisor-close" data-close="1" aria-label="Close">×</button>
         </div>
@@ -1181,7 +1134,7 @@ function ensureModal() {
     const value = e.target?.value === '__auto__' ? null : e.target?.value || null;
     void bg({
       type: 'aiAdvisor:saveSettings',
-      logiSelectedPremiumModel: value
+      logiSelectedByokModel: value
     }).then((res) => {
       if (res?.config) advisorConfig = res.config;
     });
@@ -1192,6 +1145,9 @@ function ensureModal() {
   modalEl.querySelector('#logiAdvisorDockToggle')?.addEventListener('click', () => {
     void togglePanelMode(modalEl);
   });
+  modalEl.querySelector('#logiAdvisorExportChat')?.addEventListener('click', () => {
+    exportCurrentChat(modalEl);
+  });
   wirePanelResize(modalEl);
   wireMessagesDelegation(modalEl);
   modalEl.querySelector('#logiAdvisorQueue')?.addEventListener('click', (e) => {
@@ -1200,13 +1156,13 @@ function ensureModal() {
     const id = target.dataset.queueId;
     if (!id) return;
     if (target.classList.contains('logi-advisor-queue-remove')) {
-      removeQueueItem(modalEl, id);
+      removeQueueItem(modalEl, id, getQueueDeps());
     } else if (target.classList.contains('logi-advisor-queue-edit')) {
-      editQueueItem(modalEl, id);
+      editQueueItem(modalEl, id, getQueueDeps());
     }
   });
   modalEl.querySelector('#logiAdvisorInput')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
       e.preventDefault();
       void onSendFromInput();
     }
@@ -1374,12 +1330,7 @@ function wireMessagesDelegation(modal) {
     if (chip instanceof HTMLElement) {
       const actionId = chip.getAttribute('data-logi-suggest-action');
       if (!actionId) return;
-      const lang = getCurrentLang() === 'en' ? 'en' : 'es';
-      void enqueueUserMessage(
-        quickActionUserMessage(actionId, lang, customQuickActionPrompts),
-        modal,
-        { quickActionId: actionId }
-      );
+      void runQuickAction(modal, actionId);
     }
   });
 }
@@ -1420,15 +1371,10 @@ async function handleMessageAction(modal, action, msgIndex) {
     return;
   }
   if (action === 'quote') {
-    const input = modal.querySelector('#logiAdvisorInput');
-    if (input) {
-      const quoted = text
-        .split('\n')
-        .map((line) => `> ${line}`)
-        .join('\n');
-      input.value = input.value ? `${input.value.trim()}\n\n${quoted}` : quoted;
-      input.focus();
-    }
+    pendingQuoteAttachment = normalizeQuoteRef({ content: text });
+    renderInputAttachments(modal);
+    updateInputPlaceholder(modal);
+    modal.querySelector('#logiAdvisorInput')?.focus();
     return;
   }
   if (action === 'regenerate') {
@@ -1446,9 +1392,10 @@ async function handleMessageAction(modal, action, msgIndex) {
     bindSession(modal._sessionKey || boundSessionKey);
     renderMessages(modal);
     await persistSession(modal);
-    if (lastUser.lineRef) {
+    if (lastUser.lineRef || lastUser.quoteRef) {
       await enqueueUserMessage(lastUser.displayText || '', modal, {
         lineRef: lastUser.lineRef,
+        quoteRef: lastUser.quoteRef,
         quickActionId: lastUser.quickActionId
       });
     } else {
@@ -1596,26 +1543,6 @@ async function renderPrivacyNotice(modal) {
 
 /**
  * @param {HTMLElement} modal
- * @param {object} [usageRes]
- */
-function applyUsageHint(modal, usageRes) {
-  if (usageRes?.remaining?.today != null) {
-    usageHint = {
-      remainingToday: Number(usageRes.remaining.today),
-      maxToday: Number(usageRes.max?.today)
-    };
-  } else if (usageRes?.usage && usageRes?.max) {
-    const maxToday = Number(usageRes.max.today ?? usageRes.max.maxChatsPerDay);
-    const used = Number(usageRes.usage.chatsToday);
-    if (Number.isFinite(maxToday) && Number.isFinite(used)) {
-      usageHint = { remainingToday: Math.max(0, maxToday - used), maxToday };
-    }
-  }
-  updateIterationsLabel(modal);
-}
-
-/**
- * @param {HTMLElement} modal
  * @param {object} ctx
  */
 async function persistSession(modal, sessionKey) {
@@ -1651,6 +1578,9 @@ async function openLogiModal(ctx) {
   rt.lastCtx = ctx;
   modal._ctx = ctx;
   modal._sessionKey = sessionKey;
+  if (ctx.summaryText && typeof ctx.summaryText === 'string' && ctx.summaryText.trim()) {
+    rt.resumeSummary = ctx.summaryText.trim();
+  }
   setLogiButtonBadge(false);
 
   if (rt.processing && !wasProcessingInMemory) {
@@ -1704,19 +1634,26 @@ async function openLogiModal(ctx) {
   }
   if (dockBtn) applyPanelLayout(modal);
   pendingLineAttachment = lineAttachmentFromCtx(ctx);
-  renderLineAttachmentBadge(modal);
+  pendingQuoteAttachment = null;
+  renderInputAttachments(modal);
   if (inputEl) {
-    inputEl.placeholder = pendingLineAttachment
-      ? t('apexLogViewer.logi.inputPlaceholderWithLines')
-      : t('apexLogViewer.logi.inputPlaceholder');
-    // Keep free text empty when a line badge is attached; only use string prefill otherwise.
+    updateInputPlaceholder(modal);
+    // Keep free text empty when an attachment badge is shown; only use string prefill otherwise.
     inputEl.value =
-      pendingLineAttachment || typeof ctx.prefill !== 'string' ? '' : ctx.prefill;
-    if (pendingLineAttachment || ctx.prefill) {
+      pendingLineAttachment || pendingQuoteAttachment || typeof ctx.prefill !== 'string'
+        ? ''
+        : ctx.prefill;
+    if (pendingLineAttachment || pendingQuoteAttachment || ctx.prefill) {
       inputEl.focus();
     }
   }
   if (closeBtn) closeBtn.setAttribute('aria-label', t('apexLogViewer.logi.close'));
+  const exportBtn = modal.querySelector('#logiAdvisorExportChat');
+  if (exportBtn) {
+    exportBtn.textContent = t('apexLogViewer.logi.exportChat');
+    exportBtn.title = t('apexLogViewer.logi.exportChat');
+    exportBtn.hidden = false;
+  }
 
   customQuickActionPrompts = await loadLogiQuickActionPrompts();
   customQuickActions = getLogiCustomQuickActionsSnapshot();
@@ -1874,12 +1811,7 @@ function renderQuickActions(modal) {
     btn.addEventListener('click', () => {
       const actionId = btn.getAttribute('data-action');
       if (!actionId) return;
-      const lang = getCurrentLang() === 'en' ? 'en' : 'es';
-      void enqueueUserMessage(
-        quickActionUserMessage(actionId, lang, customQuickActionPrompts),
-        modal,
-        { quickActionId: actionId }
-      );
+      void runQuickAction(modal, actionId);
     });
   });
   mount.querySelectorAll('.logi-advisor-chip-edit').forEach((btn) => {
@@ -1892,8 +1824,12 @@ function renderQuickActions(modal) {
   });
 }
 
-function getPromptLang() {
-  return getCurrentLang() === 'en' ? 'en' : 'es';
+function getPromptLang(messages) {
+  const settingsLang = advisorConfig?.userSettings?.logiLanguage;
+  const list =
+    messages ??
+    (boundSessionKey ? getRuntime(boundSessionKey).messages : getModalRuntime(modalEl)?.messages);
+  return resolveLogiPromptLang({ settingsLang, messages: list });
 }
 
 /**
@@ -2206,12 +2142,23 @@ function renderUserMessageHtml(message) {
   }
 
   const lineRef = normalizeLineRef(message.lineRef);
-  if (lineRef) {
-    const badge = formatLineRefBadgeLabel(lineRef);
+  const quoteRef = normalizeQuoteRef(message.quoteRef);
+  if (lineRef || quoteRef) {
     const note = String(message.displayText || '').trim();
+    const badges = [];
+    if (lineRef) {
+      badges.push(
+        `<span class="logi-advisor-line-badge logi-advisor-line-badge--msg">${escapeHtml(formatLineRefBadgeLabel(lineRef))}</span>`
+      );
+    }
+    if (quoteRef) {
+      badges.push(
+        `<span class="logi-advisor-line-badge logi-advisor-line-badge--msg logi-advisor-quote-badge">${escapeHtml(formatQuoteBadgeLabel(quoteRef.content))}</span>`
+      );
+    }
     return `<div class="logi-advisor-msg logi-advisor-msg--user logi-advisor-msg--line-ref">
       <div class="logi-advisor-msg-body logi-advisor-msg-body--line-ref">
-        <span class="logi-advisor-line-badge logi-advisor-line-badge--msg">${escapeHtml(badge)}</span>
+        ${badges.join('')}
         ${note ? `<span class="logi-advisor-line-note">${escapeHtml(note)}</span>` : ''}
       </div>
     </div>`;
@@ -2254,7 +2201,7 @@ function renderMessages(modal) {
       }
       if (m.role === 'assistant') {
         if (isLogiWelcomeGreeting(m.content || '')) return '';
-        const bodyHtml = formatAssistantHtml(m.content || '');
+        const bodyHtml = formatAssistantHtml(m.content || '', modal);
         if (!isVisibleAssistantContent(m.content || '') || !bodyHtml.trim()) return '';
         const actions = `<div class="logi-advisor-msg-actions">
           <button type="button" class="logi-advisor-msg-action" data-logi-msg-action="copy" data-msg-index="${idx}">${escapeHtml(copyLabel)}</button>
@@ -2318,7 +2265,7 @@ function renderMessages(modal) {
 
   if (showThinking) {
     mount.insertAdjacentHTML('beforeend', THINKING_BUBBLE_HTML);
-    ensureThinkingRotation(modal);
+    ensureThinkingRotation(modal, getThinkingDeps());
   } else {
     stopThinkingRotation();
   }
@@ -2348,14 +2295,15 @@ function syncBusyUi(modal) {
   });
   if (mount) mount.setAttribute('aria-busy', busy ? 'true' : 'false');
 
-  renderQueuePanel(modal);
+  renderQueuePanel(modal, getQueueDeps());
 }
 
 /**
  * @param {string} text
  */
-function formatAssistantHtml(text) {
-  return renderLogiMarkdown(text);
+function formatAssistantHtml(text, modal) {
+  const instanceUrl = modal?._ctx?.payload?.instanceUrl || '';
+  return renderLogiMarkdown(text, { instanceUrl });
 }
 
 /**
@@ -2371,7 +2319,7 @@ function stripInvisibleChars(text) {
 function isVisibleAssistantContent(content) {
   const raw = stripInvisibleChars(content).trim();
   if (!raw) return false;
-  const html = formatAssistantHtml(raw);
+  const html = formatAssistantHtml(raw, null);
   if (!html.trim()) return false;
   const text = stripInvisibleChars(html.replace(/<[^>]+>/g, '')).trim();
   return text.length > 0 || /<(?:pre|hr|h[1-4]|ul|ol|table)\b/i.test(html);
@@ -2493,12 +2441,13 @@ function isMaxIterationsResponse(modal, res) {
 /**
  * @param {string} text
  * @param {HTMLElement} modal
- * @param {{ quickActionId?: string, lineRef?: LogiLineRef, displayText?: string }} [opts]
+ * @param {{ quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, displayText?: string }} [opts]
  */
 async function enqueueUserMessage(text, modal, opts = {}) {
   const trimmed = String(text || '').trim();
   const lineRef = normalizeLineRef(opts.lineRef);
-  if (!trimmed && !lineRef) return;
+  const quoteRef = normalizeQuoteRef(opts.quoteRef);
+  if (!trimmed && !lineRef && !quoteRef) return;
 
   if (isChatBlocked()) {
     if (usageLimitReason) {
@@ -2512,14 +2461,19 @@ async function enqueueUserMessage(text, modal, opts = {}) {
   /** @type {QueuedMessage} */
   const queueItem = {
     id: createRequestId(),
-    text: lineRef ? buildLineAttachmentLlmText(lineRef, trimmed) : trimmed
+    text: buildQueuedMessageLlmText(trimmed, lineRef, quoteRef)
   };
   if (opts.quickActionId) {
     queueItem.quickActionId = opts.quickActionId;
   }
   if (lineRef) {
     queueItem.lineRef = lineRef;
-    if (trimmed) queueItem.displayText = trimmed;
+  }
+  if (quoteRef) {
+    queueItem.quoteRef = quoteRef;
+  }
+  if (trimmed && (lineRef || quoteRef)) {
+    queueItem.displayText = trimmed;
   }
   messageQueue.push(queueItem);
   syncBusyUi(modal);
@@ -2547,7 +2501,7 @@ async function drainQueue(modal) {
     return;
   }
 
-  const next = normalizeQueueItem(rt.messageQueue[0]);
+  const next = normalizeQueueItem(rt.messageQueue[0], getQueueDeps());
   if (!next) {
     rt.messageQueue.shift();
     void drainQueue(modal);
@@ -2572,7 +2526,12 @@ async function drainQueue(modal) {
   }
   if (next.lineRef) {
     userMessage.lineRef = next.lineRef;
-    if (next.displayText) userMessage.displayText = next.displayText;
+  }
+  if (next.quoteRef) {
+    userMessage.quoteRef = next.quoteRef;
+  }
+  if (next.displayText) {
+    userMessage.displayText = next.displayText;
   }
   rt.messages.push(userMessage);
 
@@ -2699,44 +2658,23 @@ function appendAssistantMessageForSession(text, modal, sessionKey, opts = {}) {
   }
 }
 
-/**
- * @param {HTMLElement} modal
- */
-function updateIterationsLabel(modal) {
-  const el = modal.querySelector('#logiAdvisorIterations');
-  const remEl = modal.querySelector('#logiAdvisorChatsRemaining');
-  const max = getMaxIterations();
-  if (el) {
-    el.textContent = t('apexLogViewer.logi.iterations', {
-      current: Math.min(iteration, max),
-      max
-    });
-  }
-  if (remEl) {
-    if (usageHint && Number.isFinite(usageHint.remainingToday)) {
-      remEl.hidden = false;
-      remEl.textContent = t('apexLogViewer.logi.chatsRemaining', {
-        remaining: usageHint.remainingToday
-      });
-    } else {
-      remEl.hidden = true;
-      remEl.textContent = '';
-    }
-  }
-}
-
 async function onSendFromInput() {
   const modal = modalEl;
   if (!modal) return;
   const input = modal.querySelector('#logiAdvisorInput');
   const text = input?.value?.trim() || '';
   const lineRef = pendingLineAttachment;
-  if (!text && !lineRef) return;
+  const quoteRef = pendingQuoteAttachment;
+  if (!text && !lineRef && !quoteRef) return;
   if (input) input.value = '';
   pendingLineAttachment = null;
-  renderLineAttachmentBadge(modal);
-  if (input) input.placeholder = t('apexLogViewer.logi.inputPlaceholder');
-  await enqueueUserMessage(text, modal, lineRef ? { lineRef } : {});
+  pendingQuoteAttachment = null;
+  renderInputAttachments(modal);
+  updateInputPlaceholder(modal);
+  await enqueueUserMessage(text, modal, {
+    ...(lineRef ? { lineRef } : {}),
+    ...(quoteRef ? { quoteRef } : {})
+  });
 }
 
 /**
@@ -2837,7 +2775,7 @@ function appendStreamDelta(modal, sessionKey, delta) {
   const prev = body.dataset.raw || '';
   const next = prev + delta;
   body.dataset.raw = next;
-  body.innerHTML = formatAssistantHtml(next);
+  body.innerHTML = formatAssistantHtml(next, modal);
   mount.scrollTop = mount.scrollHeight;
 }
 
@@ -2861,13 +2799,9 @@ async function runChatTurn(modal, sessionKey, requestId, turnId) {
   const parsed = ctx.getParsed?.();
   const raw = ctx.getRawContent?.() || '';
   const payload = ctx.payload || {};
-  const lang = getCurrentLang() === 'en' ? 'en' : 'es';
+  const lang = getPromptLang(rt.messages);
 
-  const initialContext = buildInitialLogContext(parsed, {
-    orgId: payload.orgId,
-    logId: payload.logId,
-    instanceUrl: payload.instanceUrl
-  });
+  const initialContext = buildLogContextForModal(modal, parsed, payload, sessionKey);
 
   const chatPayload = {
     requestId,
@@ -2878,7 +2812,7 @@ async function runChatTurn(modal, sessionKey, requestId, turnId) {
     initialContext,
     orgId: payload.orgId || '',
     logId: payload.logId || '',
-    lang,
+    logiLanguage: lang,
     isNewChat: rt.isNewChat,
     ...buildChatMessageExtras()
   };
@@ -2961,67 +2895,11 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
   if (!shouldApplyTurnResult(sessionKey, turnId)) return;
 
   const localCalls = res.localToolCalls || [];
-  for (const tc of localCalls) {
-    const name = tc?.function?.name;
-    let args = {};
-    try {
-      args = JSON.parse(tc.function?.arguments || '{}');
-    } catch {
-      args = {};
-    }
-
-    let toolResult = '';
-    if (name === 'fetch_log_lines') {
-      const fetched = fetchLogLines(raw, args.start_line, args.end_line);
-      toolResult = JSON.stringify(enrichLocalToolResult(name, fetched, lang));
-    } else if (name === 'fetch_parsed_section') {
-      toolResult = JSON.stringify(
-        enrichLocalToolResult(name, fetchParsedSection(parsed, args.section), lang)
-      );
-    } else if (name === 'search_log') {
-      toolResult = JSON.stringify(
-        enrichLocalToolResult(
-          name,
-          searchLog(raw, args.query, {
-            maxResults: args.max_results,
-            caseSensitive: args.case_sensitive
-          }),
-          lang
-        )
-      );
-    } else if (name === 'get_stack_around') {
-      toolResult = JSON.stringify(
-        enrichLocalToolResult(
-          name,
-          getStackAround(raw, parsed, args.line, { radius: args.radius, reason: args.reason }),
-          lang
-        )
-      );
-    } else if (name === 'get_hotspots') {
-      toolResult = JSON.stringify(
-        enrichLocalToolResult(name, getHotspots(parsed, { reason: args.reason }), lang)
-      );
-    } else if (name === 'highlight_log_lines') {
-      const highlighted = highlightLogLines(args.start_line, args.end_line, args.reason);
-      try {
-        window.dispatchEvent(
-          new CustomEvent('sfoc-logi-highlight-lines', {
-            detail: {
-              startLine: highlighted.start_line,
-              endLine: highlighted.end_line
-            }
-          })
-        );
-      } catch {
-        /* ignore */
-      }
-      toolResult = JSON.stringify(enrichLocalToolResult(name, highlighted, lang));
-    } else {
-      toolResult = JSON.stringify(
-        enrichLocalToolResult(name, { error: 'unknown_tool', retryable: false }, lang)
-      );
-    }
-
+  for (const { tc, name, args, toolResult } of executeLocalToolCalls(localCalls, {
+    raw,
+    parsed,
+    lang
+  })) {
     rt.messages.push({
       role: 'assistant',
       content: '',
@@ -3036,7 +2914,7 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
 
     rt.thinkingMode = 'tools';
     rt.thinkingStatus = t('apexLogViewer.logi.thinkingTools');
-    rt.thinkingReason = truncateText(String(args.reason || ''), 80);
+    rt.thinkingReason = formatToolActivityLabel(name, args, t);
     await persistRuntime(sessionKey);
     refreshUiIfBound(modal, sessionKey);
 
@@ -3047,11 +2925,7 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
       requestId,
       sessionKey,
       messages: rt.messages,
-      initialContext: buildInitialLogContext(parsed, {
-        orgId: payload.orgId,
-        logId: payload.logId,
-        instanceUrl: payload.instanceUrl
-      }),
+    initialContext: buildLogContextForModal(modal, parsed, payload, sessionKey),
       orgId: payload.orgId || '',
       logId: payload.logId || '',
       lang,
@@ -3102,234 +2976,14 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
       lang,
       requestId,
       res.pendingOrgQuery,
-      turnId
+      turnId,
+      getOrgFlowDeps()
     );
     return;
   }
 
   emitChatTurnSuccess(sessionKey, payload);
   finishTurnUi(sessionKey, turnId, modal);
-}
-
-/**
- * @param {HTMLElement} modal
- * @param {string} sessionKey
- * @param {object} ctx
- * @param {object} parsed
- * @param {string} raw
- * @param {object} payload
- * @param {'es'|'en'} lang
- * @param {string} requestId
- * @param {object} pending
- * @param {string} turnId
- */
-async function runPendingOrgQueryFlow(
-  modal,
-  sessionKey,
-  ctx,
-  parsed,
-  raw,
-  payload,
-  lang,
-  requestId,
-  pending,
-  turnId
-) {
-  if (!shouldApplyTurnResult(sessionKey, turnId)) return;
-
-  const rt = getRuntime(sessionKey);
-
-  if (!payload.orgId) {
-    appendAssistantMessageForSession(t('apexLogViewer.logi.queryNoOrg'), modal, sessionKey);
-    finishTurnUi(sessionKey, turnId, modal);
-    return;
-  }
-
-  const approved = await showOrgQueryApproval(pending, payload.orgId);
-  if (!shouldApplyTurnResult(sessionKey, turnId)) return;
-
-  const toolName = pending.toolName || 'org_query';
-
-  /** @type {string} */
-  let toolContent;
-  if (!approved) {
-    toolContent = JSON.stringify(
-      formatOrgQueryToolResult(
-        {
-          ok: false,
-          error: 'user_denied',
-          reason: 'The user denied running this org query.'
-        },
-        lang
-      )
-    );
-  } else if (toolName === 'describe_sobject_fields') {
-    const describeRes = await bg({
-      type: 'queryExplorer:describeSobject',
-      orgId: payload.orgId,
-      objectApiName: pending.sobject || pending.queryText
-    });
-    if (describeRes?.ok && describeRes.describe) {
-      const fields = (describeRes.describe.fields || []).slice(0, 80).map((f) => ({
-        name: f.name,
-        type: f.type,
-        label: f.label,
-        nillable: f.nillable,
-        custom: f.custom
-      }));
-      toolContent = JSON.stringify({
-        ok: true,
-        sobject: pending.sobject || pending.queryText,
-        fieldCount: (describeRes.describe.fields || []).length,
-        fields,
-        truncated: (describeRes.describe.fields || []).length > 80
-      });
-    } else {
-      toolContent = JSON.stringify(
-        formatOrgQueryToolResult(
-          { ok: false, error: describeRes?.error || describeRes?.reason || 'DESCRIBE_FAILED' },
-          lang
-        )
-      );
-    }
-  } else {
-    const queryRes = await bg({
-      type: 'aiAdvisor:runQuery',
-      orgId: payload.orgId,
-      variant: pending.variant,
-      queryText: pending.queryText
-    });
-    toolContent = JSON.stringify(formatOrgQueryToolResult(queryRes, lang));
-  }
-
-  /** @type {Record<string, unknown>} */
-  const toolArgs =
-    toolName === 'get_apex_source'
-      ? { name: pending.apexName, type: pending.apexType, reason: pending.reason }
-      : toolName === 'describe_sobject_fields'
-        ? { sobject: pending.sobject || pending.queryText, reason: pending.reason }
-        : { variant: pending.variant, query_text: pending.queryText, reason: pending.reason };
-
-  rt.messages.push({
-    role: 'assistant',
-    content: '',
-    tool_calls: [
-      {
-        id: pending.toolCallId,
-        type: 'function',
-        function: {
-          name: toolName,
-          arguments: JSON.stringify(toolArgs)
-        }
-      }
-    ]
-  });
-  rt.messages.push({
-    role: 'tool',
-    tool_call_id: pending.toolCallId,
-    name: toolName,
-    content: toolContent
-  });
-
-  rt.thinkingMode = 'org';
-  rt.thinkingStatus = t('apexLogViewer.logi.thinkingOrgQuery');
-  rt.thinkingReason = truncateText(String(pending.reason || ''), 80);
-  await persistRuntime(sessionKey);
-  refreshUiIfBound(modal, sessionKey);
-
-  if (!shouldApplyTurnResult(sessionKey, turnId)) return;
-
-  const followUp = await bg({
-    type: 'aiAdvisor:chat',
-    requestId,
-    sessionKey,
-    messages: rt.messages,
-    initialContext: buildInitialLogContext(parsed, {
-      orgId: payload.orgId,
-      logId: payload.logId,
-      instanceUrl: payload.instanceUrl
-    }),
-    orgId: payload.orgId,
-    logId: payload.logId || '',
-    lang,
-    isNewChat: false,
-    skipIterationReserve: true,
-    ...buildChatMessageExtras()
-  });
-  if (Number.isFinite(Number(followUp?.iteration))) {
-    rt.iteration = Math.max(rt.iteration, Math.floor(Number(followUp.iteration)));
-  }
-  bindSession(sessionKey);
-  applyIterationState(modal, followUp);
-  await persistRuntime(sessionKey);
-  refreshUiIfBound(modal, sessionKey);
-
-  if (!shouldApplyTurnResult(sessionKey, turnId)) return;
-  if (isMaxIterationsResponse(modal, followUp)) return;
-
-  if (!followUp?.ok) {
-    if (followUp?.reason === 'CANCELLED' || !shouldApplyTurnResult(sessionKey, turnId)) return;
-    if (hasTurnTimedOut(sessionKey)) return;
-    if (followUp?.reason === 'LLM_TIMEOUT') {
-      rt.turnTimedOut = true;
-      clearTurnTimeout(sessionKey);
-    }
-    appendAssistantMessageForSession(
-      mapErrorReason(followUp?.reason, followUp?.error),
-      modal,
-      sessionKey
-    );
-    finishTurnUi(sessionKey, turnId, modal);
-    return;
-  }
-  rememberTurnAiMetrics(sessionKey, followUp);
-  await processLlmResponse(followUp, modal, sessionKey, ctx, parsed, raw, payload, lang, requestId, turnId);
-}
-
-/**
- * @param {object} pending
- * @param {string} orgId
- */
-function showOrgQueryApproval(pending, orgId) {
-  return new Promise((resolve) => {
-    const toolName = pending.toolName || 'org_query';
-    const titleKey =
-      toolName === 'get_apex_source'
-        ? 'apexLogViewer.logi.sourceApprovalTitle'
-        : toolName === 'describe_sobject_fields'
-          ? 'apexLogViewer.logi.describeApprovalTitle'
-          : 'apexLogViewer.logi.queryApprovalTitle';
-    const displayQuery =
-      toolName === 'describe_sobject_fields'
-        ? `DESCRIBE ${pending.sobject || pending.queryText}`
-        : pending.queryText;
-    const variantLabel =
-      toolName === 'describe_sobject_fields' ? 'describe' : pending.variant || 'rest-soql';
-
-    const overlay = document.createElement('div');
-    overlay.className = 'logi-advisor-approval ph-no-capture';
-    overlay.innerHTML = `
-      <div class="logi-advisor-approval-panel" role="alertdialog" aria-modal="true">
-        <h3>${escapeHtml(t(titleKey))}</h3>
-        <p class="logi-advisor-approval-reason">${escapeHtml(pending.reason || '')}</p>
-        <dl class="logi-advisor-approval-meta">
-          <dt>${escapeHtml(t('apexLogViewer.logi.queryOrg'))}</dt><dd>${escapeHtml(orgId)}</dd>
-          <dt>${escapeHtml(t('apexLogViewer.logi.queryVariant'))}</dt><dd>${escapeHtml(variantLabel)}</dd>
-        </dl>
-        <pre class="logi-advisor-approval-query">${escapeHtml(displayQuery)}</pre>
-        <div class="logi-advisor-approval-actions">
-          <button type="button" class="logi-advisor-approval-deny">${escapeHtml(t('apexLogViewer.logi.queryDeny'))}</button>
-          <button type="button" class="logi-advisor-approval-approve">${escapeHtml(t('apexLogViewer.logi.queryApprove'))}</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    const cleanup = (ok) => {
-      overlay.remove();
-      resolve(ok);
-    };
-    overlay.querySelector('.logi-advisor-approval-deny')?.addEventListener('click', () => cleanup(false));
-    overlay.querySelector('.logi-advisor-approval-approve')?.addEventListener('click', () => cleanup(true));
-  });
 }
 
 /**
@@ -3365,9 +3019,68 @@ function mapErrorReason(reason, error) {
     LLM_ERROR: 'apexLogViewer.logi.error.llm'
   };
   const key = map[reason] || 'apexLogViewer.logi.error.generic';
-  const base = t(key);
+  let base = t(key);
+  if ((reason === 'TELEMETRY_REQUIRED' || reason === 'LLM_PROXY_BLOCKED') && typeof chrome !== 'undefined') {
+    const settingsUrl = getLogiSettingsUrl();
+    const linkLabel = t('apexLogViewer.logi.error.openSettings');
+    base = `${base} [${linkLabel}](${settingsUrl})`;
+  }
   if ((reason === 'LLM_ERROR' || reason === 'LLM_NETWORK') && error) {
     return `${base} (${error})`;
   }
   return base;
+}
+
+function getLogiSettingsUrl() {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+      return chrome.runtime.getURL('popup/settings.html#settingsLogi');
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'popup/settings.html#settingsLogi';
+}
+
+/**
+ * @param {HTMLElement} modal
+ * @param {object | null | undefined} parsed
+ * @param {object} payload
+ * @param {string} sessionKey
+ */
+function buildLogContextForModal(modal, parsed, payload, sessionKey) {
+  const base = buildInitialLogContext(parsed, {
+    orgId: payload.orgId,
+    logId: payload.logId,
+    instanceUrl: payload.instanceUrl
+  });
+  const rt = getRuntime(sessionKey);
+  const summary = typeof rt.resumeSummary === 'string' ? rt.resumeSummary.trim() : '';
+  if (!summary || !rt.isNewChat) return base;
+  const lang = getPromptLang(rt.messages);
+  const header =
+    lang === 'en' ? 'Prior Logi summary (user opened chat from resume):' : 'Resumen previo de Logi (el usuario abrió el chat desde el resumen):';
+  return `${base}\n\n---\n${header}\n${summary}`;
+}
+
+/**
+ * @param {HTMLElement} modal
+ * @param {string} actionId
+ */
+async function runQuickAction(modal, actionId) {
+  const lang = getPromptLang();
+  const prompt = quickActionUserMessage(actionId, lang, customQuickActionPrompts);
+  await enqueueUserMessage(prompt, modal, { quickActionId: actionId });
+}
+
+/**
+ * @param {HTMLElement} modal
+ */
+function exportCurrentChat(modal) {
+  const rt = getModalRuntime(modal);
+  if (!rt?.messages?.length) return;
+  const md = exportChatAsMarkdown(rt.messages);
+  if (md && navigator.clipboard?.writeText) {
+    void navigator.clipboard.writeText(md);
+  }
 }

@@ -37,7 +37,7 @@ import { sanitizeExceptionContext } from '../shared/sanitizeExceptionContext.js'
 import { resolveTelemetryUserLabel, resolveSfUserContextForOrg } from './telemetryUserResolver.js';
 import { orgFieldsForTelemetry } from '../shared/telemetryOrgContext.js';
 import { buildSfocAiUserProperties } from '../shared/posthogAiUserContext.js';
-import { LOGI_USAGE_EVENT } from '../shared/logiTelemetryConstants.js';
+import { LOGI_USAGE_EVENT } from '../shared/logi/logiTelemetryConstants.js';
 
 function posthogDebugLog(...args) {
   if (POSTHOG_DEBUG) console.log('[posthog]', ...args);

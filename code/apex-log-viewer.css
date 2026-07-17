@@ -1025,6 +1025,15 @@ html[data-ui-theme='light'] .apex-log-gantt-action:hover {
   background: #d4dce6;
 }
 
+html[data-ui-theme='light'] .apex-log-text-config-switch {
+  background: #e8edf3;
+  border-color: var(--alb-border);
+}
+
+html[data-ui-theme='light'] .apex-log-text-config-switch::after {
+  background: #fff;
+}
+
 html[data-ui-theme='light'] .apex-log-gantt-tooltip {
   background: #f2f5f9;
   border-color: var(--alb-border);
@@ -1653,6 +1662,66 @@ html[data-ui-theme='light'] .apex-log-find-results {
   padding: 4px 12px;
   font-size: 11px;
   color: var(--alb-muted);
+}
+
+.apex-log-text-config {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--alb-border);
+}
+
+.apex-log-text-config-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--alb-muted);
+}
+
+.apex-log-text-config-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.apex-log-text-config-switch {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  position: relative;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.apex-log-text-config-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transition: transform 0.2s ease;
+}
+
+.apex-log-text-config-toggle input:checked + .apex-log-text-config-switch {
+  background: var(--alb-accent, #0ea5e9);
+  border-color: var(--alb-accent, #0ea5e9);
+}
+
+.apex-log-text-config-toggle input:checked + .apex-log-text-config-switch::after {
+  transform: translateX(14px);
+}
+
+.apex-log-text-config-label {
+  user-select: none;
 }
 
 .apex-log-line-hidden {

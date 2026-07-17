@@ -11,7 +11,7 @@ import { revealTreeLogLine } from './lib/apexLogViewer/rawTreeView.js';
 import { renderTimelineView, revealTimelineLogLine } from './lib/apexLogViewer/timelineView.js';
 import { renderSummaryView } from './lib/apexLogViewer/summaryView.js';
 import { renderErrorsView, highlightErrorsPanelRow } from './lib/apexLogViewer/errorsView.js';
-import { mountTextFilterBar } from './lib/apexLogViewer/textFilterBar.js';
+import { mountTextFilterBar, getTextFilterApi } from './lib/apexLogViewer/textFilterBar.js';
 import { ensurePanelSectionHeading } from './lib/apexLogViewer/panelSectionHeading.js';
 import { highlightPanelRow } from './lib/apexLogViewer/analysisTableUtils.js';
 import { escapeHtml } from '../shared/htmlEscape.js';
@@ -29,8 +29,8 @@ import {
   isLogiAdvisorButtonVisible,
   mountLogiAdvisor,
   openLogiAdvisor
-} from './lib/apexLogViewer/logiAdvisorModal.js';
-import { bindLogiResumeMount } from './lib/apexLogViewer/logiResumePanel.js';
+} from './lib/logi/logiAdvisorModal.js';
+import { bindLogiResumeMount } from './lib/logi/logiResumePanel.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -328,7 +328,21 @@ async function main() {
 
   function fileLineToEditorLine(fileLine) {
     if (!fileLine) return 0;
-    return fileLine - textFileLineOffset;
+    const sliceLine = fileLine - textFileLineOffset;
+    const textFilter = getTextFilterApi();
+    if (textFilter?.isStripMode()) {
+      return textFilter.getFileToEditorLine(sliceLine);
+    }
+    return sliceLine;
+  }
+
+  function editorLineToFileLine(editorLine) {
+    if (!editorLine) return 0;
+    const textFilter = getTextFilterApi();
+    const sliceLine = textFilter?.isStripMode()
+      ? textFilter.getEditorToFileLine(editorLine)
+      : editorLine;
+    return sliceLine + textFileLineOffset;
   }
 
   function syncTextEditorContent() {
@@ -489,8 +503,8 @@ async function main() {
 
       const startEditorLine = Math.min(sel.startLineNumber, sel.endLineNumber);
       const endEditorLine = Math.max(sel.startLineNumber, sel.endLineNumber);
-      const startFileLine = startEditorLine + textFileLineOffset;
-      const endFileLine = endEditorLine + textFileLineOffset;
+      const startFileLine = editorLineToFileLine(startEditorLine);
+      const endFileLine = editorLineToFileLine(endEditorLine);
 
       askBtn.textContent = t('apexLogViewer.logi.askSelection');
       askBtn.hidden = false;

@@ -7,8 +7,8 @@ import {
   setLogiAdvisorMemoryCache,
   unwrapCacheRaw,
   readLogiAdvisorCacheEntry
-} from '../shared/logiAdvisorCache.js';
-import { DEFAULT_LOGI_ADVISOR_CONFIG } from '../shared/apexLogAiAdvisorConfig.js';
+} from '../shared/logi/logiAdvisorCache.js';
+import { DEFAULT_LOGI_ADVISOR_CONFIG } from '../shared/logi/apexLogAiAdvisorConfig.js';
 
 describe('logiAdvisorCache', () => {
   beforeEach(() => {

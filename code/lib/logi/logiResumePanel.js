@@ -1,5 +1,5 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
-import { renderLogiMarkdown } from '../../../shared/logiMarkdown.js';
+import { renderLogiMarkdown } from '../../../shared/logi/logiMarkdown.js';
 import { getCurrentLang, t } from '../../../shared/i18n.js';
 import { bg } from '../../core/bridge.js';
 import {
@@ -11,14 +11,15 @@ import {
   getStackAround,
   highlightLogLines,
   searchLog
-} from '../../../shared/apexLogAiContext.js';
-import { buildLogiSessionKey } from '../../../shared/logiAdvisorSession.js';
+} from '../../../shared/logi/apexLogAiContext.js';
+import { buildLogiSessionKey, readLogiSession } from '../../../shared/logi/logiAdvisorSession.js';
+import { resolveLogiPromptLang } from '../../../shared/logi/logiPromptLang.js';
 import {
   clearLogiSummary,
   readLogiSummary,
   writeLogiSummary
-} from '../../../shared/logiSummaryCache.js';
-import { hashLogiSessionKey } from '../../../shared/logiAiMetrics.js';
+} from '../../../shared/logi/logiSummaryCache.js';
+import { hashLogiSessionKey } from '../../../shared/logi/logiAiMetrics.js';
 
 const LOGI_RESUME_AI_ICON = `<svg class="apex-log-summary-hero-logi-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 2.5l1.2 3.6 3.6 1.2-3.6 1.2L12 12l-1.2-3.5-3.6-1.2 3.6-1.2L12 2.5zm6.5 7.5l.8 2.4 2.4.8-2.4.8-.8 2.4-.8-2.4-2.4-.8 2.4-.8.8-2.4zM6.5 13l1 3 3 1-3 1-1 3-1-3-3-1 3-1 1-3z"/></svg>`;
 
@@ -42,6 +43,19 @@ let summaryText = '';
 
 /** @type {string} */
 let errorReason = '';
+
+/** @type {string} */
+let lastSummaryLang = 'en';
+
+/** @type {boolean} */
+let logiResumeUiVisible = false;
+
+/**
+ * @param {HTMLElement | null | undefined} mount
+ */
+function clearResumeFromMount(mount) {
+  mount?.querySelector('#logiSummaryResume')?.remove();
+}
 
 /**
  * @param {string} action
@@ -70,13 +84,21 @@ export function mountLogiResume(opts) {
  * @param {boolean} visible
  */
 export function setLogiResumeButtonVisible(visible) {
+  logiResumeUiVisible = visible;
   const btn = document.getElementById('logiResumeBtn');
-  if (!btn) return;
-  btn.hidden = !visible;
-  const label = t('apexLogViewer.logi.resumeButton');
-  const span = btn.querySelector('span[data-i18n], span');
-  if (span) span.textContent = label;
-  else btn.setAttribute('aria-label', label);
+  if (btn) {
+    btn.hidden = !visible;
+    const label = t('apexLogViewer.logi.resumeButton');
+    const span = btn.querySelector('span[data-i18n], span');
+    if (span) span.textContent = label;
+    else btn.setAttribute('aria-label', label);
+  }
+  if (!visible) {
+    cancelActiveResume();
+    clearResumeFromMount(getSummaryMount());
+    return;
+  }
+  void bindLogiResumeMount(getSummaryMount());
 }
 
 /**
@@ -85,6 +107,10 @@ export function setLogiResumeButtonVisible(visible) {
  */
 export async function bindLogiResumeMount(mount) {
   if (!mount) return;
+  if (!logiResumeUiVisible) {
+    clearResumeFromMount(mount);
+    return;
+  }
   const key = currentSessionKey();
   activeSessionKey = key;
 
@@ -127,7 +153,7 @@ export async function bindLogiResumeMount(mount) {
  * @param {{ force?: boolean }} [opts]
  */
 export async function startLogiResume(opts = {}) {
-  if (!resumeOpts) return;
+  if (!resumeOpts || !logiResumeUiVisible) return;
   const force = opts.force === true;
   const key = currentSessionKey();
   activeSessionKey = key;
@@ -211,11 +237,11 @@ export function cancelActiveResume() {
  */
 export function getLogiResumeAskContext() {
   if (!summaryText) return {};
-  const lang = getCurrentLang() === 'en' ? 'en' : 'es';
+  const lang = lastSummaryLang;
   const prefill =
-    lang === 'en'
-      ? 'Please go deeper on this summary and help me investigate.'
-      : 'Profundiza en este resumen y ayúdame a investigar.';
+    lang === 'es'
+      ? 'Profundiza en este resumen y ayúdame a investigar.'
+      : 'Please go deeper on this summary and help me investigate.';
   return { prefill, summaryText };
 }
 
@@ -236,6 +262,7 @@ function getSummaryMount() {
  * @param {{ state: string, text?: string, reason?: string }} view
  */
 function paintCurrentMount(view) {
+  if (!logiResumeUiVisible) return;
   const mount = getSummaryMount();
   if (!mount) return;
   renderResumeInto(mount, view);
@@ -382,6 +409,20 @@ function mapResumeError(reason) {
 }
 
 /**
+ * @param {string} sessionKey
+ */
+async function resolveSummaryLang(sessionKey) {
+  const [configRes, session] = await Promise.all([
+    bg({ type: 'aiAdvisor:getConfig' }),
+    sessionKey ? readLogiSession(sessionKey) : Promise.resolve(null)
+  ]);
+  return resolveLogiPromptLang({
+    settingsLang: configRes?.config?.userSettings?.logiLanguage,
+    messages: session?.messages
+  });
+}
+
+/**
  * @param {string} requestId
  * @returns {Promise<{ text: string, aiMetrics: Record<string, string | number | boolean> | null }>}
  */
@@ -389,7 +430,12 @@ async function runSummaryLoop(requestId) {
   const parsed = resumeOpts?.getParsed?.() || null;
   const raw = resumeOpts?.getRawContent?.() || '';
   const payload = resumeOpts?.payload || {};
-  const lang = getCurrentLang() === 'en' ? 'en' : 'es';
+  const sessionKey =
+    typeof activeSessionKey === 'string' && activeSessionKey.trim()
+      ? activeSessionKey.trim()
+      : buildLogiSessionKey(payload);
+  const lang = await resolveSummaryLang(sessionKey);
+  lastSummaryLang = lang;
   const initialContext = buildInitialLogContext(parsed, {
     orgId: payload.orgId,
     logId: payload.logId,
@@ -418,7 +464,7 @@ async function runSummaryLoop(requestId) {
       logId: payload.logId,
       title: payload.title,
       instanceUrl: payload.instanceUrl,
-      lang,
+      logiLanguage: lang,
       initialContext,
       messages,
       skipIterationReserve

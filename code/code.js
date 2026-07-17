@@ -24,7 +24,6 @@ import { updateOrgSelectorsLockedState } from './ui/viewerChrome.js';
 import {
   wireSelectors,
   setupResizable,
-  setupDragAndDrop,
   setupDownloadAll,
   setupCopyAll,
   setupClearHistoryButton,
@@ -330,7 +329,6 @@ async function init() {
   refreshDependencyExplorerPanel();
   setupResizable();
   setupCompareListToolbar();
-  setupDragAndDrop();
   setupDownloadAll();
   setupCopyAll();
   setupRemoveAll();

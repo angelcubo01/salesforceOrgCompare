@@ -1,4 +1,4 @@
-import { classifyLlmTransportFailure } from './aiTransport.js';
+import { classifyLlmTransportFailure } from '../aiTransport.js';
 
 /** @param {string} sessionKey */
 export function hashLogiSessionKey(sessionKey) {

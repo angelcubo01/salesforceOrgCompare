@@ -47,7 +47,7 @@ import {
 import {
   hookLogiAdvisorOnFeatureFlags,
   loadLogiAdvisorFromPosthog
-} from './posthogLogiAdvisorFlag.js';
+} from './logi/posthogLogiAdvisorFlag.js';
 import {
   ensureFeatureFlagsLoaded,
   invalidateFeatureFlagsCache
