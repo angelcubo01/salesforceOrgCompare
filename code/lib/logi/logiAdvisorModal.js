@@ -27,6 +27,7 @@ import {
   truncateText
 } from '../../../shared/logi/apexLogAiContext.js';
 import { resolveLogiPromptLang } from '../../../shared/logi/logiPromptLang.js';
+import { hashLogiSessionKey } from '../../../shared/logi/logiAiMetrics.js';
 import {
   buildLogiQuickActionPromptsExport,
   createLogiCustomQuickAction,
