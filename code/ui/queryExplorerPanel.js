@@ -5,6 +5,7 @@ import { applyArtifactTypeUi, getSelectedArtifactType } from './artifactTypeUi.j
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { handleToolError } from '../../shared/reportToolError.js';
+import { bindRunShortcut } from './runShortcut.js';
 
 function showQueryExplorerErrorToast(e) {
   const msg = String(e?.message || e);
@@ -1159,4 +1160,5 @@ export function setupQueryExplorerPanel() {
   renderers.right.renderLocal();
 
   setupQueryExplorerSavedQueriesUi();
+  bindRunShortcut('QueryExplorer', () => void runExecute(), { allowInMonaco: true });
 }

@@ -11,6 +11,7 @@ import {
   wireSearchFilter
 } from './analysisTableUtils.js';
 import { panelSectionHeading, wirePanelHelpButtons } from './panelSectionHeading.js';
+import { showToast } from '../../ui/toast.js';
 
 function truncateQuery(query, max = 72) {
   const compact = String(query || '').replace(/\s+/g, ' ').trim();
@@ -225,7 +226,10 @@ export function renderSoqlView(mount, parsed, onJump, t) {
     root?.querySelectorAll('.apex-log-copy-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        navigator.clipboard?.writeText(btn.getAttribute('data-query') || '').catch(() => {});
+        const text = btn.getAttribute('data-query') || '';
+        navigator.clipboard?.writeText(text).then(() => {
+          showToast(t('queryExplorer.linkCopied'), 'info');
+        }).catch(() => {});
       });
     });
   }

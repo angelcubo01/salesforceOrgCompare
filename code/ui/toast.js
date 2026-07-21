@@ -6,10 +6,10 @@ export function showToast(message, type = 'info', opts = {}) {
   try {
     const now = Date.now();
     const bypassCooldown =
-      opts.bypassCooldown === true || type === 'error' || type === 'warn';
+      opts.bypassCooldown === true || type === 'error' || type === 'warn' || type === 'success';
     if (!bypassCooldown && now - state.lastToastAt < 2500) return; // evitar spam en toasts informativos
     state.lastToastAt = now;
-    const container = document.getElementById('toastContainer');
+    const container = ensureToastContainer();
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -43,7 +43,7 @@ export function showToast(message, type = 'info', opts = {}) {
 export function showToastWithSpinner(message, opts = {}) {
   dismissSpinnerToast();
   try {
-    const container = document.getElementById('toastContainer');
+    const container = ensureToastContainer();
     if (!container) return;
     const toast = document.createElement('div');
     toast.className = 'toast info toast-spinner';
@@ -84,4 +84,14 @@ export function dismissSpinnerToast() {
     }
     state.spinnerToast = null;
   } catch {}
+}
+
+function ensureToastContainer() {
+  let container = document.getElementById('toastContainer');
+  if (container) return container;
+  container = document.createElement('div');
+  container.id = 'toastContainer';
+  container.className = 'toast-container';
+  document.body.appendChild(container);
+  return container;
 }

@@ -45,12 +45,16 @@ export function helpToolTitleKey(toolId) {
 
 /** @param {string} toolId */
 export function helpToolBodyKeys(toolId) {
-  return [
+  const keys = [
     `help.tool.${toolId}.lead`,
     `help.tool.${toolId}.body1`,
     `help.tool.${toolId}.body2`,
     `help.tool.${toolId}.body3`
   ];
+  if (toolId === HELP_HOME_ID) {
+    keys.push(`help.tool.${toolId}.body4`);
+  }
+  return keys;
 }
 
 /** @param {string} toolId */

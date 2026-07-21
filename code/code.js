@@ -123,6 +123,7 @@ import {
 import { applyDeepLinkOrgs, applyDeepLinkItemHint } from './lib/compareDeepLinkUi.js';
 import { setupAppHistoryNavigation } from './lib/appHistoryNavigation.js';
 import { buildDiscoverBannerLineHtml } from '../shared/landingDiscoverBanner.js';
+import { refreshLandingToolRecents } from './ui/landingRecentsUi.js';
 import { ensureExtensionExceptionReporting } from '../shared/posthogClient.js';
 import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.js';
 import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
@@ -209,6 +210,7 @@ async function init() {
   applyArtifactTypeUi();
   applyFeatureControlsUi();
   revealAppNavigation();
+  void refreshLandingToolRecents();
   void maybeShowToolOnboarding(getSelectedArtifactType());
 
   ensureExtensionExceptionReporting();

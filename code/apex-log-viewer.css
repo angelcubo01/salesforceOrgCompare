@@ -1,9 +1,18 @@
 :root {
-  --alb-bg: #0f172a;
-  --alb-border: #334155;
-  --alb-text: #e2e8f0;
-  --alb-accent: #38bdf8;
-  --alb-muted: #94a3b8;
+  --sfoc-bg-app: #0f172a;
+  --sfoc-bg-panel: #1e293b;
+  --sfoc-bg-elevated: #334155;
+  --sfoc-border: #334155;
+  --sfoc-text: #e2e8f0;
+  --sfoc-text-muted: #94a3b8;
+  --sfoc-accent: #38bdf8;
+  --sfoc-success: #22c55e;
+  --sfoc-z-toast: 1500;
+  --alb-bg: var(--sfoc-bg-app);
+  --alb-border: var(--sfoc-border);
+  --alb-text: var(--sfoc-text);
+  --alb-accent: var(--sfoc-accent);
+  --alb-muted: var(--sfoc-text-muted);
   --alb-chip-bg: rgba(56, 189, 248, 0.1);
   --alb-warning: #fb7185;
   --alb-gantt-grid: rgba(148, 163, 184, 0.22);
@@ -17,7 +26,7 @@ body {
   overflow: hidden;
   background: var(--alb-bg);
   color: var(--alb-text);
-  font-family: system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
   display: flex;
   flex-direction: column;
 }
@@ -2758,3 +2767,23 @@ html[data-ui-theme='light'] .apex-log-error-card {
   flex-direction: column;
   min-height: 0;
 }
+
+.toast-container {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: var(--sfoc-z-toast);
+}
+.toast {
+  background: rgba(32, 32, 32, 0.95);
+  border: 1px solid var(--sfoc-border);
+  color: var(--sfoc-text);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.toast.info { border-color: #60a5fa; color: #e6f0ff; }
+.toast.success { border-color: var(--sfoc-success); color: #bbf7d0; }

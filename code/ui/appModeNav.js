@@ -16,6 +16,8 @@ import { isModeVisible, isToolVisible } from '../../shared/featureControls.js';
 import { getCachedFeatureControlsConfig } from '../../shared/posthogFeatureControlsFlag.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
+import { recordToolVisit } from '../core/toolRecents.js';
+import { refreshLandingToolRecents } from './landingRecentsUi.js';
 
 export const NAV_PREFS_KEY = 'sfocAppNavPrefs';
 
@@ -504,6 +506,8 @@ export async function navigateToModeAndTool(mode, tool, opts = {}) {
     }
     sel.value = pick;
     handleArtifactTypeSelectChange({ isUserChange: userInitiated });
+    if (pick) void recordToolVisit(pick);
+    void refreshLandingToolRecents();
     const { applyFeatureControlsUi } = await import('./featureControlsUi.js');
     applyFeatureControlsUi();
   } finally {

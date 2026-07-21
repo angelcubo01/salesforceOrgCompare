@@ -12,7 +12,7 @@
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 20000;
+        z-index: 1500;
         flex-direction: column;
         align-items: center;
         justify-content: center;
@@ -323,6 +323,16 @@
             <div id="appLandingDiscoverBanner" class="app-landing-discover-banner" role="note">
               <p id="appLandingDiscoverBannerText" class="app-landing-discover-banner-text"></p>
             </div>
+            <div class="app-landing-tools-wrap">
+              <section class="app-landing-tools-section" aria-labelledby="appLandingRecentsHeading">
+                <h2 id="appLandingRecentsHeading" class="app-landing-tools-heading" data-i18n="code.landingRecents">Recientes</h2>
+                <div id="appLandingRecentsList" class="app-landing-tools-list-host"></div>
+              </section>
+              <section class="app-landing-tools-section" aria-labelledby="appLandingPinnedHeading">
+                <h2 id="appLandingPinnedHeading" class="app-landing-tools-heading" data-i18n="code.landingPinned">Fijadas</h2>
+                <div id="appLandingPinnedList" class="app-landing-tools-list-host"></div>
+              </section>
+            </div>
             <div class="app-landing-grid-wrap">
             <div class="app-landing-grid">
               <article class="app-landing-card app-landing-card-accent-1">
@@ -462,7 +472,7 @@
           </div>
         </div>
         </div>
-        <div id="generatePackageXmlPanel" class="generate-package-xml-panel ph-no-capture hidden" data-i18n-aria-label="code.ariaGenPkgPanel">
+        <div id="generatePackageXmlPanel" class="sfoc-tool-panel generate-package-xml-panel ph-no-capture hidden" data-tool="GeneratePackageXml" data-i18n-aria-label="code.ariaGenPkgPanel">
           <div class="generate-package-xml-panel-inner">
             <div class="generate-package-xml-head">
               <div>
@@ -572,7 +582,8 @@
         </div>
         <div
           id="metadataTypeComparePanel"
-          class="setup-records-compare-panel org-limits-panel hidden"
+          class="sfoc-tool-panel setup-records-compare-panel org-limits-panel hidden"
+          data-tool="MetadataTypeCompare"
           data-i18n-aria-label="code.ariaMetadataTypeCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
@@ -634,7 +645,7 @@
             <div id="metadataTypeCompareTableMount" class="setup-records-compare-table-mount"></div>
           </div>
         </div>
-        <div id="apexTestsPanel" class="apex-tests-panel ph-no-capture hidden" data-i18n-aria-label="code.ariaApexTestsPanel">
+        <div id="apexTestsPanel" class="sfoc-tool-panel apex-tests-panel ph-no-capture hidden" data-tool="ApexTests" data-i18n-aria-label="code.ariaApexTestsPanel">
           <div id="apexTestsHubView" class="apex-tests-hub-view">
             <div class="apex-tests-hub-header">
               <div class="apex-tests-hub-header-text">
@@ -1059,7 +1070,7 @@
             </div>
           </div>
         </div>
-        <div id="dependencyExplorerPanel" class="dep-explorer-panel ph-no-capture hidden" data-i18n-aria-label="code.ariaDepExplorer">
+        <div id="dependencyExplorerPanel" class="sfoc-tool-panel dep-explorer-panel ph-no-capture hidden" data-tool="DependencyExplorer" data-i18n-aria-label="code.ariaDepExplorer">
           <div class="dep-explorer-panel-inner">
             <div class="dep-explorer-head">
               <div>
@@ -1155,7 +1166,7 @@
             <div id="depExplorerCategories" class="dep-explorer-categories" aria-live="polite"></div>
           </div>
         </div>
-        <div id="fieldDependencyPanel" class="field-dependency-panel hidden" data-i18n-aria-label="code.ariaFieldDep">
+        <div id="fieldDependencyPanel" class="sfoc-tool-panel field-dependency-panel hidden" data-tool="FieldDependency" data-i18n-aria-label="code.ariaFieldDep">
           <div class="field-dependency-panel-inner">
             <h2 class="field-dependency-title" data-i18n="fieldDep.title">Field Dependency</h2>
             <p class="sfoc-panel-subtitle" data-i18n="fieldDep.subtitle">Revisa dependencias de picklist entre entornos antes de publicar</p>
@@ -1210,7 +1221,7 @@
             </div>
           </div>
         </div>
-        <div id="objectDescribePanel" class="object-describe-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaObjectDescribe">
+        <div id="objectDescribePanel" class="sfoc-tool-panel object-describe-panel org-limits-panel hidden" data-tool="ObjectDescribe" data-i18n-aria-label="code.ariaObjectDescribe">
           <div class="org-limits-panel-inner object-describe-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -1290,7 +1301,7 @@
             </div>
           </div>
         </div>
-        <div id="anonymousApexPanel" class="anonymous-apex-panel hidden" data-i18n-aria-label="anonymousApex.title">
+        <div id="anonymousApexPanel" class="sfoc-tool-panel anonymous-apex-panel hidden" data-tool="AnonymousApex" data-i18n-aria-label="anonymousApex.title">
           <div class="anonymous-apex-panel-inner">
             <div class="anonymous-apex-head">
               <div>
@@ -1328,7 +1339,7 @@
               <div id="anonymousApexDocTabs" class="vscode-tabs" role="tablist"></div>
               <div id="anonymousApexEditorMount" class="anonymous-apex-editor-mount ph-no-capture vscode-editor-mount"></div>
               <div class="anonymous-apex-actions">
-                <button type="button" id="anonymousApexRunBtn" class="anonymous-apex-run-btn" data-i18n="anonymousApex.run">
+                <button type="button" id="anonymousApexRunBtn" class="sfoc-btn sfoc-btn--primary anonymous-apex-run-btn" data-i18n="anonymousApex.run">
                   Ejecutar
                 </button>
                 <button type="button" id="anonymousApexOpenLogBtn" class="anonymous-apex-log-btn hidden" data-i18n="anonymousApex.openLog" disabled>
@@ -1400,7 +1411,7 @@
             </div>
           </div>
         </div>
-        <div id="restExplorerPanel" class="rest-explorer-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaRestExplorer">
+        <div id="restExplorerPanel" class="sfoc-tool-panel rest-explorer-panel org-limits-panel hidden" data-tool="RestExplorer" data-i18n-aria-label="code.ariaRestExplorer">
           <div class="org-limits-panel-inner rest-explorer-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -1424,7 +1435,7 @@
                 <label class="sfoc-tool-label" for="restExplorerUri" data-i18n="restExplorer.uri">URI</label>
                 <input id="restExplorerUri" type="text" class="sfoc-query-input" placeholder="/services/data/v59.0/sobjects/Account/describe" spellcheck="false" autocomplete="off" />
               </div>
-              <button type="button" id="restExplorerSendBtn" class="org-limits-refresh-btn" data-i18n="restExplorer.send">Enviar</button>
+              <button type="button" id="restExplorerSendBtn" class="sfoc-btn sfoc-btn--primary org-limits-refresh-btn" data-i18n="restExplorer.send">Enviar</button>
             </div>
             <div class="sfoc-tool-field sfoc-tool-field--grow">
               <label class="sfoc-tool-label" for="restExplorerHeaders" data-i18n="restExplorer.headers">Cabeceras (JSON)</label>
@@ -1449,7 +1460,7 @@
             </div>
           </div>
         </div>
-        <div id="dataWorkbenchPanel" class="data-workbench-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaDataWorkbench">
+        <div id="dataWorkbenchPanel" class="sfoc-tool-panel data-workbench-panel org-limits-panel hidden" data-tool="DataWorkbench" data-i18n-aria-label="code.ariaDataWorkbench">
           <div class="org-limits-panel-inner data-workbench-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -1557,7 +1568,7 @@
             </div>
           </div>
         </div>
-        <div id="bulkJobMonitorPanel" class="bulk-job-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaBulkJobMonitor">
+        <div id="bulkJobMonitorPanel" class="sfoc-tool-panel bulk-job-panel org-limits-panel hidden" data-tool="BulkJobMonitor" data-i18n-aria-label="code.ariaBulkJobMonitor">
           <div class="org-limits-panel-inner bulk-job-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -1590,7 +1601,7 @@
             </div>
           </div>
         </div>
-        <div id="eventMonitorPanel" class="event-monitor-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaEventMonitor">
+        <div id="eventMonitorPanel" class="sfoc-tool-panel event-monitor-panel org-limits-panel hidden" data-tool="EventMonitor" data-i18n-aria-label="code.ariaEventMonitor">
           <div class="org-limits-panel-inner event-monitor-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -1648,7 +1659,7 @@
             </div>
           </div>
         </div>
-        <div id="queryExplorerPanel" class="query-explorer-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaQueryExplorer">
+        <div id="queryExplorerPanel" class="sfoc-tool-panel query-explorer-panel org-limits-panel hidden" data-tool="QueryExplorer" data-i18n-aria-label="code.ariaQueryExplorer">
           <div class="org-limits-panel-inner query-explorer-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -1756,7 +1767,7 @@
                 ></div>
               </div>
               <div class="query-explorer-run-row">
-                <button type="button" id="queryExplorerRunBtn" class="org-limits-refresh-btn" data-i18n="queryExplorer.run">
+                <button type="button" id="queryExplorerRunBtn" class="sfoc-btn sfoc-btn--primary org-limits-refresh-btn" data-i18n="queryExplorer.run">
                   Ejecutar
                 </button>
               </div>
@@ -1863,7 +1874,7 @@
             </div>
           </div>
         </div>
-        <div id="apexCoverageComparePanel" class="apex-coverage-compare-panel org-limits-panel hidden" data-i18n-aria-label="code.ariaCoverageCompare">
+        <div id="apexCoverageComparePanel" class="sfoc-tool-panel apex-coverage-compare-panel org-limits-panel hidden" data-tool="ApexCoverageCompare" data-i18n-aria-label="code.ariaCoverageCompare">
           <div class="apex-coverage-compare-panel-inner org-limits-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -1887,7 +1898,8 @@
         </div>
         <div
           id="customSettingsComparePanel"
-          class="setup-records-compare-panel org-limits-panel hidden"
+          class="sfoc-tool-panel setup-records-compare-panel org-limits-panel hidden"
+          data-tool="CustomSettingsCompare"
           data-i18n-aria-label="code.ariaCustomSettingsCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
@@ -1945,7 +1957,8 @@
         </div>
         <div
           id="customMetadataComparePanel"
-          class="setup-records-compare-panel org-limits-panel hidden"
+          class="sfoc-tool-panel setup-records-compare-panel org-limits-panel hidden"
+          data-tool="CustomMetadataCompare"
           data-i18n-aria-label="code.ariaCustomMetadataCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
@@ -2003,7 +2016,8 @@
         </div>
         <div
           id="recordComparePanel"
-          class="setup-records-compare-panel org-limits-panel hidden"
+          class="sfoc-tool-panel setup-records-compare-panel org-limits-panel hidden"
+          data-tool="RecordCompare"
           data-i18n-aria-label="code.ariaRecordCompare"
         >
           <div class="setup-records-compare-panel-inner org-limits-panel-inner">
@@ -2096,7 +2110,7 @@
             <div id="recordCompareTableMount" class="setup-records-compare-table-mount"></div>
           </div>
         </div>
-        <div id="permissionDiffPanel" class="permission-diff-panel ph-no-capture hidden" data-i18n-aria-label="permDiff.ariaPanel">
+        <div id="permissionDiffPanel" class="sfoc-tool-panel permission-diff-panel ph-no-capture hidden" data-tool="PermissionDiff" data-i18n-aria-label="permDiff.ariaPanel">
           <div class="permission-diff-panel-inner">
             <div class="permission-diff-head">
               <div>
@@ -2197,7 +2211,7 @@
             </div>
           </div>
         </div>
-        <div id="environmentStatusPanel" class="env-status-panel ph-no-capture hidden" data-i18n-aria-label="envStatus.title">
+        <div id="environmentStatusPanel" class="sfoc-tool-panel env-status-panel ph-no-capture hidden" data-tool="EnvironmentStatus" data-i18n-aria-label="envStatus.title">
           <div class="env-status-panel-inner">
             <div class="env-status-head">
               <div>
@@ -2240,7 +2254,7 @@
             </div>
           </div>
         </div>
-        <div id="orgLimitsPanel" class="org-limits-panel hidden" data-i18n-aria-label="orgLimits.title">
+        <div id="orgLimitsPanel" class="sfoc-tool-panel org-limits-panel hidden" data-tool="OrgLimits" data-i18n-aria-label="orgLimits.title">
           <div class="org-limits-panel-inner">
             <div class="org-limits-head">
               <div>
@@ -2262,7 +2276,7 @@
             <div id="orgLimitsCards" class="org-limits-cards ph-no-capture"></div>
           </div>
         </div>
-        <div id="deployStatusPanel" class="deploy-status-panel ph-no-capture hidden" data-i18n-aria-label="deployStatus.title">
+        <div id="deployStatusPanel" class="sfoc-tool-panel deploy-status-panel ph-no-capture hidden" data-tool="DeployStatus" data-i18n-aria-label="deployStatus.title">
           <div class="deploy-status-panel-inner">
             <div class="deploy-status-head">
               <div>
@@ -2517,7 +2531,7 @@
             </div>
           </div>
         </div>
-        <div id="debugLogBrowserPanel" class="debug-log-browser-panel ph-no-capture hidden" data-i18n-aria-label="debugLogs.title">
+        <div id="debugLogBrowserPanel" class="sfoc-tool-panel debug-log-browser-panel ph-no-capture hidden" data-tool="DebugLogBrowser" data-i18n-aria-label="debugLogs.title">
           <div class="debug-log-browser-panel-inner">
             <div class="debug-log-browser-head">
               <div>
@@ -2887,12 +2901,13 @@
             </div>
           </div>
         </div>
-        <div id="quickEditPanel" class="quick-edit-panel hidden" data-i18n-aria-label="quickEdit.title">
+        <div id="quickEditPanel" class="sfoc-tool-panel quick-edit-panel hidden" data-tool="QuickEdit" data-i18n-aria-label="quickEdit.title">
           <div class="quick-edit-panel-inner">
             <header class="quick-edit-panel-header">
               <div class="quick-edit-panel-header-text">
                 <h2 class="org-limits-title" data-i18n="quickEdit.title">Editor Apex</h2>
                 <p class="sfoc-panel-subtitle" data-i18n="quickEdit.subtitle">Edita, Validate y haz deploy sin cambiar de pantalla</p>
+                <span id="quickEditDeployTargetChip" class="sfoc-org-chip" role="status" hidden></span>
               </div>
               <div class="quick-edit-search-zone">
                 <div class="quick-edit-search-bar">
@@ -2967,7 +2982,7 @@
             </div>
           </div>
         </div>
-        <div id="lightningQuickEditPanel" class="quick-edit-panel lightning-quick-edit-panel hidden" data-i18n-aria-label="lightningQuickEdit.title">
+        <div id="lightningQuickEditPanel" class="sfoc-tool-panel quick-edit-panel lightning-quick-edit-panel hidden" data-tool="LightningQuickEdit" data-i18n-aria-label="lightningQuickEdit.title">
           <div class="quick-edit-panel-inner">
             <header class="quick-edit-panel-header">
               <div class="quick-edit-panel-header-text">
@@ -3041,7 +3056,7 @@
             </div>
           </div>
         </div>
-        <div id="fieldHistoryPanel" class="field-history-panel ph-no-capture hidden" data-i18n-aria-label="fieldHistory.title">
+        <div id="fieldHistoryPanel" class="sfoc-tool-panel field-history-panel ph-no-capture hidden" data-tool="FieldHistory" data-i18n-aria-label="fieldHistory.title">
           <div class="field-history-panel-inner">
             <div class="field-history-head">
               <h2 class="field-history-title" data-i18n="fieldHistory.title">Historial de campos (Field History)</h2>
@@ -3174,7 +3189,7 @@
             </div>
           </div>
         </div>
-        <div id="setupAuditTrailPanel" class="setup-audit-panel ph-no-capture hidden" data-i18n-aria-label="setupAudit.title">
+        <div id="setupAuditTrailPanel" class="sfoc-tool-panel setup-audit-panel ph-no-capture hidden" data-tool="SetupAuditTrail" data-i18n-aria-label="setupAudit.title">
           <div class="setup-audit-panel-inner">
             <div class="setup-audit-head">
               <h2 class="setup-audit-title" data-i18n="setupAudit.title">Historial de Setup (Audit Trail)</h2>

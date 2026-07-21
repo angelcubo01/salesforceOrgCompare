@@ -1141,6 +1141,12 @@ html[data-ui-theme="light"] .toast.info {
   background: #eff6ff;
 }
 
+html[data-ui-theme="light"] .toast.success {
+  border-color: #16a34a;
+  color: #14532d;
+  background: #f0fdf4;
+}
+
 html[data-ui-theme="light"] .toast-spinner-cancel {
   border-color: rgba(30, 58, 138, 0.35);
   background: rgba(255, 255, 255, 0.65);

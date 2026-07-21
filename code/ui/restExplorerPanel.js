@@ -6,6 +6,7 @@ import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { flattenJsonForTree } from '../../shared/restExplorerApi.js';
 import { logToolUsage } from './toolUsageLog.js';
+import { bindRunShortcut } from './runShortcut.js';
 
 function escapeHtml(v) {
   return String(v ?? '')
@@ -79,6 +80,7 @@ async function sendRequest() {
 
 export function setupRestExplorerPanel() {
   document.getElementById('restExplorerSendBtn')?.addEventListener('click', () => void sendRequest());
+  bindRunShortcut('RestExplorer', () => void sendRequest(), { allowInMonaco: true });
 }
 
 export async function refreshRestExplorerPanel() {

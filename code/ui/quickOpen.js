@@ -29,7 +29,7 @@ const QUICK_OPEN_SHORTCUT = Object.freeze({
   key: 'p'
 });
 
-const MAX_TOTAL_RESULTS = 8;
+const MAX_TOTAL_RESULTS = 18;
 
 let isOpen = false;
 let searchGeneration = 0;

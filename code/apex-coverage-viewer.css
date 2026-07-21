@@ -1,7 +1,10 @@
 :root {
-  --acv-bg: #0f172a;
-  --acv-border: #334155;
-  --acv-text: #e2e8f0;
+  --sfoc-bg-app: #0f172a;
+  --sfoc-text: #e2e8f0;
+  --sfoc-border: #334155;
+  --acv-bg: var(--sfoc-bg-app);
+  --acv-border: var(--sfoc-border);
+  --acv-text: var(--sfoc-text);
 }
 
 html,
@@ -11,7 +14,7 @@ body {
   overflow: hidden;
   background: var(--acv-bg);
   color: var(--acv-text);
-  font-family: system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
 }
 
 .apex-cov-viewer-toolbar {
@@ -270,7 +273,7 @@ html[data-ui-theme='light'] .apex-cov-split-mini-legend {
 .apex-log-help-modal {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 1500;
   display: flex;
   align-items: center;
   justify-content: center;

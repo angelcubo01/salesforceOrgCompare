@@ -12,6 +12,7 @@ import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { guardToolAction } from './featureControlsUi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { renderVscodeTabBar } from './vscodeTabs.js';
+import { bindRunShortcut } from './runShortcut.js';
 
 import {
   createTabId,
@@ -1079,6 +1080,7 @@ export function setupAnonymousApexPanel() {
   setupCodeEditorSessionPersistence('AnonymousApex', persistSession);
   refreshSavedScriptsUi();
   syncSaveButtonLabel();
+  bindRunShortcut('AnonymousApex', () => void runAnonymousApex(), { allowInMonaco: true });
 }
 
 /** Aplica el tema Monaco guardado en ajustes (p. ej. tras cambiar desde Ajustes con esta pantalla abierta). */

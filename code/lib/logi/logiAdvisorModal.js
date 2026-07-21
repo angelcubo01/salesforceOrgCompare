@@ -2,6 +2,7 @@ import { mountLogiResume, setLogiResumeButtonVisible } from './logiResumePanel.j
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { renderLogiMarkdown, exportChatAsPlainText, logiMarkdownToPlainText } from '../../../shared/logi/logiMarkdown.js';
 import { getCurrentLang, t } from '../../../shared/i18n.js';
+import { showToast } from '../../ui/toast.js';
 import { bg } from '../../core/bridge.js';
 import { LOGI_ADVISOR_READY_EVENT } from '../../../shared/logi/posthogLogiAdvisorFlag.js';
 import { formatLogiModelLabel } from '../../../shared/logi/logiModelLabels.js';
@@ -1435,7 +1436,11 @@ function wireMessagesDelegation(modal) {
     if (copyCode instanceof HTMLElement) {
       const pre = copyCode.parentElement?.querySelector('pre code');
       const text = pre?.textContent || '';
-      if (text && navigator.clipboard?.writeText) void navigator.clipboard.writeText(text);
+      if (text && navigator.clipboard?.writeText) {
+        void navigator.clipboard.writeText(text).then(() => {
+          showToast(t('apexLogViewer.logi.copied'), 'info');
+        });
+      }
       return;
     }
 
@@ -1489,7 +1494,11 @@ async function handleMessageAction(modal, action, msgIndex) {
 
   if (action === 'copy') {
     const plain = logiMarkdownToPlainText(text);
-    if (plain && navigator.clipboard?.writeText) void navigator.clipboard.writeText(plain);
+    if (plain && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(plain).then(() => {
+        showToast(t('apexLogViewer.logi.copied'), 'info');
+      });
+    }
     return;
   }
   if (action === 'quote') {

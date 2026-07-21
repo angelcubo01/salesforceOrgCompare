@@ -1,8 +1,12 @@
 :root {
-  --asv-bg: #0f172a;
-  --asv-border: #334155;
-  --asv-text: #e2e8f0;
-  --asv-accent: #38bdf8;
+  --sfoc-bg-app: #0f172a;
+  --sfoc-text: #e2e8f0;
+  --sfoc-border: #334155;
+  --sfoc-accent: #38bdf8;
+  --asv-bg: var(--sfoc-bg-app);
+  --asv-border: var(--sfoc-border);
+  --asv-text: var(--sfoc-text);
+  --asv-accent: var(--sfoc-accent);
 }
 
 html,
@@ -12,7 +16,7 @@ body {
   overflow: hidden;
   background: var(--asv-bg);
   color: var(--asv-text);
-  font-family: system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
 }
 
 body {

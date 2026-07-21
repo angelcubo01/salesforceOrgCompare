@@ -601,6 +601,23 @@ function updateEditorActionButtons() {
   if (apiVersionInput) {
     apiVersionInput.disabled = isDeploying || !deployApiVersionWindow?.editable;
   }
+  syncDeployTargetChip(deployOrgId);
+}
+
+function syncDeployTargetChip(deployOrgId) {
+  const chip = document.getElementById('quickEditDeployTargetChip');
+  if (!chip) return;
+  if (!deployOrgId) {
+    chip.hidden = true;
+    chip.textContent = '';
+    return;
+  }
+  const alias = getOrgDisplayLabel(deployOrgId);
+  const kind = isOrgSandbox(deployOrgId)
+    ? t('quickEdit.deployTargetSandbox')
+    : t('quickEdit.deployTargetProd');
+  chip.hidden = false;
+  chip.textContent = `${t('quickEdit.deployTargetLabel')} ${alias} (${kind})`;
 }
 
 /** @deprecated alias */

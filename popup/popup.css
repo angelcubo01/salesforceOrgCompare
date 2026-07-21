@@ -3,11 +3,42 @@ body {
   margin: 0;
   padding: 8px 12px 12px;
   width: 460px;
-  background-color: #1a1a1a;
-  color: #e0e0e0;
+  background-color: var(--sfoc-bg-app, #1a1a1a);
+  color: var(--sfoc-text, #e0e0e0);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+:root {
+  --sfoc-bg-app: #1a1a1a;
+  --sfoc-bg-panel: #252525;
+  --sfoc-border: #444444;
+  --sfoc-text: #e0e0e0;
+  --sfoc-accent: #38bdf8;
+  --sfoc-z-modal: 1500;
+}
+
+.sfoc-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--sfoc-border);
+  border-radius: 8px;
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sfoc-btn--primary {
+  background: var(--sfoc-accent);
+  border-color: var(--sfoc-accent);
+  color: #0f172a;
 }
 
 .hidden {
@@ -482,7 +513,7 @@ li.dragging {
 .popup-help-modal {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: var(--sfoc-z-modal, 1500);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -556,7 +587,7 @@ li.dragging {
 .popup-welcome-modal {
   position: fixed;
   inset: 0;
-  z-index: 10001;
+  z-index: calc(var(--sfoc-z-modal, 1500) + 1);
   display: flex;
   align-items: stretch;
   justify-content: stretch;
@@ -757,7 +788,7 @@ body.popup-welcome-active .popup-welcome-panel {
 .popup-open-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10002;
+  z-index: calc(var(--sfoc-z-modal, 1500) + 2);
   display: flex;
   align-items: center;
   justify-content: center;

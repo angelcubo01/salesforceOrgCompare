@@ -36,6 +36,31 @@
   --sfoc-quick-edit-search-min: 288px;
   /* Altura de la barra de modos (.app-mode-tabs-wrap + .app-mode-tab min-height) */
   --sfoc-app-mode-bar-min-h: 62px;
+  /* Tokens semánticos (guía UI/UX §3) */
+  --sfoc-bg-app: #1a1a1a;
+  --sfoc-bg-panel: #252525;
+  --sfoc-bg-elevated: #333333;
+  --sfoc-border: #555555;
+  --sfoc-text: #e0e0e0;
+  --sfoc-text-muted: #94a3b8;
+  --sfoc-accent: #38bdf8;
+  --sfoc-danger: #ef4444;
+  --sfoc-success: #22c55e;
+  --sfoc-warn: #f59e0b;
+  --sfoc-info: #60a5fa;
+  --sfoc-space-1: 4px;
+  --sfoc-space-2: 8px;
+  --sfoc-space-3: 12px;
+  --sfoc-space-4: 16px;
+  --sfoc-space-5: 24px;
+  --sfoc-space-6: 32px;
+  --sfoc-radius-sm: 6px;
+  --sfoc-radius-md: 8px;
+  --sfoc-radius-lg: 12px;
+  --sfoc-z-toast: 1500;
+  --sfoc-z-help: calc(var(--sfoc-z-overlay) + 1);
+  --sfoc-z-logi: calc(var(--sfoc-z-overlay) + 2);
+  --sfoc-z-boot: calc(var(--sfoc-z-overlay) + 100);
 }
 
 /* Campos de texto de búsqueda / filtro unificados (sidebar, Quick Edit, Apex tests, package.xml, Field Dep, Anonymous Apex) */
@@ -65,6 +90,257 @@
 .sfoc-query-input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Botones estándar (guía UI/UX §4.1) */
+.sfoc-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sfoc-space-2);
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--sfoc-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.sfoc-btn:hover:not(:disabled) {
+  background: var(--sfoc-bg-elevated);
+  border-color: #666;
+}
+.sfoc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sfoc-btn--primary {
+  background: var(--sfoc-accent);
+  border-color: var(--sfoc-accent);
+  color: #0f172a;
+}
+.sfoc-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: var(--sfoc-accent);
+  border-color: var(--sfoc-accent);
+}
+.sfoc-btn--secondary {
+  background: var(--sfoc-bg-panel);
+  border-color: var(--sfoc-border);
+  color: var(--sfoc-text);
+}
+.sfoc-btn--danger {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #fecaca;
+}
+.sfoc-btn--danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.28);
+  border-color: var(--sfoc-danger);
+  color: #fff;
+}
+.sfoc-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--sfoc-text-muted);
+}
+.sfoc-btn--ghost:hover:not(:disabled) {
+  background: var(--sfoc-bg-elevated);
+  border-color: var(--sfoc-border);
+  color: var(--sfoc-text);
+}
+
+/* Alias temporales: clases one-off → sfoc-btn */
+.query-explorer-secondary-btn,
+.setup-records-compare-secondary-btn,
+.deploy-status-primary-btn,
+.field-history-primary-btn,
+.org-limits-refresh-btn,
+.anonymous-apex-run-btn,
+.rest-explorer-send-btn {
+  /* heredan estilos vía clases adicionales en HTML */
+}
+
+.query-explorer-secondary-btn,
+.setup-records-compare-secondary-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--sfoc-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.query-explorer-secondary-btn:hover:not(:disabled),
+.setup-records-compare-secondary-btn:hover:not(:disabled) {
+  background: var(--sfoc-bg-elevated);
+}
+.query-explorer-secondary-btn:disabled,
+.setup-records-compare-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.deploy-status-primary-btn,
+.field-history-primary-btn,
+.org-limits-refresh-btn,
+.anonymous-apex-run-btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--sfoc-accent);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-accent);
+  color: #0f172a;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.deploy-status-primary-btn:hover:not(:disabled),
+.field-history-primary-btn:hover:not(:disabled),
+.org-limits-refresh-btn:hover:not(:disabled),
+.anonymous-apex-run-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.debug-log-trace-modal-btn-primary {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--sfoc-accent);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-accent);
+  color: #0f172a;
+  font-size: 13px;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.debug-log-trace-modal-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.apex-tests-runs-action-btn--primary {
+  color: #0f172a;
+  background: var(--sfoc-accent);
+  border-color: var(--sfoc-accent);
+}
+.apex-tests-runs-action-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* Panel chrome estándar (guía UI/UX §4.3) */
+.sfoc-tool-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  z-index: var(--sfoc-z-tool-panel);
+}
+.sfoc-tool-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sfoc-space-3);
+  padding: var(--sfoc-space-4) var(--sfoc-workspace-pad-x);
+  border-bottom: 1px solid var(--sfoc-border);
+}
+.sfoc-tool-panel__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--sfoc-text);
+}
+.sfoc-tool-panel__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sfoc-space-2);
+}
+.sfoc-tool-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--sfoc-space-4) var(--sfoc-workspace-pad-x);
+}
+.sfoc-tool-panel__status {
+  padding: var(--sfoc-space-2) var(--sfoc-workspace-pad-x);
+  font-size: 13px;
+  color: var(--sfoc-text-muted);
+  border-top: 1px solid var(--sfoc-border);
+}
+.sfoc-tool-panel__status[data-tone="success"] { color: var(--sfoc-success); }
+.sfoc-tool-panel__status[data-tone="warn"] { color: var(--sfoc-warn); }
+.sfoc-tool-panel__status[data-tone="error"] { color: var(--sfoc-danger); }
+.sfoc-tool-panel__status[data-tone="info"] { color: var(--sfoc-info); }
+
+.sfoc-org-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sfoc-space-1);
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--sfoc-border);
+  background: var(--sfoc-bg-elevated);
+  font-size: 12px;
+  color: var(--sfoc-text-muted);
+}
+.sfoc-org-chip strong {
+  color: var(--sfoc-text);
+  font-weight: 600;
+}
+
+/* Empty / loading (guía UI/UX §4.7) */
+.sfoc-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sfoc-space-3);
+  padding: var(--sfoc-space-6) var(--sfoc-space-4);
+  text-align: center;
+  color: var(--sfoc-text-muted);
+  font-size: 13px;
+}
+.sfoc-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sfoc-space-2);
+  padding: var(--sfoc-space-4);
+  color: var(--sfoc-text-muted);
+  font-size: 13px;
+}
+.sfoc-loading::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--sfoc-border);
+  border-top-color: var(--sfoc-accent);
+  border-radius: 50%;
+  animation: file-viewer-loading-spin 0.7s linear infinite;
 }
 
 /* <select> alineado con .sfoc-query-input (mismas variables --sfoc-query-*) */
@@ -483,7 +759,7 @@ body.sidebar-collapsed .sidebar {
   min-width: 0;
   max-width: min(780px, calc(100vw - 16px));
   overflow-x: hidden;
-  z-index: 10050;
+  z-index: var(--sfoc-z-help);
   border-radius: 4px;
   margin: 0;
 }
@@ -1857,6 +2133,30 @@ body.artifact-apex-tests #editorContainer.editor {
   color: #94a3b8;
   max-width: 68ch;
 }
+.app-landing-tools-wrap {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto 20px;
+}
+.app-landing-tools-heading {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sfoc-text-muted, #94a3b8);
+}
+.app-landing-tools-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app-landing-tools-empty {
+  padding: 12px 0;
+  margin: 0;
+  font-size: 13px;
+}
 .app-landing-grid-wrap {
   width: 100%;
   display: flex;
@@ -2869,7 +3169,7 @@ body.artifact-apex-tests #editorContainer.editor {
 .apex-tests-coverage-modal {
   position: fixed;
   inset: 0;
-  z-index: 12000;
+  z-index: var(--sfoc-z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4618,7 +4918,7 @@ body.artifact-apex-tests #editorContainer.editor {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  z-index: 1000;
+  z-index: var(--sfoc-z-toast);
 }
 .toast {
   background: rgba(32, 32, 32, 0.95);
@@ -4639,6 +4939,46 @@ body.artifact-apex-tests #editorContainer.editor {
 .toast.error { border-color: #ef4444; color: #ffdada; max-width: min(560px, calc(100vw - 32px)); }
 .toast.warn { border-color: #f59e0b; color: #fff1cc; }
 .toast.info { border-color: #60a5fa; color: #e6f0ff; }
+.toast.success { border-color: var(--sfoc-success); color: #bbf7d0; background: rgba(20, 83, 45, 0.35); }
+
+/* Modal helper (guía UI/UX §4.5) */
+.sfoc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--sfoc-z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sfoc-space-4);
+  background: rgba(0, 0, 0, 0.55);
+}
+.sfoc-modal-panel {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  padding: var(--sfoc-space-5);
+  border-radius: var(--sfoc-radius-lg);
+  border: 1px solid var(--sfoc-border);
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.sfoc-modal-title {
+  margin: 0 0 var(--sfoc-space-3);
+  font-size: 16px;
+  font-weight: 600;
+}
+.sfoc-modal-body {
+  margin-bottom: var(--sfoc-space-4);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--sfoc-text-muted);
+}
+.sfoc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sfoc-space-2);
+}
 
 .toast:has(.toast-title) {
   white-space: normal;
@@ -4846,7 +5186,7 @@ body.artifact-apex-tests #editorContainer.editor {
 .app-help-modal {
   position: fixed;
   inset: 0;
-  z-index: 10050;
+  z-index: var(--sfoc-z-help);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10995,7 +11335,7 @@ body.quick-open-active {
   left: 0;
   top: 0;
   right: auto;
-  z-index: 10050;
+  z-index: var(--sfoc-z-help);
   max-height: min(280px, 55vh);
   overflow-y: auto;
 }

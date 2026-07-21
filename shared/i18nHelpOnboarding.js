@@ -12,9 +12,11 @@ export const helpOnboardingEs = {
   'help.tool.home.body1':
     'Conecta tus entornos desde el icono de la extensión. Allí puedes añadir el entorno de la pestaña actual, poner alias y agruparlos (por ejemplo PRO, UAT).',
   'help.tool.home.body2':
-    'En la barra superior elige un área: Comparador, Tests y depurar, Análisis, Límites y auditoría, o Manifiestos. Cada área agrupa herramientas en un submenú.',
+    'En la barra superior elige un área: Comparador, Desarrollo, Análisis, Monitorización o Manifiestos. Cada área agrupa herramientas en un submenú.',
   'help.tool.home.body3':
     'La primera vez que abras una herramienta verás un resumen breve. Usa Ctrl+Shift+P (⌘⇧P en Mac) para saltar a metadatos, herramientas o scripts guardados.',
+  'help.tool.home.body4':
+    'Atajos útiles: Ctrl+Enter (⌘↵) ejecutar consultas o Apex anónimo; Ctrl+S (⌘S) guardar en editores; F2 renombrar scripts; Escape cerrar modales; ? o Ayuda para esta ventana.',
 
   'help.tool.Comparator.title': 'Comparador de metadatos',
   'help.tool.Comparator.lead':
@@ -527,9 +529,11 @@ export const helpOnboardingEn = {
   'help.tool.home.body1':
     'Connect your orgs from the extension icon. There you can add the org from the current tab, set aliases, and group them (for example PRO, UAT).',
   'help.tool.home.body2':
-    'In the top bar pick an area: Comparator, Tests & debug, Analysis, Limits & audit, or Manifests. Each area groups tools in a submenu.',
+    'In the top bar pick an area: Comparator, Development, Analysis, Monitoring, or Manifests. Each area groups tools in a submenu.',
   'help.tool.home.body3':
     'The first time you open a tool you will see a short summary. Use Ctrl+Shift+P (⌘⇧P on Mac) to jump to metadata, tools, or saved scripts.',
+  'help.tool.home.body4':
+    'Useful shortcuts: Ctrl+Enter (⌘↵) run queries or anonymous Apex; Ctrl+S (⌘S) save in editors; F2 rename scripts; Escape close modals; ? or Help for this panel.',
 
   'help.tool.Comparator.title': 'Metadata comparator',
   'help.tool.Comparator.lead':

@@ -1,6 +1,6 @@
 .logi-ask-selection-btn {
   position: fixed;
-  z-index: 10040;
+  z-index: var(--sfoc-z-logi, 1402);
   padding: 6px 10px;
   font-size: 0.75rem;
   font-weight: 700;
@@ -93,7 +93,7 @@
 .logi-advisor-modal {
   position: fixed;
   inset: 0;
-  z-index: 10050;
+  z-index: var(--sfoc-z-logi, 1402);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1417,7 +1417,7 @@
 .logi-advisor-approval {
   position: fixed;
   inset: 0;
-  z-index: 10060;
+  z-index: calc(var(--sfoc-z-logi, 1402) + 1);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1757,7 +1757,7 @@ html[data-ui-theme='light'] .logi-advisor-model-select {
 .logi-advisor-edit-modal {
   position: fixed;
   inset: 0;
-  z-index: 10060;
+  z-index: calc(var(--sfoc-z-logi, 1402) + 1);
   display: flex;
   align-items: center;
   justify-content: center;
