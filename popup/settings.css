@@ -88,6 +88,43 @@ body {
   flex-shrink: 0;
 }
 
+.settings-subheading {
+  margin: 16px 0 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.settings-sf-inject-integrations {
+  margin-top: 8px;
+  padding: 10px 12px 4px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.settings-checkbox-row--nested {
+  margin-left: 4px;
+}
+
+.settings-hint--nested {
+  margin-left: 28px;
+  margin-bottom: 10px;
+}
+
+html[data-ui-theme='light'] .settings-sf-inject-integrations {
+  border-color: #cbd5e1;
+  background: rgba(248, 250, 252, 0.8);
+}
+
+html[data-ui-theme='light'] .settings-subheading {
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme='light'] .settings-checkbox-row {
+  color: var(--sfoc-light-text);
+}
+
 .settings-select {
   width: 100%;
   max-width: 280px;
@@ -239,6 +276,31 @@ body {
   margin-bottom: 12px;
 }
 
+.settings-install-id {
+  margin: 0 0 12px 0;
+}
+
+.settings-version-row--install {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.settings-install-id-value {
+  margin-left: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  word-break: break-all;
+}
+
+.settings-copy-id {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  margin-left: auto;
+}
+
 .settings-links {
   display: flex;
   flex-wrap: wrap;
@@ -343,7 +405,20 @@ html[data-ui-theme='light'] {
   --sfoc-light-border: #7d8fa3;
   --sfoc-light-border-subtle: #94a3b8;
   --sfoc-light-text: #0f172a;
-  --sfoc-light-text-muted: #475569;
+  --sfoc-light-text-muted: #334155;
+  --sfoc-light-text-placeholder: #64748b;
+  --sfoc-text-muted: #334155;
+  --sfoc-bg-app: #f1f5f9;
+  --sfoc-bg-panel: #ffffff;
+  --sfoc-bg-elevated: var(--sfoc-light-bg-elevated);
+  --sfoc-border: var(--sfoc-light-border);
+  --sfoc-text: var(--sfoc-light-text);
+  --sfoc-text-muted: var(--sfoc-light-text-muted);
+  --sfoc-accent: #2563eb;
+  --sfoc-danger: #dc2626;
+  --sfoc-success: #16a34a;
+  --sfoc-warn: #d97706;
+  --sfoc-info: #2563eb;
 }
 
 html[data-ui-theme='light'] body {
@@ -396,7 +471,8 @@ html[data-ui-theme='light'] .settings-version-row {
   color: var(--sfoc-light-text-muted);
 }
 
-html[data-ui-theme='light'] .settings-version-value {
+html[data-ui-theme='light'] .settings-version-value,
+html[data-ui-theme='light'] .settings-install-id-value {
   color: var(--sfoc-light-text);
 }
 

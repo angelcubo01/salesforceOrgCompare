@@ -14,6 +14,7 @@ import { installFeatureControlsGuard } from './background/featureControlsGuard.j
 import { hydrateLogiAdvisorCache } from './shared/logi/logiAdvisorCache.js';
 import { bootstrapLogiAdvisorViaProxy } from './shared/logi/logiAdvisorBootstrap.js';
 import { loadExtensionSettings } from './shared/extensionSettings.js';
+import { loadSfInjectSettings } from './sfInject/lib/settings.js';
 import { sendPosthogException } from './background/posthogTelemetry.js';
 
 try {
@@ -21,6 +22,7 @@ try {
   installLogiChatStreamPort();
   void installFeatureControlsGuard();
   void loadExtensionSettings()
+    .then(() => loadSfInjectSettings())
     .then(() => hydrateLogiAdvisorCache())
     .then(() => bootstrapLogiAdvisorViaProxy());
   installCookieCacheInvalidation();

@@ -247,7 +247,10 @@ const translations = {
     'settings.logi.usageMonth': 'Este mes',
     'settings.logi.usageUser': 'Total',
     'settings.versionLabel': 'Versión instalada',
-    'settings.userIdLabel': 'ID de usuario',
+    'settings.userIdLabel': 'ID de instalación',
+    'settings.userIdCopy': 'Copiar',
+    'settings.userIdCopied': 'ID copiado.',
+    'settings.userIdCopyFailed': 'No se pudo copiar el ID.',
     'settings.projectPage': 'Web del proyecto',
     'settings.privacy': 'Política de privacidad',
     'settings.linkedIn': 'by Ángel Picado',
@@ -265,6 +268,22 @@ const translations = {
     'settings.orgsImportReplaceConfirm':
       '¿Sustituir todas los entornos, orden y alias por el contenido del fichero?',
     'settings.sectionBackup': 'Copia de seguridad',
+    'settings.sectionSfInject': 'Salesforce UI Integration',
+    'settings.sfInjectLead':
+      'Añade accesos de Salesforce Org Compare dentro de las pantallas nativas de Salesforce (Setup). Solo funciona en entornos guardados en la extensión y con sesión activa en el navegador.',
+    'settings.sfInjectEnabled': 'Activar todas las integraciones UI',
+    'settings.sfInjectEnabledHint':
+      'Interruptor global. Si lo desactivas, se quitan todos los botones y enlaces inyectados en Salesforce. Si lo activas, se habilitan todas las integraciones de la lista. Si solo algunas están activas, el check aparece en estado intermedio.',
+    'settings.sfInjectIntegrationsTitle': 'Integraciones disponibles',
+    'settings.sfInjectIntegrationsHint':
+      'Puedes activar o desactivar cada integración por separado. Las que estén desmarcadas no se inyectan aunque el interruptor global esté activo.',
+    'settings.sfInjectDebugLogOpenViewer': 'Debug Logs → Abrir en SFOC',
+    'settings.sfInjectDebugLogOpenViewerHint':
+      'En Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), añade el enlace «Abrir en SFOC» junto a View / Download / Delete de cada fila. Al pulsarlo descarga el Apex Log y lo abre en el visor analítico de la extensión.',
+    'settings.sfInjectDebugLogsTableOrder': 'Debug Logs → Tabla encima de User Trace Flags',
+    'settings.sfInjectDebugLogsTableOrderHint':
+      'En Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), muestra la tabla Debug Logs (con Previous Page y Next Page) encima de User Trace Flags. Se reaplica al refrescar la página o al paginar.',
+    'settings.sfInjectSaved': 'Salesforce UI Integration guardada.',
     'settings.backupExport': 'Exportar copia',
     'settings.backupImportMerge': 'Importar (fusionar)',
     'settings.backupImportReplace': 'Importar (sustituir todo)',
@@ -461,6 +480,9 @@ const translations = {
     'toolbar.supportMe': 'Apóyame',
     'toolbar.supportMeTitle': 'Apoya el desarrollo en Buy Me a Coffee (se abre en una pestaña nueva)',
     'toolbar.support': 'Soporte',
+    'toolbar.themeToggleLabel': 'Tema de la interfaz',
+    'toolbar.themeToggleLight': 'Modo claro activo; cambiar a oscuro',
+    'toolbar.themeToggleDark': 'Modo oscuro activo; cambiar a claro',
     'toolbar.supportTitle': 'Contactar con soporte (chat de incidencias)',
     'toolbar.supportUnavailable':
       'El chat de soporte no está disponible.',
@@ -2736,7 +2758,10 @@ const translations = {
     'settings.logi.usageMonth': 'This month',
     'settings.logi.usageUser': 'Total',
     'settings.versionLabel': 'Installed version',
-    'settings.userIdLabel': 'User ID',
+    'settings.userIdLabel': 'Installation ID',
+    'settings.userIdCopy': 'Copy',
+    'settings.userIdCopied': 'ID copied.',
+    'settings.userIdCopyFailed': 'Could not copy the ID.',
     'settings.projectPage': 'Project website',
     'settings.privacy': 'Privacy policy',
     'settings.linkedIn': 'by Ángel Picado',
@@ -2754,6 +2779,22 @@ const translations = {
     'settings.orgsImportReplaceConfirm':
       'Replace all saved orgs, order, and aliases with the file contents?',
     'settings.sectionBackup': 'Backup',
+    'settings.sectionSfInject': 'Salesforce UI Integration',
+    'settings.sfInjectLead':
+      'Adds Salesforce Org Compare shortcuts inside native Salesforce screens (Setup). Only works for orgs saved in the extension and with an active browser session.',
+    'settings.sfInjectEnabled': 'Enable all UI integrations',
+    'settings.sfInjectEnabledHint':
+      'Global switch. Turning it off removes every injected button/link in Salesforce. Turning it on enables all integrations below. If only some are enabled, the checkbox shows an indeterminate state.',
+    'settings.sfInjectIntegrationsTitle': 'Available integrations',
+    'settings.sfInjectIntegrationsHint':
+      'Toggle each integration individually. Unchecked ones are not injected even if the global switch is on.',
+    'settings.sfInjectDebugLogOpenViewer': 'Debug Logs → Open in SFOC',
+    'settings.sfInjectDebugLogOpenViewerHint':
+      'On Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), adds an «Open in SFOC» link next to View / Download / Delete on each row. Clicking it downloads the Apex Log and opens it in the extension’s analytical viewer.',
+    'settings.sfInjectDebugLogsTableOrder': 'Debug Logs → Table above User Trace Flags',
+    'settings.sfInjectDebugLogsTableOrderHint':
+      'On Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), shows the Debug Logs table (with Previous Page and Next Page) above User Trace Flags. Re-applies on refresh or pagination.',
+    'settings.sfInjectSaved': 'Salesforce UI Integration saved.',
     'settings.backupExport': 'Export backup',
     'settings.backupImportMerge': 'Import (merge)',
     'settings.backupImportReplace': 'Import (replace all)',
@@ -2959,6 +3000,9 @@ const translations = {
     'toolbar.supportMe': 'Support me',
     'toolbar.supportMeTitle': 'Support development on Buy Me a Coffee (opens in a new tab)',
     'toolbar.support': 'Support',
+    'toolbar.themeToggleLabel': 'Interface theme',
+    'toolbar.themeToggleLight': 'Light mode on; switch to dark',
+    'toolbar.themeToggleDark': 'Dark mode on; switch to light',
     'toolbar.supportTitle': 'Contact support (issue chat)',
     'toolbar.supportUnavailable':
       'Support chat is unavailable.',

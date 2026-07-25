@@ -257,6 +257,53 @@
               </svg>
               <span class="app-toolbar-bmc-label" data-i18n="toolbar.supportMe">Apóyame</span>
             </a>
+            <div class="app-theme-toggle" id="appThemeToggle">
+              <input
+                type="checkbox"
+                class="app-theme-toggle__input"
+                id="appThemeToggleInput"
+                role="switch"
+              />
+              <label class="app-theme-toggle__track" for="appThemeToggleInput">
+                <span class="app-theme-toggle__thumb" aria-hidden="true">
+                  <svg
+                    class="app-theme-toggle__icon"
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    <g class="app-theme-toggle__moon" fill="currentColor">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                      <circle cx="15.5" cy="9.5" r="1" fill="#cbd5e1" opacity="0.55" />
+                      <circle cx="17" cy="13.5" r="0.75" fill="#cbd5e1" opacity="0.45" />
+                    </g>
+                    <g class="app-theme-toggle__sun" fill="currentColor">
+                      <circle class="app-theme-toggle__sun-disc" cx="12" cy="12" r="5" />
+                      <g
+                        class="app-theme-toggle__sun-beams"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        fill="none"
+                      >
+                        <line x1="12" y1="2" x2="12" y2="4" />
+                        <line x1="12" y1="20" x2="12" y2="22" />
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                        <line x1="2" y1="12" x2="4" y2="12" />
+                        <line x1="20" y1="12" x2="22" y2="12" />
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                      </g>
+                    </g>
+                  </svg>
+                </span>
+                <span class="app-theme-toggle__stars" aria-hidden="true"></span>
+              </label>
+            </div>
             <button
               type="button"
               id="appSupportBtn"

@@ -179,14 +179,23 @@ export function buildHostCandidatesForOrg(org) {
       const prefix = instHost.replace('.my.salesforce.com', '');
       add(`${prefix}.lightning.force.com`);
       add(`${prefix}.salesforce.com`);
+      add(`${prefix}.my.salesforce-setup.com`);
+      add(`${prefix}.salesforce-setup.com`);
     } else if (instHost.endsWith('.lightning.force.com')) {
       const prefix = instHost.replace('.lightning.force.com', '');
       add(`${prefix}.my.salesforce.com`);
       add(`${prefix}.salesforce.com`);
+      add(`${prefix}.my.salesforce-setup.com`);
+      add(`${prefix}.salesforce-setup.com`);
     } else if (instHost.endsWith('.salesforce-setup.com')) {
       const prefix = instHost.replace('.salesforce-setup.com', '');
       add(`${prefix}.my.salesforce.com`);
       add(`${prefix}.salesforce.com`);
+      if (prefix.endsWith('.my')) {
+        add(`${prefix.replace(/\.my$/, '')}.my.salesforce-setup.com`);
+      } else {
+        add(`${prefix}.my.salesforce-setup.com`);
+      }
     }
   } catch {}
   return hosts;

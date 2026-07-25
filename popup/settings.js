@@ -39,6 +39,7 @@ import {
   normalizeLogiQuickActionFullStore,
   normalizeLogiQuickActionPromptStore
 } from '../shared/logi/logiQuickActionPrompts.js';
+import { wireSfInjectSettings } from '../sfInject/popup/settingsPanel.js';
 
 const MONACO_THEME_I18N_KEYS = {
   'sfoc-editor-dark': 'settings.monacoThemeSfocDark',
@@ -578,6 +579,7 @@ function wireOrgsBackup() {
   });
 }
 
+
 async function main() {
   await loadLang();
   await loadExtensionSettings();
@@ -591,13 +593,30 @@ async function main() {
   wireGeneralTraceSettings();
   wireAdvancedPanel();
   wireOrgsBackup();
+  wireSfInjectSettings(t);
 
   const manifest = chrome.runtime.getManifest();
   const verEl = document.getElementById('settingsVersion');
   if (verEl) verEl.textContent = `v${manifest.version}`;
 
   const userIdEl = document.getElementById('settingsTelemetryUserId');
-  if (userIdEl) userIdEl.textContent = await getOrCreateTelemetryInstallId();
+  const installId = await getOrCreateTelemetryInstallId();
+  if (userIdEl) {
+    userIdEl.textContent = installId;
+    userIdEl.title = installId;
+  }
+  const copyBtn = document.getElementById('settingsCopyInstallId');
+  const copyStatus = document.getElementById('settingsCopyInstallIdStatus');
+  copyBtn?.addEventListener('click', async () => {
+    const id = userIdEl?.textContent?.trim() || installId;
+    if (!id || id === '—') return;
+    try {
+      await navigator.clipboard.writeText(id);
+      if (copyStatus) copyStatus.textContent = t('settings.userIdCopied');
+    } catch {
+      if (copyStatus) copyStatus.textContent = t('settings.userIdCopyFailed');
+    }
+  });
 
   const home = document.getElementById('settingsHomeLink');
   if (home && UPDATE_PAGE_URL) home.href = UPDATE_PAGE_URL;

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
+  addDistinctIdToStaticCohort,
   extractCohortIdFromFlag,
   isDistinctIdInCohort,
   isLogiAdvisorFlagEnabledForDistinctId,
@@ -235,5 +236,57 @@ describe('fetchPersonQuotaBonus', () => {
       '9f714351-1446-4c09-8a72-37aec34a91f1'
     );
     expect(bonus).toEqual({ day: 10, month: -5, user: 100, iterations: 5 });
+  });
+});
+
+describe('addDistinctIdToStaticCohort', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('looks up person by distinct_id and PATCHes add_persons_to_static_cohort', async () => {
+    const fetchMock = vi.fn(async (url, init) => {
+      const u = String(url);
+      if (u.includes('/persons/?distinct_id=')) {
+        return {
+          ok: true,
+          json: async () => ({
+            results: [{ uuid: '54d7961f-7abf-5228-ae43-1b7bde6f8bf0' }]
+          })
+        };
+      }
+      if (u.includes('/cohorts/180098/add_persons_to_static_cohort/')) {
+        expect(init?.method).toBe('PATCH');
+        expect(JSON.parse(String(init?.body))).toEqual({
+          person_ids: ['54d7961f-7abf-5228-ae43-1b7bde6f8bf0']
+        });
+        return { ok: true, json: async () => ({ success: true }), text: async () => '' };
+      }
+      throw new Error(`unexpected fetch: ${u}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await addDistinctIdToStaticCohort(
+      {
+        POSTHOG_PERSONAL_API_KEY: 'phx_test',
+        POSTHOG_PROJECT_ID: '191202',
+        POSTHOG_HOST: 'https://eu.posthog.com'
+      },
+      '9f714351-1446-4c09-8a72-37aec34a91f1',
+      180098
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      personUuid: '54d7961f-7abf-5228-ae43-1b7bde6f8bf0'
+    });
+    expect(
+      fetchMock.mock.calls.some(([u]) =>
+        String(u).includes('/cohorts/180098/add_persons_to_static_cohort/')
+      )
+    ).toBe(true);
+    expect(
+      fetchMock.mock.calls.some(([u]) => /\/cohorts\/180098\/persons\/?$/.test(String(u)))
+    ).toBe(false);
   });
 });

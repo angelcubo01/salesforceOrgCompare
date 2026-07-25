@@ -44,6 +44,7 @@ import {
 import { applyArtifactTypeUi, getSelectedArtifactType } from './ui/artifactTypeUi.js';
 import { setupAppHelp, maybeShowToolOnboarding, refreshHelpModalIfOpen } from './ui/appHelp.js';
 import { setupAppSupport, refreshAppSupportUi } from './ui/appSupport.js';
+import { setupAppThemeToggle, syncAppThemeToggleUi } from './ui/appThemeToggle.js';
 import { setupFeatureControlsUi, applyFeatureControlsUi } from './ui/featureControlsUi.js';
 import {
   setupGeneratePackageXmlPanel,
@@ -225,6 +226,7 @@ async function init() {
 
         await loadExtensionSettings();
         applyUiThemeToDocument(document);
+        syncAppThemeToggleUi();
         updateApexTestsHubPollingState();
         updateDeployStatusPollingState();
         if (state.monaco) applyMonacoThemeGlobally(state.monaco);
@@ -275,6 +277,7 @@ async function init() {
   setupQuickOpen();
   setupAppModeTabHandlers();
   setupAppHelp();
+  setupAppThemeToggle();
   setupAppSupport();
   setupGeneratePackageXmlPanel();
   setupMetadataTypeComparePanel();

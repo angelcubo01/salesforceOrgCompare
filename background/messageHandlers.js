@@ -249,6 +249,7 @@ import { isOrgAlreadySaved } from '../shared/orgPrefs.js';
 import { RetrieveCancelledError } from '../shared/metadataRetrieve.js';
 import { sanitizeUiError } from '../shared/sanitizeUiError.js';
 import { isTrustedExtensionSender } from '../shared/trustedSender.js';
+import { handleSfInjectMessage, isSfInjectMessageType } from '../sfInject/background/handlers.js';
 import { pickUsageLogEntry } from '../shared/usageLogEntry.js';
 import {
   beginRetrieveSession,
@@ -485,6 +486,13 @@ export function installMessageHandlers() {
     };
     (async () => {
       try {
+        if (isSfInjectMessageType(message?.type)) {
+          const sfRes = await handleSfInjectMessage(message, sender);
+          if (sfRes != null) {
+            reply(sfRes);
+            return;
+          }
+        }
         switch (message?.type) {
           case 'sfoc:ping': {
             reply({

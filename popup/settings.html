@@ -125,6 +125,26 @@
           <p id="settingsGeneralTraceStatus" class="settings-status" role="status"></p>
         </section>
 
+        <section class="settings-card" id="settingsSfInject" aria-labelledby="settings-sfinject-heading">
+          <h2 id="settings-sfinject-heading" class="settings-card-title" data-i18n="settings.sectionSfInject">
+            Salesforce UI Integration
+          </h2>
+          <p class="settings-hint settings-hint--nomargin" data-i18n="settings.sfInjectLead"></p>
+          <label class="settings-checkbox-row">
+            <input type="checkbox" id="settingsSfInjectEnabled" />
+            <span data-i18n="settings.sfInjectEnabled">Activar integración UI en Salesforce</span>
+          </label>
+          <p class="settings-hint" data-i18n="settings.sfInjectEnabledHint"></p>
+          <div class="settings-sf-inject-integrations" role="group" aria-labelledby="settings-sfinject-integrations-heading">
+            <h3 id="settings-sfinject-integrations-heading" class="settings-subheading" data-i18n="settings.sfInjectIntegrationsTitle">
+              Integraciones
+            </h3>
+            <p class="settings-hint settings-hint--nomargin" data-i18n="settings.sfInjectIntegrationsHint"></p>
+            <div id="settingsSfInjectIntegrations"></div>
+          </div>
+          <p id="settingsSfInjectStatus" class="settings-status" role="status"></p>
+        </section>
+
         <section class="settings-card" id="settingsLogi" hidden aria-labelledby="settings-logi-heading">
           <h2 id="settings-logi-heading" class="settings-card-title" data-i18n="settings.logi.sectionTitle">Logi · IA</h2>
           <p class="settings-hint settings-hint--nomargin" data-i18n="settings.logi.lead"></p>
@@ -203,10 +223,21 @@
             <span data-i18n="settings.versionLabel">Versión instalada</span>
             <strong id="settingsVersion" class="settings-version-value">—</strong>
           </p>
-          <p class="settings-version-row">
-            <span data-i18n="settings.userIdLabel">ID de usuario (PostHog)</span>
-            <strong id="settingsTelemetryUserId" class="settings-version-value">—</strong>
-          </p>
+          <div class="settings-install-id">
+            <p class="settings-version-row settings-version-row--install">
+              <span data-i18n="settings.userIdLabel">ID de instalación</span>
+              <strong id="settingsTelemetryUserId" class="settings-version-value settings-install-id-value" title="">—</strong>
+              <button
+                type="button"
+                id="settingsCopyInstallId"
+                class="settings-secondary settings-copy-id"
+                data-i18n="settings.userIdCopy"
+              >
+                Copiar
+              </button>
+            </p>
+            <p id="settingsCopyInstallIdStatus" class="settings-status" role="status" aria-live="polite"></p>
+          </div>
           <div class="settings-links">
             <a
               id="settingsHomeLink"

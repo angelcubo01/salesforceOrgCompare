@@ -54,6 +54,47 @@ function logSoapXmlDebug(label, xml) {
   console.error(label, snippet);
 }
 
+/**
+ * Resume el cuerpo de una respuesta HTTP no OK para logs y mensajes de error.
+ * @param {string} bodyText
+ * @param {number} [maxLen]
+ */
+export function summarizeSoapHttpErrorBody(bodyText, maxLen = 500) {
+  const text = String(bodyText || '').trim();
+  if (!text) return '';
+
+  const fault =
+    extractTagValue(text, 'faultstring') ||
+    extractTagValue(text, 'faultString') ||
+    extractTagValue(text, 'exceptionMessage');
+  if (fault) return fault;
+
+  if (/INVALID_SESSION_ID|Session expired|Invalid Session/i.test(text)) {
+    return 'Session expired or invalid';
+  }
+
+  if (/^<!doctype html|^<html/i.test(text)) {
+    const title = /<title[^>]*>([^<]+)</i.exec(text);
+    return title?.[1]?.trim() || 'HTML error page (not SOAP XML)';
+  }
+
+  const flat = text.replace(/\s+/g, ' ');
+  return flat.length > maxLen ? `${flat.slice(0, maxLen)}…` : flat;
+}
+
+/**
+ * @param {number} status
+ * @param {string} [detail]
+ */
+export function metadataSoapHttpErrorMessage(status, detail) {
+  const base = `Metadata SOAP call failed: HTTP ${status}`;
+  if (detail) return `${base} — ${detail}`;
+  if (status === 401) return `${base} — session expired or invalid`;
+  if (status === 403) return `${base} — insufficient access to Metadata API`;
+  if (status === 404) return `${base} — Metadata API endpoint not found (check API version)`;
+  return base;
+}
+
 export class RetrieveCancelledError extends Error {
   constructor() {
     super('Retrieve cancelled');
@@ -103,18 +144,21 @@ async function metadataSoapCall(instanceUrl, sid, apiVersion, bodyInnerXml) {
     body: envelope,
   });
 
+  const text = await res.text();
+
   if (!res.ok) {
-    console.error('[MetadataSOAP] HTTP error', {
-      url,
-      status: res.status,
-      statusText: res.statusText,
-    });
-    const err = new Error(`Metadata SOAP call failed: ${res.status}`);
+    const detail = summarizeSoapHttpErrorBody(text);
+    const summary = `[MetadataSOAP] HTTP ${res.status} ${res.statusText || ''} url=${url}${
+      detail ? ` detail=${detail}` : ''
+    }`;
+    console.error(summary);
+    const err = new Error(metadataSoapHttpErrorMessage(res.status, detail));
     err.status = res.status;
+    err.url = url;
+    if (DEBUG_LOGS) err.responseBody = text;
     throw err;
   }
 
-  const text = await res.text();
   return text;
 }
 

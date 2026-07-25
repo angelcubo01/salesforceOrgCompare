@@ -8,7 +8,9 @@ Salesforce Org Compare is a browser extension that helps you compare and work wi
 
 The extension communicates **only between your browser and Salesforce** for org operations (metadata retrieve, SOQL, deploy, etc.). Salesforce org data is not routed through our servers for processing.
 
-**Exception — Logi AI advisor (optional):** When you use the Apex log AI advisor, log excerpts and chat messages you send are transmitted to **OpenRouter** (directly with your own API key, or via our Cloudflare Worker proxy for free-tier models). This is separate from normal metadata compare operations.
+**Exception — Logi AI advisor (optional, Beta):** When you use the Apex log AI advisor, log excerpts and chat messages you send are transmitted to **OpenRouter** (directly with your own API key, or via our Cloudflare Worker proxy for free-tier models). Beta access may require membership in a PostHog cohort identified by your installation ID (Settings → About). You can request access from [salesforceorgcompare.com/solicitar-acceso-logi](https://salesforceorgcompare.com/solicitar-acceso-logi/).
+
+**Coming soon — Salesforce UI integration:** Optional content scripts may inject SFOC actions into Salesforce Setup/Lightning pages (local DOM only; opt-in in Settings; saved orgs only). See the full privacy policy for planned details.
 
 ## Session authentication
 

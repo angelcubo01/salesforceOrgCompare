@@ -1,0 +1,25 @@
+/* Enlaces SFOC: heredan link-button / slds-text-link nativos de Debug Logs */
+
+a.sfoc-inject-link.link-button,
+a.sfoc-inject-link.actionLink {
+  white-space: nowrap;
+}
+
+.sfoc-inject-toast {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 2147483646;
+  max-width: 22rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.25rem;
+  background: #16325c;
+  color: #fff;
+  font-size: 0.8125rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.sfoc-inject-toast--error {
+  background: #8b0000;
+}

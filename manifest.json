@@ -37,6 +37,7 @@
   "https://*.visualforce.com/*",
   "https://*.cloudforce.com/*",
   "https://*.salesforce-setup.com/*",
+  "https://*.my.salesforce-setup.com/*",
   "https://salesforceorgcompare.com/*",
   "https://sfoc-logi-proxy.angelpicadocuadrado.workers.dev/*",
   "https://eu.i.posthog.com/*",
@@ -46,7 +47,22 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline';"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.lightning.force.com/lightning/setup/ApexDebugLogs/*",
+        "https://*.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
+        "https://*.my.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
+        "https://*.my.salesforce.com/setup/ui/listApexTraces.apexp*",
+        "https://*.salesforce.com/setup/ui/listApexTraces.apexp*",
+        "https://*.my.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
+        "https://*.salesforce-setup.com/setup/ui/listApexTraces.apexp*"
+      ],
+      "js": ["sfInject/content/bundle.js"],
+      "css": ["sfInject/content/styles.css"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
 }
-
-
