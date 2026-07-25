@@ -5,9 +5,9 @@
   "description": "Chrome extension to compare Salesforce org metadata",
   "type": "module",
   "scripts": {
-    "prepare": "node scripts/bundle-sf-inject.mjs",
+    "prepare": "node sfInject/bundle.mjs",
     "test": "vitest run",
-    "build:sf-inject": "node scripts/bundle-sf-inject.mjs",
+    "build:sf-inject": "node sfInject/bundle.mjs",
     "pretest": "node tests/ensureTelemetryConfig.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

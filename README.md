@@ -1,14 +1,78 @@
 # Salesforce Org Compare
 
-[![Version](https://img.shields.io/badge/version-3.1.1-blue)](manifest.json)
+[![Version](https://img.shields.io/badge/version-3.1.3-blue)](manifest.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-salesforceorgcompare.com-0176d3)](https://salesforceorgcompare.com/)
 
-**[salesforceorgcompare.com](https://salesforceorgcompare.com/)**
+**Compare Salesforce orgs with the browser session you already have — no Salesforce CLI, no Connected App, no API keys.**
 
-Chrome extension to compare Salesforce org metadata using your browser session — no separate OAuth setup required. Built for administrators, developers, and integrators who work across multiple orgs every day.
+[Website](https://salesforceorgcompare.com/) · [Privacy](PRIVACY.md) · Built for admins, developers, and release managers who live in multiple orgs every day.
 
+![Salesforce Org Compare — multi-org, browser session, no CLI](media/readme/hero-marketing.png)
+
+---
+
+## Why teams choose the browser
+
+Skip Connected Apps, API keys, and CLI installs for day-to-day compare and debug work. Use the Salesforce session you already have open in Chrome.
+
+![Why teams choose the browser session over CLI or manual XML](media/readme/value-browser-session.png)
+
+| | |
+|---|---|
+| **Your session, not new credentials** | Reuses the Salesforce tab you already logged into |
+| **Multi-org in one place** | Save PRO, UAT, and sandboxes with aliases and jump between them |
+| **Diff on screen** | Metadata and code comparison — export HTML when you need a report |
+| **Dev hub in Chrome** | Apex tests, SOQL, Quick Edit, REST, debug logs, and more |
+| **Free** | Available on the Chrome Web Store |
+
+---
+
+## How it works
+
+![Get started — log in, save orgs, compare or debug](media/readme/flow-get-started.png)
+
+1. **Log into Salesforce** in Chrome.
+2. **Save orgs** from the extension popup (aliases, groups).
+3. **Compare, debug, or open logs** from the main app — or jump in from Setup when UI Integration is enabled.
+
+---
+
+## Usage flows
+
+### Compare orgs before a release
+
+Sandbox → UAT → PRO: pull metadata, see what changed, ship with confidence.
+
+![Multi-org comparison flow: Sandbox, UAT, PRO into Diff](media/readme/flow-compare-orgs.png)
+
+### Debug faster with Logi
+
+From a raw Apex debug log to parsed analysis to an optional AI assist (**Logi**: summarize, debug, suggest fixes). Free tier or BYOK OpenRouter. Opt-in.
+
+![Debug flow: Apex log → parse & analyze → Logi](media/readme/flow-debug-logi.png)
+
+### Open logs from Salesforce Setup
+
+Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFOC. Opt-in in Settings; only for saved orgs with an active session.
+
+![Setup Debug Logs → Open in SFOC](media/readme/flow-sf-inject.png)
+
+> **Trademark notice:** Salesforce Org Compare is a third-party tool and is not affiliated with or endorsed by Salesforce, Inc.
+
+---
+
+## Table of contents
+
+**Product**
+
+- [Why teams choose the browser](#why-teams-choose-the-browser)
+- [How it works](#how-it-works)
+- [Usage flows](#usage-flows)
 - [Features](#features)
+
+**Technical**
+
 - [Security and Privacy](#security-and-privacy)
 - [Installation](#installation)
 - [Troubleshooting](#troubleshooting)
@@ -19,12 +83,14 @@ Chrome extension to compare Salesforce org metadata using your browser session �
 - [About](#about)
 - [License](#license)
 
+---
+
 ## Features
 
 ### Metadata Comparator
 
 - Search and index metadata across saved orgs
-- Retrieve source from orgs and compare side by side with Monaco Editor
+- Retrieve source and compare side by side with Monaco Editor
 - Export diffs to HTML
 - Support for Apex, LWC, Aura, Visualforce, Permission Sets, Profiles, FlexiPages, and more
 - Persist compared items locally between sessions
@@ -77,28 +143,43 @@ Chrome extension to compare Salesforce org metadata using your browser session �
 ### Standalone Viewers
 
 - **Apex Log Viewer** — advanced debug log parsing and analysis
+- **Logi** — optional AI advisor inside the Apex Log Viewer (summarize, chat, quick actions)
 - **Apex Coverage Viewer** — coverage visualization
 - **Apex Source Viewer** — focused Apex source inspection
+
+### Salesforce UI Integration (`sfInject`)
+
+- Opt-in in Settings → Salesforce UI Integration
+- **Open in SFOC** on Apex Debug Logs (Lightning Setup and Classic list)
+- Reorder Debug Logs table above User Trace Flags (with pagination)
 
 ### Popup & Settings
 
 - Manage saved orgs (aliases, groups, drag-and-drop ordering)
 - Detect the org from the active browser tab
-- Theme, language (EN/ES), telemetry opt-out, export/import settings
+- Light / dark appearance (Settings + toolbar toggle)
+- Language (EN/ES), telemetry opt-out, export/import settings
+- Favorites and recent tools in the main app
+
+---
 
 ## Security and Privacy
 
-The Salesforce Org Compare extension communicates **directly between your browser and Salesforce**. Org data is not sent to third-party servers for processing.
+The Salesforce Org Compare extension communicates **directly between your browser and Salesforce**. Org data is not sent to third-party servers for processing (except when you explicitly use optional features such as Logi).
 
 - Authentication reuses your existing Salesforce browser session (session cookie read at runtime; never stored in extension storage).
 - API calls use the official Salesforce REST and Metadata APIs with the permissions of the logged-in user.
 - Preferences, saved org aliases, and locally cached metadata are stored in `chrome.storage.local` on your device.
 - Optional usage telemetry is sent to PostHog (EU region) and can be disabled in extension settings. Telemetry does not include Salesforce record data.
+- Logi (when enabled and used) sends log excerpts / chat to an LLM via a secure proxy or your own OpenRouter key — only when you invoke Logi.
+- Salesforce UI Integration is opt-in and runs as local DOM enhancement on matching Setup pages for saved orgs.
 - The extension requires cookie access for Salesforce domains to obtain the session token used by the Salesforce UI.
 
 For a full summary, see [PRIVACY.md](PRIVACY.md). The complete privacy policy is available at [salesforceorgcompare.com/privacy-policy](https://salesforceorgcompare.com/privacy-policy).
 
 To validate this description, inspect the source code or monitor network traffic in your browser DevTools.
+
+---
 
 ## Installation
 
@@ -114,11 +195,16 @@ Visit **[salesforceorgcompare.com](https://salesforceorgcompare.com/)** for the 
 4. Click **Load unpacked**.
 5. Select the **root directory** of this repository (the folder containing `manifest.json`).
 
+---
+
 ## Troubleshooting
 
 - **Extension not detecting your org** — Make sure you are logged into Salesforce in the same browser profile and refresh the Salesforce tab.
 - **Org not found after enabling My Domain** — Restart your browser or clear the old `sid` cookie for the previous Salesforce domain.
 - **Missing icons when loading unpacked** — Ensure the `icons/` folder with `icon-16.png`, `icon-32.png`, `icon-48.png`, and `icon-128.png` is present (required by `manifest.json`).
+- **Salesforce UI Integration not visible** — Enable it in Settings, confirm the org is saved, and open a supported Apex Debug Logs Setup URL.
+
+---
 
 ## Contributions
 
@@ -128,19 +214,23 @@ Contributions are welcome! Please open an issue to discuss significant changes b
 
 1. Describe the problem or feature clearly in the issue.
 2. Keep changes focused and follow existing code style.
-3. Test the extension manually in Chrome after loading unpacked.
+3. Run unit tests (`npm test`) and test the extension manually in Chrome after loading unpacked.
+
+---
 
 ## Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) with npm (for optional build scripts)
+- [Node.js](https://nodejs.org/) with npm
 
 ### Setup
 
 ```bash
 npm install
 ```
+
+`npm install` runs `prepare`, which rebuilds the Salesforce UI Integration content bundle via `sfInject/bundle.mjs` (the committed `sfInject/content/bundle.js` is what the extension loads).
 
 ### Load in Chrome
 
@@ -152,8 +242,9 @@ npm install
 ### Build & package
 
 ```bash
-npm run minify:extension   # Minify for production
-npm run pack:chrome        # Package for Chrome Web Store (Windows PowerShell)
+npm run build:sf-inject   # Rebuild sfInject content bundle
+npm run minify:extension  # Minify for production
+npm run pack:chrome       # Package for Chrome Web Store (Windows PowerShell)
 ```
 
 ### Telemetry config (local only)
@@ -162,7 +253,13 @@ Copy `shared/telemetryConfig.example.js` to `shared/telemetryConfig.js` and fill
 
 ### Unit tests
 
-Unit tests are maintained locally and are **not included in this public repository**. The `npm test` script requires a local `tests/` folder.
+```bash
+npm test
+```
+
+Uses Vitest. Tests live under `tests/`.
+
+---
 
 ## Project Structure
 
@@ -173,14 +270,20 @@ Unit tests are maintained locally and are **not included in this public reposito
 | `background/` | Message handlers, org auth, caches, telemetry |
 | `popup/` | Extension popup and settings UI |
 | `code/` | Main app — comparator, tools, Monaco editor |
+| `sfInject/` | Salesforce UI Integration (content scripts, injectors, `bundle.mjs`) |
 | `shared/` | Shared APIs, i18n, feature controls |
 | `vendor/` | Third-party libraries (Monaco Editor, etc.) |
-| `scripts/` | Build and packaging scripts |
-| `docs/` | Product docs — see [MEJORAS_POR_HERRAMIENTA_3.1.2.md](docs/MEJORAS_POR_HERRAMIENTA_3.1.2.md) and [GUIA_UI_UX_COMUN.md](docs/GUIA_UI_UX_COMUN.md) |
+| `media/readme/` | README marketing and usage images |
+| `icons/` | Extension icons |
+| `tests/` | Unit tests (Vitest) |
+
+---
 
 ## Third-Party Libraries
 
 This extension uses third-party open-source libraries. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for attribution and license details.
+
+---
 
 ## About
 
@@ -188,6 +291,8 @@ Built by **[Ángel Picado](https://es.linkedin.com/in/angelcubo01)**.
 
 - Website: [salesforceorgcompare.com](https://salesforceorgcompare.com/)
 - LinkedIn: [es.linkedin.com/in/angelcubo01](https://es.linkedin.com/in/angelcubo01)
+
+---
 
 ## License
 
