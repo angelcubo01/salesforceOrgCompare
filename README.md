@@ -1,6 +1,8 @@
 # Salesforce Org Compare
 
-[![Version](https://img.shields.io/badge/version-3.1.3-blue)](manifest.json)
+[![Chrome Web Store Version](https://img.shields.io/chrome-web-store/v/mpocihehhnklfhplkdlmahmopinjnpcg?label=chrome%20web%20store)](https://chromewebstore.google.com/detail/salesforce-org-compare/mpocihehhnklfhplkdlmahmopinjnpcg)
+[![Chrome Web Store Users](https://img.shields.io/chrome-web-store/users/mpocihehhnklfhplkdlmahmopinjnpcg)](https://chromewebstore.google.com/detail/salesforce-org-compare/mpocihehhnklfhplkdlmahmopinjnpcg)
+[![Chrome Web Store Rating](https://img.shields.io/chrome-web-store/rating/mpocihehhnklfhplkdlmahmopinjnpcg)](https://chromewebstore.google.com/detail/salesforce-org-compare/mpocihehhnklfhplkdlmahmopinjnpcg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-salesforceorgcompare.com-0176d3)](https://salesforceorgcompare.com/)
 
