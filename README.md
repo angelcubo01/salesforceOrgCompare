@@ -46,9 +46,11 @@ Sandbox → UAT → PRO: pull metadata, see what changed, ship with confidence.
 
 ![Multi-org comparison flow: Sandbox, UAT, PRO into Diff](media/readme/flow-compare-orgs.png)
 
-### Debug faster with Logi
+### Debug faster with Logi ![Beta](https://img.shields.io/badge/Logi-Beta-0176d3)
 
 From a raw Apex debug log to parsed analysis to an optional AI assist (**Logi**: summarize, debug, suggest fixes). Free tier or BYOK OpenRouter. Opt-in.
+
+Access is invite-only during beta — [request access](https://salesforceorgcompare.com/solicitar-acceso-logi/) with your installation ID (Settings → About).
 
 ![Debug flow: Apex log → parse & analyze → Logi](media/readme/flow-debug-logi.png)
 
@@ -143,7 +145,7 @@ Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFO
 ### Standalone Viewers
 
 - **Apex Log Viewer** — advanced debug log parsing and analysis
-- **Logi** — optional AI advisor inside the Apex Log Viewer (summarize, chat, quick actions)
+- **Logi** ![Beta](https://img.shields.io/badge/Logi-Beta-0176d3) — optional AI advisor inside the Apex Log Viewer (summarize, chat, quick actions). [Request beta access](https://salesforceorgcompare.com/solicitar-acceso-logi/).
 - **Apex Coverage Viewer** — coverage visualization
 - **Apex Source Viewer** — focused Apex source inspection
 
