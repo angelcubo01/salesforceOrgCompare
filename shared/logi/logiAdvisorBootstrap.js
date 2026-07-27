@@ -40,8 +40,9 @@ function parseConfigWithQuotaBonus(remotePayload, quotaBonus) {
 
 /**
  * Carga config Logi desde logi-proxy.
- * - force:true (settings / abrir log) → siempre GET /v1/advisor-config.
- * - Sin force y con caché operativa → reutiliza cache hasta el próximo force.
+ * - force:true solo refresca si el lease local de 2h expiró (o no hay caché operativa).
+ * - Sin force y con caché operativa → reutiliza cache.
+ * - Si ya hay un bootstrap en vuelo, se reutiliza también con force (anti-herd).
  * - Si el fetch falla de forma transitoria → no borra una config operativa previa.
  * - Si el proxy responde flag_disabled (fuera de cohort) → limpia caché.
  * @param {{ force?: boolean }} [opts]
@@ -58,11 +59,11 @@ export async function bootstrapLogiAdvisorViaProxy(opts = {}) {
   }
 
   const cached = await readLogiAdvisorCacheEntry();
-  if (!force && canSkipLogiAdvisorRemoteFetch(cached)) {
+  if (canSkipLogiAdvisorRemoteFetch(cached, { force })) {
     return cached.config;
   }
 
-  if (bootstrapInFlight && !force) {
+  if (bootstrapInFlight) {
     return bootstrapInFlight;
   }
 

@@ -6,9 +6,11 @@ import {
 
 export const LOGI_ADVISOR_STORAGE_KEY = 'sfocLogiAdvisorCache';
 
-/** How long a successful advisor-config fetch is considered "fresh" (telemetry/debug only).
- *  Refresh is driven by force:true on settings / open-log — not by this TTL. */
+/** Short freshness window (telemetry/debug). */
 export const LOGI_ADVISOR_CACHE_TTL_MS = 15 * 60 * 1000;
+
+/** Min interval before force:true may hit the proxy again (local lease / write-safe). */
+export const LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS = 2 * 60 * 60 * 1000;
 
 /**
  * @typedef {object} LogiAdvisorCacheEntry
@@ -85,12 +87,20 @@ export function isLogiAdvisorCacheFresh(cachedAt, ttlMs = LOGI_ADVISOR_CACHE_TTL
 
 /**
  * Skip proxy when we already have an operational remote config.
- * Entry points (settings / open log) pass force:true to refresh; other calls reuse cache.
+ * - Without force: reuse any operational fromRemote cache.
+ * - With force: only skip while within LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS (2h lease).
  * @param {LogiAdvisorCacheEntry | null | undefined} entry
+ * @param {{ force?: boolean, minIntervalMs?: number }} [opts]
  */
-export function canSkipLogiAdvisorRemoteFetch(entry) {
+export function canSkipLogiAdvisorRemoteFetch(entry, opts = {}) {
   if (!entry || entry.fromRemote !== true) return false;
-  return isLogiAdvisorOperational(entry.config);
+  if (!isLogiAdvisorOperational(entry.config)) return false;
+  if (opts.force === true) {
+    const minMs = Number(opts.minIntervalMs);
+    const ttl = Number.isFinite(minMs) && minMs > 0 ? minMs : LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS;
+    return isLogiAdvisorCacheFresh(entry.cachedAt, ttl);
+  }
+  return true;
 }
 
 /**

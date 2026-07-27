@@ -3,6 +3,7 @@ import {
   canSkipLogiAdvisorRemoteFetch,
   isLogiAdvisorCacheFresh,
   LOGI_ADVISOR_CACHE_TTL_MS,
+  LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS,
   resetLogiAdvisorCacheForTests,
   setLogiAdvisorMemoryCache,
   unwrapCacheRaw,
@@ -71,9 +72,28 @@ describe('logiAdvisorCache', () => {
     });
     expect(isLogiAdvisorCacheFresh(entry.cachedAt)).toBe(true);
     expect(canSkipLogiAdvisorRemoteFetch(entry)).toBe(true);
+    expect(canSkipLogiAdvisorRemoteFetch(entry, { force: true })).toBe(true);
   });
 
-  it('still skips when TTL expired if cache is operational (refresh only on force)', () => {
+  it('force skips only while within 2h remote lease', () => {
+    const freshAt = Date.now() - 1000;
+    const staleAt = Date.now() - LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS - 1000;
+    const base = {
+      config: {
+        ...DEFAULT_LOGI_ADVISOR_CONFIG,
+        enabled: true,
+        showButton: true,
+        transport: 'proxy',
+        proxyUrl: 'https://x'
+      },
+      fromRemote: true
+    };
+    expect(canSkipLogiAdvisorRemoteFetch({ ...base, cachedAt: freshAt }, { force: true })).toBe(true);
+    expect(canSkipLogiAdvisorRemoteFetch({ ...base, cachedAt: staleAt }, { force: true })).toBe(false);
+    expect(canSkipLogiAdvisorRemoteFetch({ ...base, cachedAt: staleAt })).toBe(true);
+  });
+
+  it('without force still skips when short TTL expired if cache is operational', () => {
     const at = Date.now() - LOGI_ADVISOR_CACHE_TTL_MS - 1000;
     expect(
       canSkipLogiAdvisorRemoteFetch({

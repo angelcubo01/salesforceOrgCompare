@@ -4,7 +4,8 @@ import {
   acquireProxyJwt,
   getProxyJwt,
   resetLogiProxySessionForTests,
-  buildLogiProxySessionUrl
+  buildLogiProxySessionUrl,
+  LOGI_REMOTE_LEASE_MS
 } from '../shared/logi/logiProxySession.js';
 import { createChatCompletion } from '../shared/aiTransport.js';
 
@@ -28,7 +29,11 @@ describe('logiProxySession', () => {
         method: 'POST',
         response: () =>
           new Response(
-            JSON.stringify({ ok: true, token: 'jwt-test-token', expiresAt: Date.now() + 3_600_000 }),
+            JSON.stringify({
+              ok: true,
+              token: 'jwt-test-token',
+              expiresAt: Date.now() + LOGI_REMOTE_LEASE_MS
+            }),
             { status: 200, headers: { 'Content-Type': 'application/json' } }
           )
       }
@@ -37,6 +42,57 @@ describe('logiProxySession', () => {
     expect(token).toBe('jwt-test-token');
     const cached = await getProxyJwt(PROXY_CHAT, INSTALL_ID);
     expect(cached).toBe('jwt-test-token');
+    restore();
+  });
+
+  it('singleflight coalesces concurrent acquireProxyJwt', async () => {
+    let posts = 0;
+    const restore = mockFetch([
+      {
+        url: PROXY_SESSION,
+        method: 'POST',
+        response: async () => {
+          posts += 1;
+          await new Promise((r) => setTimeout(r, 30));
+          return new Response(
+            JSON.stringify({
+              ok: true,
+              token: 'jwt-once',
+              expiresAt: Date.now() + LOGI_REMOTE_LEASE_MS
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    ]);
+    const [a, b] = await Promise.all([
+      acquireProxyJwt(PROXY_CHAT, INSTALL_ID),
+      acquireProxyJwt(PROXY_CHAT, INSTALL_ID)
+    ]);
+    expect(a).toBe('jwt-once');
+    expect(b).toBe('jwt-once');
+    expect(posts).toBe(1);
+    restore();
+  });
+
+  it('backs off locally after SESSION_RATE_LIMIT 429', async () => {
+    let posts = 0;
+    const restore = mockFetch([
+      {
+        url: PROXY_SESSION,
+        method: 'POST',
+        response: () => {
+          posts += 1;
+          return new Response(
+            JSON.stringify({ error: 'Session rate limit exceeded', code: 'SESSION_RATE_LIMIT' }),
+            { status: 429, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    ]);
+    await expect(acquireProxyJwt(PROXY_CHAT, INSTALL_ID)).rejects.toThrow(/429/);
+    await expect(acquireProxyJwt(PROXY_CHAT, INSTALL_ID)).rejects.toThrow(/backoff|429/);
+    expect(posts).toBe(1);
     restore();
   });
 });
@@ -54,10 +110,13 @@ describe('aiTransport JWT proxy', () => {
         url: PROXY_SESSION,
         method: 'POST',
         response: () =>
-          new Response(JSON.stringify({ token: 'jwt-chat', expiresAt: Date.now() + 3_600_000 }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          })
+          new Response(
+            JSON.stringify({ token: 'jwt-chat', expiresAt: Date.now() + LOGI_REMOTE_LEASE_MS }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          )
       },
       {
         url: PROXY_CHAT,

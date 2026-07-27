@@ -1,12 +1,26 @@
 /**
  * JWT session cache for logi-proxy (extension client).
+ * Lease local 2h en chrome.storage.local (tipo cookie) para no spamear /v1/session.
  */
 
-const SESSION_STORAGE_KEY = 'sfocLogiProxyJwtByBase';
+export const LOGI_REMOTE_LEASE_MS = 2 * 60 * 60 * 1000;
+export const SESSION_STORAGE_KEY = 'sfocLogiProxyJwtByBase';
 const RENEW_BEFORE_MS = 60_000;
 
-/** @type {Map<string, { token: string, expiresAt: number }>} */
+/**
+ * @typedef {{
+ *   token?: string,
+ *   expiresAt?: number,
+ *   lastSessionAt?: number,
+ *   sessionBackoffUntil?: number
+ * }} ProxyJwtEntry
+ */
+
+/** @type {Map<string, ProxyJwtEntry>} */
 const memoryByBase = new Map();
+
+/** @type {Map<string, Promise<string>>} */
+const acquireInFlight = new Map();
 
 /**
  * @param {string} proxyUrl
@@ -32,53 +46,147 @@ export function buildLogiProxySessionUrl(proxyUrl) {
 }
 
 /**
- * @param {string} baseUrl
- * @returns {Promise<{ token: string, expiresAt: number } | null>}
+ * @param {unknown} raw
+ * @returns {ProxyJwtEntry | null}
  */
-async function readCachedSession(baseUrl) {
-  const base = resolveProxyBaseUrl(baseUrl);
-  const mem = memoryByBase.get(base);
-  if (mem?.token && mem.expiresAt > Date.now()) return mem;
+function normalizeEntry(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  /** @type {ProxyJwtEntry} */
+  const entry = {};
+
+  const token = String(o.token || '').trim();
+  const expiresAt = Number(o.expiresAt);
+  if (token && Number.isFinite(expiresAt) && expiresAt > Date.now()) {
+    entry.token = token;
+    entry.expiresAt = expiresAt;
+  }
+
+  const lastSessionAt = Number(o.lastSessionAt);
+  if (Number.isFinite(lastSessionAt) && lastSessionAt > 0) entry.lastSessionAt = lastSessionAt;
+
+  const sessionBackoffUntil = Number(o.sessionBackoffUntil);
+  if (Number.isFinite(sessionBackoffUntil) && sessionBackoffUntil > Date.now()) {
+    entry.sessionBackoffUntil = sessionBackoffUntil;
+  }
+
+  if (!entry.token && !entry.sessionBackoffUntil && !entry.lastSessionAt) return null;
+  return entry;
+}
+
+/**
+ * @returns {Promise<Record<string, ProxyJwtEntry>>}
+ */
+async function readLocalMap() {
+  /** @type {Record<string, ProxyJwtEntry>} */
+  const out = {};
+  try {
+    const local = typeof chrome !== 'undefined' ? chrome.storage?.local : null;
+    if (local) {
+      const data = await local.get(SESSION_STORAGE_KEY);
+      const map = data?.[SESSION_STORAGE_KEY];
+      if (map && typeof map === 'object' && !Array.isArray(map)) {
+        for (const [k, v] of Object.entries(map)) {
+          const n = normalizeEntry(v);
+          if (n) out[k] = n;
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 
   try {
-    const store = typeof chrome !== 'undefined' ? chrome.storage?.session : null;
-    if (!store) return null;
-    const data = await store.get(SESSION_STORAGE_KEY);
-    const map = data?.[SESSION_STORAGE_KEY];
-    if (!map || typeof map !== 'object') return null;
-    const entry = map[base];
-    if (!entry || typeof entry !== 'object') return null;
-    const token = String(entry.token || '').trim();
-    const expiresAt = Number(entry.expiresAt);
-    if (!token || !Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
-    const cached = { token, expiresAt };
-    memoryByBase.set(base, cached);
-    return cached;
+    const sess = typeof chrome !== 'undefined' ? chrome.storage?.session : null;
+    if (sess) {
+      const data = await sess.get(SESSION_STORAGE_KEY);
+      const map = data?.[SESSION_STORAGE_KEY];
+      if (map && typeof map === 'object' && !Array.isArray(map)) {
+        let migrated = false;
+        for (const [k, v] of Object.entries(map)) {
+          if (out[k]) continue;
+          const n = normalizeEntry(v);
+          if (!n) continue;
+          out[k] = n;
+          migrated = true;
+        }
+        if (migrated) {
+          const local = typeof chrome !== 'undefined' ? chrome.storage?.local : null;
+          if (local) await local.set({ [SESSION_STORAGE_KEY]: out });
+          await sess.remove(SESSION_STORAGE_KEY);
+        }
+      }
+    }
   } catch {
-    return null;
+    /* ignore */
   }
+
+  return out;
 }
 
 /**
  * @param {string} baseUrl
- * @param {string} token
- * @param {number} expiresAt
+ * @returns {Promise<ProxyJwtEntry | null>}
  */
-async function writeCachedSession(baseUrl, token, expiresAt) {
+async function readCachedSession(baseUrl) {
   const base = resolveProxyBaseUrl(baseUrl);
-  const entry = { token, expiresAt };
+  const mem = memoryByBase.get(base);
+  if (mem) {
+    const stillValidToken = mem.token && Number(mem.expiresAt) > Date.now();
+    const stillBackoff = Number(mem.sessionBackoffUntil) > Date.now();
+    if (stillValidToken || stillBackoff || mem.lastSessionAt) return mem;
+  }
+
+  const map = await readLocalMap();
+  const entry = map[base] || null;
+  if (!entry) return null;
+  memoryByBase.set(base, entry);
+  return entry;
+}
+
+/**
+ * @param {string} baseUrl
+ * @param {ProxyJwtEntry} entry
+ */
+async function writeCachedSession(baseUrl, entry) {
+  const base = resolveProxyBaseUrl(baseUrl);
   memoryByBase.set(base, entry);
   try {
-    const store = typeof chrome !== 'undefined' ? chrome.storage?.session : null;
-    if (!store) return;
-    const data = await store.get(SESSION_STORAGE_KEY);
-    const prev = data?.[SESSION_STORAGE_KEY];
-    const map = prev && typeof prev === 'object' && !Array.isArray(prev) ? { ...prev } : {};
+    const local = typeof chrome !== 'undefined' ? chrome.storage?.local : null;
+    if (!local) return;
+    const map = await readLocalMap();
     map[base] = entry;
-    await store.set({ [SESSION_STORAGE_KEY]: map });
+    await local.set({ [SESSION_STORAGE_KEY]: map });
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * @param {ProxyJwtEntry | null | undefined} entry
+ * @returns {boolean}
+ */
+export function isProxyJwtLeaseFresh(entry) {
+  if (!entry?.token || !(Number(entry.expiresAt) > Date.now() + RENEW_BEFORE_MS)) return false;
+  const last = Number(entry.lastSessionAt);
+  if (Number.isFinite(last) && last > 0) {
+    return Date.now() - last < LOGI_REMOTE_LEASE_MS;
+  }
+  return Number(entry.expiresAt) - Date.now() > RENEW_BEFORE_MS;
+}
+
+/**
+ * @param {string} baseUrl
+ * @param {number} untilMs
+ */
+async function writeSessionBackoff(baseUrl, untilMs) {
+  const prev = (await readCachedSession(baseUrl)) || {};
+  /** @type {ProxyJwtEntry} */
+  const entry = {
+    ...prev,
+    sessionBackoffUntil: untilMs
+  };
+  await writeCachedSession(baseUrl, entry);
 }
 
 /**
@@ -87,11 +195,20 @@ async function writeCachedSession(baseUrl, token, expiresAt) {
  * @param {{ signal?: AbortSignal }} [opts]
  * @returns {Promise<string>}
  */
-export async function acquireProxyJwt(proxyUrl, installId, opts = {}) {
+async function acquireProxyJwtOnce(proxyUrl, installId, opts = {}) {
   const sessionUrl = buildLogiProxySessionUrl(proxyUrl);
   const id = String(installId || '').trim();
   if (!sessionUrl || !id) {
     throw new Error('LOGI_NO_PROXY_SESSION');
+  }
+
+  const existing = await readCachedSession(proxyUrl);
+  const backoffUntil = Number(existing?.sessionBackoffUntil);
+  if (Number.isFinite(backoffUntil) && backoffUntil > Date.now()) {
+    if (existing?.token && Number(existing.expiresAt) > Date.now()) {
+      return /** @type {string} */ (existing.token);
+    }
+    throw new Error('LOGI_PROXY_SESSION_HTTP_429: Session rate limit exceeded (local backoff)');
   }
 
   const res = await fetch(sessionUrl, {
@@ -113,7 +230,11 @@ export async function acquireProxyJwt(proxyUrl, installId, opts = {}) {
   }
 
   if (!res.ok) {
+    const code = data?.code || '';
     const msg = data?.error || data?.message || res.statusText;
+    if (res.status === 429 || code === 'SESSION_RATE_LIMIT') {
+      await writeSessionBackoff(proxyUrl, Date.now() + LOGI_REMOTE_LEASE_MS);
+    }
     throw new Error(`LOGI_PROXY_SESSION_HTTP_${res.status}: ${msg}`);
   }
 
@@ -122,9 +243,32 @@ export async function acquireProxyJwt(proxyUrl, installId, opts = {}) {
   if (!token) {
     throw new Error('LOGI_PROXY_SESSION_EMPTY');
   }
-  const exp = Number.isFinite(expiresAt) ? expiresAt : Date.now() + 3_600_000;
-  await writeCachedSession(proxyUrl, token, exp);
+  const exp = Number.isFinite(expiresAt) ? expiresAt : Date.now() + LOGI_REMOTE_LEASE_MS;
+  const now = Date.now();
+  await writeCachedSession(proxyUrl, {
+    token,
+    expiresAt: exp,
+    lastSessionAt: now
+  });
   return token;
+}
+
+/**
+ * @param {string} proxyUrl
+ * @param {string} installId
+ * @param {{ signal?: AbortSignal }} [opts]
+ * @returns {Promise<string>}
+ */
+export async function acquireProxyJwt(proxyUrl, installId, opts = {}) {
+  const base = resolveProxyBaseUrl(proxyUrl);
+  const existing = acquireInFlight.get(base);
+  if (existing) return existing;
+
+  const p = acquireProxyJwtOnce(proxyUrl, installId, opts).finally(() => {
+    acquireInFlight.delete(base);
+  });
+  acquireInFlight.set(base, p);
+  return p;
 }
 
 /**
@@ -136,7 +280,10 @@ export async function acquireProxyJwt(proxyUrl, installId, opts = {}) {
 export async function getProxyJwt(proxyUrl, installId, opts = {}) {
   if (!opts.forceRenew) {
     const cached = await readCachedSession(proxyUrl);
-    if (cached?.token && cached.expiresAt > Date.now() + RENEW_BEFORE_MS) {
+    if (cached?.token && isProxyJwtLeaseFresh(cached)) {
+      return cached.token;
+    }
+    if (cached?.token && Number(cached.expiresAt) > Date.now() + RENEW_BEFORE_MS) {
       return cached.token;
     }
   }
@@ -146,4 +293,5 @@ export async function getProxyJwt(proxyUrl, installId, opts = {}) {
 /** Para tests. */
 export function resetLogiProxySessionForTests() {
   memoryByBase.clear();
+  acquireInFlight.clear();
 }
