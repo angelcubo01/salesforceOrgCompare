@@ -65,6 +65,27 @@ body {
   color: #94a3b8;
 }
 
+.settings-card-title--with-badge {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-beta-badge {
+  display: inline-block;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fcd34d;
+  background: rgba(251, 191, 36, 0.15);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 4px;
+  vertical-align: middle;
+}
+
 .settings-label {
   display: block;
   margin-bottom: 6px;
@@ -449,6 +470,12 @@ html[data-ui-theme='light'] .settings-card-muted {
 
 html[data-ui-theme='light'] .settings-card-title {
   color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme='light'] .settings-beta-badge {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(217, 119, 6, 0.35);
 }
 
 html[data-ui-theme='light'] .settings-label {

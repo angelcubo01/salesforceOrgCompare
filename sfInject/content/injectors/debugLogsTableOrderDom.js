@@ -1,5 +1,9 @@
 /**
  * Reordenación DOM: Debug Logs encima de User Trace Flags (Setup Classic iframe).
+ *
+ * Ambas secciones son `tr` hermanas de `table#Apex_Trace_List:panelGrid > tbody`,
+ * y cada `tr` contiene su bloque completo (título + tabla de datos), así que basta
+ * con mover la fila de Debug Logs delante de la de User Trace Flags.
  */
 export const INTEGRATION_ID = 'debugLogsTableOrder';
 

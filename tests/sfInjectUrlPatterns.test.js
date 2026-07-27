@@ -4,10 +4,12 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   APEX_DEBUG_LOGS_HOME_RE,
+  APEX_DEBUG_LOGS_SETUP_RE,
   extractApexLogId,
   isApexDebugLogsClassicFrame,
   isApexDebugLogsHomePage,
   isApexDebugLogsInjectPage,
+  isApexDebugLogsSetupPage,
   normalizeApexLogId
 } from '../sfInject/content/matchers/debugLogPages.js';
 import {
@@ -33,12 +35,7 @@ describe('isApexDebugLogsHomePage', () => {
     ).toBe(true);
   });
 
-  it('rejects ApexDebugLogs without /home', () => {
-    expect(
-      isApexDebugLogsHomePage(
-        'https://myorg.lightning.force.com/lightning/setup/ApexDebugLogs/'
-      )
-    ).toBe(false);
+  it('rejects ApexDebugLogs /page (use isApexDebugLogsSetupPage)', () => {
     expect(
       isApexDebugLogsHomePage(
         'https://myorg.lightning.force.com/lightning/setup/ApexDebugLogs/page?address=%2F07L'
@@ -64,6 +61,30 @@ describe('isApexDebugLogsHomePage', () => {
   });
 });
 
+describe('isApexDebugLogsSetupPage', () => {
+  it('matches home and filtered /page shell', () => {
+    expect(
+      isApexDebugLogsSetupPage(
+        'https://myorg.lightning.force.com/lightning/setup/ApexDebugLogs/home'
+      )
+    ).toBe(true);
+    expect(
+      isApexDebugLogsSetupPage(
+        'https://caixabankcc--devservic2.sandbox.my.salesforce-setup.com/lightning/setup/ApexDebugLogs/page?address=%2Fsetup%2Fui%2FlistApexTraces.apexp%3Ffcf%3D00B'
+      )
+    ).toBe(true);
+    expect(APEX_DEBUG_LOGS_SETUP_RE.test('/lightning/setup/ApexDebugLogs/page')).toBe(true);
+  });
+
+  it('rejects unrelated Setup pages', () => {
+    expect(
+      isApexDebugLogsSetupPage(
+        'https://myorg.lightning.force.com/lightning/setup/ApexClasses/home'
+      )
+    ).toBe(false);
+  });
+});
+
 describe('isApexDebugLogsClassicFrame', () => {
   it('matches listApexTraces.apexp iframe', () => {
     expect(
@@ -83,10 +104,15 @@ describe('isApexDebugLogsClassicFrame', () => {
 });
 
 describe('isApexDebugLogsInjectPage', () => {
-  it('accepts Lightning home and Classic frame', () => {
+  it('accepts Lightning home, /page and Classic frame', () => {
     expect(
       isApexDebugLogsInjectPage(
         'https://myorg.lightning.force.com/lightning/setup/ApexDebugLogs/home'
+      )
+    ).toBe(true);
+    expect(
+      isApexDebugLogsInjectPage(
+        'https://caixabankcc--devservic2.sandbox.my.salesforce-setup.com/lightning/setup/ApexDebugLogs/page?address=%2Fsetup%2Fui%2FlistApexTraces.apexp'
       )
     ).toBe(true);
     expect(
@@ -133,15 +159,18 @@ describe('sfInject registry', () => {
     expect(SF_INJECT_INTEGRATION_IDS).toEqual(SF_INJECT_SHIPPED.map((item) => item.id));
     expect(SF_INJECT_INTEGRATION_IDS).toContain('debugLogOpenViewer');
     expect(SF_INJECT_INTEGRATION_IDS).toContain('debugLogsTableOrder');
+    expect(SF_INJECT_INTEGRATION_IDS).toContain('userTraceFlagsEnhance');
   });
 });
 
 describe('sfInject settings', () => {
-  it('defaults enabled with debugLogOpenViewer enabled', () => {
+  it('defaults all integrations disabled (opt-in)', () => {
     const cfg = normalizeSfInjectConfig({});
-    expect(cfg.enabled).toBe(true);
-    expect(cfg.integrations.debugLogOpenViewer).toBe(true);
-    expect(cfg.integrations.debugLogsTableOrder).toBe(true);
+    expect(cfg.enabled).toBe(false);
+    expect(cfg.integrations.debugLogOpenViewer).toBe(false);
+    expect(cfg.integrations.debugLogsTableOrder).toBe(false);
+    expect(cfg.integrations.userTraceFlagsEnhance).toBe(false);
+    expect(cfg.prefs.userTraceFlagsActiveOnly).toBe(false);
   });
 
   it('requires master toggle for integration', () => {

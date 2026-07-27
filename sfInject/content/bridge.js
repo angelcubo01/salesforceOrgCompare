@@ -52,3 +52,51 @@ export async function openApexLogInViewer(orgId, logId) {
     return { ok: false, reason: 'MESSAGE_FAILED' };
   }
 }
+
+/**
+ * @param {Partial<{ userTraceFlagsActiveOnly: boolean }>} prefs
+ * @returns {Promise<{ ok: boolean, settings?: object, reason?: string }>}
+ */
+export async function saveSfInjectPrefsRemote(prefs) {
+  try {
+    return await sfInjectSend({ type: 'sfInject:savePrefs', prefs });
+  } catch {
+    return { ok: false, reason: 'MESSAGE_FAILED' };
+  }
+}
+
+/**
+ * @param {string} orgId
+ * @returns {Promise<{ ok: boolean, traces?: Array<Record<string, unknown>>, reason?: string, error?: string }>}
+ */
+export async function fetchUserTraceFlags(orgId) {
+  try {
+    return await sfInjectSend({ type: 'sfInject:listTraceFlags', orgId });
+  } catch {
+    return { ok: false, reason: 'MESSAGE_FAILED' };
+  }
+}
+
+/**
+ * @param {object} opts
+ * @param {string} opts.orgId
+ * @param {string} opts.traceFlagId
+ * @param {boolean} [opts.allowReactivate]
+ * @param {string} [opts.startIso]
+ * @param {string} [opts.expirationIso]
+ * @returns {Promise<{ ok: boolean, expirationIso?: string, startIso?: string, reactivated?: boolean, reason?: string, error?: string }>}
+ */
+export async function extendUserTraceFlag(opts) {
+  try {
+    return await sfInjectSend({
+      type: 'sfInject:extendTraceFlag',
+      orgId: opts.orgId,
+      traceFlagId: opts.traceFlagId,
+      allowReactivate: opts.allowReactivate,
+      startIso: opts.startIso,
+      expirationIso: opts.expirationIso
+    });
+  } catch {
+    return { ok: false, reason: 'MESSAGE_FAILED' };
+  }
+}

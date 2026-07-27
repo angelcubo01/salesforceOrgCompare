@@ -23,3 +23,65 @@ a.sfoc-inject-link.actionLink {
 .sfoc-inject-toast--error {
   background: #8b0000;
 }
+
+/* User Trace Flags: filtro + badge estilo SLDS */
+.sfoc-utf-filter {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 8px 0 10px 12px;
+  padding: 0;
+  font: 11px Arial, Helvetica, sans-serif;
+  color: #333;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.sfoc-utf-empty-hint {
+  color: #706e6b;
+  font-style: italic;
+  padding-left: 0;
+}
+
+.sfoc-utf-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  font-weight: normal;
+  vertical-align: middle;
+}
+
+.sfoc-utf-filter-input {
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+  position: relative;
+  top: 0;
+  flex: 0 0 auto;
+}
+
+.sfoc-utf-filter-text {
+  vertical-align: middle;
+  line-height: 1.25;
+}
+
+.sfoc-utf-badge.slds-badge,
+span.sfoc-utf-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.025rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-radius: 15rem;
+  background-color: #fe9339;
+  color: #080707;
+  vertical-align: middle;
+  margin-left: 0.35rem;
+}

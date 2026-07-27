@@ -1,15 +1,22 @@
 /**
  * Handlers background para integración UI en Salesforce (sfInject:*).
  */
-import { fetchApexLogBody, queryApexLogsInWindow } from '../../shared/salesforceApi.js';
+import {
+  extendUserDebugTraceFlag,
+  fetchApexLogBody,
+  queryApexLogsInWindow,
+  queryUserDebugTraceFlags
+} from '../../shared/salesforceApi.js';
 import { instanceUrlsReferToSameOrg } from '../../shared/orgDiscovery.js';
 import { loadLang } from '../../shared/i18n.js';
 import {
   getSfInjectSettingsSnapshot,
   isSfInjectIntegrationEnabled,
   loadSfInjectSettings,
+  saveSfInjectPrefs,
   saveSfInjectSettings
 } from '../lib/settings.js';
+import { normalizeTraceFlagId } from '../content/matchers/traceFlagIds.js';
 import { stageApexViewerPayload } from '../../background/apexViewerStaging.js';
 import { buildOrgFromActiveTab, loadSavedOrgs, resolveSidForOrg } from '../../background/orgHelpers.js';
 import { instanceUrlFromLocationUrl } from '../lib/instanceUrl.js';
@@ -100,6 +107,62 @@ export async function handleSfInjectMessage(message, sender) {
       }
       const settings = await saveSfInjectSettings(message.settings || {});
       return { ok: true, settings };
+    }
+    case 'sfInject:savePrefs': {
+      // Preferencias de UI inyectada: solo desde Debug Logs (no toggles master).
+      if (!isDebugLogsPageSender(sender)) {
+        return { ok: false, reason: 'FORBIDDEN' };
+      }
+      await loadSfInjectSettings();
+      const settings = await saveSfInjectPrefs(message.prefs || {});
+      return { ok: true, settings };
+    }
+    case 'sfInject:listTraceFlags': {
+      if (!isDebugLogsPageSender(sender)) {
+        return { ok: false, reason: 'FORBIDDEN' };
+      }
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'userTraceFlagsEnhance')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const { orgId } = message;
+      const saved = await loadSavedOrgs();
+      const org = saved[orgId];
+      if (!org) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      const sid = await resolveSidForOrg(org);
+      if (!sid) return { ok: false, reason: 'NO_SID' };
+      try {
+        const traces = await queryUserDebugTraceFlags(org.instanceUrl, sid, org.apiVersion);
+        return { ok: true, traces };
+      } catch (e) {
+        return { ok: false, error: e?.message || String(e) };
+      }
+    }
+    case 'sfInject:extendTraceFlag': {
+      if (!isDebugLogsPageSender(sender)) {
+        return { ok: false, reason: 'FORBIDDEN' };
+      }
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'userTraceFlagsEnhance')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const traceFlagId = normalizeTraceFlagId(message.traceFlagId);
+      if (!traceFlagId) return { ok: false, error: 'Invalid traceFlagId' };
+      const { orgId } = message;
+      const saved = await loadSavedOrgs();
+      const org = saved[orgId];
+      if (!org) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      const sid = await resolveSidForOrg(org);
+      if (!sid) return { ok: false, reason: 'NO_SID' };
+      try {
+        const result = await extendUserDebugTraceFlag(org.instanceUrl, sid, org.apiVersion, {
+          traceFlagId,
+          allowReactivate: !!message.allowReactivate
+        });
+        return { ok: true, ...result };
+      } catch (e) {
+        return { ok: false, error: e?.message || String(e) };
+      }
     }
     case 'sfInject:resolveActiveOrg': {
       if (!isExtensionUiSender(sender) && !isDebugLogsPageSender(sender)) {

@@ -5,7 +5,6 @@ import {
   isDebugLogsAboveUserTraceFlags,
   reorderDebugLogsAboveUserTraceFlags
 } from './debugLogsTableOrderDom.js';
-import { mountDebouncedDomObserver } from './observer.js';
 
 /**
  * @param {Document} doc
@@ -20,11 +19,14 @@ export function applyDebugLogsTableOrder(doc) {
 }
 
 /**
+ * Sin MutationObserver: el AJAX de las listas Visualforce provocaba
+ * reordenaciones en bucle. El host reintenta con retryInject.
  * @param {Document} doc
  * @returns {() => void}
  */
 export function mountDebugLogsTableOrder(doc) {
-  return mountDebouncedDomObserver(doc, () => applyDebugLogsTableOrder(doc), { debounceMs: 250 });
+  applyDebugLogsTableOrder(doc);
+  return () => {};
 }
 
 function isParentDebugLogsHomePage() {

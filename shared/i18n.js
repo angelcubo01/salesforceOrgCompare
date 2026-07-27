@@ -269,20 +269,24 @@ const translations = {
       '¿Sustituir todas los entornos, orden y alias por el contenido del fichero?',
     'settings.sectionBackup': 'Copia de seguridad',
     'settings.sectionSfInject': 'Salesforce UI Integration',
+    'settings.sfInjectBeta': 'Beta',
     'settings.sfInjectLead':
-      'Añade accesos de Salesforce Org Compare dentro de las pantallas nativas de Salesforce (Setup). Solo funciona en entornos guardados en la extensión y con sesión activa en el navegador.',
+      'Función en beta. Añade accesos de Salesforce Org Compare dentro de las pantallas nativas de Salesforce (Setup). Solo funciona en entornos guardados en la extensión y con sesión activa en el navegador. Por defecto todo está desactivado: activa solo lo que quieras usar.',
     'settings.sfInjectEnabled': 'Activar todas las integraciones UI',
     'settings.sfInjectEnabledHint':
       'Interruptor global. Si lo desactivas, se quitan todos los botones y enlaces inyectados en Salesforce. Si lo activas, se habilitan todas las integraciones de la lista. Si solo algunas están activas, el check aparece en estado intermedio.',
     'settings.sfInjectIntegrationsTitle': 'Integraciones disponibles',
     'settings.sfInjectIntegrationsHint':
-      'Puedes activar o desactivar cada integración por separado. Las que estén desmarcadas no se inyectan aunque el interruptor global esté activo.',
+      'Opt-in: por defecto ninguna está activa. Activa o desactiva cada integración por separado; solo se inyectan las marcadas.',
     'settings.sfInjectDebugLogOpenViewer': 'Debug Logs → Abrir en SFOC',
     'settings.sfInjectDebugLogOpenViewerHint':
       'En Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), añade el enlace «Abrir en SFOC» junto a View / Download / Delete de cada fila. Al pulsarlo descarga el Apex Log y lo abre en el visor analítico de la extensión.',
     'settings.sfInjectDebugLogsTableOrder': 'Debug Logs → Tabla encima de User Trace Flags',
     'settings.sfInjectDebugLogsTableOrderHint':
       'En Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), muestra la tabla Debug Logs (con Previous Page y Next Page) encima de User Trace Flags. Se reaplica al refrescar la página o al paginar.',
+    'settings.sfInjectUserTraceFlagsEnhance': 'Debug Logs → User Trace Flags (filtro y +15 min)',
+    'settings.sfInjectUserTraceFlagsEnhanceHint':
+      'En Setup → Debug Logs, en la tabla User Trace Flags: checkbox para mostrar solo trazas activas o caducadas hace menos de 30 min (con badge), y enlace por fila para ampliar/reactivar 15 minutos.',
     'settings.sfInjectSaved': 'Salesforce UI Integration guardada.',
     'settings.backupExport': 'Exportar copia',
     'settings.backupImportMerge': 'Importar (fusionar)',
@@ -2780,20 +2784,24 @@ const translations = {
       'Replace all saved orgs, order, and aliases with the file contents?',
     'settings.sectionBackup': 'Backup',
     'settings.sectionSfInject': 'Salesforce UI Integration',
+    'settings.sfInjectBeta': 'Beta',
     'settings.sfInjectLead':
-      'Adds Salesforce Org Compare shortcuts inside native Salesforce screens (Setup). Only works for orgs saved in the extension and with an active browser session.',
+      'Beta feature. Adds Salesforce Org Compare shortcuts inside native Salesforce screens (Setup). Only works for orgs saved in the extension and with an active browser session. Everything is off by default: enable only what you want to use.',
     'settings.sfInjectEnabled': 'Enable all UI integrations',
     'settings.sfInjectEnabledHint':
       'Global switch. Turning it off removes every injected button/link in Salesforce. Turning it on enables all integrations below. If only some are enabled, the checkbox shows an indeterminate state.',
     'settings.sfInjectIntegrationsTitle': 'Available integrations',
     'settings.sfInjectIntegrationsHint':
-      'Toggle each integration individually. Unchecked ones are not injected even if the global switch is on.',
+      'Opt-in: none are enabled by default. Toggle each integration individually; only checked ones are injected.',
     'settings.sfInjectDebugLogOpenViewer': 'Debug Logs → Open in SFOC',
     'settings.sfInjectDebugLogOpenViewerHint':
       'On Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), adds an «Open in SFOC» link next to View / Download / Delete on each row. Clicking it downloads the Apex Log and opens it in the extension’s analytical viewer.',
     'settings.sfInjectDebugLogsTableOrder': 'Debug Logs → Table above User Trace Flags',
     'settings.sfInjectDebugLogsTableOrderHint':
       'On Setup → Debug Logs (/lightning/setup/ApexDebugLogs/home), shows the Debug Logs table (with Previous Page and Next Page) above User Trace Flags. Re-applies on refresh or pagination.',
+    'settings.sfInjectUserTraceFlagsEnhance': 'Debug Logs → User Trace Flags (filter and +15 min)',
+    'settings.sfInjectUserTraceFlagsEnhanceHint':
+      'On Setup → Debug Logs, in the User Trace Flags table: checkbox to show only active or recently expired (≤30 min) traces (with badge), and a per-row link to extend/reactivate by 15 minutes.',
     'settings.sfInjectSaved': 'Salesforce UI Integration saved.',
     'settings.backupExport': 'Export backup',
     'settings.backupImportMerge': 'Import (merge)',

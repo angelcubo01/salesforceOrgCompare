@@ -2,10 +2,17 @@
  * Matchers de URL y IDs para Debug Logs (Setup).
  */
 
-/** Solo Setup → Debug Logs → home (Lightning / salesforce-setup.com). */
+/** Setup → Debug Logs → home (Lightning / salesforce-setup.com). */
 export const APEX_DEBUG_LOGS_HOME_RE = /\/lightning\/setup\/ApexDebugLogs\/home\/?$/i;
 
-/** Iframe Classic VF embebido en Debug Logs home. */
+/**
+ * Shell Lightning de Debug Logs: /home, /page (vistas filtradas) o la raíz del nodo.
+ * Ej.: .../ApexDebugLogs/page?address=%2Fsetup%2Fui%2FlistApexTraces.apexp%3F...
+ */
+export const APEX_DEBUG_LOGS_SETUP_RE =
+  /\/lightning\/setup\/ApexDebugLogs(?:\/(?:home|page)?)?\/?$/i;
+
+/** Iframe Classic VF embebido en Debug Logs. */
 export const APEX_DEBUG_LOGS_CLASSIC_FRAME_RE = /\/setup\/ui\/listApexTraces\.apexp$/i;
 
 /**
@@ -31,6 +38,16 @@ export function isApexDebugLogsHomePage(url) {
 }
 
 /**
+ * Shell Lightning Setup de Debug Logs (home, page filtrada, etc.).
+ * @param {string | URL | undefined | null} url
+ * @returns {boolean}
+ */
+export function isApexDebugLogsSetupPage(url) {
+  const u = toUrl(url);
+  return !!(u && APEX_DEBUG_LOGS_SETUP_RE.test(u.pathname));
+}
+
+/**
  * Frame Classic de la lista de Debug Logs (Previous/Next + tabla).
  * @param {string | URL | undefined | null} url
  * @returns {boolean}
@@ -46,7 +63,7 @@ export function isApexDebugLogsClassicFrame(url) {
  * @returns {boolean}
  */
 export function isApexDebugLogsInjectPage(url) {
-  return isApexDebugLogsHomePage(url) || isApexDebugLogsClassicFrame(url);
+  return isApexDebugLogsSetupPage(url) || isApexDebugLogsClassicFrame(url);
 }
 
 /**

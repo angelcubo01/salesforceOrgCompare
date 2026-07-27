@@ -86,7 +86,7 @@ export function wireSfInjectSettings(translate) {
     for (const cb of integrationCbs) {
       const id = cb.getAttribute('data-sf-inject-integration');
       if (!id) continue;
-      const integrationOn = cfg.integrations?.[id] !== false;
+      const integrationOn = cfg.integrations?.[id] === true;
       cb.checked = cfg.enabled === true && integrationOn;
     }
     syncMasterFromChildren();

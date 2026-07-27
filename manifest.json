@@ -52,11 +52,15 @@
     {
       "matches": [
         "https://*.lightning.force.com/lightning/setup/ApexDebugLogs/*",
+        "https://*.sandbox.lightning.force.com/lightning/setup/ApexDebugLogs/*",
         "https://*.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
         "https://*.my.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
+        "https://*.sandbox.my.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
         "https://*.my.salesforce.com/setup/ui/listApexTraces.apexp*",
+        "https://*.sandbox.my.salesforce.com/setup/ui/listApexTraces.apexp*",
         "https://*.salesforce.com/setup/ui/listApexTraces.apexp*",
         "https://*.my.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
+        "https://*.sandbox.my.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
         "https://*.salesforce-setup.com/setup/ui/listApexTraces.apexp*"
       ],
       "js": ["sfInject/content/bundle.js"],

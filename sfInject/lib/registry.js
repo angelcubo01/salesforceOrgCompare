@@ -16,6 +16,11 @@ export const SF_INJECT_SHIPPED = /** @type {const} */ ([
     id: 'debugLogsTableOrder',
     settingsLabelKey: 'settings.sfInjectDebugLogsTableOrder',
     settingsHintKey: 'settings.sfInjectDebugLogsTableOrderHint'
+  },
+  {
+    id: 'userTraceFlagsEnhance',
+    settingsLabelKey: 'settings.sfInjectUserTraceFlagsEnhance',
+    settingsHintKey: 'settings.sfInjectUserTraceFlagsEnhanceHint'
   }
 ]);
 

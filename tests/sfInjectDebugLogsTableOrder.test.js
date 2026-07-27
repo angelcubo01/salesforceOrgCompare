@@ -77,11 +77,15 @@ function createMockDocument(root) {
       return a < b ? DOCUMENT_POSITION_FOLLOWING : 0;
     };
     node.insertBefore = function insertBefore(child, before) {
-      const idx = this.children.indexOf(before);
-      if (idx === -1) throw new Error('before not found');
       const prevIdx = this.children.indexOf(child);
       if (prevIdx !== -1) this.children.splice(prevIdx, 1);
-      this.children.splice(idx, 0, child);
+      if (before == null) {
+        this.children.push(child);
+      } else {
+        const idx = this.children.indexOf(before);
+        if (idx === -1) throw new Error('before not found');
+        this.children.splice(idx, 0, child);
+      }
       child.parentElement = this;
     };
     node.appendChild = function appendChild(child) {
@@ -217,5 +221,14 @@ describe('debugLogsTableOrderDom', () => {
     reorderDebugLogsAboveUserTraceFlags(doc);
     const debugTr = findDebugLogsSectionRow(doc);
     expect(debugTr?.querySelector('[id="Apex_Trace_List:traceForm:traceTableNextPrev"]')).toBeTruthy();
+  });
+
+  it('keeps the user trace flags list inside its own section row', () => {
+    const userTr = findUserTraceFlagsSectionRow(doc, findDebugLogsSectionRow(doc));
+    expect(userTr?.querySelector('[id="Apex_Trace_List:monitoredUsersForm"]')).toBeTruthy();
+    reorderDebugLogsAboveUserTraceFlags(doc);
+    const afterTr = findUserTraceFlagsSectionRow(doc, findDebugLogsSectionRow(doc));
+    expect(afterTr).toBe(userTr);
+    expect(afterTr?.querySelector('[id="Apex_Trace_List:monitoredUsersForm"]')).toBeTruthy();
   });
 });

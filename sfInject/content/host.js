@@ -121,6 +121,7 @@ async function bootstrap() {
   const ctx = {
     orgId: orgRes.orgId,
     lang,
+    prefs: settings.prefs || {},
     onError: (msg) => showInjectToast(msg, true)
   };
 
