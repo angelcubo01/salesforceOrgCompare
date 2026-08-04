@@ -91,9 +91,14 @@ body {
 
 html[data-ui-theme='light'] {
   --asv-bg: #f8fafc;
-  --asv-border: #cbd5e1;
+  --asv-border: #b8c6d6;
   --asv-text: #0f172a;
-  --asv-accent: #0284c7;
+  --asv-accent: #2f5f9f;
+}
+
+html[data-ui-theme='light'] .apex-src-viewer-toolbar {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(8px);
 }
 
 html[data-ui-theme='light'] .apex-src-viewer-back {
@@ -101,8 +106,8 @@ html[data-ui-theme='light'] .apex-src-viewer-back {
 }
 
 html[data-ui-theme='light'] .apex-src-viewer-download {
-  background: rgba(2, 132, 199, 0.12);
-  color: #0369a1;
+  background: rgba(47, 95, 159, 0.12);
+  color: #1f3f61;
 }
 
 html[data-ui-theme='light'] .apex-src-line-highlight {

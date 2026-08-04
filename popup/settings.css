@@ -13,9 +13,9 @@ body {
 }
 
 .settings-shell {
-  max-width: 520px;
+  max-width: 640px;
   margin: 0 auto;
-  padding: 28px 20px 40px;
+  padding: 32px 24px 48px;
 }
 
 .settings-header {
@@ -45,10 +45,12 @@ body {
 }
 
 .settings-card {
-  background: rgba(15, 23, 42, 0.65);
-  border: 1px solid #334155;
-  border-radius: 10px;
-  padding: 16px 18px;
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 12px 30px rgba(2, 6, 23, 0.22);
+  backdrop-filter: blur(8px);
 }
 
 .settings-card-muted {
@@ -149,13 +151,14 @@ html[data-ui-theme='light'] .settings-checkbox-row {
 .settings-select {
   width: 100%;
   max-width: 280px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   font-size: 0.9rem;
   color: #e2e8f0;
-  background: #020617;
+  background: rgba(2, 6, 23, 0.9);
   border: 1px solid #475569;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
 }
 
 .settings-select--full {
@@ -163,9 +166,10 @@ html[data-ui-theme='light'] .settings-checkbox-row {
 }
 
 .settings-select:hover,
-.settings-select:focus {
+.settings-select:focus-visible {
   border-color: #64748b;
   outline: none;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
 }
 
 .settings-number {
@@ -355,20 +359,23 @@ html[data-ui-theme='light'] .settings-checkbox-row {
   font-size: 0.85rem;
   font-weight: 600;
   color: #e2e8f0;
-  background: #1e293b;
+  background: linear-gradient(135deg, #243244 0%, #1d2a3a 100%);
   border: 1px solid #475569;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(2, 6, 23, 0.24);
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .settings-secondary:hover {
-  background: #334155;
+  background: linear-gradient(135deg, #2f4058 0%, #243244 100%);
   border-color: #64748b;
+  transform: translateY(-1px);
 }
 
-.settings-secondary:focus {
-  outline: 2px solid #38bdf8;
-  outline-offset: 2px;
+.settings-secondary:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.24);
 }
 
 .settings-status {
@@ -418,17 +425,17 @@ html[data-ui-theme='light'] .settings-checkbox-row {
 /* ── Modo claro (Ajustes) ── */
 html[data-ui-theme='light'] {
   color-scheme: light;
-  --sfoc-light-bg-page: linear-gradient(165deg, #c8d2de 0%, #b8c5d4 55%, #aebdce 100%);
-  --sfoc-light-bg-surface: #d4dce6;
-  --sfoc-light-bg-elevated: #e2e8f0;
+  --sfoc-light-bg-page: linear-gradient(165deg, #edf2f7 0%, #e4ebf3 55%, #dbe5ef 100%);
+  --sfoc-light-bg-surface: #e7edf4;
+  --sfoc-light-bg-elevated: #f2f6fb;
   --sfoc-light-bg-input: #f8fafc;
-  --sfoc-light-bg-hover: #b8c5d4;
-  --sfoc-light-border: #7d8fa3;
-  --sfoc-light-border-subtle: #94a3b8;
+  --sfoc-light-bg-hover: #d7e1ec;
+  --sfoc-light-border: #8da0b6;
+  --sfoc-light-border-subtle: #a9b8ca;
   --sfoc-light-text: #0f172a;
-  --sfoc-light-text-muted: #334155;
-  --sfoc-light-text-placeholder: #64748b;
-  --sfoc-text-muted: #334155;
+  --sfoc-light-text-muted: #243447;
+  --sfoc-light-text-placeholder: #4f6278;
+  --sfoc-text-muted: #243447;
   --sfoc-bg-app: #f1f5f9;
   --sfoc-bg-panel: #ffffff;
   --sfoc-bg-elevated: var(--sfoc-light-bg-elevated);
