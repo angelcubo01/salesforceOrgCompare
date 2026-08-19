@@ -67,6 +67,31 @@
       ></button>
     </div>
 
+    <section class="popup-ui-mode" aria-labelledby="popupUiModeTitle">
+      <div class="popup-ui-mode__content">
+        <div class="popup-ui-mode__heading">
+          <h3 id="popupUiModeTitle" class="popup-ui-mode__title" data-i18n="popup.uiMode.title">Nueva interfaz 2.0</h3>
+          <span class="popup-ui-mode__badge" data-i18n="popup.uiMode.beta">Beta</span>
+        </div>
+        <p id="popupUiModeHelp" class="popup-ui-mode__help" data-i18n="popup.uiMode.help">Puedes volver temporalmente a la interfaz clásica</p>
+        <p id="popupUiModeStatus" class="popup-ui-mode__status" aria-live="polite"></p>
+      </div>
+      <div class="popup-ui-mode__actions">
+        <label class="popup-ui-mode__switch" for="popupUiModeToggle">
+          <input
+            id="popupUiModeToggle"
+            class="popup-ui-mode__input"
+            type="checkbox"
+            role="switch"
+            aria-describedby="popupUiModeHelp popupUiModeStatus"
+          />
+          <span class="popup-ui-mode__track" aria-hidden="true"><span class="popup-ui-mode__thumb"></span></span>
+          <span class="sr-only" data-i18n="popup.uiMode.title">Nueva interfaz 2.0</span>
+        </label>
+        <button type="button" id="popupUiModeOpenBtn" class="popup-ui-mode__open"></button>
+      </div>
+    </section>
+
     <section>
       <h3 data-i18n="popup.savedOrgs">Tus entornos</h3>
       <p class="section-hint" data-i18n="popup.savedOrgsHint">Arrastra el asa ⋮⋮ solo dentro del mismo grupo (o entre entornos sin grupo). Ese orden se usa en los desplegables de la aplicación.</p>
