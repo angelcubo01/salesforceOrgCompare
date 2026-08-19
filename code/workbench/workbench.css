@@ -68,6 +68,10 @@ body[data-ui-mode="v2"] .workbench-shell {
   color: var(--workbench-text);
 }
 
+body[data-ui-mode="v2"] .workbench-panel-backdrop {
+  display: block;
+}
+
 body[data-ui-mode="v2"] .content {
   box-sizing: border-box;
   height: 100vh;
@@ -833,6 +837,13 @@ body[data-ui-mode="v2"] .quick-open-item {
   min-height: 44px;
   border-bottom-color: var(--workbench-border);
   color: var(--workbench-text);
+}
+
+body[data-ui-mode="v2"] .quick-open-option-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
 }
 
 body[data-ui-mode="v2"] .quick-open-item[aria-disabled="true"] {

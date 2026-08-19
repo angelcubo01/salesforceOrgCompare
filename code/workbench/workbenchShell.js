@@ -63,6 +63,8 @@ let panelQuery = '';
 let initialized = false;
 let compactMedia = null;
 let headerActionObservers = [];
+let headerRenderSignature = '';
+let categoryBrowseOverride = false;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -200,6 +202,7 @@ function createRail() {
 
 async function selectCategory(categoryId) {
   selectedCategoryId = categoryId;
+  categoryBrowseOverride = categoryId !== 'home' && categoryId !== 'comparator';
   if (categoryId === 'home') {
     await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated: true });
     await setPanelExpanded(true);
@@ -572,6 +575,25 @@ function handleTabKeydown(event, workspace) {
 export function renderWorkbenchHeader() {
   const editor = document.getElementById('editorContainer');
   if (!editor) return;
+  const workspace = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
+  const tabInfo = activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null;
+  const orgSignature = selectedOrgIds(tabInfo).map((orgId) => {
+    const env = environmentForOrg(orgId);
+    return [orgId, orgDisplayName(orgId), env.className, !!readOnlyByOrgId[orgId]];
+  });
+  const tabsSignature = workspace
+    ? visibleTabs(workspace).map((tab) => [tab.id, tabVisibility(tab).disabled, tabVisibility(tab).message])
+    : [];
+  const signature = JSON.stringify({
+    selectedCategoryId,
+    activeWorkspaceId,
+    activeTabId,
+    theme: document.documentElement.dataset.uiTheme || '',
+    orgSignature,
+    tabsSignature
+  });
+  if (signature === headerRenderSignature && document.getElementById('workbenchContextHeader')) return;
+  headerRenderSignature = signature;
   for (const observer of headerActionObservers) observer.disconnect();
   headerActionObservers = [];
   document.getElementById('workbenchContextHeader')?.remove();
@@ -591,12 +613,13 @@ function syncActiveRail() {
 export function renderWorkbenchShell() {
   if (!initialized) return;
   const shell = document.getElementById('workbenchShell');
-  if (shell) {
-    const previousFocusId = document.activeElement?.id;
-    shell.replaceChildren(createRail(), createPanel());
-    renderWorkbenchPanel();
-    if (previousFocusId) document.getElementById(previousFocusId)?.focus({ preventScroll: true });
+  if (shell && !document.getElementById('workbenchRail')) {
+    shell.append(createRail(), createPanel());
   }
+  const subtitle = document.querySelector('.workbench-panel-subtitle');
+  if (subtitle) subtitle.textContent = categoryLabel(selectedCategoryId);
+  document.getElementById('workbenchPanelPin')?.setAttribute('aria-pressed', prefs.panelPinned ? 'true' : 'false');
+  renderWorkbenchPanel();
   syncActiveRail();
   syncShellLayoutAttributes();
   renderWorkbenchHeader();
@@ -608,8 +631,15 @@ function validHistorySelection(value, toolId) {
   return tabInfo && tabInfo.toolId === toolId ? { workspaceId: workspace.id, tabId: tabInfo.id } : null;
 }
 
-function syncFromLegacyNavigation() {
+function syncFromLegacyNavigation(event = null) {
+  if (event?.detail?.source === 'tool-handlers-ready') {
+    if (activeWorkspaceId && activeTabId) void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
+    headerRenderSignature = '';
+    renderWorkbenchHeader();
+    return;
+  }
   const toolId = document.getElementById('typeSelect')?.value || '';
+  if (categoryBrowseOverride && toolId) return;
   if (state.appNavMode === APP_NAV_MODE_HOME || !toolId) {
     activeWorkspaceId = null;
     activeTabId = null;
@@ -647,6 +677,7 @@ export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
   const workspace = getWorkspaceById(workspaceId);
   const tabInfo = workspace && getTabById(workspaceId, tabId);
   if (!workspace || !tabInfo) return false;
+  categoryBrowseOverride = false;
   const availability = tabVisibility(tabInfo);
   if (!availability.visible || availability.disabled) {
     if (availability.message) showToast(availability.message, 'warn', { bypassCooldown: true });
@@ -704,8 +735,12 @@ export function getVisibleWorkbenchSearchEntries() {
 
 export async function setupWorkbenchShell() {
   if (initialized) return;
-  prefs = await loadWorkbenchPrefs();
-  await Promise.all([loadToolRecents(), loadReadOnlyMap()]);
+  const [loadedPrefs] = await Promise.all([
+    loadWorkbenchPrefs(),
+    loadToolRecents(),
+    loadReadOnlyMap()
+  ]);
+  prefs = loadedPrefs;
   compactMedia = window.matchMedia(COMPACT_QUERY);
   const shell = el('div', 'workbench-shell');
   shell.id = 'workbenchShell';
@@ -722,6 +757,7 @@ export async function setupWorkbenchShell() {
   document.addEventListener('sfoc:navigationchange', syncFromLegacyNavigation);
   document.addEventListener('sfoc:tool-recents-change', renderWorkbenchPanel);
   window.addEventListener('popstate', (event) => {
+    categoryBrowseOverride = false;
     pendingHistorySelection = event.state?.sfocWorkbench || null;
   });
   for (const id of ['leftOrg', 'rightOrg']) {

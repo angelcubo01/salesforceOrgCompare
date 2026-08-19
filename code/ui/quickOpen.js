@@ -22,6 +22,8 @@ import {
   getMetadataSearchLoadingMessage,
   renderSearchLoadingSpinner
 } from './searchLoadingUi.js';
+import { createIcon } from '../workbench/iconRegistry.js';
+import { getToolIcon, getWorkspaceById } from '../workbench/workspaceRegistry.js';
 
 const QUICK_OPEN_SHORTCUT = Object.freeze({ shift: true, key: 'p' });
 const COMMAND_PALETTE_SHORTCUT = Object.freeze({ shift: false, key: 'k' });
@@ -161,7 +163,19 @@ function createToolOption(entry) {
     entry.groupLabel || t('quickOpen.groupTools'),
     entry.label || entry.workspaceLabel || entry.tool || ''
   );
-  button.appendChild(crumbs);
+  if (isV2()) {
+    const main = document.createElement('span');
+    main.className = 'quick-open-option-main';
+    const workspace = entry.workspaceId ? getWorkspaceById(entry.workspaceId) : null;
+    const iconName = entry.toolId || entry.tool
+      ? getToolIcon(entry.toolId || entry.tool)
+      : workspace?.icon || 'command';
+    main.appendChild(createIcon(iconName, { size: 20 }));
+    main.appendChild(crumbs);
+    button.appendChild(main);
+  } else {
+    button.appendChild(crumbs);
+  }
 
   if (entry.disabled) {
     const reason = document.createElement('span');
