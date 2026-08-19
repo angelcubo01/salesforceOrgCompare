@@ -436,6 +436,11 @@ export function syncTabSelection() {
   });
 
   syncCompareContextTitle();
+  document.dispatchEvent(
+    new CustomEvent('sfoc:navigationchange', {
+      detail: { mode, tool }
+    })
+  );
 }
 
 export function syncSidebarToolRow() {

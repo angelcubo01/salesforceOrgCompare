@@ -128,6 +128,7 @@ import { refreshLandingToolRecents } from './ui/landingRecentsUi.js';
 import { ensureExtensionExceptionReporting } from '../shared/posthogClient.js';
 import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.js';
 import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
+import { applyUiModeToDocument, loadUiMode } from '../shared/uiMode.js';
 
 function applyStaticTranslations() {
   const brandLogo = document.getElementById('sidebarBrandLogo');
@@ -168,8 +169,9 @@ function applyLandingDiscoverBanner() {
 }
 
 async function init() {
-  await Promise.all([loadLang(), loadExtensionSettings()]);
+  const [, , uiMode] = await Promise.all([loadLang(), loadExtensionSettings(), loadUiMode()]);
   applyUiThemeToDocument(document);
+  applyUiModeToDocument(document, uiMode);
 
   await bootstrapFeatureControls();
   setupFeatureControlsUi();
@@ -210,6 +212,10 @@ async function init() {
   }
   applyArtifactTypeUi();
   applyFeatureControlsUi();
+  if (uiMode === 'v2') {
+    const { setupWorkbenchShell } = await import('./workbench/workbenchShell.js');
+    await setupWorkbenchShell();
+  }
   revealAppNavigation();
   void refreshLandingToolRecents();
   void maybeShowToolOnboarding(getSelectedArtifactType());
