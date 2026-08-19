@@ -576,6 +576,13 @@ body.sidebar-collapsed .sidebar {
   background: transparent;
   color: #cccccc;
   cursor: pointer;
+  line-height: 0;
+}
+
+.sidebar-search-input-row .sidebar-action-btn svg {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .sidebar-search-input-row .sidebar-action-btn:hover {
@@ -1096,12 +1103,12 @@ body.artifact-no-operation .type-select {
 
 .compare-list-section-title {
   flex-shrink: 0;
-  padding: 6px 12px 4px;
+  padding: 8px 12px 5px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #8a8a8a;
+  letter-spacing: 0.06em;
+  color: #9fb0c4;
   background: #252526;
   user-select: none;
 }
@@ -1212,8 +1219,8 @@ body.modifier-pressed .compare-list-scroll-host .list::after {
   align-items: center;
   gap: var(--list-tree-gap, 4px);
   user-select: none;
-  min-height: 24px;
-  height: 24px;
+  min-height: 25px;
+  height: 25px;
   max-width: 100%;
   box-sizing: border-box;
   overflow: hidden;
@@ -1322,9 +1329,9 @@ body.modifier-pressed .list.compare-list-pinned > li[data-item-index]:hover {
   border: none;
   cursor: pointer;
   gap: var(--list-tree-gap, 4px);
-  min-height: 22px;
-  height: 22px;
-  color: #cccccc;
+  min-height: 25px;
+  height: 25px;
+  color: #b8c7da;
 }
 
 .bundle-chevron {
@@ -1365,7 +1372,8 @@ body.modifier-pressed .list.compare-list-pinned > li[data-item-index]:hover {
 }
 
 .list.compare-tree > li.bundle-header:hover {
-  background: #2a2d2e;
+  background: rgba(56, 189, 248, 0.1);
+  color: #f8fafc;
 }
 
 /* Retrieve package.xml: igualdad rápida (texto) sin abrir diff */
@@ -1603,7 +1611,8 @@ body.modifier-pressed .list li.bundle-header:hover .list-item-actions--bundle .r
 }
 
 .list li.pinned-item .list-item-name {
-  font-style: italic;
+  font-style: normal;
+  font-weight: inherit;
 }
 
 .pinned-separator {
@@ -1634,7 +1643,7 @@ body.modifier-pressed .list li.bundle-header:hover .list-item-actions--bundle .r
 }
 
 .list li[data-item-index].active:hover {
-  background: #094771 !important;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.24) 0%, rgba(37, 99, 235, 0.24) 100%) !important;
 }
 
 .editor {
