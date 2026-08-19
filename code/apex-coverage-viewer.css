@@ -240,20 +240,25 @@ body.apex-cov-split-active .apex-cov-viewer-legend {
 }
 
 html[data-ui-theme='light'] {
-  --acv-bg: #d4dce6;
-  --acv-border: #7d8fa3;
+  --acv-bg: #f5f7fb;
+  --acv-border: #b8c6d6;
   --acv-text: #0f172a;
 }
 
+html[data-ui-theme='light'] .apex-cov-viewer-toolbar {
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(8px);
+}
+
 html[data-ui-theme='light'] .apex-cov-viewer-back {
-  background: #f2f5f9;
+  background: #f4f7fb;
   border-color: var(--acv-border);
 }
 
 html[data-ui-theme='light'] .apex-cov-viewer-back:hover {
-  background: #d4dce6;
-  border-color: #0284c7;
-  color: #0284c7;
+  background: #dce5ef;
+  border-color: #2f5f9f;
+  color: #1f3f61;
 }
 
 html[data-ui-theme='light'] .apex-cov-viewer-legend {

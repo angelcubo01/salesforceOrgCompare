@@ -15,7 +15,7 @@ describe('light theme CSS contract', () => {
   it('remaps semantic --sfoc-* tokens on html[data-ui-theme=light]', () => {
     expect(css).toMatch(/html\[data-ui-theme="light"\][\s\S]*--sfoc-bg-panel:/);
     expect(css).toMatch(/--sfoc-accent:\s*#2563eb/);
-    expect(css).toMatch(/--sfoc-light-text-muted:\s*#334155/);
+    expect(css).toMatch(/--sfoc-light-text-muted:\s*#243447/);
     expect(css).toMatch(/--sfoc-text:\s*var\(--sfoc-light-text\)/);
     expect(css).toMatch(/--sfoc-input-bg:/);
     expect(css).toMatch(/--sfoc-link:/);
@@ -39,7 +39,7 @@ describe('light theme CSS contract', () => {
   });
 
   it('uses accessible muted text token for secondary copy', () => {
-    expect(css).toMatch(/--sfoc-light-text-placeholder:\s*#64748b/);
+    expect(css).toMatch(/--sfoc-light-text-placeholder:\s*#4f6278/);
     expect(css).toMatch(/html\[data-ui-theme="light"\] \.query-explorer-field-label/);
   });
 });
