@@ -4,6 +4,7 @@ import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
+import { confirmSfocOrgAction } from './sfocModal.js';
 import {
   isUserDebugTraceActive,
   isUserDebugTraceRecentlyInactive,
@@ -309,7 +310,12 @@ async function extendTrace(row) {
 
 async function deleteTrace(row) {
   if (!row?.id || !state.leftOrgId || busyRowId) return;
-  if (!window.confirm(t('debugLogs.viewTracesDeleteConfirm'))) return;
+  if (!await confirmSfocOrgAction({
+    orgId: state.leftOrgId,
+    description: t('debugLogs.viewTracesDeleteConfirm'),
+    confirmLabel: t('modal.action.deleteTrace'),
+    risk: 'destructive'
+  })) return;
   busyRowId = String(row.id);
   renderTable();
   showToastWithSpinner(t('debugLogs.viewTracesDeleting'));

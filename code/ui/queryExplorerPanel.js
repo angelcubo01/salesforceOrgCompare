@@ -6,6 +6,7 @@ import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { bindRunShortcut } from './runShortcut.js';
+import { confirmSfocToolAction } from './sfocModal.js';
 
 function showQueryExplorerErrorToast(e) {
   const msg = String(e?.message || e);
@@ -913,9 +914,12 @@ function refreshSavedQueriesListUi() {
     del.className = 'anonymous-apex-script-delete-btn';
     del.title = t('queryExplorer.deleteSavedQuery');
     del.textContent = 'X';
-    del.addEventListener('click', (ev) => {
+    del.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      const ok = window.confirm(t('queryExplorer.confirmDeleteQuery', { name: String(s.name || '') }));
+      const ok = await confirmSfocToolAction(
+        t('queryExplorer.confirmDeleteQuery', { name: String(s.name || '') }),
+        t('modal.action.deleteQuery')
+      );
       if (!ok) return;
       const list = readSavedQueries().filter((x) => x.id !== s.id);
       writeSavedQueries(list);

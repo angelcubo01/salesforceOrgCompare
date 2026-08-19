@@ -13,6 +13,7 @@ import { guardToolAction } from './featureControlsUi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { renderVscodeTabBar } from './vscodeTabs.js';
 import { bindRunShortcut } from './runShortcut.js';
+import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
 
 import {
   createTabId,
@@ -247,7 +248,7 @@ async function closeTab(tabId) {
     anonWorkbench.hasTab(tab.id) ? anonWorkbench.getValue(tab.id) : tab.content,
     tab.originalContent
   )) {
-    if (!window.confirm(t('codeEditor.unsavedTab'))) return;
+    if (!await confirmSfocToolAction(t('codeEditor.unsavedTab'), t('modal.action.discardChanges'))) return;
   }
 
   if (renamingTabId === tabId) renamingTabId = null;
@@ -652,9 +653,12 @@ function refreshSavedScriptsUi() {
     del.className = 'anonymous-apex-script-delete-btn';
     del.title = t('anonymousApex.deleteScript');
     del.textContent = 'X';
-    del.addEventListener('click', (ev) => {
+    del.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      const ok = window.confirm(t('anonymousApex.confirmDeleteScript', { name: String(s.name || '') }));
+      const ok = await confirmSfocToolAction(
+        t('anonymousApex.confirmDeleteScript', { name: String(s.name || '') }),
+        t('modal.action.deleteScript')
+      );
       if (!ok) return;
       const list = readSavedScripts().filter((x) => x.id !== s.id);
       writeSavedScripts(list);
@@ -782,27 +786,31 @@ async function runAnonymousApex() {
     showToast(t('anonymousApex.emptyBody'), 'warn');
     return;
   }
+  const targetOrgIds = state.anonymousApexCompareMode
+    ? [state.leftOrgId, state.rightOrgId].filter(Boolean)
+    : [state.leftOrgId].filter(Boolean);
+  if (state.anonymousApexCompareMode && !state.rightOrgId) {
+    setExecStatus(t('anonymousApex.selectRightOrg'), 'error');
+    return;
+  }
+  for (const orgId of targetOrgIds) {
+    if (!await confirmSfocOrgAction({
+      orgId,
+      description: t('modal.confirmAnonymousApex'),
+      confirmLabel: t('modal.action.executeAnonymousApex'),
+      risk: 'write'
+    })) return;
+  }
   if (runBtn) runBtn.disabled = true;
   if (logBtn) {
     logBtn.disabled = true;
     logBtn.classList.add('hidden');
   }
   setExecStatus(t('anonymousApex.running'));
-  const targetOrgIds = state.anonymousApexCompareMode
-    ? [state.leftOrgId, state.rightOrgId].filter(Boolean)
-    : [state.leftOrgId].filter(Boolean);
   const usageBase = {
     leftOrgId: state.leftOrgId || '',
     rightOrgId: state.anonymousApexCompareMode ? state.rightOrgId || '' : ''
   };
-  if (state.anonymousApexCompareMode && !state.rightOrgId) {
-    setExecStatus(t('anonymousApex.selectRightOrg'), 'error');
-    if (runBtn) runBtn.disabled = false;
-    void logAnonymousApexUsage({
-      ...usageBase
-    });
-    return;
-  }
   try {
     const execResults = await Promise.all(
       targetOrgIds.map(async (orgId) => ({

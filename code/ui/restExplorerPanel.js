@@ -7,6 +7,7 @@ import { handleToolError } from '../../shared/reportToolError.js';
 import { flattenJsonForTree } from '../../shared/restExplorerApi.js';
 import { logToolUsage } from './toolUsageLog.js';
 import { bindRunShortcut } from './runShortcut.js';
+import { confirmSfocOrgAction } from './sfocModal.js';
 
 function escapeHtml(v) {
   return String(v ?? '')
@@ -50,6 +51,18 @@ async function sendRequest() {
       showToast(t('restExplorer.badHeaders'), 'error');
       return;
     }
+  }
+  const normalizedMethod = String(method).toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(normalizedMethod)) {
+    if (!await confirmSfocOrgAction({
+      orgId,
+      description: t('modal.confirmRestWrite', { method: normalizedMethod, uri }),
+      confirmLabel: normalizedMethod === 'DELETE'
+        ? t('modal.action.sendRestDelete')
+        : t('modal.action.sendRestWrite'),
+      risk: normalizedMethod === 'DELETE' ? 'destructive' : 'write',
+      variant: normalizedMethod === 'DELETE' ? 'destructive' : 'standard'
+    })) return;
   }
   showToastWithSpinner(t('restExplorer.sending'));
   try {

@@ -8,6 +8,7 @@ import { guardToolAction, getFeatureControlsConfig } from './featureControlsUi.j
 import { isActionDisabled } from '../../shared/featureControls.js';
 import { logToolUsage } from './toolUsageLog.js';
 import { EVENT_CHANNEL_TYPES, buildChannelPath } from '../../shared/eventMonitorApi.js';
+import { confirmSfocToolAction } from './sfocModal.js';
 
 /** @typedef {import('../../shared/eventMonitorApi.js').EventChannelType} EventChannelType */
 
@@ -249,7 +250,11 @@ async function subscribe() {
   selectedChannel = document.getElementById('eventMonitorChannel')?.value || selectedChannel;
   customChannelPath = document.getElementById('eventMonitorCustomPath')?.value?.trim() || '';
   replayId = parseInt(document.getElementById('eventMonitorReplayId')?.value ?? '-1', 10);
-  if (replayId === -2 && !window.confirm(t('eventMonitor.replayAllConfirm'))) return;
+  if (replayId === -2 && !await confirmSfocToolAction(
+    t('eventMonitor.replayAllConfirm'),
+    t('modal.action.subscribeAll'),
+    { variant: 'standard' }
+  )) return;
 
   const channelPath = buildChannelPath(selectedChannelType, selectedChannel, customChannelPath);
   if (!channelPath) {

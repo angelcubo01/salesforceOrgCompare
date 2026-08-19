@@ -14,6 +14,7 @@ import {
 import { buildRecordEditorRows, buildUpdatePayloadFromRows } from '../../shared/recordEditorModel.js';
 import { buildRecordViewUrl } from '../../shared/idActionsApi.js';
 import { logToolUsage } from './toolUsageLog.js';
+import { confirmSfocOrgAction } from './sfocModal.js';
 
 /** @type {'recordEditor' | 'import'} */
 let activeTab = 'recordEditor';
@@ -345,6 +346,17 @@ async function saveRecord() {
     return;
   }
 
+  if (!await confirmSfocOrgAction({
+    orgId,
+    description: t('modal.confirmRecordSave', {
+      operation: editorMode === 'create' ? t('dataWorkbench.insert') : t('dataWorkbench.update'),
+      object: objectApiName
+    }),
+    confirmLabel: editorMode === 'create' ? t('modal.action.createRecord') : t('modal.action.updateRecord'),
+    risk: 'write',
+    variant: 'standard'
+  })) return;
+
   if (editorMode !== 'create') {
     if (!lastRecord) {
       showToast(t('recordEditor.loadFirst'), 'warn');
@@ -420,7 +432,19 @@ async function runRecordDml(operation) {
     showToast(t('dataWorkbench.idRequired'), 'warn');
     return;
   }
-  if (operation === 'purge' && !window.confirm(t('dataWorkbench.purgeConfirm'))) return;
+  if (!await confirmSfocOrgAction({
+    orgId,
+    description: operation === 'purge'
+      ? t('dataWorkbench.purgeConfirm')
+      : t('modal.confirmRecordOperation', { operation, object: objectApiName, id: recordId }),
+    confirmLabel: operation === 'purge'
+      ? t('modal.action.purgeRecord')
+      : operation === 'delete'
+        ? t('modal.action.deleteRecord')
+        : t('modal.action.undeleteRecord'),
+    risk: operation === 'undelete' ? 'write' : 'destructive',
+    variant: operation === 'undelete' ? 'standard' : 'destructive'
+  })) return;
   showToastWithSpinner(t('dataWorkbench.runningDml'));
   try {
     const res = await bg({
@@ -676,6 +700,18 @@ async function runImport() {
     showToast(t('dataWorkbench.csvNoMapped'), 'warn');
     return;
   }
+
+  if (!await confirmSfocOrgAction({
+    orgId,
+    description: t('modal.confirmDataImport', {
+      operation,
+      count: records.length,
+      object: objectApiName
+    }),
+    confirmLabel: t('modal.action.importRecords'),
+    risk: operation === 'delete' || operation === 'hardDelete' ? 'destructive' : 'write',
+    variant: operation === 'delete' || operation === 'hardDelete' ? 'destructive' : 'standard'
+  })) return;
 
   importRunComplete = true;
   importRowStatuses = new Array(parsedImport.rows.length).fill(null);

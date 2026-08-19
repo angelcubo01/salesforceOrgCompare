@@ -5,6 +5,7 @@ import { MonacoWorkbench } from '../editor/monacoWorkbench.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
+import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { guardToolAction } from './featureControlsUi.js';
 import {
@@ -274,15 +275,17 @@ async function syncDeployApiVersionFromClass(tab) {
   }
 }
 
-function confirmDeployOrgMismatch(tab) {
+async function confirmDeployOrgMismatch(tab) {
   const tabOrgId = getTabSourceOrgId(tab);
   const selectorOrgId = getDeployTargetOrgId();
   if (!selectorOrgId) return true;
   if (!tabOrgId || String(tabOrgId) === String(selectorOrgId)) return true;
   const tabOrg = getOrgDisplayLabel(tabOrgId);
   const selectorOrg = getOrgDisplayLabel(selectorOrgId);
-  return window.confirm(
-    t('quickEdit.deployOrgMismatchConfirm', { tabOrg, selectorOrg })
+  return confirmSfocToolAction(
+    t('quickEdit.deployOrgMismatchConfirm', { tabOrg, selectorOrg }),
+    t('modal.action.deploySelectedOrg'),
+    { variant: 'production' }
   );
 }
 
@@ -537,7 +540,7 @@ async function persistSession() {
 }
 
 async function clearAllEditorTabs() {
-  if (!window.confirm(t('codeEditor.clearAllConfirm'))) return;
+  if (!await confirmSfocToolAction(t('codeEditor.clearAllConfirm'), t('modal.action.closeTabs'))) return;
 
   editorSession = { orgId: null, activeTabId: null, activeTabIndex: null, tabs: [], deployApiVersion: null };
   sessionRestored = true;
@@ -662,7 +665,7 @@ async function revertActiveTabLocally() {
     showToast(t('quickEdit.nothingToRevert'), 'info');
     return;
   }
-  if (!window.confirm(t('quickEdit.revertLocalConfirm'))) return;
+  if (!await confirmSfocToolAction(t('quickEdit.revertLocalConfirm'), t('modal.action.discardChanges'))) return;
 
   const reverted = revertContentToBaseline(tab.originalContent);
   tab.content = reverted.content;
@@ -695,7 +698,10 @@ async function retrieveActiveTabFromOrg() {
     showTabAuthExpiredStatus(tab);
     return;
   }
-  if (isQuickEditTabModified(tab) && !window.confirm(t('quickEdit.retrieveFromOrgConfirm'))) {
+  if (isQuickEditTabModified(tab) && !await confirmSfocToolAction(
+    t('quickEdit.retrieveFromOrgConfirm'),
+    t('modal.action.retrieveDiscard')
+  )) {
     return;
   }
 
@@ -894,7 +900,7 @@ async function closeTab(tabId, _event, meta = {}) {
     ? quickEditWorkbench.getValue(tab.id)
     : tab.content;
   if (isTabContentDirty(dirtyContent, tab.originalContent)) {
-    if (!window.confirm(t('codeEditor.unsavedTab'))) return;
+    if (!await confirmSfocToolAction(t('codeEditor.unsavedTab'), t('modal.action.discardChanges'))) return;
   }
 
   const wasActive = isClosingActive;
@@ -1048,7 +1054,7 @@ async function deployComponent(checkOnly = false) {
     return;
   }
 
-  if (!confirmDeployOrgMismatch(tab)) return;
+  if (!await confirmDeployOrgMismatch(tab)) return;
 
   if (!checkOnly && !isOrgSandbox(deployOrgId)) {
     showToast(t('quickEdit.productionBlocked'), 'error');
@@ -1062,6 +1068,14 @@ async function deployComponent(checkOnly = false) {
     showToast(t('quickEdit.emptyContent'), 'warn');
     return;
   }
+
+  if (!checkOnly && !await confirmSfocOrgAction({
+    orgId: deployOrgId,
+    description: t('modal.confirmMetadataDeploy', { component: tab.name }),
+    confirmLabel: t('modal.action.deploy'),
+    risk: 'write',
+    variant: 'standard'
+  })) return;
 
   saveApexDraft({
     orgId: deployOrgId,

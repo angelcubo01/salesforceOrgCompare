@@ -28,6 +28,7 @@ import {
 } from '../../shared/apexTestRunJobPrune.js';
 import { apexTestRunHasFailures } from '../../shared/apexTestRunStatus.js';
 import { sfApexIdKey, apexRunMatchesStoredJobId } from '../../shared/apexTestJobIdMatch.js';
+import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
 
 const STORAGE_KEY = 'apexTestRunJobs';
 const MAX_POLLS_ALL_MISSING = 10;
@@ -270,7 +271,7 @@ function createApexRunsMoreOptionsMenu(opts) {
 }
 
 export async function clearAllApexTestRunHistory() {
-  if (!window.confirm(t('apexTests.runsClearHistoryConfirm'))) return;
+  if (!await confirmSfocToolAction(t('apexTests.runsClearHistoryConfirm'), t('modal.action.clearHistory'))) return;
   try {
     await chrome.storage.local.set({ [STORAGE_KEY]: [] });
   } catch {
@@ -3185,7 +3186,12 @@ async function renderHubRunsTable(opts = {}) {
     btnAbort.addEventListener('click', async (e) => {
       e.stopPropagation();
       if (btnAbort.disabled) return;
-      if (!window.confirm(t('apexTests.runsAbortConfirm'))) return;
+      if (!await confirmSfocOrgAction({
+        orgId: rowOrgId,
+        description: t('apexTests.runsAbortConfirm'),
+        confirmLabel: t('modal.action.cancelExecution'),
+        risk: 'write'
+      })) return;
       btnAbort.disabled = true;
       const abortRes = await bg({
         type: 'apexTests:abortRun',

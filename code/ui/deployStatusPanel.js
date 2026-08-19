@@ -13,6 +13,7 @@ import { randomStagingId } from '../../shared/randomId.js';
 import { showToast } from './toast.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { getReturnContext, returnToQuickEditEditor } from '../lib/quickEditDeployContext.js';
+import { confirmSfocOrgAction } from './sfocModal.js';
 
 const POLL_ACTIVE_MS = 3000;
 const POLL_IDLE_MS = 15000;
@@ -1393,7 +1394,12 @@ async function tickDeployStatus(opts = {}) {
 
 async function handleCancelDeploy(asyncId) {
   if (!asyncId || cancelInFlight) return;
-  if (!window.confirm(t('deployStatus.cancelConfirm', { id: asyncId }))) return;
+  if (!await confirmSfocOrgAction({
+    orgId: state.leftOrgId,
+    description: t('deployStatus.cancelConfirm', { id: asyncId }),
+    confirmLabel: t('modal.action.cancelDeployment'),
+    risk: 'write'
+  })) return;
 
   cancelInFlight = true;
   updateCancelButton({ asyncId, status: 'InProgress' }, { status: 'InProgress' });
