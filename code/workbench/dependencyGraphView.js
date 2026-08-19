@@ -4,7 +4,6 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 function nodeId(node) {
   return String(node?.id || node?.storeKey || node?.key || '').trim();
 }
-
 /** Construye un layout determinista y acotado, independiente del DOM. */
 export function buildDependencyGraphModel(data, query = '') {
   const root = data?.root && nodeId(data.root) ? { ...data.root, isRoot: true } : null;
@@ -184,4 +183,3 @@ export function renderDependencyGraph(host, data, translate) {
   reset.addEventListener('click', () => { zoom = 1; filter.value = ''; draw(); });
   draw();
 }
-

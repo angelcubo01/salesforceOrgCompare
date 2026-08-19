@@ -11,7 +11,6 @@ export const UI_MODE_V2 = 'v2';
 export function normalizeUiMode(value) {
   return value === UI_MODE_V2 ? UI_MODE_V2 : UI_MODE_CLASSIC;
 }
-
 function defaultStorageArea() {
   return typeof chrome !== 'undefined' ? chrome.storage?.local : null;
 }
@@ -46,4 +45,3 @@ export function applyUiModeToDocument(doc, value) {
   if (doc?.body) doc.body.dataset.uiMode = mode;
   return mode;
 }
-

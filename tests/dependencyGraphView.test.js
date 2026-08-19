@@ -31,4 +31,3 @@ describe('dependency graph model', () => {
     expect(model.truncated).toBe(true);
   });
 });
-

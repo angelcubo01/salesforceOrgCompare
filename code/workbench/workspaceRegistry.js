@@ -154,7 +154,6 @@ const WORKSPACE_BY_ID = new Map(WORKBENCH_WORKSPACES.map((workspace) => [workspa
 export function getWorkspaceById(workspaceId) {
   return WORKSPACE_BY_ID.get(workspaceId) || null;
 }
-
 export function getWorkspaceRouteForTool(toolId) {
   if (['Apex', 'LWC', 'Aura', 'VF', 'PermissionSet', 'Profile', 'FlexiPage', 'PackageXml'].includes(toolId)) {
     return LEGACY_TOOL_ROUTES.Comparator;
@@ -190,4 +189,3 @@ export function getSearchText(workspace, translate = (key) => key) {
   }
   return labels.join(' ').toLocaleLowerCase();
 }
-

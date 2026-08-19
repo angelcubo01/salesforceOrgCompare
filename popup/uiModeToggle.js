@@ -8,7 +8,6 @@ export function getPopupUiModeCopyKeys(mode) {
     ? { status: 'popup.uiMode.statusV2', open: 'popup.uiMode.openV2' }
     : { status: 'popup.uiMode.statusClassic', open: 'popup.uiMode.openClassic' };
 }
-
 export function refreshPopupUiModeToggleText() {
   const keys = getPopupUiModeCopyKeys(currentMode);
   const status = document.getElementById('popupUiModeStatus');
@@ -52,4 +51,3 @@ export async function setupPopupUiModeToggle(opts = {}) {
   });
   return currentMode;
 }
-

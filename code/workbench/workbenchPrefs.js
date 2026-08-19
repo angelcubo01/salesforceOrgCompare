@@ -23,7 +23,6 @@ export function normalizeWorkbenchPrefs(raw) {
     lastTabByWorkspace
   };
 }
-
 function storageAreaOrDefault(storageArea) {
   return storageArea || (typeof chrome !== 'undefined' ? chrome.storage?.local : null);
 }
@@ -45,4 +44,3 @@ export async function saveWorkbenchPrefs(prefs, storageArea) {
   if (area?.set) await area.set({ [WORKBENCH_PREFS_KEY]: normalized });
   return normalized;
 }
-

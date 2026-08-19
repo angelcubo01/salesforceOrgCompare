@@ -129,4 +129,3 @@ export function createIcon(iconName, opts = {}) {
   svg.appendChild(use);
   return svg;
 }
-

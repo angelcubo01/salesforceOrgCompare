@@ -33,4 +33,3 @@ describe('sfoc modal safety', () => {
     expect(source).toContain('focusTarget.focus()');
   });
 });
-

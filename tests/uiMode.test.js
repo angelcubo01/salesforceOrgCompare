@@ -32,4 +32,3 @@ describe('uiMode', () => {
     expect(doc.body.dataset.uiMode).toBe('v2');
   });
 });
-
