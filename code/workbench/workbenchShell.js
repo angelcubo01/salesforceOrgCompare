@@ -621,23 +621,18 @@ function syncFromLegacyNavigation() {
       activeWorkspaceId = route.workspaceId;
       activeTabId = route.tabId;
       selectedCategoryId = getWorkspaceById(route.workspaceId)?.categoryId || 'home';
-      applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
+      void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
     }
   }
   pendingHistorySelection = null;
   renderWorkbenchShell();
 }
 
-function applyWorkspaceTabVariant(workspaceId, tabId) {
+async function applyWorkspaceTabVariant(workspaceId, tabId) {
   document.body.dataset.workbenchWorkspace = workspaceId || '';
   document.body.dataset.workbenchTab = tabId || '';
-  if (workspaceId === 'apex-quality') {
-    if (tabId === 'tests') document.getElementById('apexTestsOpenRunnerBtn')?.click();
-    if (tabId === 'runs' || tabId === 'results') document.getElementById('apexTestsBackToHubBtn')?.click();
-  }
-  if (workspaceId === 'diagnostics' && tabId === 'trace-flags') {
-    document.getElementById('debugLogBrowserViewTracesBtn')?.click();
-  }
+  const { activateWorkspaceAdapter } = await import('./workspaceAdapters.js');
+  await activateWorkspaceAdapter(workspaceId, tabId);
 }
 
 function writeWorkbenchHistoryState(workspaceId, tabId) {
@@ -665,7 +660,7 @@ export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
     ...prefs,
     lastTabByWorkspace: { ...prefs.lastTabByWorkspace, [workspaceId]: tabId }
   });
-  applyWorkspaceTabVariant(workspaceId, tabId);
+  await applyWorkspaceTabVariant(workspaceId, tabId);
   writeWorkbenchHistoryState(workspaceId, tabId);
   renderWorkbenchShell();
   return true;

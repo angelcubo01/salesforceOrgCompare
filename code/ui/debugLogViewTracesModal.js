@@ -26,6 +26,7 @@ let cachedDebugLevels = [];
 let editingTrace = null;
 let loadGeneration = 0;
 let busyRowId = '';
+let inlineMode = false;
 
 function els() {
   return {
@@ -411,6 +412,58 @@ function closeModal() {
   busyRowId = '';
 }
 
+function ensureInlineHost() {
+  const panel = document.getElementById('debugLogBrowserPanel');
+  if (!panel) return null;
+  let host = document.getElementById('debugLogViewTracesInlineHost');
+  if (!host) {
+    host = document.createElement('section');
+    host.id = 'debugLogViewTracesInlineHost';
+    host.className = 'debug-log-view-traces-inline-host hidden';
+    host.setAttribute('aria-label', t('debugLogs.viewTracesModalTitle'));
+    panel.appendChild(host);
+  }
+  return host;
+}
+
+function tracePanel() {
+  return document.querySelector('.debug-log-view-traces-modal-panel');
+}
+
+export function deactivateDebugLogViewTracesInline() {
+  if (!inlineMode) return;
+  const modal = document.getElementById('debugLogViewTracesModal');
+  const host = document.getElementById('debugLogViewTracesInlineHost');
+  const panel = tracePanel();
+  document.querySelector('.debug-log-browser-panel-inner')?.classList.remove('hidden');
+  host?.classList.add('hidden');
+  panel?.classList.remove('debug-log-view-traces-modal-panel--inline');
+  if (modal && panel && panel.parentElement !== modal) modal.appendChild(panel);
+  inlineMode = false;
+}
+
+export async function openDebugLogViewTracesInline() {
+  if (!state.leftOrgId) {
+    showToast(t('debugLogs.selectOrg'), 'warn');
+    return false;
+  }
+  const { modal, showInactive } = els();
+  const host = ensureInlineHost();
+  const panel = tracePanel();
+  if (!modal || !host || !panel) return false;
+  inlineMode = true;
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  document.querySelector('.debug-log-browser-panel-inner')?.classList.add('hidden');
+  host.classList.remove('hidden');
+  panel.classList.add('debug-log-view-traces-modal-panel--inline');
+  host.appendChild(panel);
+  if (showInactive) showInactive.checked = false;
+  cachedDebugLevels = [];
+  await loadTraces();
+  return true;
+}
+
 export function openDebugLogViewTracesModal() {
   if (!state.leftOrgId) {
     showToast(t('debugLogs.selectOrg'), 'warn');
@@ -418,6 +471,7 @@ export function openDebugLogViewTracesModal() {
   }
   const { modal, showInactive } = els();
   if (!modal) return;
+  deactivateDebugLogViewTracesInline();
   if (showInactive) showInactive.checked = false;
   cachedDebugLevels = [];
   modal.classList.remove('hidden');
@@ -433,7 +487,10 @@ export function setupDebugLogViewTracesModal() {
 
   openBtn?.addEventListener('click', () => openDebugLogViewTracesModal());
   addTraceBtn?.addEventListener('click', () => openDebugLogTraceModal());
-  closeBtn?.addEventListener('click', () => closeModal());
+  closeBtn?.addEventListener('click', () => {
+    if (inlineMode) deactivateDebugLogViewTracesInline();
+    else closeModal();
+  });
   refreshBtn?.addEventListener('click', () => void loadTraces());
   showInactive?.addEventListener('change', () => renderTable());
   editCancel?.addEventListener('click', () => closeEditModal());

@@ -313,6 +313,11 @@ async function init() {
   setupBulkJobMonitorPanel();
   setupEventMonitorPanel();
   setupDependencyExplorerPanel();
+  if (uiMode === 'v2') {
+    document.dispatchEvent(new CustomEvent('sfoc:navigationchange', {
+      detail: { source: 'tool-handlers-ready' }
+    }));
+  }
   renderEditor();
   refreshGeneratePackageXmlTypes();
   void refreshMetadataTypeComparePanel();

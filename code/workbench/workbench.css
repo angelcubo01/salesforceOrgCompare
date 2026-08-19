@@ -869,3 +869,173 @@ body[data-ui-mode="v2"] .quick-open-footer {
 html[data-ui-theme="light"] body[data-ui-mode="v2"] .quick-open-blocked-reason {
   color: #92400e;
 }
+
+body[data-ui-mode="v2"] .debug-log-view-traces-inline-host {
+  box-sizing: border-box;
+  min-height: 0;
+  flex: 1;
+  padding: 12px;
+  overflow: auto;
+}
+
+body[data-ui-mode="v2"] .debug-log-view-traces-modal-panel--inline {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 1px solid var(--workbench-border);
+  background: var(--workbench-panel-bg);
+  box-shadow: none;
+}
+
+body[data-ui-mode="v2"] .debug-log-view-traces-modal-panel--inline #debugLogViewTracesCloseBtn {
+  display: none;
+}
+
+.workbench-inline-banner {
+  margin: 8px 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.13);
+  color: #dbeafe;
+  font-size: 12px;
+}
+
+html[data-ui-theme="light"] .workbench-inline-banner {
+  color: #1e3a8a;
+}
+
+body[data-ui-mode="v2"] .dependency-explorer-graph-host {
+  min-height: 0;
+  margin-top: 10px;
+  flex: 1;
+  overflow: auto;
+}
+
+.dependency-graph-host {
+  display: flex;
+  min-height: 420px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dependency-graph-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dependency-graph-filter {
+  min-width: 180px;
+  flex: 1;
+}
+
+.dependency-graph-action {
+  min-width: 42px;
+  min-height: 42px;
+  padding: 7px 10px;
+  border: 1px solid var(--workbench-border);
+  border-radius: 8px;
+  background: var(--workbench-surface);
+  color: var(--workbench-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dependency-graph-action:focus-visible,
+.dependency-graph-list-button:focus-visible,
+.dependency-graph-node:focus-visible {
+  outline: 3px solid var(--workbench-focus);
+  outline-offset: 2px;
+}
+
+.dependency-graph-status {
+  margin: 0;
+  color: var(--workbench-muted);
+  font-size: 11px;
+}
+
+.dependency-graph-canvas {
+  min-height: 360px;
+  overflow: auto;
+  border: 1px solid var(--workbench-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--workbench-panel-bg) 88%, #020617);
+}
+
+.dependency-graph-svg {
+  display: block;
+  width: 100%;
+  min-width: 760px;
+  min-height: 360px;
+}
+
+.dependency-graph-edge {
+  stroke: var(--workbench-muted);
+  stroke-width: 1.5;
+  opacity: 0.55;
+}
+
+.dependency-graph-node rect {
+  fill: var(--workbench-surface);
+  stroke: var(--workbench-border);
+  stroke-width: 1.5;
+}
+
+.dependency-graph-node--root rect {
+  fill: var(--workbench-active);
+  stroke: var(--workbench-focus);
+  stroke-width: 2;
+}
+
+.dependency-graph-node-name {
+  fill: var(--workbench-text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.dependency-graph-node-type {
+  fill: var(--workbench-muted);
+  font-size: 9px;
+}
+
+.dependency-graph-accessible-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 4px;
+  max-height: 180px;
+  margin: 0;
+  padding: 6px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--workbench-border);
+  border-radius: 8px;
+}
+
+.dependency-graph-list-button {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--workbench-text);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dependency-graph-list-button:hover {
+  border-color: var(--workbench-border);
+  background: var(--workbench-hover);
+  transform: none;
+  box-shadow: none;
+}
