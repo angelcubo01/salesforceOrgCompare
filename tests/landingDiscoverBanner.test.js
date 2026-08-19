@@ -13,7 +13,7 @@ describe('landingDiscoverBanner', () => {
     const html = buildDiscoverBannerLineHtml(t);
     expect(html).toContain('app-landing-discover-lead');
     expect(html).toContain('app-landing-discover-shortcuts');
-    expect(html).toContain('<kbd>Ctrl+Shift+P</kbd>');
-    expect(html).toContain('<kbd>⌘⇧P</kbd>');
+    expect(html).toContain('<kbd>Ctrl+K</kbd>');
+    expect(html).toContain('<kbd>⌘K</kbd>');
   });
 });

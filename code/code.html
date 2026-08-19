@@ -3371,25 +3371,41 @@
     >
       <div id="quickOpenBackdrop" class="quick-open-backdrop" tabindex="-1"></div>
       <div class="quick-open-shell">
-        <input
-          id="quickOpenInput"
-          class="quick-open-input sfoc-query-input"
-          type="search"
-          autocomplete="off"
-          spellcheck="false"
-          data-i18n-placeholder="quickOpen.placeholder"
-          placeholder="Buscar metadatos, herramientas o ficheros…"
-          maxlength="120"
-          aria-controls="quickOpenResults"
-          aria-autocomplete="list"
-          aria-expanded="false"
-        />
+        <header class="quick-open-header">
+          <div>
+            <h2 id="quickOpenTitle" class="quick-open-title" data-i18n="quickOpen.title">Command palette</h2>
+            <p class="quick-open-subtitle" data-i18n="quickOpen.subtitle">Herramientas, workspaces, metadata y scripts</p>
+          </div>
+          <button type="button" id="quickOpenCloseBtn" class="quick-open-close" data-i18n="help.close">Cerrar</button>
+        </header>
+        <div class="quick-open-input-wrap">
+          <input
+            id="quickOpenInput"
+            class="quick-open-input sfoc-query-input"
+            type="search"
+            role="combobox"
+            autocomplete="off"
+            spellcheck="false"
+            data-i18n-placeholder="quickOpen.placeholder"
+            placeholder="Buscar metadatos, herramientas o ficheros…"
+            maxlength="120"
+            aria-controls="quickOpenResults"
+            aria-autocomplete="list"
+            aria-expanded="false"
+          />
+          <kbd id="quickOpenShortcutHint" class="quick-open-shortcut-hint">Ctrl+K</kbd>
+        </div>
         <div
           id="quickOpenResults"
-          class="quick-open-results hidden"
+          class="quick-open-results"
           role="listbox"
           aria-live="polite"
         ></div>
+        <footer class="quick-open-footer" aria-hidden="true">
+          <span>↑↓ <span data-i18n="quickOpen.hintNavigate">navegar</span></span>
+          <span>Enter <span data-i18n="quickOpen.hintOpen">abrir</span></span>
+          <span>Esc <span data-i18n="quickOpen.hintClose">cerrar</span></span>
+        </footer>
       </div>
     </div>
     <div id="toastContainer" class="toast-container"></div>

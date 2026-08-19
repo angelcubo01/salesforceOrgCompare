@@ -14,7 +14,7 @@ export const helpOnboardingEs = {
   'help.tool.home.body2':
     'En la barra superior elige un área: Comparador, Desarrollo, Análisis, Monitorización o Manifiestos. Cada área agrupa herramientas en un submenú.',
   'help.tool.home.body3':
-    'La primera vez que abras una herramienta verás un resumen breve. Usa Ctrl+Shift+P (⌘⇧P en Mac) para saltar a metadatos, herramientas o scripts guardados.',
+    'La primera vez que abras una herramienta verás un resumen breve. Usa Ctrl+K (⌘K en Mac) para saltar a metadatos, herramientas o scripts guardados. Ctrl+Shift+P también seguirá funcionando temporalmente.',
   'help.tool.home.body4':
     'Atajos útiles: Ctrl+Enter (⌘↵) ejecutar consultas o Apex anónimo; Ctrl+S (⌘S) guardar en editores; F2 renombrar scripts; Escape cerrar modales; ? o Ayuda para esta ventana.',
 
@@ -531,7 +531,7 @@ export const helpOnboardingEn = {
   'help.tool.home.body2':
     'In the top bar pick an area: Comparator, Development, Analysis, Monitoring, or Manifests. Each area groups tools in a submenu.',
   'help.tool.home.body3':
-    'The first time you open a tool you will see a short summary. Use Ctrl+Shift+P (⌘⇧P on Mac) to jump to metadata, tools, or saved scripts.',
+    'The first time you open a tool you will see a short summary. Use Ctrl+K (⌘K on Mac) to jump to metadata, tools, or saved scripts. Ctrl+Shift+P will also keep working temporarily.',
   'help.tool.home.body4':
     'Useful shortcuts: Ctrl+Enter (⌘↵) run queries or anonymous Apex; Ctrl+S (⌘S) save in editors; F2 rename scripts; Escape close modals; ? or Help for this panel.',
 
