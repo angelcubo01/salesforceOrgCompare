@@ -725,6 +725,7 @@ export async function setupWorkbenchShell() {
   syncFromLegacyNavigation();
 
   document.addEventListener('sfoc:navigationchange', syncFromLegacyNavigation);
+  document.addEventListener('sfoc:tool-recents-change', renderWorkbenchPanel);
   window.addEventListener('popstate', (event) => {
     pendingHistorySelection = event.state?.sfocWorkbench || null;
   });

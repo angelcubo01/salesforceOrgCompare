@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'sfocToolRecents';
-const MAX_RECENTS = 5;
-const MAX_PINS = 3;
+const MAX_RECENTS = 8;
+const MAX_PINS = 8;
 
 /** @typedef {{ recents: string[]; pins: string[] }} ToolRecentsState */
 
@@ -36,6 +36,9 @@ async function saveToolRecents() {
     await chrome.storage.local.set({ [STORAGE_KEY]: cache });
   } catch {
     /* ignore */
+  }
+  if (typeof document !== 'undefined') {
+    document.dispatchEvent(new CustomEvent('sfoc:tool-recents-change', { detail: getToolRecentsSnapshot() }));
   }
 }
 
