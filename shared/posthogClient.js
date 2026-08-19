@@ -41,16 +41,14 @@ import {
 import { initPosthogSupport, dismissPosthogConversationsWidget, enablePosthogConversationsWidget } from './posthogSupport.js';
 import { hookSupportOnFeatureFlags, isPosthogSupportFlagEnabled } from './posthogSupportFlag.js';
 import {
-  hookFeatureControlsOnFeatureFlags,
-  loadFeatureControlsFromPosthog
+  hookFeatureControlsOnFeatureFlags
 } from './posthogFeatureControlsFlag.js';
 import {
-  hookLogiAdvisorOnFeatureFlags,
-  loadLogiAdvisorFromPosthog
+  hookLogiAdvisorOnFeatureFlags
 } from './logi/posthogLogiAdvisorFlag.js';
 import {
-  ensureFeatureFlagsLoaded,
-  invalidateFeatureFlagsCache
+  invalidateFeatureFlagsCache,
+  pauseFeatureFlagsReloading
 } from './posthogFeatureFlagLoader.js';
 
 const POSTHOG_UI_HOST = 'https://eu.posthog.com';
@@ -194,11 +192,6 @@ export async function initPosthogClient(opts = {}) {
 
   if (initialized) {
     await waitForPosthogClientReady();
-    if (opts.forceFeatureFlags) {
-      await ensureFeatureFlagsLoaded(posthog, { force: true });
-      await loadFeatureControlsFromPosthog(posthog, { force: true });
-      await loadLogiAdvisorFromPosthog(posthog, { force: true });
-    }
     return posthog;
   }
 
@@ -207,7 +200,6 @@ export async function initPosthogClient(opts = {}) {
     return posthog;
   }
 
-  const forceFeatureFlags = opts.forceFeatureFlags === true;
   let clientReadyResolve;
   clientReadyPromise = new Promise((resolve) => {
     clientReadyResolve = resolve;
@@ -243,12 +235,12 @@ export async function initPosthogClient(opts = {}) {
     disable_conversations: true,
     /** Sin autocapture SDK: errores van al SW (funciona con telemetría de uso desactivada). */
     capture_exceptions: false,
+    advanced_disable_feature_flags_on_first_load: true,
+    remote_config_refresh_interval_ms: 0,
     opt_out_capturing_by_default: !telemetryEnabled,
     loaded: async (ph) => {
       try {
-        await ensureFeatureFlagsLoaded(ph, { force: forceFeatureFlags });
-        await loadFeatureControlsFromPosthog(ph, { force: forceFeatureFlags });
-        await loadLogiAdvisorFromPosthog(ph, { force: forceFeatureFlags });
+        pauseFeatureFlagsReloading(ph);
         hookFeatureControlsOnFeatureFlags(ph, undefined, { skipInitialRun: true });
         hookLogiAdvisorOnFeatureFlags(ph);
 
@@ -340,7 +332,6 @@ export async function syncPosthogOptOut(enabled) {
     hookSessionReplayOnFeatureFlags(posthog);
     installSessionReplayDebugHook(posthog);
     hookFeatureControlsOnFeatureFlags(posthog);
-    await ensureFeatureFlagsLoaded(posthog, { force: true });
     await syncPosthogSfUserContext();
     void maybeStartSessionReplay(posthog);
     void maybeInitPosthogSupport(posthog);
@@ -350,7 +341,6 @@ export async function syncPosthogOptOut(enabled) {
     dismissPosthogConversationsWidget(posthog);
     invalidateFeatureFlagsCache();
     hookFeatureControlsOnFeatureFlags(posthog);
-    await ensureFeatureFlagsLoaded(posthog, { force: true });
   }
 }
 

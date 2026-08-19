@@ -9,6 +9,8 @@ import {
 } from '../shared/onboardingPrefs.js';
 import { initPosthogClient, getPosthogClient, syncPosthogAppLanguage } from '../shared/posthogClient.js';
 import { loadPopupControlsFromPosthog } from '../shared/posthogPopupControlsFlag.js';
+import { refreshFeatureFlagsIfStale } from '../shared/posthogFeatureFlagLoader.js';
+import { loadFeatureControlsFromPosthog } from '../shared/posthogFeatureControlsFlag.js';
 import {
   buildNoticeFingerprint,
   isOpenAppDisabled,
@@ -110,7 +112,7 @@ async function applyPopupLangChange(lang) {
   const sel = document.getElementById('popupLangSelect');
   if (sel) sel.value = getCurrentLang();
   await refresh();
-  await setupPopupControls();
+  await setupPopupControls(null);
 }
 
 function rowGroupKey(li) {
@@ -475,7 +477,7 @@ function renderNoticeText(textEl, text, url) {
   textEl.parentElement.appendChild(link);
 }
 
-async function setupPopupControls() {
+async function setupPopupControls(ph = getPosthogClient()) {
   const banner = document.getElementById('popupTelemetryNotice');
   const dismissBtn = document.getElementById('popupTelemetryNoticeDismissBtn');
   const textEl = document.getElementById('popupTelemetryNoticeText');
@@ -484,7 +486,7 @@ async function setupPopupControls() {
 
   const lang = getCurrentLang();
   const prefs = await loadOnboardingPrefs();
-  const config = await loadPopupControlsFromPosthog(getPosthogClient());
+  const config = await loadPopupControlsFromPosthog(ph);
 
   if (openCodeBtn) {
     const disabled = isOpenAppDisabled(config);
@@ -581,7 +583,10 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   setupPopupHelp();
   setupPopupWelcome();
   await initPosthogClient();
-  await setupPopupControls();
+  const ph = getPosthogClient();
+  const refreshed = await refreshFeatureFlagsIfStale(ph);
+  await loadFeatureControlsFromPosthog(refreshed ? ph : null);
+  await setupPopupControls(refreshed ? ph : null);
   await refresh();
   await maybeShowPopupWelcome((window.__savedOrgs || []).length);
 })();

@@ -171,7 +171,7 @@ async function init() {
   await Promise.all([loadLang(), loadExtensionSettings()]);
   applyUiThemeToDocument(document);
 
-  await bootstrapFeatureControls({ force: true });
+  await bootstrapFeatureControls();
   setupFeatureControlsUi();
 
   applyStaticTranslations();

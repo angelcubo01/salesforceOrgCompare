@@ -6,6 +6,7 @@ import { DEFAULT_POPUP_CONTROLS, parsePopupControlsPayload } from './popupContro
 export const POPUP_CONTROLS_FLAG = 'sfoc_popup_controls';
 
 export const POPUP_CONTROLS_READY_EVENT = 'sfoc:popup-controls-ready';
+export const POPUP_CONTROLS_STORAGE_KEY = 'sfocPopupControlsCache';
 
 /** @type {import('./popupControls.js').PopupControlsConfig | null} */
 let cachedConfig = null;
@@ -13,6 +14,29 @@ let cachedConfig = null;
 /** Para tests. */
 export function resetPopupControlsFlagCacheForTests() {
   cachedConfig = null;
+}
+
+async function readPopupControlsCache() {
+  if (cachedConfig) return cachedConfig;
+  try {
+    const result = await chrome.storage.local.get(POPUP_CONTROLS_STORAGE_KEY);
+    if (result[POPUP_CONTROLS_STORAGE_KEY]) {
+      cachedConfig = parsePopupControlsPayload(result[POPUP_CONTROLS_STORAGE_KEY], { flagActive: true });
+      return cachedConfig;
+    }
+  } catch {
+    /* ignore */
+  }
+  return { ...DEFAULT_POPUP_CONTROLS };
+}
+
+async function writePopupControlsCache(config) {
+  cachedConfig = config;
+  try {
+    await chrome.storage.local.set({ [POPUP_CONTROLS_STORAGE_KEY]: config });
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -40,7 +64,7 @@ function dispatchPopupControlsReady(config) {
  */
 export async function loadPopupControlsFromPosthog(ph, opts = {}) {
   if (!ph) {
-    cachedConfig = { ...DEFAULT_POPUP_CONTROLS };
+    cachedConfig = await readPopupControlsCache();
     return cachedConfig;
   }
 
@@ -50,7 +74,7 @@ export async function loadPopupControlsFromPosthog(ph, opts = {}) {
   });
   if (!flagsOk) {
     if (POSTHOG_DEBUG) console.log('[posthog] popup controls flags timeout — fail-open');
-    cachedConfig = { ...DEFAULT_POPUP_CONTROLS };
+    cachedConfig = await readPopupControlsCache();
     return cachedConfig;
   }
 
@@ -63,6 +87,7 @@ export async function loadPopupControlsFromPosthog(ph, opts = {}) {
     if (!flagOn) {
       if (POSTHOG_DEBUG) console.log('[posthog] popup controls flag off');
       cachedConfig = { ...DEFAULT_POPUP_CONTROLS };
+      await writePopupControlsCache(cachedConfig);
       return cachedConfig;
     }
 
@@ -71,10 +96,11 @@ export async function loadPopupControlsFromPosthog(ph, opts = {}) {
       rawPayload = ph.getFeatureFlagPayload(POPUP_CONTROLS_FLAG);
     }
     cachedConfig = parsePopupControlsPayload(rawPayload, { flagActive: true });
+    await writePopupControlsCache(cachedConfig);
     if (POSTHOG_DEBUG) console.log('[posthog] popup controls loaded', cachedConfig);
     return cachedConfig;
   } catch {
-    cachedConfig = { ...DEFAULT_POPUP_CONTROLS };
+    cachedConfig = await readPopupControlsCache();
     return cachedConfig;
   }
 }

@@ -2,7 +2,6 @@ import { POSTHOG_DEBUG } from './telemetryConfig.js';
 import { ensureFeatureFlagsLoaded } from './posthogFeatureFlagLoader.js';
 import { parseFeatureControlsPayload, DEFAULT_FEATURE_CONTROLS } from './featureControls.js';
 import { writeFeatureControlsCache, readFeatureControlsCache } from './featureControlsCache.js';
-import { isPosthogApiConfigured } from './posthogConfigured.js';
 
 /** Feature flag remoto (PostHog). Rollout 100 %; restricciones vía payload JSON. */
 export const FEATURE_CONTROLS_FLAG = 'sfoc_feature_controls';
@@ -143,27 +142,13 @@ let bootstrapPromise = null;
  * @param {{ force?: boolean }} [opts] force=true en cada F5 (por defecto).
  */
 export async function bootstrapFeatureControls(opts = {}) {
-  const force = opts.force !== false;
-  if (bootstrapPromise && !force) return bootstrapPromise;
+  if (bootstrapPromise) return bootstrapPromise;
 
   bootstrapPromise = (async () => {
-    if (!isPosthogApiConfigured()) {
-      const config = await loadFeatureControlsFromPosthog(null);
-      dispatchFeatureControlsReady(config);
-      return config;
-    }
-
-    try {
-      const { initPosthogClient } = await import('./posthogClient.js');
-      await initPosthogClient({ forceFeatureFlags: force, awaitReady: true });
-      const config = getCachedFeatureControlsConfig();
-      dispatchFeatureControlsReady(config);
-      return config;
-    } catch {
-      cachedConfig = await readFeatureControlsCache();
-      dispatchFeatureControlsReady(cachedConfig);
-      return cachedConfig;
-    }
+    // code.html nunca consulta PostHog: aplica lo que el popup haya dejado persistido.
+    cachedConfig = await readFeatureControlsCache();
+    dispatchFeatureControlsReady(cachedConfig);
+    return cachedConfig;
   })();
 
   return bootstrapPromise;

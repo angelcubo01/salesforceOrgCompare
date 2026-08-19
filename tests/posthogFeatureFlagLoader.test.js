@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   FEATURE_FLAG_RELOAD_TTL_MS,
+  refreshFeatureFlagsIfStale,
   reloadFeatureFlagsIfNeeded,
   resetFeatureFlagLoaderForTests,
   waitForFeatureFlags
@@ -11,37 +12,51 @@ describe('posthogFeatureFlagLoader', () => {
     resetFeatureFlagLoaderForTests();
   });
 
-  it('reload solo una vez dentro del TTL', () => {
+  it('solo el refresco explícito del popup llama a reloadFeatureFlags', async () => {
     let reloads = 0;
-    const ph = { reloadFeatureFlags: () => { reloads += 1; }, onFeatureFlags: (cb) => cb() };
+    let onFlags;
+    const ph = {
+      reloadFeatureFlags: () => {
+        reloads += 1;
+        setTimeout(() => onFlags?.(), 0);
+      },
+      onFeatureFlags: (cb) => { onFlags = cb; },
+      featureFlags: { setReloadingPaused: () => {} }
+    };
 
-    expect(reloadFeatureFlagsIfNeeded(ph)).toBe(true);
-    expect(reloadFeatureFlagsIfNeeded(ph)).toBe(false);
+    await expect(refreshFeatureFlagsIfStale(ph)).resolves.toBe(true);
     expect(reloads).toBe(1);
   });
 
-  it('force ignora TTL', () => {
+  it('deduplica dos revalidaciones simultáneas del popup', async () => {
     let reloads = 0;
-    const ph = { reloadFeatureFlags: () => { reloads += 1; } };
+    let onFlags;
+    const ph = {
+      reloadFeatureFlags: () => {
+        reloads += 1;
+        setTimeout(() => onFlags?.(), 0);
+      },
+      onFeatureFlags: (cb) => { onFlags = cb; },
+      featureFlags: { setReloadingPaused: () => {} }
+    };
 
-    reloadFeatureFlagsIfNeeded(ph);
-    reloadFeatureFlagsIfNeeded(ph, { force: true });
-    expect(reloads).toBe(2);
+    await Promise.all([refreshFeatureFlagsIfStale(ph), refreshFeatureFlagsIfStale(ph)]);
+    expect(reloads).toBe(1);
   });
 
-  it('waitForFeatureFlags no dispara reload si flags ya listos', async () => {
+  it('los helpers pasivos nunca disparan una recarga', async () => {
     let reloads = 0;
     const ph = {
       reloadFeatureFlags: () => { reloads += 1; },
       onFeatureFlags: (cb) => cb()
     };
-    reloadFeatureFlagsIfNeeded(ph);
+
+    expect(reloadFeatureFlagsIfNeeded(ph)).toBe(false);
     await waitForFeatureFlags(ph, 100);
-    await waitForFeatureFlags(ph, 100);
-    expect(reloads).toBe(1);
+    expect(reloads).toBe(0);
   });
 
-  it('TTL configurado a 30 minutos', () => {
-    expect(FEATURE_FLAG_RELOAD_TTL_MS).toBe(30 * 60 * 1000);
+  it('TTL configurado a 6 horas', () => {
+    expect(FEATURE_FLAG_RELOAD_TTL_MS).toBe(6 * 60 * 60 * 1000);
   });
 });

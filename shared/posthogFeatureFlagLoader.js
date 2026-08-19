@@ -1,58 +1,72 @@
 import { POSTHOG_DEBUG } from './telemetryConfig.js';
 
-/** Recarga flags como máximo cada 30 min por pestaña (estrategia equilibrada). */
-export const FEATURE_FLAG_RELOAD_TTL_MS = 30 * 60 * 1000;
+/** La evaluación remota se renueva solo desde el popup. */
+export const FEATURE_FLAG_RELOAD_TTL_MS = 6 * 60 * 60 * 1000;
+export const FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY = 'lastSuccessfulFeatureFlagsFetchAt';
 
-/** @type {number} */
 let lastReloadAt = 0;
-
-/** @type {boolean} */
 let flagsReady = false;
-
-/** @type {Promise<boolean> | null} */
 let waitPromise = null;
+let refreshPromise = null;
+let storageLoaded = false;
+
+function setSdkReloadingPaused(ph, paused) {
+  try {
+    ph?.featureFlags?.setReloadingPaused?.(paused);
+  } catch {
+    /* El SDK no expone esta API en mocks/versiones antiguas. */
+  }
+}
+
+async function readLastSuccessfulFetchAt() {
+  if (storageLoaded) return lastReloadAt;
+  storageLoaded = true;
+  try {
+    const result = await chrome.storage.local.get(FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY);
+    const value = Number(result[FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY]);
+    lastReloadAt = Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    /* Sin storage se conserva la caché de memoria. */
+  }
+  return lastReloadAt;
+}
+
+async function markSuccessfulFetch() {
+  lastReloadAt = Date.now();
+  storageLoaded = true;
+  try {
+    await chrome.storage.local.set({ [FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY]: lastReloadAt });
+  } catch {
+    /* Sin storage se conserva la marca de memoria. */
+  }
+}
+
+export async function areFeatureFlagsStale() {
+  const lastFetchAt = await readLastSuccessfulFetchAt();
+  return !lastFetchAt || Date.now() - lastFetchAt >= FEATURE_FLAG_RELOAD_TTL_MS;
+}
 
 /** Para tests. */
 export function resetFeatureFlagLoaderForTests() {
   lastReloadAt = 0;
   flagsReady = false;
   waitPromise = null;
+  refreshPromise = null;
+  storageLoaded = false;
+}
+
+/** Impide recargas implícitas de posthog-js fuera de la ventana del popup. */
+export function pauseFeatureFlagsReloading(ph) {
+  setSdkReloadingPaused(ph, true);
 }
 
 /**
- * @param {import('./posthogClient.js').posthog} ph
- * @param {{ force?: boolean }} [opts]
- * @returns {boolean} true si se solicitó reload al servidor
- */
-export function reloadFeatureFlagsIfNeeded(ph, opts = {}) {
-  if (!ph || typeof ph.reloadFeatureFlags !== 'function') return false;
-  const force = opts.force === true;
-  const now = Date.now();
-  const stale = !lastReloadAt || now - lastReloadAt >= FEATURE_FLAG_RELOAD_TTL_MS;
-  if (!force && !stale && lastReloadAt > 0) {
-    if (POSTHOG_DEBUG) console.log('[posthog] feature flags cache hit (TTL)');
-    return false;
-  }
-  lastReloadAt = now;
-  flagsReady = false;
-  waitPromise = null;
-  try {
-    ph.reloadFeatureFlags();
-    if (POSTHOG_DEBUG) console.log('[posthog] feature flags reload', { force, stale });
-  } catch {
-    /* ignore */
-  }
-  return true;
-}
-
-/**
- * Espera a que posthog-js evalúe flags ya cargados o en curso. No llama a reload.
+ * Espera una evaluación ya en curso; nunca inicia una petición por sí misma.
  * @param {import('./posthogClient.js').posthog} ph
  * @param {number} [timeoutMs]
  */
 export function waitForFeatureFlags(ph, timeoutMs = 10000) {
   if (!ph) return Promise.resolve(false);
-  reloadFeatureFlagsIfNeeded(ph);
   if (flagsReady) return Promise.resolve(true);
   if (waitPromise) return waitPromise;
 
@@ -64,34 +78,74 @@ export function waitForFeatureFlags(ph, timeoutMs = 10000) {
       if (ok) flagsReady = true;
       resolve(ok);
     };
-
-    if (typeof ph.onFeatureFlags === 'function') {
-      ph.onFeatureFlags(() => done(true));
-    }
-    if (typeof ph.onFeatureFlagsReady === 'function') {
-      ph.onFeatureFlagsReady(() => done(true));
-    }
-
+    ph.onFeatureFlags?.(() => done(true));
+    ph.onFeatureFlagsReady?.(() => done(true));
     setTimeout(() => done(false), timeoutMs);
   });
-
   return waitPromise;
 }
 
 /**
- * Una recarga (si TTL o force) y espera a evaluación. Punto único de entrada en init / opt-in.
+ * Único punto que puede abrir una ventana de red para flags. Debe invocarse al abrir el popup.
  * @param {import('./posthogClient.js').posthog} ph
  * @param {{ force?: boolean, timeoutMs?: number }} [opts]
  */
+export async function refreshFeatureFlagsIfStale(ph, opts = {}) {
+  if (!ph || typeof ph.reloadFeatureFlags !== 'function') return false;
+  if (refreshPromise) return refreshPromise;
+
+  const force = opts.force === true;
+  refreshPromise = (async () => {
+    try {
+      if (!force && !(await areFeatureFlagsStale())) {
+        if (POSTHOG_DEBUG) console.log('[posthog] feature flags cache persistente vigente');
+        return false;
+      }
+      flagsReady = false;
+      waitPromise = null;
+      setSdkReloadingPaused(ph, false);
+      try {
+        ph.reloadFeatureFlags();
+        const loaded = await waitForFeatureFlags(ph, opts.timeoutMs ?? 8000);
+        if (loaded) await markSuccessfulFetch();
+        if (POSTHOG_DEBUG) console.log('[posthog] feature flags popup refresh', { loaded, force });
+        return loaded;
+      } catch {
+        return false;
+      } finally {
+        setSdkReloadingPaused(ph, true);
+      }
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
+/** Compatibilidad: ya no realiza I/O; usar refreshFeatureFlagsIfStale desde el popup. */
+export function reloadFeatureFlagsIfNeeded() {
+  return false;
+}
+
+/** Compatibilidad para consumidores existentes: solo espera una carga iniciada explícitamente. */
 export async function ensureFeatureFlagsLoaded(ph, opts = {}) {
   if (!ph) return false;
-  reloadFeatureFlagsIfNeeded(ph, { force: opts.force === true });
+  if (opts.refreshFromPopup === true) {
+    const refreshed = await refreshFeatureFlagsIfStale(ph, opts);
+    if (refreshed) return true;
+  }
   return waitForFeatureFlags(ph, opts.timeoutMs ?? 10000);
 }
 
-/** Invalida caché en memoria tras reload explícito (p. ej. opt-out). */
-export function invalidateFeatureFlagsCache() {
+/** Invalida la caducidad tras cambiar consentimiento o limpiar datos locales. */
+export async function invalidateFeatureFlagsCache() {
   flagsReady = false;
   waitPromise = null;
   lastReloadAt = 0;
+  storageLoaded = true;
+  try {
+    await chrome.storage.local.remove(FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY);
+  } catch {
+    /* ignore */
+  }
 }

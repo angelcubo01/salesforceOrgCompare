@@ -197,10 +197,6 @@ export async function waitForConversationsAvailable(ph, attempt = 0) {
     return true;
   }
 
-  if (typeof ph?.reloadFeatureFlags === 'function' && attempt === 0) {
-    ph.reloadFeatureFlags();
-  }
-
   if (attempt >= MAX_WAIT_ATTEMPTS) return false;
   await sleep(WAIT_MS);
   return waitForConversationsAvailable(ph, attempt + 1);
