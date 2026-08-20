@@ -9,7 +9,7 @@ Classic concentra la navegación en menús superiores, conserva el Tool ID activ
 UI 2.0 añade una capa Workbench sobre esos contratos, no otra aplicación:
 
 - Rail permanente de 60 px con diez categorías, estado seleccionado con icono, borde, texto accesible y `aria-current`.
-- Panel de 264 px expandible y fijable, dedicado a búsqueda y workspaces de la categoría. Favoritas y recientes permanecen en Inicio y en la command palette, sin duplicarse en el menú.
+- Panel de 264 px expandible y fijable, dedicado únicamente a búsqueda y workspaces de la categoría. Favoritas permanecen en Inicio y en la command palette; “Última herramienta” y “Recientes” no se presentan en los menús V2.
 - Cabecera contextual con breadcrumb, herramienta, tabs, orgs, entorno, solo lectura, riesgo, acciones proxy, ayuda y tema.
 - Command palette con `Ctrl/Cmd+K`; `Ctrl/Cmd+Shift+P` sigue siendo compatible.
 - Los paneles existentes permanecen montados. Los adaptadores seleccionan vistas internas existentes y conservan filtros, scroll y editores.
@@ -41,8 +41,8 @@ El inventario y las medidas anteriores a la implementación están en [UI_V2_BAS
 │      │ Apex Quality           │ [icono] Apex Quality [ORG] [SANDBOX]       │
 │      │ Code Studio            │                    Ayuda  Tema              │
 │      │                        ├──────────────────────────────────────────────┤
-│      │ ★ Favoritas            │ Tests | Ejecuciones | Resultados | Cobertura│
-│      │ ↻ Recientes            ├──────────────────────────────────────────────┤
+│      │                        │ Tests | Ejecuciones | Resultados | Cobertura│
+│      │                        ├──────────────────────────────────────────────┤
 │      │                        │ Panel existente, sin clonar handlers        │
 └──────┴────────────────────────┴──────────────────────────────────────────────┘
 ```
@@ -228,7 +228,7 @@ La puerta de rendimiento toma diez muestras alternadas por modo, mide hasta reti
 | Empaquetado de iconos | registro y 63 símbolos del sprite coinciden exactamente |
 | Recursos externos | ninguna petición remota de scripts, estilos, fuentes o imágenes |
 
-Cobertura E2E: popup y siguiente apertura, Classic/V2 simultáneos, preferencias compartidas, rail/panel/tabs/palette por teclado, favoritas/recientes, siete rutas representativas, atrás/adelante, reinicio del service worker, 1024/1440 y reflow 200 %, ES/EN, claro/oscuro, Axe y recursos locales. Las pruebas usan almacenamiento/fixtures y no ejecutan operaciones reales contra Salesforce.
+Cobertura E2E: popup y siguiente apertura, Classic/V2 simultáneos, preferencias compartidas, rail/panel/tabs/palette por teclado, favoritas y ausencia de bloques V2 redundantes, siete rutas representativas, atrás/adelante, reinicio del service worker, 1024/1440 y reflow 200 %, ES/EN, claro/oscuro, Axe y recursos locales. Las pruebas usan almacenamiento/fixtures y no ejecutan operaciones reales contra Salesforce.
 
 Los únicos avisos de Vitest son los sourcemaps ausentes ya existentes de PostHog.
 

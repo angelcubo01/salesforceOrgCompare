@@ -61,8 +61,17 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   await waitForCodeBoot(v2);
   await expect(v2.locator('body')).toHaveAttribute('data-ui-mode', 'v2');
   await expect(classic.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
+  await expect(classic.locator('.app-landing-tools-section--recents')).toBeVisible();
+  await expect(v2.locator('.app-landing-tools-section--recents')).toBeHidden();
   await expect(v2.locator('#appLandingPinnedList')).toContainText('SOQL');
   await expect(v2.locator('.workbench-tool-row')).toHaveCount(0);
+
+  await v2.keyboard.press('Control+K');
+  await expect(v2.locator('#quickOpenOverlay')).toHaveAttribute('aria-hidden', 'false');
+  await expect(v2.locator('#quickOpenResults')).not.toContainText('Recientes');
+  await expect(v2.locator('#quickOpenResults')).toContainText('Favoritas');
+  await v2.locator('#quickOpenInput').press('Escape');
+
   const sharedPrefs = await v2.evaluate(async () => chrome.storage.local.get(['sfocToolRecents', 'sfocWorkbenchPrefs']));
   expect(sharedPrefs.sfocToolRecents).toEqual({ recents: ['QueryExplorer'], pins: ['QueryExplorer'] });
   expect(sharedPrefs.sfocWorkbenchPrefs.panelExpanded).toBe(true);

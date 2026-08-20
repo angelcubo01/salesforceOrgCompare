@@ -95,14 +95,10 @@ async function filterWorkbenchTools(query) {
   const favorites = snapshot.pins
     .map((toolId) => findTool(toolId, t('quickOpen.groupFavorites')))
     .filter(Boolean);
-  const recents = snapshot.recents
-    .filter((toolId) => !snapshot.pins.includes(toolId))
-    .map((toolId) => findTool(toolId, t('quickOpen.groupRecents')))
-    .filter(Boolean);
   const workspaces = entries
     .filter((entry) => entry.type === 'workspace')
     .map((entry) => ({ ...entry, groupLabel: t('quickOpen.groupWorkspaces') }));
-  return [...favorites, ...recents, ...workspaces];
+  return [...favorites, ...workspaces];
 }
 
 async function filterTools(query, opts = {}) {
