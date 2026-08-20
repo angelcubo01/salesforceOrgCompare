@@ -168,10 +168,10 @@ El popup muestra:
 - Etiqueta “Nueva interfaz 2.0”.
 - Badge “Beta”.
 - Ayuda “Puedes volver temporalmente a la interfaz clásica”.
-- Estado de aplicación en la siguiente apertura.
-- CTA “Abrir interfaz 2.0” o “Abrir Classic”.
+- El switch refleja la modalidad que usará la siguiente apertura.
+- La apertura sigue usando el botón principal del popup; el banner no duplica esa acción.
 
-La preferencia se guarda exclusivamente en `chrome.storage.local` bajo `sfocUiMode: "classic" | "v2"`; la ausencia equivale a `classic`. No se recargan pestañas abiertas, por lo que una edición, retrieve, test o despliegue en curso no se interrumpe. La pestaña actual conserva su modo y el CTA abre otra en el modo recién elegido, permitiendo rollback inmediato.
+La preferencia se guarda exclusivamente en `chrome.storage.local` bajo `sfocUiMode: "classic" | "v2"`; la ausencia equivale a `classic`. No se recargan pestañas abiertas, por lo que una edición, retrieve, test o despliegue en curso no se interrumpe. La pestaña actual conserva su modo y el botón principal abre otra en el modo recién elegido, permitiendo rollback inmediato.
 
 ## 6. Migración y rollback
 

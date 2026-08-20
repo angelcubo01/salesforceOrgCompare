@@ -208,10 +208,6 @@ html[data-ui-theme="light"] .popup-ui-mode__help {
   color: var(--sfoc-light-text-muted);
 }
 
-html[data-ui-theme="light"] .popup-ui-mode__status {
-  color: #1e40af;
-}
-
 html[data-ui-theme="light"] .popup-ui-mode__track {
   border-color: var(--sfoc-light-border);
   background: #cbd5e1;

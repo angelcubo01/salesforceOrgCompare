@@ -54,9 +54,9 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   await toggle.focus();
   await toggle.press('Space');
   await expect(toggle).toBeChecked();
-  await expect(popup.locator('#popupUiModeStatus')).toContainText('2.0');
+  await expect(toggle).toBeEnabled();
   const v2Page = context.waitForEvent('page');
-  await popup.locator('#popupUiModeOpenBtn').click();
+  await popup.locator('#openCodeBtn').click();
   const v2 = await v2Page;
   await waitForCodeBoot(v2);
   await expect(v2.locator('body')).toHaveAttribute('data-ui-mode', 'v2');
