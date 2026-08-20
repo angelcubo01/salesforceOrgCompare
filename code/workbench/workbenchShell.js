@@ -64,7 +64,14 @@ let initialized = false;
 let compactMedia = null;
 let headerActionObservers = [];
 let headerRenderSignature = '';
+let panelRenderSignature = '';
 let categoryBrowseOverride = false;
+let workbenchNavigationDepth = 0;
+let navigationGeneration = 0;
+let prefsWriteQueue = Promise.resolve();
+let availabilityConfig = null;
+let availabilityLang = '';
+let availabilityCache = new Map();
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -89,15 +96,27 @@ function currentConfig() {
 
 function tabVisibility(tabInfo) {
   const config = currentConfig();
-  if (!isModeVisible(config, tabInfo.legacyMode) || !isToolVisible(config, tabInfo.toolId)) {
-    return { visible: false, disabled: true, message: '' };
+  const lang = getCurrentLang();
+  if (config !== availabilityConfig || lang !== availabilityLang) {
+    availabilityConfig = config;
+    availabilityLang = lang;
+    availabilityCache = new Map();
   }
-  const notice = getToolNotice(config, tabInfo.toolId, getCurrentLang());
-  return {
-    visible: true,
-    disabled: notice?.blocking === true,
-    message: notice?.message || ''
-  };
+  const cacheKey = `${tabInfo.legacyMode}\u0000${tabInfo.toolId}`;
+  if (availabilityCache.has(cacheKey)) return availabilityCache.get(cacheKey);
+  let result;
+  if (!isModeVisible(config, tabInfo.legacyMode) || !isToolVisible(config, tabInfo.toolId)) {
+    result = { visible: false, disabled: true, message: '' };
+  } else {
+    const notice = getToolNotice(config, tabInfo.toolId, lang);
+    result = {
+      visible: true,
+      disabled: notice?.blocking === true,
+      message: notice?.message || ''
+    };
+  }
+  availabilityCache.set(cacheKey, result);
+  return result;
 }
 
 function visibleTabs(workspace) {
@@ -174,9 +193,9 @@ function createRail() {
   rail.appendChild(brand);
 
   const items = el('div', 'workbench-rail-items');
+  const visibleCategoryIds = new Set(visibleWorkspaces().map(({ categoryId }) => categoryId));
   for (const category of WORKBENCH_CATEGORIES) {
-    if (category.id !== 'home' && category.id !== 'comparator' && !visibleWorkspaces(category.id).length) continue;
-    if (category.id === 'comparator' && !visibleWorkspaces('comparator').length) continue;
+    if (category.id !== 'home' && !visibleCategoryIds.has(category.id)) continue;
     const label = t(category.labelKey);
     const button = makeIconButton(`workbenchRail-${category.id}`, category.icon, label, 'workbench-rail-button');
     button.dataset.categoryId = category.id;
@@ -262,27 +281,10 @@ function createToolLink(toolId, opts = {}) {
     favorite.setAttribute('aria-pressed', isToolPinned(toolId) ? 'true' : 'false');
     favorite.addEventListener('click', async () => {
       await toggleToolPin(toolId);
-      renderWorkbenchPanel();
     });
     row.appendChild(favorite);
   }
   return row;
-}
-
-function appendToolCollection(host, titleKey, toolIds, emptyKey) {
-  const section = el('section', 'workbench-panel-section');
-  section.appendChild(createSectionHeading(titleKey));
-  const list = el('div', 'workbench-tool-list');
-  let count = 0;
-  for (const toolId of toolIds) {
-    const row = createToolLink(toolId);
-    if (!row) continue;
-    list.appendChild(row);
-    count++;
-  }
-  if (!count) list.appendChild(el('p', 'workbench-panel-empty', t(emptyKey)));
-  section.appendChild(list);
-  host.appendChild(section);
 }
 
 function createWorkspaceButton(workspace) {
@@ -291,17 +293,27 @@ function createWorkspaceButton(workspace) {
   button.dataset.workspaceId = workspace.id;
   button.setAttribute('aria-current', workspace.id === activeWorkspaceId ? 'page' : 'false');
   button.appendChild(createIcon(workspace.icon, { size: 20 }));
-  const copy = el('span', 'workbench-workspace-copy');
-  copy.appendChild(el('span', 'workbench-workspace-label', t(workspace.labelKey)));
-  const itemCount = visibleTabs(workspace).length + (workspace.toolAliases?.length || 0);
-  copy.appendChild(el('span', 'workbench-workspace-meta', t('workbench.workspace.toolCount', { count: itemCount })));
-  button.appendChild(copy);
+  button.appendChild(el('span', 'workbench-workspace-label', t(workspace.labelKey)));
+  const preferredTabId = prefs.lastTabByWorkspace[workspace.id];
+  const candidates = [
+    preferredTabId,
+    workspace.defaultTabId,
+    ...workspace.tabs.map(({ id }) => id)
+  ].filter((id, index, all) => id && all.indexOf(id) === index);
+  const targetTab = candidates
+    .map((id) => getTabById(workspace.id, id))
+    .find((tabInfo) => tabInfo && tabVisibility(tabInfo).visible && !tabVisibility(tabInfo).disabled);
+  const blockedTab = visibleTabs(workspace).find((tabInfo) => tabVisibility(tabInfo).disabled);
+  if (!targetTab) {
+    const message = blockedTab ? tabVisibility(blockedTab).message : '';
+    button.disabled = true;
+    button.setAttribute('aria-disabled', 'true');
+    if (message) button.title = message;
+    button.appendChild(createIcon(STATE_ICONS.locked, { size: 16, className: 'workbench-tool-lock' }));
+    if (message) button.appendChild(el('span', 'sr-only', message));
+  }
   button.addEventListener('click', () => {
-    const storedTab = prefs.lastTabByWorkspace[workspace.id];
-    const target = getTabById(workspace.id, storedTab) && tabVisibility(getTabById(workspace.id, storedTab)).visible
-      ? storedTab
-      : workspace.defaultTabId;
-    void navigateToWorkspaceTab(workspace.id, target, { userInitiated: true });
+    if (targetTab) void navigateToWorkspaceTab(workspace.id, targetTab.id, { userInitiated: true });
   });
   return button;
 }
@@ -315,7 +327,7 @@ function appendWorkspaceList(host) {
   for (const workspace of visibleWorkspaces(selectedCategoryId === 'home' ? null : selectedCategoryId)) {
     if (normalized && !getSearchText(workspace, t).includes(normalized)) continue;
     list.appendChild(createWorkspaceButton(workspace));
-    if (workspace.toolAliases?.length && !normalized) {
+    if (workspace.toolAliases?.length && !normalized && selectedCategoryId === workspace.categoryId) {
       for (const alias of workspace.toolAliases) {
         const canonicalWorkspace = getWorkspaceById(alias.workspaceId);
         const row = createToolLink(alias.toolId, {
@@ -339,18 +351,37 @@ function appendWorkspaceList(host) {
   host.appendChild(section);
 }
 
+function getPanelRenderSignature() {
+  const normalized = panelQuery.trim().toLocaleLowerCase();
+  const workspaces = visibleWorkspaces(selectedCategoryId === 'home' ? null : selectedCategoryId).map((workspace) => [
+    workspace.id,
+    visibleTabs(workspace).map((tabInfo) => {
+      const availability = tabVisibility(tabInfo);
+      return [tabInfo.id, availability.disabled, availability.message];
+    })
+  ]);
+  const pins = normalized ? getToolRecentsSnapshot().pins : null;
+  return JSON.stringify({ selectedCategoryId, normalized, workspaces, pins });
+}
+
+function syncActiveWorkspaceButtons() {
+  document.querySelectorAll('.workbench-workspace-button').forEach((button) => {
+    button.setAttribute('aria-current', button.getAttribute('data-workspace-id') === activeWorkspaceId ? 'page' : 'false');
+  });
+}
+
 export function renderWorkbenchPanel() {
   const body = document.getElementById('workbenchPanelBody');
   if (!body) return;
-  body.replaceChildren();
-  const snapshot = getToolRecentsSnapshot();
-  if (!panelQuery.trim()) {
-    const last = snapshot.recents[0];
-    if (last) appendToolCollection(body, 'workbench.panel.lastTool', [last], 'workbench.panel.noRecents');
-    appendToolCollection(body, 'workbench.panel.favorites', snapshot.pins, 'workbench.panel.noFavorites');
-    appendToolCollection(body, 'workbench.panel.recents', snapshot.recents, 'workbench.panel.noRecents');
+  const signature = getPanelRenderSignature();
+  if (signature === panelRenderSignature) {
+    syncActiveWorkspaceButtons();
+    return;
   }
+  panelRenderSignature = signature;
+  body.replaceChildren();
   appendWorkspaceList(body);
+  syncActiveWorkspaceButtons();
 }
 
 function createPanel() {
@@ -485,11 +516,13 @@ function createHeaderActionProxy(targetId) {
 function createContextHeader() {
   const header = el('header', 'workbench-context-header');
   header.id = 'workbenchContextHeader';
+  header.addEventListener('click', (event) => event.stopPropagation());
   const main = el('div', 'workbench-context-main');
   const identity = el('div', 'workbench-context-identity');
   const breadcrumb = el('nav', 'workbench-breadcrumb');
   breadcrumb.setAttribute('aria-label', t('workbench.breadcrumb'));
-  const category = categoryLabel(selectedCategoryId);
+  const workspace = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
+  const category = categoryLabel(workspace?.categoryId || selectedCategoryId);
   breadcrumb.appendChild(el('span', '', category));
   if (activeWorkspaceId) {
     breadcrumb.appendChild(el('span', 'workbench-breadcrumb-separator', '/'));
@@ -497,7 +530,6 @@ function createContextHeader() {
   }
   identity.appendChild(breadcrumb);
   const titleRow = el('div', 'workbench-context-title-row');
-  const workspace = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
   titleRow.appendChild(createIcon(workspace?.icon || CATEGORY_ICONS.home, { size: 24 }));
   const title = el('h1', 'workbench-context-title', workspace ? t(workspace.labelKey) : t('workbench.home.title'));
   title.id = 'workbenchContextTitle';
@@ -585,7 +617,7 @@ export function renderWorkbenchHeader() {
     ? visibleTabs(workspace).map((tab) => [tab.id, tabVisibility(tab).disabled, tabVisibility(tab).message])
     : [];
   const signature = JSON.stringify({
-    selectedCategoryId,
+    contextCategoryId: workspace?.categoryId || selectedCategoryId,
     activeWorkspaceId,
     activeTabId,
     theme: document.documentElement.dataset.uiTheme || '',
@@ -638,6 +670,7 @@ function syncFromLegacyNavigation(event = null) {
     renderWorkbenchHeader();
     return;
   }
+  if (workbenchNavigationDepth > 0) return;
   const toolId = document.getElementById('typeSelect')?.value || '';
   if (categoryBrowseOverride && toolId) return;
   if (state.appNavMode === APP_NAV_MODE_HOME || !toolId) {
@@ -648,10 +681,11 @@ function syncFromLegacyNavigation(event = null) {
     const fromHistory = validHistorySelection(pendingHistorySelection || history.state?.sfocWorkbench, toolId);
     const route = fromHistory || getWorkspaceRouteForTool(toolId);
     if (route) {
+      const selectionChanged = activeWorkspaceId !== route.workspaceId || activeTabId !== route.tabId;
       activeWorkspaceId = route.workspaceId;
       activeTabId = route.tabId;
       selectedCategoryId = getWorkspaceById(route.workspaceId)?.categoryId || 'home';
-      void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
+      if (selectionChanged) void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
     }
   }
   pendingHistorySelection = null;
@@ -665,8 +699,9 @@ async function applyWorkspaceTabVariant(workspaceId, tabId) {
   await activateWorkspaceAdapter(workspaceId, tabId);
 }
 
-function writeWorkbenchHistoryState(workspaceId, tabId) {
-  history.replaceState(
+function writeWorkbenchHistoryState(workspaceId, tabId, opts = {}) {
+  const method = opts.push ? 'pushState' : 'replaceState';
+  history[method](
     { ...(history.state || {}), sfocWorkbench: { workspaceId, tabId } },
     '',
     window.location.href
@@ -683,18 +718,45 @@ export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
     if (availability.message) showToast(availability.message, 'warn', { bypassCooldown: true });
     return false;
   }
-  await navigateToModeAndTool(tabInfo.legacyMode, tabInfo.toolId, { userInitiated: opts.userInitiated === true });
+  const requestId = ++navigationGeneration;
+  workbenchNavigationDepth++;
+  const currentToolId = document.getElementById('typeSelect')?.value || '';
+  const sameLegacyTool = state.appNavMode === tabInfo.legacyMode && currentToolId === tabInfo.toolId;
   activeWorkspaceId = workspaceId;
   activeTabId = tabId;
   selectedCategoryId = workspace.categoryId;
-  prefs = await saveWorkbenchPrefs({
-    ...prefs,
-    lastTabByWorkspace: { ...prefs.lastTabByWorkspace, [workspaceId]: tabId }
-  });
-  await applyWorkspaceTabVariant(workspaceId, tabId);
-  writeWorkbenchHistoryState(workspaceId, tabId);
+  document.body.dataset.workbenchWorkspace = workspaceId;
+  document.body.dataset.workbenchTab = tabId;
   renderWorkbenchShell();
-  return true;
+  try {
+    if (!sameLegacyTool) {
+      await navigateToModeAndTool(tabInfo.legacyMode, tabInfo.toolId, { userInitiated: opts.userInitiated === true });
+    }
+    if (requestId !== navigationGeneration) return false;
+    await applyWorkspaceTabVariant(workspaceId, tabId);
+    if (requestId !== navigationGeneration) return false;
+    writeWorkbenchHistoryState(workspaceId, tabId, {
+      push: sameLegacyTool && opts.userInitiated === true
+    });
+    const nextPrefs = {
+      ...prefs,
+      lastTabByWorkspace: { ...prefs.lastTabByWorkspace, [workspaceId]: tabId }
+    };
+    prefs = nextPrefs;
+    prefsWriteQueue = prefsWriteQueue
+      .catch(() => {})
+      .then(() => saveWorkbenchPrefs(nextPrefs))
+      .then((saved) => {
+        if (navigationGeneration === requestId) prefs = saved;
+      });
+    renderWorkbenchShell();
+    return true;
+  } finally {
+    workbenchNavigationDepth = Math.max(0, workbenchNavigationDepth - 1);
+    if (workbenchNavigationDepth === 0 && pendingHistorySelection) {
+      requestAnimationFrame(() => syncFromLegacyNavigation());
+    }
+  }
 }
 
 async function loadReadOnlyMap() {
@@ -735,21 +797,21 @@ export function getVisibleWorkbenchSearchEntries() {
 
 export async function setupWorkbenchShell() {
   if (initialized) return;
-  const [loadedPrefs] = await Promise.all([
-    loadWorkbenchPrefs(),
-    loadToolRecents(),
-    loadReadOnlyMap()
-  ]);
-  prefs = loadedPrefs;
+  prefs = await loadWorkbenchPrefs();
+  void Promise.all([loadToolRecents(), loadReadOnlyMap()]);
   compactMedia = window.matchMedia(COMPACT_QUERY);
   const shell = el('div', 'workbench-shell');
   shell.id = 'workbenchShell';
+  shell.addEventListener('click', (event) => event.stopPropagation());
   document.body.insertBefore(shell, document.body.firstChild);
   const backdrop = el('button', 'workbench-panel-backdrop hidden');
   backdrop.id = 'workbenchPanelBackdrop';
   backdrop.type = 'button';
   backdrop.setAttribute('aria-label', t('workbench.panel.collapse'));
-  backdrop.addEventListener('click', () => void setPanelExpanded(false));
+  backdrop.addEventListener('click', (event) => {
+    event.stopPropagation();
+    void setPanelExpanded(false);
+  });
   document.body.appendChild(backdrop);
   initialized = true;
   syncFromLegacyNavigation();

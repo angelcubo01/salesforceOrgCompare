@@ -40,6 +40,8 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
   await v2.setViewportSize({ width: 1280, height: 900 });
   await v2.screenshot({ path: path.join(output, 'v2-home-expanded-dark-1280.png') });
   await v2.locator('#workbenchPanelClose').click();
+  await v2.waitForFunction(() => document.body.dataset.workbenchPanel === 'collapsed');
+  await v2.waitForTimeout(200);
   await v2.screenshot({ path: path.join(output, 'v2-home-collapsed-dark-1280.png') });
   await v2.keyboard.press('Control+K');
   await v2.screenshot({ path: path.join(output, 'v2-command-palette-dark-1280.png') });
@@ -68,6 +70,7 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
   await v2.screenshot({ path: path.join(output, 'v2-modal-destructive-dark-1280.png') });
   await v2.keyboard.press('Escape');
   await v2.locator('#workbenchThemeBtn').click();
+  await v2.waitForTimeout(50);
   await v2.screenshot({ path: path.join(output, 'v2-home-collapsed-light-1280.png') });
   await v2.close();
 });

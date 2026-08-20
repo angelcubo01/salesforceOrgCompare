@@ -9,7 +9,7 @@ Classic concentra la navegación en menús superiores, conserva el Tool ID activ
 UI 2.0 añade una capa Workbench sobre esos contratos, no otra aplicación:
 
 - Rail permanente de 60 px con diez categorías, estado seleccionado con icono, borde, texto accesible y `aria-current`.
-- Panel de 264 px expandible y fijable, con búsqueda, última herramienta, favoritas, recientes y workspaces.
+- Panel de 264 px expandible y fijable, dedicado a búsqueda y workspaces de la categoría. Favoritas y recientes permanecen en Inicio y en la command palette, sin duplicarse en el menú.
 - Cabecera contextual con breadcrumb, herramienta, tabs, orgs, entorno, solo lectura, riesgo, acciones proxy, ayuda y tema.
 - Command palette con `Ctrl/Cmd+K`; `Ctrl/Cmd+Shift+P` sigue siendo compatible.
 - Los paneles existentes permanecen montados. Los adaptadores seleccionan vistas internas existentes y conservan filtros, scroll y editores.
@@ -26,10 +26,10 @@ El inventario y las medidas anteriores a la implementación están en [UI_V2_BAS
 │ RAIL │ Salesforce Org Compare │ Inicio                         Ayuda  Tema   │
 │ ● 🏠 │ Buscar herramientas…   ├──────────────────────────────────────────────┤
 │   ⇄  │                        │ Salesforce Org Compare                       │
-│   </>│ Última herramienta     │ [ Ctrl/Cmd+K Buscar cualquier herramienta ] │
-│   DB │ Favoritas              │                                              │
-│   …  │ Recientes              │ Recientes             Fijadas               │
-│      │ Workspaces             │ ┌ Seguridad ┐ ┌ Productividad ┐ ┌ Estado ┐ │
+│   </>│ Workspaces             │ [ Ctrl/Cmd+K Buscar cualquier herramienta ] │
+│   DB │                        │                                              │
+│   …  │                        │ Recientes             Fijadas               │
+│      │                        │ ┌ Seguridad ┐ ┌ Productividad ┐ ┌ Estado ┐ │
 └──────┴────────────────────────┴──────────────────────────────────────────────┘
 ```
 
@@ -209,7 +209,10 @@ Todo lo demás —orgs, feature controls, idioma, tema, rutas, recientes, favori
 - Tokens V2 aislados bajo `[data-ui-mode="v2"]` para claro y oscuro.
 - Drawer superpuesto para 1024 px y reflow equivalente a zoom 200 %.
 - Import dinámico del shell solo en V2 y adaptadores pesados bajo demanda.
-- Rail, panel y cabecera se actualizan incrementalmente; los paneles de herramientas no se reconstruyen.
+- Los clics del Workbench no activan los listeners globales de los menús Classic.
+- Rail, panel y cabecera se actualizan incrementalmente; los nodos del menú se conservan al cambiar de tab o herramienta.
+- Las tabs que comparten Tool ID ejecutan solo su adaptador interno, sin relanzar navegación ni refrescar todos los paneles.
+- La tab activa se refleja antes de persistir preferencias; las escrituras de preferencias se serializan en segundo plano.
 - Sprite SVG local mínimo: sin CDN, fuentes de iconos ni peticiones UI externas.
 
 La puerta de rendimiento toma diez muestras alternadas por modo, mide hasta retirar `app-nav-booting` y compara medianas. El resultado final cumple `mediana V2 <= mediana Classic × 1,10`.

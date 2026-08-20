@@ -61,8 +61,8 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   await waitForCodeBoot(v2);
   await expect(v2.locator('body')).toHaveAttribute('data-ui-mode', 'v2');
   await expect(classic.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
-  await expect(v2.locator('.workbench-favorite-button[aria-pressed="true"]').first()).toBeVisible();
-  await expect(v2.locator('.workbench-tool-link[data-tool-id="QueryExplorer"]').first()).toBeVisible();
+  await expect(v2.locator('#appLandingPinnedList')).toContainText('SOQL');
+  await expect(v2.locator('.workbench-tool-row')).toHaveCount(0);
   const sharedPrefs = await v2.evaluate(async () => chrome.storage.local.get(['sfocToolRecents', 'sfocWorkbenchPrefs']));
   expect(sharedPrefs.sfocToolRecents).toEqual({ recents: ['QueryExplorer'], pins: ['QueryExplorer'] });
   expect(sharedPrefs.sfocWorkbenchPrefs.panelExpanded).toBe(true);
@@ -76,17 +76,30 @@ test('rail, panel, tabs y command palette son operables por teclado', async ({ e
 
   await page.locator('#workbenchRail-development').click();
   await expect(page.locator('#workbenchPanel')).toHaveAttribute('aria-hidden', 'false');
-  await page.getByRole('button', { name: 'Apex Quality' }).click();
+  await expect(page.locator('.workbench-panel-section:not(.workbench-panel-section--workspaces)')).toHaveCount(0);
+  await expect(page.locator('.workbench-workspace-meta')).toHaveCount(0);
+  const apexWorkspaceButton = page.getByRole('button', { name: 'Apex Quality' });
+  await apexWorkspaceButton.evaluate((button) => { window.__sfocApexWorkspaceButton = button; });
+  await apexWorkspaceButton.click();
   const testsTab = page.locator('#workbenchTab-apex-quality-tests');
-  await expect(testsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(testsTab).toHaveAttribute('aria-selected', 'true', { timeout: 500 });
   await testsTab.press('ArrowRight');
+  await expect(page.locator('#workbenchTab-apex-quality-runs')).toHaveAttribute('aria-selected', 'true', { timeout: 500 });
+
+  const panelButtonWasPreserved = await page.evaluate(() => (
+    document.querySelector('.workbench-workspace-button[data-workspace-id="apex-quality"]') === window.__sfocApexWorkspaceButton
+  ));
+  expect(panelButtonWasPreserved).toBe(true);
+
+  await page.goBack();
+  await expect(page.locator('#workbenchTab-apex-quality-tests')).toHaveAttribute('aria-selected', 'true');
+  await page.goForward();
   await expect(page.locator('#workbenchTab-apex-quality-runs')).toHaveAttribute('aria-selected', 'true');
 
-  const recentRow = page.locator('.workbench-tool-row').filter({
-    has: page.locator('.workbench-tool-link[data-tool-id="ApexTests"]')
-  }).first();
-  await expect(recentRow).toBeVisible();
-  await expect(recentRow.locator('.workbench-favorite-button')).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Code Studio' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'code-studio', { timeout: 500 });
+  await page.getByRole('button', { name: 'Apex Quality' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'apex-quality', { timeout: 500 });
 
   await page.keyboard.press('Control+K');
   await expect(page.locator('#quickOpenOverlay')).toHaveAttribute('aria-hidden', 'false');
