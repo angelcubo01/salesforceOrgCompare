@@ -30,6 +30,7 @@ test.beforeEach(async ({ extensionWorker }) => {
       metadataTypes: {},
       actions: {}
     },
+    sfocAppNavPrefs: { lastMode: 'home', lastToolByMode: {} },
     sfocToolRecents: { recents: [], pins: [] },
     sfocWorkbenchPrefs: { panelExpanded: true, panelPinned: false, lastTabByWorkspace: {} },
     sfocOnboardingSeen: {
@@ -77,6 +78,8 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   await expect(v2.locator('#workbenchPanel, #workbenchRail, #workbenchPanelBackdrop')).toHaveCount(0);
   await expect(v2.locator('#workbenchLandingCategories')).toHaveCount(0);
   await expect(v2.locator('#workbenchMarketingHero')).toBeVisible();
+  await expect(v2.locator('#workbenchLandingLogo')).toBeVisible();
+  await expect(v2.locator('#workbenchLandingLogo')).toHaveAttribute('src', /logo-horizontal\.png$/);
   await expect(v2.locator('#workbenchMarketingHero')).toContainText('Tus orgs Salesforce, bajo control.');
   await expect(v2.locator('#workbenchCapabilityGrid .workbench-capability-card')).toHaveCount(6);
   await expect(v2.locator('.workbench-workflow-step')).toHaveCount(3);

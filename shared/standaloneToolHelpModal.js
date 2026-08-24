@@ -1,4 +1,5 @@
 import { helpToolTitleKey, helpToolBodyKeys } from './helpToolIds.js';
+import { activateDialogFocus, deactivateDialogFocus } from './dialogFocus.js';
 
 let modalEl = null;
 
@@ -27,7 +28,10 @@ function ensureModal() {
 }
 
 export function closeStandaloneToolHelpModal() {
-  if (modalEl) modalEl.hidden = true;
+  if (modalEl) {
+    modalEl.hidden = true;
+    deactivateDialogFocus(modalEl);
+  }
 }
 
 /**
@@ -58,5 +62,5 @@ export function openStandaloneToolHelpModal(t, toolId) {
 
   modal.hidden = false;
   bodyEl.scrollTop = 0;
-  closeBtn?.focus();
+  activateDialogFocus(modal, { initialFocus: closeBtn });
 }

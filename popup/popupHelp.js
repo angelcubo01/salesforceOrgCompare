@@ -1,4 +1,5 @@
 import { t } from '../shared/i18n.js';
+import { activateDialogFocus, deactivateDialogFocus } from '../shared/dialogFocus.js';
 
 const POPUP_HELP_BODY_KEYS = [
   'popup.help.body1',
@@ -31,7 +32,7 @@ export function openPopupHelpModal() {
   refreshPopupHelpModalContent();
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
-  document.getElementById('popupHelpModalCloseBtn')?.focus();
+  activateDialogFocus(modal, { initialFocus: document.getElementById('popupHelpModalCloseBtn') });
 }
 
 export function closePopupHelpModal() {
@@ -39,7 +40,7 @@ export function closePopupHelpModal() {
   if (!modal) return;
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  document.getElementById('openPopupHelpBtn')?.focus();
+  deactivateDialogFocus(modal);
 }
 
 export function setupPopupHelp() {

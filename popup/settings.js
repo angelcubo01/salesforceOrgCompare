@@ -179,6 +179,10 @@ function applyStaticTranslations() {
   document.querySelectorAll('[data-i18n-title]').forEach((elem) => {
     elem.title = t(elem.getAttribute('data-i18n-title'));
   });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((elem) => {
+    const key = elem.getAttribute('data-i18n-aria-label');
+    if (key) elem.setAttribute('aria-label', t(key));
+  });
 }
 
 function advFieldStep(key) {

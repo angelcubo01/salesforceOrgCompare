@@ -1,17 +1,21 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-sfoc-document="apex-coverage-viewer">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Cobertura Apex · Salesforce Org Compare</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../icons/icon-16.png" />
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
     <link rel="stylesheet" href="./apex-coverage-viewer.css" />
+    <link rel="stylesheet" href="../shared/sfoc-design-system.css" />
   </head>
   <body>
     <header class="apex-cov-viewer-toolbar" id="apexCovViewerHeader">
       <button type="button" id="apexCovViewerBack" class="apex-cov-viewer-back" data-i18n="apexLogViewer.back">
         Volver
       </button>
+      <img class="sfoc-viewer-brand-logo" src="../icons/icon-32.png" width="32" height="32" alt="" aria-hidden="true" />
       <span id="apexCovViewerTitle" class="apex-cov-viewer-title"></span>
       <span id="apexCovViewerUser" class="apex-cov-viewer-user ph-no-capture" hidden></span>
       <button

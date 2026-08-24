@@ -256,81 +256,111 @@ function wrapDiffExportHtml({ title, metaLeft, metaRight, exportedAt, body }) {
 <title>${title}</title>
 <style>
 :root {
-  --bg: #1a1a1a;
-  --fg: #e0e0e0;
-  --muted: #888;
-  --border: #333;
-  --add-bg: rgba(45, 212, 191, 0.08);
-  --rem-bg: rgba(251, 113, 133, 0.08);
-  --ctx-bg: #222;
-  --empty-bg: #1a1a1a;
-  --head-bg: linear-gradient(135deg, #333 0%, #2a2a2a 100%);
+  color-scheme: light dark;
+  --canvas: #f3f5f8;
+  --surface: #ffffff;
+  --surface-subtle: #f6f8fb;
+  --text: #181818;
+  --text-secondary: #444f5e;
+  --border: #c5ceda;
+  --border-strong: #8f9daf;
+  --primary: #0b5cab;
+  --add-bg: #dff7e8;
+  --add-text: #1b5e36;
+  --rem-bg: #fde7e9;
+  --rem-text: #8e1725;
+  --empty-bg: #eef2f7;
+  --empty-text: #687789;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --canvas: #0b1220;
+    --surface: #111c2e;
+    --surface-subtle: #17243a;
+    --text: #f3f6fb;
+    --text-secondary: #b7c3d4;
+    --border: #354760;
+    --border-strong: #4b607b;
+    --primary: #5eb4ff;
+    --add-bg: #0f3b32;
+    --add-text: #9be8bd;
+    --rem-bg: #45212a;
+    --rem-text: #ffb3bd;
+    --empty-bg: #0b1220;
+    --empty-text: #7f8da1;
+  }
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
   padding: 16px;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: Monaco, Menlo, "Ubuntu Mono", Consolas, monospace;
+  background: var(--canvas);
+  color: var(--text);
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.45;
 }
 header {
-  padding: 12px 14px;
+  padding: 12px 4px 14px;
   margin-bottom: 16px;
-  background: var(--head-bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border-bottom: 1px solid var(--border);
 }
 header h1 {
   margin: 0 0 8px 0;
-  font-size: 15px;
-  font-weight: 600;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 700;
 }
 header .meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 header .exported {
   margin-top: 8px;
   font-size: 11px;
-  color: var(--muted);
+  color: var(--text-secondary);
 }
 .hunk { margin-bottom: 20px; }
 .hunk-header {
   padding: 6px 8px;
-  margin-bottom: 6px;
-  background: #252525;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: #b0b8c4;
+  background: var(--surface-subtle);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
   font-size: 12px;
 }
 .diff-table {
   width: 100%;
   border-collapse: collapse;
   border: 1px solid var(--border);
+  background: var(--surface);
   table-layout: fixed;
 }
 .diff-table thead th {
-  background: #2a2a2a;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-subtle);
   padding: 6px 8px;
   text-align: left;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 700;
   font-size: 11px;
-  color: #b0b8c4;
-  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-strong);
 }
 .diff-table .ln {
   width: 44px;
   padding: 2px 6px;
   vertical-align: top;
   text-align: right;
-  color: var(--muted);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
   border-right: 1px solid var(--border);
   user-select: none;
 }
@@ -338,18 +368,29 @@ header .exported {
   width: 50%;
   padding: 0;
   vertical-align: top;
-  border-right: 1px solid var(--border);
 }
+.diff-table .lc:nth-of-type(2) { border-right: 1px solid var(--border); }
 .diff-table .lc pre {
   margin: 0;
   padding: 2px 8px;
+  color: var(--text);
+  font-family: var(--font-mono);
   white-space: pre-wrap;
   word-break: break-word;
 }
-.diff-table td.add { background: var(--add-bg); }
-.diff-table td.rem { background: var(--rem-bg); }
-.diff-table td.ctx { background: var(--ctx-bg); }
-.diff-table td.empty { background: var(--empty-bg); color: #555; }
+.diff-table td.add { background: var(--add-bg); color: var(--add-text); }
+.diff-table td.rem { background: var(--rem-bg); color: var(--rem-text); }
+.diff-table td.ctx { background: var(--surface); }
+.diff-table td.empty { background: var(--empty-bg); color: var(--empty-text); }
+@media (max-width: 640px) {
+  body { padding: 8px; }
+  header .meta { grid-template-columns: 1fr; }
+  .diff-table { min-width: 620px; }
+  .hunk { overflow-x: auto; }
+}
+@media (forced-colors: active) {
+  .diff-table, .diff-table th, .diff-table td, header { border-color: CanvasText; }
+}
 </style>
 </head>
 <body>

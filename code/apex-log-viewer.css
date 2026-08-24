@@ -1,24 +1,3 @@
-:root {
-  --sfoc-bg-app: #0f172a;
-  --sfoc-bg-panel: #18212d;
-  --sfoc-bg-elevated: #233141;
-  --sfoc-border: #334155;
-  --sfoc-text: #f8fafc;
-  --sfoc-text-muted: #94a3b8;
-  --sfoc-accent: #38bdf8;
-  --sfoc-success: #22c55e;
-  --sfoc-z-toast: 1500;
-  --alb-bg: linear-gradient(180deg, #0f172a 0%, #111827 100%);
-  --alb-border: rgba(148, 163, 184, 0.24);
-  --alb-text: var(--sfoc-text);
-  --alb-accent: var(--sfoc-accent);
-  --alb-muted: var(--sfoc-text-muted);
-  --alb-chip-bg: rgba(56, 189, 248, 0.12);
-  --alb-warning: #fb7185;
-  --alb-gantt-grid: rgba(148, 163, 184, 0.22);
-  --alb-page-pad-x: 16px;
-}
-
 html,
 body {
   margin: 0;
@@ -990,17 +969,6 @@ body {
 
 html[data-ui-theme='light'] .apex-log-line-highlight {
   background: rgba(2, 132, 199, 0.15);
-}
-
-html[data-ui-theme='light'] {
-  --alb-bg: linear-gradient(180deg, #f8fafc 0%, #eef3f8 100%);
-  --alb-border: #b8c6d6;
-  --alb-text: #0f172a;
-  --alb-accent: #2f5f9f;
-  --alb-muted: #2f445b;
-  --alb-chip-bg: rgba(47, 95, 159, 0.1);
-  --alb-warning: #e11d48;
-  --alb-gantt-grid: rgba(71, 85, 105, 0.3);
 }
 
 html[data-ui-theme='light'] .apex-log-viewer-toolbar {

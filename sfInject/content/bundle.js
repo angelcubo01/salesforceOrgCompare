@@ -662,7 +662,7 @@
       if (!doc.body) return;
       const el = doc.createElement("div");
       el.className = `sfoc-inject-toast${isError ? " sfoc-inject-toast--error" : ""}`;
-      el.setAttribute("role", "status");
+      el.setAttribute("role", isError ? "alert" : "status");
       el.textContent = message;
       doc.body.appendChild(el);
       setTimeout(() => el.remove(), 4e3);

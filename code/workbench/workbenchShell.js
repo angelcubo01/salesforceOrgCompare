@@ -845,10 +845,10 @@ function decorateLanding() {
   const logoWrap = el('span', 'workbench-landing-logo-wrap');
   const logo = el('img', 'workbench-landing-logo');
   logo.id = 'workbenchLandingLogo';
-  logo.src = chrome.runtime.getURL('icons/icon-32.png');
+  logo.src = chrome.runtime.getURL('icons/logo-horizontal.png');
   logo.alt = '';
-  logo.width = 32;
-  logo.height = 32;
+  logo.width = 88;
+  logo.height = 58;
   logoWrap.appendChild(logo);
   eyebrow.appendChild(logoWrap);
   eyebrow.appendChild(el('span', '', t('workbench.marketing.eyebrow')));

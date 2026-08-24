@@ -583,6 +583,8 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   applyUiThemeToDocument(document);
   await loadLang();
   document.documentElement.lang = getCurrentLang() === 'en' ? 'en' : 'es';
+  const versionEl = document.getElementById('popupVersion');
+  if (versionEl) versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   setupPopupLanguageSelect();
   applyStaticTranslations();
   setupPopupHelp();

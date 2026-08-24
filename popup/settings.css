@@ -423,32 +423,6 @@ html[data-ui-theme='light'] .settings-checkbox-row {
 }
 
 /* ── Modo claro (Ajustes) ── */
-html[data-ui-theme='light'] {
-  color-scheme: light;
-  --sfoc-light-bg-page: linear-gradient(165deg, #edf2f7 0%, #e4ebf3 55%, #dbe5ef 100%);
-  --sfoc-light-bg-surface: #e7edf4;
-  --sfoc-light-bg-elevated: #f2f6fb;
-  --sfoc-light-bg-input: #f8fafc;
-  --sfoc-light-bg-hover: #d7e1ec;
-  --sfoc-light-border: #8da0b6;
-  --sfoc-light-border-subtle: #a9b8ca;
-  --sfoc-light-text: #0f172a;
-  --sfoc-light-text-muted: #243447;
-  --sfoc-light-text-placeholder: #4f6278;
-  --sfoc-text-muted: #243447;
-  --sfoc-bg-app: #f1f5f9;
-  --sfoc-bg-panel: #ffffff;
-  --sfoc-bg-elevated: var(--sfoc-light-bg-elevated);
-  --sfoc-border: var(--sfoc-light-border);
-  --sfoc-text: var(--sfoc-light-text);
-  --sfoc-text-muted: var(--sfoc-light-text-muted);
-  --sfoc-accent: #2563eb;
-  --sfoc-danger: #dc2626;
-  --sfoc-success: #16a34a;
-  --sfoc-warn: #d97706;
-  --sfoc-info: #2563eb;
-}
-
 html[data-ui-theme='light'] body {
   background: var(--sfoc-light-bg-page);
   color: var(--sfoc-light-text);

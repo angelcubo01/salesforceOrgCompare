@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Salesforce Org Compare</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../icons/icon-16.png" />
     <style>
       body.app-nav-booting .content {
         visibility: hidden;
@@ -32,6 +34,12 @@
         border-radius: 50%;
         animation: app-boot-spin 0.7s linear infinite;
       }
+      .app-boot-splash-logo {
+        display: block;
+        width: 112px;
+        height: auto;
+        object-fit: contain;
+      }
       @keyframes app-boot-spin {
         to {
           transform: rotate(360deg);
@@ -53,9 +61,11 @@
     <link rel="stylesheet" href="./workbench/workbench.css" />
     <link rel="stylesheet" href="./workbench/workbench-refresh.css" />
     <link rel="stylesheet" href="../vendor/driver.js/driver.css" />
+    <link rel="stylesheet" href="../shared/sfoc-design-system.css" />
   </head>
   <body class="app-nav-booting">
     <div id="appBootSplash" class="app-boot-splash" role="status" aria-live="polite" aria-busy="true">
+      <img class="app-boot-splash-logo" src="../icons/logo-horizontal.png" width="112" height="74" alt="" aria-hidden="true" />
       <span class="app-boot-splash-spinner" aria-hidden="true"></span>
       <p id="appBootSplashText" class="app-boot-splash-text" data-i18n="popup.openingApp"></p>
     </div>

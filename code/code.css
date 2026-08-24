@@ -12405,15 +12405,15 @@ body.quick-open-active {
 .sfoc-tool-danger-btn,
 .data-workbench-danger-btn,
 .streaming-delete-btn {
-  border-color: rgba(248, 113, 113, 0.45) !important;
-  color: #fca5a5 !important;
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
 }
 
 .sfoc-tool-danger-btn:hover,
 .data-workbench-danger-btn:hover,
 .streaming-delete-btn:hover {
-  background: rgba(127, 29, 29, 0.35) !important;
-  border-color: rgba(248, 113, 113, 0.65) !important;
+  background: rgba(127, 29, 29, 0.35);
+  border-color: rgba(248, 113, 113, 0.65);
 }
 
 .sfoc-table-actions {

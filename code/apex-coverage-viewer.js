@@ -3,6 +3,7 @@ import { loadMonaco, createSingleEditor } from './editor/monaco.js';
 import { loadLang, t } from '../shared/i18n.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 import { openStandaloneToolHelpModal } from '../shared/standaloneToolHelpModal.js';
+import { renderStandaloneViewerState } from '../shared/standaloneViewerState.js';
 import { renderConnectedUserBadge, applyConnectedUserTitle } from './lib/renderConnectedUserBadge.js';
 
 function getStorageKey() {
@@ -142,6 +143,11 @@ async function main() {
   const key = getStorageKey();
   if (!key || !chrome?.storage?.local) {
     if (titleEl) titleEl.textContent = t('apexLogViewer.missingPayload');
+    renderStandaloneViewerState(singleMount, {
+      kind: 'error',
+      title: t('apexLogViewer.missingPayload'),
+      description: t('state.error.description')
+    });
     return;
   }
 
@@ -152,6 +158,21 @@ async function main() {
     await chrome.storage.local.remove(key);
   } catch {
     if (titleEl) titleEl.textContent = t('apexLogViewer.missingPayload');
+    renderStandaloneViewerState(singleMount, {
+      kind: 'error',
+      title: t('apexLogViewer.missingPayload'),
+      description: t('state.error.description')
+    });
+    return;
+  }
+
+  if (!payload) {
+    if (titleEl) titleEl.textContent = t('apexLogViewer.missingPayload');
+    renderStandaloneViewerState(singleMount, {
+      kind: 'error',
+      title: t('apexLogViewer.missingPayload'),
+      description: t('state.error.description')
+    });
     return;
   }
 
@@ -199,6 +220,11 @@ async function main() {
       });
     } catch {
       if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
+      renderStandaloneViewerState(splitRoot, {
+        kind: 'error',
+        title: t('apexLogViewer.monacoError'),
+        description: t('state.error.description')
+      });
     }
 
     backBtn?.addEventListener('click', () => {
@@ -242,6 +268,11 @@ async function main() {
     );
   } catch {
     if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
+    renderStandaloneViewerState(singleMount, {
+      kind: 'error',
+      title: t('apexLogViewer.monacoError'),
+      description: t('state.error.description')
+    });
   }
 
   backBtn?.addEventListener('click', () => {
