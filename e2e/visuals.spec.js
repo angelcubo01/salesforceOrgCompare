@@ -22,17 +22,28 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
   };
   await setLocalStorage(extensionWorker, {
     soc_language: 'es',
+    sfocFeatureControlsCache: {
+      version: 1,
+      rootVersionTarget: null,
+      global: null,
+      modes: {},
+      tools: {},
+      metadataTypes: {},
+      actions: {}
+    },
     sfocOnboardingSeen: onboarding,
     sfocWorkbenchPrefs: { panelExpanded: true, panelPinned: false, lastTabByWorkspace: {} },
     sfocToolRecents: { recents: ['QueryExplorer', 'ApexTests'], pins: ['QueryExplorer'] }
   });
 
-  await setLocalStorage(extensionWorker, { sfocUiMode: 'classic' });
-  const classic = await openExtensionPage(extensionContext, extensionId, 'code/code.html');
-  await waitForCodeBoot(classic);
-  await classic.setViewportSize({ width: 1280, height: 900 });
-  await classic.screenshot({ path: path.join(output, 'classic-home-dark-1280.png') });
-  await classic.close();
+  if (process.env.SFOC_V2_ONLY !== '1') {
+    await setLocalStorage(extensionWorker, { sfocUiMode: 'classic' });
+    const classic = await openExtensionPage(extensionContext, extensionId, 'code/code.html');
+    await waitForCodeBoot(classic);
+    await classic.setViewportSize({ width: 1280, height: 900 });
+    await classic.screenshot({ path: path.join(output, 'classic-home-dark-1280.png') });
+    await classic.close();
+  }
 
   await setLocalStorage(extensionWorker, { sfocUiMode: 'v2' });
   const v2 = await openExtensionPage(extensionContext, extensionId, 'code/code.html');

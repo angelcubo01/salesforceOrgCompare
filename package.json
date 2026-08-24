@@ -5,7 +5,8 @@
   "description": "Chrome extension to compare Salesforce org metadata",
   "type": "module",
   "scripts": {
-    "prepare": "node sfInject/bundle.mjs",
+    "prepare": "npm run vendor:driver && node sfInject/bundle.mjs",
+    "vendor:driver": "node sync-driver-vendor.mjs",
     "test": "vitest run",
     "build:sf-inject": "node sfInject/bundle.mjs",
     "pretest": "node tests/ensureTelemetryConfig.mjs",
@@ -54,5 +55,8 @@
     "posthog-js": "^1.379.0",
     "vitest": "^3.1.4",
     "wrangler": "^4.110.0"
+  },
+  "dependencies": {
+    "driver.js": "1.8.0"
   }
 }

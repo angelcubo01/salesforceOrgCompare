@@ -547,13 +547,33 @@ body.sidebar-collapsed .sidebar {
 .sidebar-search-input-row {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   min-height: 32px;
 }
 
-.sidebar-search-input-row .sfoc-query-input {
+.sidebar-search-field,
+.compare-list-filter-field {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  position: relative;
+}
+
+.sidebar-search-input-row .sidebar-search-field .sfoc-query-input,
+.compare-list-filter-field .compare-list-filter {
   flex: 1;
   min-width: 0;
+}
+
+.sidebar-field-icon,
+.compare-list-filter-icon {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  flex: 0 0 auto;
+  color: #8fa3bb;
+  pointer-events: none;
 }
 
 .sidebar-search-input-row .sidebar-action-btn,
@@ -607,7 +627,7 @@ body.sidebar-collapsed .sidebar {
   color: #cccccc;
   box-shadow: inset 0 -1px 0 #2b2b2b;
   min-height: 32px;
-  padding: 6px 12px;
+  padding: 6px 12px 6px 34px;
   font-size: 13px;
   line-height: 20px;
 }
@@ -1038,7 +1058,7 @@ body.artifact-no-operation .type-select {
   gap: 4px;
 }
 
-.compare-list-toolbar-row .compare-list-filter {
+.compare-list-toolbar-row .compare-list-filter-field {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -1102,6 +1122,9 @@ body.artifact-no-operation .type-select {
 }
 
 .compare-list-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   flex-shrink: 0;
   padding: 8px 12px 5px;
   font-size: 11px;
@@ -1139,7 +1162,7 @@ body.artifact-no-operation .type-select {
   width: 100%;
   font-size: 13px;
   line-height: 20px;
-  padding: 6px 12px;
+  padding: 6px 12px 6px 34px;
   min-height: 32px;
   border: none;
   border-radius: 0;
@@ -5452,6 +5475,7 @@ body.artifact-apex-tests #editorContainer.editor {
   border-top: 1px solid #1e293b;
   padding-top: 12px;
   margin-top: 0;
+  gap: 8px;
 }
 .app-help-modal-foot.hidden {
   display: none;
@@ -5469,6 +5493,27 @@ body.artifact-apex-tests #editorContainer.editor {
 }
 .app-help-modal-primary:hover {
   background: #334155;
+}
+.app-help-modal-tour {
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  background: #0c4a6e;
+  color: #f0f9ff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.app-help-modal-tour:hover {
+  background: #075985;
+}
+.app-help-modal-tour:focus-visible,
+.app-help-modal-primary:focus-visible,
+.app-help-modal-close:focus-visible {
+  outline: 3px solid #7dd3fc;
+  outline-offset: 2px;
 }
 
 .app-landing-help-hint {

@@ -289,6 +289,18 @@ export const helpOnboardingEs = {
     'Útil para entender por qué la cobertura de una clase bajó o qué líneas faltan por testear.',
 
   'onboarding.gotIt': 'Entendido',
+  'onboarding.common.previous': 'Anterior',
+  'onboarding.common.next': 'Siguiente',
+  'onboarding.common.finish': 'Finalizar',
+  'onboarding.common.skip': 'Saltar tour',
+  'onboarding.common.progress': 'Paso {{current}} de {{total}}',
+  'onboarding.common.startTour': 'Iniciar tour',
+  'onboarding.common.repeatTour': 'Repetir tour',
+  'onboarding.common.contextTitle': 'Empieza aquí',
+  'onboarding.common.prepareTitle': 'Configura la herramienta',
+  'onboarding.common.actionTitle': 'Completa el flujo',
+  'onboarding.common.resultTitle': 'Resultado y siguientes pasos',
+  'onboarding.common.viewsTitle': 'Vistas de la herramienta',
 
   'onboarding.tool.Comparator.title': 'Comparador de metadatos',
   'onboarding.tool.Comparator.lead':
@@ -308,6 +320,8 @@ export const helpOnboardingEs = {
     'Elige clases, métodos o suites y lanza la ejecución; el progreso aparece en pantalla.',
   'onboarding.tool.ApexTests.step3':
     'Abre resultados, cobertura por línea o exporta el informe cuando termine.',
+  'onboarding.tool.ApexTests.views':
+    'Tests prepara una ejecución; Ejecuciones y Resultados permiten seguirla y revisar fallos. Cobertura tiene su propio recorrido.',
 
   'onboarding.tool.QuickEdit.title': 'Editor Apex',
   'onboarding.tool.QuickEdit.lead':
@@ -341,7 +355,7 @@ export const helpOnboardingEs = {
   'onboarding.tool.QueryExplorer.step2':
     'Guarda consultas con nombre para reutilizarlas. Exporta resultados a CSV o JSON si lo necesitas.',
   'onboarding.tool.QueryExplorer.step3':
-    'Activa Modo comparación para ejecutar la misma consulta en los dos entornos y ver diferencias.',
+    'Pulsa Ejecutar para lanzar la consulta. Activa Modo comparación si quieres contrastarla en los dos entornos.',
 
   'onboarding.tool.DebugLogBrowser.title': 'Debug Log Browser',
   'onboarding.tool.DebugLogBrowser.lead':
@@ -350,6 +364,8 @@ export const helpOnboardingEs = {
   'onboarding.tool.DebugLogBrowser.step2': 'Filtra por usuario, aplicación o rango de fechas.',
   'onboarding.tool.DebugLogBrowser.step3':
     'Abre un log en el visor estructurado para ver consultas, errores y límites sin leer el archivo entero.',
+  'onboarding.tool.DebugLogBrowser.views':
+    'Logs muestra y filtra ejecuciones. Trace Flags gestiona la captura de nuevos logs; el tour nunca creará ni modificará una traza.',
 
   'onboarding.tool.ApexCoverageCompare.title': 'Comparar cobertura Apex',
   'onboarding.tool.ApexCoverageCompare.lead':
@@ -375,6 +391,8 @@ export const helpOnboardingEs = {
   'onboarding.tool.DependencyExplorer.step2':
     'Pulsa Analizar. Activa comparación entre entornos si quieres ver diferencias de dependencias.',
   'onboarding.tool.DependencyExplorer.step3': 'Exporta resumen, CSV o package.xml desde el menú ⋯.',
+  'onboarding.tool.DependencyExplorer.views':
+    'Metadata presenta el listado analizado y Grafo muestra visualmente las relaciones sin ejecutar un análisis nuevo.',
 
   'onboarding.tool.PermissionDiff.title': 'Analizador de permisos',
   'onboarding.tool.PermissionDiff.lead':
@@ -806,6 +824,18 @@ export const helpOnboardingEn = {
     'Useful to understand why a class’s coverage dropped or which lines still need tests.',
 
   'onboarding.gotIt': 'Got it',
+  'onboarding.common.previous': 'Previous',
+  'onboarding.common.next': 'Next',
+  'onboarding.common.finish': 'Finish',
+  'onboarding.common.skip': 'Skip tour',
+  'onboarding.common.progress': 'Step {{current}} of {{total}}',
+  'onboarding.common.startTour': 'Start tour',
+  'onboarding.common.repeatTour': 'Repeat tour',
+  'onboarding.common.contextTitle': 'Start here',
+  'onboarding.common.prepareTitle': 'Configure the tool',
+  'onboarding.common.actionTitle': 'Complete the flow',
+  'onboarding.common.resultTitle': 'Result and next steps',
+  'onboarding.common.viewsTitle': 'Tool views',
 
   'onboarding.tool.Comparator.title': 'Metadata comparator',
   'onboarding.tool.Comparator.lead':
@@ -825,6 +855,8 @@ export const helpOnboardingEn = {
     'Pick classes, methods, or suites and start a run; progress appears on screen.',
   'onboarding.tool.ApexTests.step3':
     'Open results, line coverage, or export the report when finished.',
+  'onboarding.tool.ApexTests.views':
+    'Tests prepares a run; Runs and Results let you follow it and review failures. Coverage has its own tour.',
 
   'onboarding.tool.QuickEdit.title': 'Apex Editor',
   'onboarding.tool.QuickEdit.lead':
@@ -858,7 +890,7 @@ export const helpOnboardingEn = {
   'onboarding.tool.QueryExplorer.step2':
     'Save named queries for reuse. Export results to CSV or JSON if needed.',
   'onboarding.tool.QueryExplorer.step3':
-    'Enable comparison mode to run the same query in both orgs and see differences.',
+    'Press Run to execute the query. Enable comparison mode when you want to contrast it across both orgs.',
 
   'onboarding.tool.DebugLogBrowser.title': 'Debug log browser',
   'onboarding.tool.DebugLogBrowser.lead':
@@ -867,6 +899,8 @@ export const helpOnboardingEn = {
   'onboarding.tool.DebugLogBrowser.step2': 'Filter by user, application, or date range.',
   'onboarding.tool.DebugLogBrowser.step3':
     'Open a log in the structured viewer to see queries, errors, and limits without reading the whole file.',
+  'onboarding.tool.DebugLogBrowser.views':
+    'Logs lists and filters executions. Trace Flags controls capture of new logs; this tour never creates or changes a trace.',
 
   'onboarding.tool.ApexCoverageCompare.title': 'Compare Apex coverage',
   'onboarding.tool.ApexCoverageCompare.lead':
@@ -892,6 +926,8 @@ export const helpOnboardingEn = {
   'onboarding.tool.DependencyExplorer.step2':
     'Press Analyze. Enable org comparison if you want dependency differences.',
   'onboarding.tool.DependencyExplorer.step3': 'Export summary, CSV, or package.xml from the ⋯ menu.',
+  'onboarding.tool.DependencyExplorer.views':
+    'Metadata shows the analyzed list and Graph visualizes relationships without running another analysis.',
 
   'onboarding.tool.PermissionDiff.title': 'Permission analyzer',
   'onboarding.tool.PermissionDiff.lead':

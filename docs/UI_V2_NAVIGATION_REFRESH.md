@@ -44,11 +44,12 @@ Cada workspace se asigna una sola vez. Se retiraron de v2 los aliases duplicados
 
 `code/workbench/workbench-refresh.css` centraliza tokens y presentación v2 para tema oscuro y claro: superficies, bordes, foco, estados semánticos, espaciado, tablas, formularios, editores, sidebar, modales, toasts y estados vacíos. Las animaciones son breves y se desactivan con `prefers-reduced-motion`; también existe una adaptación para `forced-colors`.
 
-La landing incorpora hero compacto, búsqueda global, atajos y una sección ligera de beneficios. No muestra herramientas fijadas, recientes ni tarjetas para explorar por categoría en v2.
+La landing se plantea como una presentación de producto completa: hero con acceso directo al Comparador, búsqueda global, vista ilustrativa de un diff, capacidades, flujo en tres pasos, estados de contexto y CTA final. Las capacidades se generan desde `landingContentRegistry.js` y se filtran con `sfoc_feature_controls`, por lo que la Home no anuncia familias cuyas herramientas estén ocultas. No muestra herramientas fijadas, recientes ni tarjetas para explorar por categoría en v2.
 
 ## Contratos de implementación
 
 - `workspaceRegistry.js`: configuración independiente de categorías, workspaces, pestañas y rutas legacy.
+- `landingContentRegistry.js`: copy estructurado, iconos y relación entre capacidades comerciales y Tool IDs.
 - `workbenchShell.js`: presentación, navegación, historial, accesibilidad y decoración no destructiva de paneles existentes.
 - `workbench-refresh.css`: overrides exclusivamente visuales y acotados a v2.
 - `shared/i18n.js`: textos completos ES/EN para navegación, descripciones, estados y etiquetas accesibles.
@@ -72,4 +73,5 @@ Comandos principales:
 npm test
 npx playwright test e2e/workbench.spec.js
 $env:SFOC_UPDATE_VISUALS='1'; npx playwright test e2e/visuals.spec.js
+$env:SFOC_UPDATE_VISUALS='1'; $env:SFOC_V2_ONLY='1'; npx playwright test e2e/visuals.spec.js # solo referencias v2
 ```

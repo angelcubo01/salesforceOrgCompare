@@ -1157,6 +1157,16 @@ html[data-ui-theme="light"] .app-help-modal-primary:hover {
   background: #e2e8f0;
 }
 
+html[data-ui-theme="light"] .app-help-modal-tour {
+  border-color: #0176d3;
+  background: #0176d3;
+  color: #ffffff;
+}
+
+html[data-ui-theme="light"] .app-help-modal-tour:hover {
+  background: #0b5cab;
+}
+
 html[data-ui-theme="light"] .app-landing-help-hint {
   color: var(--sfoc-light-text-muted);
 }

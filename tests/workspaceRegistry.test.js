@@ -4,6 +4,7 @@ import {
   WORKBENCH_CATEGORIES,
   WORKBENCH_WORKSPACES,
   getCanonicalToolIds,
+  getWorkspaceById,
   getLegacyHref,
   getTabById,
   getWorkspaceRouteForTool
@@ -30,6 +31,15 @@ describe('workspaceRegistry', () => {
       'apex-quality', 'code-studio', 'diagnostics', 'dependencies', 'data-compare'
     ]);
     expect(WORKBENCH_WORKSPACES.some(({ toolAliases }) => toolAliases?.length)).toBe(false);
+    expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'development')?.workspaceIds).toEqual([
+      'apex-quality', 'code-studio', 'anonymous-apex', 'query-explorer', 'rest-explorer'
+    ]);
+    expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'monitoring')?.workspaceIds).toEqual([
+      'diagnostics', 'event-monitor', 'org-environments', 'org-limits', 'deploy-status',
+      'bulk-job-monitor', 'setup-audit', 'field-history'
+    ]);
+    expect(getWorkspaceById('diagnostics')?.categoryId).toBe('monitoring');
+    expect(getWorkspaceById('event-monitor')?.categoryId).toBe('monitoring');
   });
 
   it('resuelve cada Tool ID legacy exactamente a un workspace y tab válidos', () => {

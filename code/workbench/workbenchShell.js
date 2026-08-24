@@ -15,6 +15,11 @@ import { getCachedFeatureControlsConfig } from '../../shared/posthogFeatureContr
 import { getCurrentLang, t } from '../../shared/i18n.js';
 import { ACTION_ICONS, CATEGORY_ICONS, STATE_ICONS, createIcon } from './iconRegistry.js';
 import {
+  MARKETING_CAPABILITIES,
+  MARKETING_STEPS,
+  MARKETING_TRUST_ITEMS
+} from './landingContentRegistry.js';
+import {
   WORKBENCH_CATEGORIES,
   WORKBENCH_WORKSPACES,
   getCategoryById,
@@ -247,6 +252,7 @@ function createCategoryButton(category) {
   button.type = 'button';
   button.id = `workbenchCategory-${category.id}`;
   button.dataset.categoryId = category.id;
+  button.dataset.onboardingAnchor = `category-${category.id}`;
   button.appendChild(createIcon(category.icon, { size: 20 }));
   button.appendChild(el('span', 'workbench-category-label', label));
   button.title = label;
@@ -308,6 +314,7 @@ function createWorkspaceNavButton(item) {
   const button = el('button', 'workbench-tool-button');
   button.type = 'button';
   button.dataset.workspaceId = item.id;
+  button.dataset.onboardingAnchor = `workspace-${item.id}`;
   button.title = description;
   button.disabled = !targetTab;
   button.setAttribute('aria-disabled', targetTab ? 'false' : 'true');
@@ -395,6 +402,7 @@ function renderWorkbenchNavigation() {
       button.setAttribute('aria-current', button.dataset.workspaceId === activeWorkspaceId ? 'page' : 'false');
     });
   }
+  renderMarketingCapabilities();
   syncCategoryButtons();
   setSubbarAccessibility(!!openCategoryId);
 }
@@ -419,31 +427,6 @@ function environmentForOrg(orgId) {
   if (org?.isSandbox === true) return { key: 'workbench.environment.sandbox', icon: STATE_ICONS.sandbox, className: 'sandbox' };
   if (org?.isSandbox === false) return { key: 'workbench.environment.production', icon: STATE_ICONS.production, className: 'production' };
   return { key: 'workbench.environment.unknown', icon: STATE_ICONS.unknownEnvironment, className: 'unknown' };
-}
-
-function createOrgContext(tabInfo) {
-  const host = el('div', 'workbench-org-context ph-no-capture');
-  host.setAttribute('aria-label', t('workbench.org.context'));
-  const ids = selectedOrgIds(tabInfo);
-  if (!ids.length) {
-    host.appendChild(el('span', 'workbench-org-empty', t('workbench.org.notSelected')));
-    return host;
-  }
-  for (const orgId of ids) {
-    const env = environmentForOrg(orgId);
-    const badge = el('span', `workbench-org-badge workbench-org-badge--${env.className}`);
-    badge.appendChild(createIcon(env.icon, { size: 16 }));
-    badge.appendChild(el('span', 'workbench-org-name', orgDisplayName(orgId)));
-    badge.appendChild(el('span', 'workbench-org-environment', t(env.key)));
-    if (readOnlyByOrgId[orgId]) {
-      const readOnly = el('span', 'workbench-read-only-badge');
-      readOnly.appendChild(createIcon(STATE_ICONS.readOnly, { size: 16 }));
-      readOnly.appendChild(el('span', '', t('workbench.org.readOnly')));
-      badge.appendChild(readOnly);
-    }
-    host.appendChild(badge);
-  }
-  return host;
 }
 
 function actionIconForTarget(targetId) {
@@ -476,6 +459,7 @@ function createHeaderActionProxy(targetId) {
 function createContextHeader() {
   const header = el('header', 'workbench-context-header');
   header.id = 'workbenchContextHeader';
+  header.dataset.onboardingAnchor = 'tool-context';
   const main = el('div', 'workbench-context-main');
   const identity = el('div', 'workbench-context-identity');
   const breadcrumb = el('nav', 'workbench-breadcrumb');
@@ -502,7 +486,6 @@ function createContextHeader() {
   }
   identity.appendChild(titleRow);
   main.appendChild(identity);
-  main.appendChild(createOrgContext(currentTab));
 
   const actions = el('div', 'workbench-context-actions');
   for (const targetId of HEADER_ACTION_TARGETS[currentTab?.toolId] || []) {
@@ -536,6 +519,7 @@ function createContextHeader() {
       button.type = 'button';
       button.id = `workbenchTab-${item.id}-${tabInfo.id}`;
       button.dataset.tabId = tabInfo.id;
+      button.dataset.onboardingAnchor = `tab-${item.id}-${tabInfo.id}`;
       button.setAttribute('role', 'tab');
       button.setAttribute('aria-selected', tabInfo.id === activeTabId ? 'true' : 'false');
       button.setAttribute('tabindex', tabInfo.id === activeTabId ? '0' : '-1');
@@ -720,59 +704,268 @@ async function loadReadOnlyMap() {
   }
 }
 
-function decorateLanding() {
-  document.getElementById('appLandingPinnedHeading')?.closest('.app-landing-tools-section')?.remove();
-  document.querySelector('.app-landing-tools-wrap')?.remove();
+function createMarketingSearchButton(className = '') {
+  const isMac = navigator.platform?.toLowerCase().includes('mac');
+  const shortcut = isMac ? '⌘K' : 'Ctrl+K';
+  const search = el('button', `workbench-marketing-search ${className}`.trim());
+  search.type = 'button';
+  search.appendChild(createIcon(ACTION_ICONS.search, { size: 20 }));
+  search.appendChild(el('span', 'workbench-marketing-search-copy', t('workbench.marketing.search')));
+  search.appendChild(el('kbd', '', shortcut));
+  search.setAttribute('aria-label', `${t('workbench.marketing.search')}, ${t('workbench.marketing.shortcut', { shortcut })}`);
+  search.addEventListener('click', () => document.dispatchEvent(new CustomEvent('sfoc:open-command-palette')));
+  return search;
+}
 
-  const header = document.querySelector('.app-landing-header');
-  if (header && !document.getElementById('workbenchLandingLogo')) {
-    const logoWrap = el('div', 'workbench-landing-logo-wrap');
-    const logo = el('img', 'workbench-landing-logo');
-    logo.id = 'workbenchLandingLogo';
-    logo.src = chrome.runtime.getURL('icons/icon-32.png');
-    logo.alt = '';
-    logo.width = 40;
-    logo.height = 40;
-    logoWrap.appendChild(logo);
-    header.prepend(logoWrap);
+function createMarketingButton(id, labelKey, iconName, className, handler) {
+  const button = el('button', `workbench-marketing-button ${className}`.trim());
+  button.type = 'button';
+  button.id = id;
+  button.appendChild(createIcon(iconName, { size: 20 }));
+  button.appendChild(el('span', '', t(labelKey)));
+  button.addEventListener('click', handler);
+  return button;
+}
 
-    const actions = el('div', 'workbench-landing-actions');
-    const search = el('button', 'workbench-landing-search');
-    search.type = 'button';
-    search.appendChild(createIcon(ACTION_ICONS.search, { size: 20 }));
-    search.appendChild(el('span', '', t('workbench.landing.search')));
-    search.appendChild(el('kbd', '', navigator.platform?.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl+K'));
-    search.addEventListener('click', () => document.dispatchEvent(new CustomEvent('sfoc:open-command-palette')));
-    actions.appendChild(search);
-    const shortcuts = el('div', 'workbench-landing-shortcuts');
-    for (const [keys, labelKey] of [
-      ['Ctrl+Enter', 'workbench.shortcut.run'],
-      ['Ctrl+S', 'workbench.shortcut.save'],
-      ['?', 'workbench.shortcut.help']
-    ]) {
-      const chip = el('span', 'workbench-shortcut-chip');
-      chip.appendChild(el('kbd', '', keys));
-      chip.appendChild(el('span', '', t(labelKey)));
-      shortcuts.appendChild(chip);
+function marketingToolIsVisible(toolId) {
+  const route = getWorkspaceRouteForTool(toolId);
+  const tabInfo = route && getTabById(route.workspaceId, route.tabId);
+  return !!tabInfo && tabVisibility(tabInfo).visible;
+}
+
+function marketingComparatorIsAvailable() {
+  const category = getCategoryById('comparator');
+  const item = category?.directWorkspaceId ? getWorkspaceById(category.directWorkspaceId) : null;
+  return !!(item && preferredTabForWorkspace(item));
+}
+
+function openComparatorFromLanding(event) {
+  const category = getCategoryById('comparator');
+  if (category) void selectDirectWorkspace(category, event.detail === 0 || lastInputWasKeyboard);
+}
+
+function renderMarketingCapabilities() {
+  const grid = document.getElementById('workbenchCapabilityGrid');
+  if (!grid) return;
+  const visible = MARKETING_CAPABILITIES.filter((capability) => capability.toolIds.some(marketingToolIsVisible));
+  const signature = `${getCurrentLang()}|${visible.map((item) => item.id).join('|')}`;
+  if (grid.dataset.renderSignature !== signature) {
+    grid.dataset.renderSignature = signature;
+    grid.replaceChildren();
+    for (const capability of visible) {
+      const card = el('article', `workbench-capability-card workbench-capability-card--${capability.tone} is-${capability.size}`);
+      card.dataset.capabilityId = capability.id;
+      const top = el('div', 'workbench-capability-top');
+      const icon = el('span', 'workbench-capability-icon');
+      icon.appendChild(createIcon(capability.icon, { size: 24 }));
+      top.appendChild(icon);
+      top.appendChild(el('span', 'workbench-capability-label', t(capability.labelKey)));
+      card.appendChild(top);
+      card.appendChild(el('h3', 'workbench-capability-title', t(capability.titleKey)));
+      card.appendChild(el('p', 'workbench-capability-description', t(capability.descriptionKey)));
+      grid.appendChild(card);
     }
-    actions.appendChild(shortcuts);
-    header.appendChild(actions);
   }
+  document.getElementById('workbenchCapabilities')?.toggleAttribute('hidden', visible.length === 0);
+  const comparatorAvailable = marketingComparatorIsAvailable();
+  for (const button of document.querySelectorAll('[data-marketing-action="compare"]')) {
+    button.disabled = !comparatorAvailable;
+    button.setAttribute('aria-disabled', comparatorAvailable ? 'false' : 'true');
+    button.title = comparatorAvailable ? '' : t('workbench.marketing.comparatorUnavailable');
+  }
+}
 
-  document.querySelectorAll('.app-landing-card').forEach((card, index) => {
-    if (card.querySelector('.workbench-benefit-icon')) return;
-    const icons = [
-      CATEGORY_ICONS.comparator,
-      CATEGORY_ICONS.development,
-      CATEGORY_ICONS.metadata,
-      CATEGORY_ICONS.security,
-      CATEGORY_ICONS.operations,
-      CATEGORY_ICONS.dataApi
-    ];
-    const icon = el('span', 'workbench-benefit-icon');
-    icon.appendChild(createIcon(icons[index] || CATEGORY_ICONS.home, { size: 20 }));
-    card.prepend(icon);
+function createMarketingPreview() {
+  const preview = el('div', 'workbench-marketing-preview');
+  preview.setAttribute('aria-hidden', 'true');
+  const chrome = el('div', 'workbench-preview-chrome');
+  const dots = el('span', 'workbench-preview-dots');
+  dots.append(el('i'), el('i'), el('i'));
+  chrome.appendChild(dots);
+  chrome.appendChild(el('span', 'workbench-preview-name', t('workbench.marketing.preview.label')));
+  const ready = el('span', 'workbench-preview-ready');
+  ready.appendChild(createIcon(STATE_ICONS.success, { size: 16 }));
+  ready.appendChild(el('span', '', t('workbench.marketing.preview.ready')));
+  chrome.appendChild(ready);
+  preview.appendChild(chrome);
+
+  const orgs = el('div', 'workbench-preview-orgs');
+  const source = el('span', 'workbench-preview-org workbench-preview-org--sandbox');
+  source.appendChild(createIcon(STATE_ICONS.sandbox, { size: 16 }));
+  source.appendChild(el('span', '', t('workbench.marketing.preview.source')));
+  const target = el('span', 'workbench-preview-org workbench-preview-org--production');
+  target.appendChild(createIcon(STATE_ICONS.production, { size: 16 }));
+  target.appendChild(el('span', '', t('workbench.marketing.preview.target')));
+  orgs.appendChild(source);
+  orgs.appendChild(createIcon('arrows-diff', { size: 20, className: 'workbench-preview-swap' }));
+  orgs.appendChild(target);
+  preview.appendChild(orgs);
+
+  const editor = el('div', 'workbench-preview-editor');
+  const file = el('div', 'workbench-preview-file');
+  file.appendChild(createIcon('file-code', { size: 16 }));
+  file.appendChild(el('span', '', 'AccountService.cls'));
+  editor.appendChild(file);
+  for (const [number, type, code] of [
+    ['18', 'context', 'public with sharing class AccountService {'],
+    ['19', 'removed', '-  return accounts;'],
+    ['19', 'added', '+  return accounts.deepClone();'],
+    ['20', 'context', '}']
+  ]) {
+    const line = el('div', `workbench-preview-line is-${type}`);
+    line.appendChild(el('span', 'workbench-preview-line-number', number));
+    line.appendChild(el('code', '', code));
+    editor.appendChild(line);
+  }
+  preview.appendChild(editor);
+  const summary = el('div', 'workbench-preview-summary');
+  summary.appendChild(el('span', 'workbench-preview-summary-count', '3'));
+  summary.appendChild(el('span', '', t('workbench.marketing.preview.differences')));
+  preview.appendChild(summary);
+  return preview;
+}
+
+function decorateLanding() {
+  const landing = document.getElementById('appLandingPanel');
+  const inner = landing?.querySelector('.app-landing-inner');
+  const header = inner?.querySelector('.app-landing-header');
+  if (!landing || !inner || !header || header.dataset.marketingReady === 'true') return;
+  header.dataset.marketingReady = 'true';
+
+  document.getElementById('appLandingPinnedHeading')?.closest('.app-landing-tools-section')?.remove();
+  inner.querySelector('.app-landing-tools-wrap')?.remove();
+  inner.querySelector('.app-landing-discover-banner')?.remove();
+  inner.querySelector('.app-landing-grid-wrap')?.remove();
+
+  header.id = 'workbenchMarketingHero';
+  header.classList.add('workbench-marketing-hero');
+  header.replaceChildren();
+  const heroCopy = el('div', 'workbench-marketing-hero-copy');
+  const eyebrow = el('div', 'workbench-marketing-eyebrow');
+  const logoWrap = el('span', 'workbench-landing-logo-wrap');
+  const logo = el('img', 'workbench-landing-logo');
+  logo.id = 'workbenchLandingLogo';
+  logo.src = chrome.runtime.getURL('icons/icon-32.png');
+  logo.alt = '';
+  logo.width = 32;
+  logo.height = 32;
+  logoWrap.appendChild(logo);
+  eyebrow.appendChild(logoWrap);
+  eyebrow.appendChild(el('span', '', t('workbench.marketing.eyebrow')));
+  heroCopy.appendChild(eyebrow);
+  const title = el('h1', 'app-landing-title workbench-marketing-title', t('workbench.marketing.title'));
+  title.id = 'appLandingHeading';
+  heroCopy.appendChild(title);
+  heroCopy.appendChild(el('p', 'app-landing-lead workbench-marketing-lead', t('workbench.marketing.subtitle')));
+
+  const actions = el('div', 'workbench-marketing-actions');
+  const compare = createMarketingButton(
+    'workbenchMarketingPrimaryCta', 'workbench.marketing.primary', 'arrows-diff',
+    'is-primary', openComparatorFromLanding
+  );
+  compare.dataset.marketingAction = 'compare';
+  actions.appendChild(compare);
+  actions.appendChild(createMarketingButton(
+    'workbenchMarketingExploreCta', 'workbench.marketing.secondary', ACTION_ICONS.forward,
+    'is-secondary', () => {
+      document.getElementById('workbenchCapabilities')?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'start'
+      });
+    }
+  ));
+  heroCopy.appendChild(actions);
+  heroCopy.appendChild(createMarketingSearchButton('workbench-marketing-search--hero'));
+
+  const chips = el('div', 'workbench-marketing-chips');
+  for (const [iconName, labelKey] of [
+    ['building-factory-2', 'workbench.marketing.chip.environments'],
+    ['arrows-diff', 'workbench.marketing.chip.comparison'],
+    ['shield-check', 'workbench.marketing.chip.control']
+  ]) {
+    const chip = el('span', 'workbench-marketing-chip');
+    chip.appendChild(createIcon(iconName, { size: 16 }));
+    chip.appendChild(el('span', '', t(labelKey)));
+    chips.appendChild(chip);
+  }
+  heroCopy.appendChild(chips);
+  header.appendChild(heroCopy);
+  header.appendChild(createMarketingPreview());
+
+  const capabilities = el('section', 'workbench-marketing-section workbench-capabilities');
+  capabilities.id = 'workbenchCapabilities';
+  capabilities.setAttribute('aria-labelledby', 'workbenchCapabilitiesTitle');
+  const capabilitiesHeader = el('div', 'workbench-marketing-section-header');
+  const capabilitiesTitle = el('h2', '', t('workbench.marketing.capabilities.title'));
+  capabilitiesTitle.id = 'workbenchCapabilitiesTitle';
+  capabilitiesHeader.appendChild(capabilitiesTitle);
+  capabilitiesHeader.appendChild(el('p', '', t('workbench.marketing.capabilities.lead')));
+  capabilities.appendChild(capabilitiesHeader);
+  const capabilityGrid = el('div', 'workbench-capability-grid');
+  capabilityGrid.id = 'workbenchCapabilityGrid';
+  capabilities.appendChild(capabilityGrid);
+  inner.insertBefore(capabilities, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
+
+  const workflow = el('section', 'workbench-marketing-section workbench-workflow');
+  workflow.setAttribute('aria-labelledby', 'workbenchWorkflowTitle');
+  const workflowHeader = el('div', 'workbench-marketing-section-header');
+  const workflowTitle = el('h2', '', t('workbench.marketing.workflow.title'));
+  workflowTitle.id = 'workbenchWorkflowTitle';
+  workflowHeader.appendChild(workflowTitle);
+  workflowHeader.appendChild(el('p', '', t('workbench.marketing.workflow.lead')));
+  workflow.appendChild(workflowHeader);
+  const steps = el('ol', 'workbench-workflow-steps');
+  MARKETING_STEPS.forEach((step, index) => {
+    const item = el('li', 'workbench-workflow-step');
+    const marker = el('span', 'workbench-workflow-marker');
+    marker.appendChild(el('span', 'workbench-workflow-number', String(index + 1).padStart(2, '0')));
+    marker.appendChild(createIcon(step.icon, { size: 24 }));
+    item.appendChild(marker);
+    item.appendChild(el('h3', '', t(step.titleKey)));
+    item.appendChild(el('p', '', t(step.descriptionKey)));
+    steps.appendChild(item);
   });
+  workflow.appendChild(steps);
+  inner.insertBefore(workflow, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
+
+  const trust = el('aside', 'workbench-trust-band');
+  trust.setAttribute('aria-labelledby', 'workbenchTrustTitle');
+  const trustCopy = el('div', 'workbench-trust-copy');
+  const trustTitle = el('h2', '', t('workbench.marketing.trust.title'));
+  trustTitle.id = 'workbenchTrustTitle';
+  trustCopy.appendChild(trustTitle);
+  trustCopy.appendChild(el('p', '', t('workbench.marketing.trust.lead')));
+  trust.appendChild(trustCopy);
+  const trustItems = el('div', 'workbench-trust-items');
+  for (const item of MARKETING_TRUST_ITEMS) {
+    const badge = el('span', `workbench-trust-badge workbench-trust-badge--${item.tone}`);
+    badge.appendChild(createIcon(item.icon, { size: 18 }));
+    badge.appendChild(el('span', '', t(item.labelKey)));
+    trustItems.appendChild(badge);
+  }
+  trust.appendChild(trustItems);
+  inner.insertBefore(trust, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
+
+  const finalCta = el('section', 'workbench-final-cta');
+  finalCta.setAttribute('aria-labelledby', 'workbenchFinalCtaTitle');
+  const finalCopy = el('div', 'workbench-final-cta-copy');
+  const finalTitle = el('h2', '', t('workbench.marketing.final.title'));
+  finalTitle.id = 'workbenchFinalCtaTitle';
+  finalCopy.appendChild(finalTitle);
+  finalCopy.appendChild(el('p', '', t('workbench.marketing.final.lead')));
+  finalCta.appendChild(finalCopy);
+  const finalActions = el('div', 'workbench-final-cta-actions');
+  const finalCompare = createMarketingButton(
+    'workbenchMarketingFinalCompare', 'workbench.marketing.primary', 'arrows-diff',
+    'is-primary', openComparatorFromLanding
+  );
+  finalCompare.dataset.marketingAction = 'compare';
+  finalActions.appendChild(finalCompare);
+  finalActions.appendChild(createMarketingSearchButton('workbench-marketing-search--compact'));
+  finalCta.appendChild(finalActions);
+  inner.insertBefore(finalCta, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
+
+  renderMarketingCapabilities();
 }
 
 function decorateV2Surfaces() {
@@ -840,9 +1033,10 @@ export async function setupWorkbenchShell() {
   decorateV2Surfaces();
 
   const editor = document.getElementById('editorContainer');
-  if (!editor) return;
+  const content = document.querySelector('.content');
+  if (!editor || !content) return;
   const shell = createPrimaryNavigation();
-  editor.insertBefore(shell, editor.firstChild);
+  content.insertBefore(shell, editor);
   initialized = true;
   document.body.dataset.workbenchSubbar = 'closed';
   syncFromLegacyNavigation();

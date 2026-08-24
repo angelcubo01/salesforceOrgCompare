@@ -17,7 +17,7 @@ export const WORKBENCH_CATEGORIES = Object.freeze([
     id: 'development', labelKey: 'workbench.category.development', icon: CATEGORY_ICONS.development,
     workspaceIds: Object.freeze([
       'apex-quality', 'code-studio', 'anonymous-apex', 'query-explorer',
-      'rest-explorer', 'diagnostics', 'event-monitor'
+      'rest-explorer'
     ])
   },
   {
@@ -30,7 +30,7 @@ export const WORKBENCH_CATEGORIES = Object.freeze([
   {
     id: 'monitoring', labelKey: 'workbench.category.monitoring', icon: CATEGORY_ICONS.operations,
     workspaceIds: Object.freeze([
-      'org-environments', 'org-limits', 'deploy-status', 'bulk-job-monitor',
+      'diagnostics', 'event-monitor', 'org-environments', 'org-limits', 'deploy-status', 'bulk-job-monitor',
       'setup-audit', 'field-history'
     ])
   },
@@ -104,7 +104,7 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     tabs: [tab('main', 'workbench.tab.rest', 'RestExplorer', 'development', 'restExplorerPanel', 'single', 'write')]
   }),
   workspace({
-    id: 'diagnostics', categoryId: 'development', labelKey: 'workbench.workspace.diagnostics',
+    id: 'diagnostics', categoryId: 'monitoring', labelKey: 'workbench.workspace.diagnostics',
     descriptionKey: 'workbench.workspace.diagnosticsDescription', icon: 'file-search', defaultTabId: 'logs',
     aliases: ['debug'], keywords: ['logs', 'trace flags', 'trazas'],
     tabs: [
@@ -113,7 +113,7 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     ]
   }),
   workspace({
-    id: 'event-monitor', categoryId: 'development', labelKey: 'workbench.workspace.eventMonitor',
+    id: 'event-monitor', categoryId: 'monitoring', labelKey: 'workbench.workspace.eventMonitor',
     descriptionKey: 'workbench.workspace.eventMonitorDescription', icon: 'activity',
     aliases: ['events'], keywords: ['streaming', 'platform event'],
     tabs: [tab('main', 'workbench.tab.events', 'EventMonitor', 'development', 'eventMonitorPanel')]

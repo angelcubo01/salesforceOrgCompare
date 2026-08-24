@@ -21,6 +21,15 @@ test.beforeEach(async ({ extensionWorker }) => {
   await setLocalStorage(extensionWorker, {
     sfocUiMode: 'v2',
     soc_language: 'es',
+    sfocFeatureControlsCache: {
+      version: 1,
+      rootVersionTarget: null,
+      global: null,
+      modes: {},
+      tools: {},
+      metadataTypes: {},
+      actions: {}
+    },
     sfocToolRecents: { recents: [], pins: [] },
     sfocWorkbenchPrefs: { panelExpanded: true, panelPinned: false, lastTabByWorkspace: {} },
     sfocOnboardingSeen: {
@@ -67,6 +76,11 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   await expect(v2.locator('.workbench-category-button')).toHaveCount(6);
   await expect(v2.locator('#workbenchPanel, #workbenchRail, #workbenchPanelBackdrop')).toHaveCount(0);
   await expect(v2.locator('#workbenchLandingCategories')).toHaveCount(0);
+  await expect(v2.locator('#workbenchMarketingHero')).toBeVisible();
+  await expect(v2.locator('#workbenchMarketingHero')).toContainText('Tus orgs Salesforce, bajo control.');
+  await expect(v2.locator('#workbenchCapabilityGrid .workbench-capability-card')).toHaveCount(6);
+  await expect(v2.locator('.workbench-workflow-step')).toHaveCount(3);
+  await expect(v2.locator('.workbench-trust-badge')).toHaveCount(4);
 
   await v2.keyboard.press('Control+K');
   await expect(v2.locator('#quickOpenOverlay')).toHaveAttribute('aria-hidden', 'false');
@@ -79,11 +93,45 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   expect(sharedPrefs.sfocWorkbenchPrefs.panelExpanded).toBe(true);
 });
 
+test('la Home adapta sus capacidades a sfoc_feature_controls', async ({ extensionContext: context, extensionId, extensionWorker }) => {
+  const hiddenOperations = [
+    'DebugLogBrowser', 'EventMonitor', 'EnvironmentStatus', 'OrgLimits', 'DeployStatus',
+    'BulkJobMonitor', 'SetupAuditTrail', 'FieldHistory', 'DataWorkbench'
+  ];
+  await setLocalStorage(extensionWorker, {
+    sfocFeatureControlsCache: {
+      version: 1,
+      rootVersionTarget: null,
+      global: null,
+      modes: {},
+      tools: Object.fromEntries(hiddenOperations.map((toolId) => [toolId, { hidden: true }])),
+      metadataTypes: {},
+      actions: {}
+    }
+  });
+
+  const page = await openExtensionPage(context, extensionId, 'code/code.html');
+  await waitForCodeBoot(page);
+  await expect(page.locator('[data-capability-id="comparison"]')).toBeVisible();
+  await expect(page.locator('[data-capability-id="operations"]')).toHaveCount(0);
+  await expect(page.locator('#workbenchCategory-monitoring')).toBeHidden();
+  await expect(page.locator('#workbenchCapabilityGrid .workbench-capability-card')).toHaveCount(5);
+});
+
 test('barra superior, subbarra, tabs y command palette son operables por teclado', async ({ extensionContext: context, extensionId }) => {
   const page = await openExtensionPage(context, extensionId, 'code/code.html');
   await waitForCodeBoot(page);
   await expect(page.locator('#workbenchShell')).toBeVisible();
   await expect(page.locator('.workbench-category-button')).toHaveCount(6);
+
+  await page.locator('#workbenchMarketingPrimaryCta').click();
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'comparator');
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('#workbenchOrgContext')).toHaveCount(0);
+  await expect(page.locator('.org-dropdown-left .org-cd-trigger')).toBeVisible();
+  await expect(page.locator('.org-dropdown-right .org-cd-trigger')).toBeVisible();
+  await page.locator('#workbenchCategory-home').click();
+  await expect(page.locator('#workbenchMarketingHero')).toBeVisible();
 
   const comparator = page.locator('#workbenchCategory-comparator');
   await comparator.click();
@@ -99,7 +147,7 @@ test('barra superior, subbarra, tabs y command palette son operables por teclado
   const development = page.locator('#workbenchCategory-development');
   await development.click();
   await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'false');
-  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveCount(7);
+  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveCount(5);
   const apexWorkspaceButton = page.getByRole('button', { name: /Calidad Apex/ });
   await apexWorkspaceButton.click();
   await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
@@ -244,6 +292,8 @@ test('reflow, tema y WCAG A/AA del shell', async ({ extensionContext: context, e
   await page.setViewportSize({ width: 1024, height: 768 });
   await expect(page.locator('#workbenchShell')).toBeVisible();
   await expect(page.locator('#workbenchOpenCommandPalette')).toHaveCount(0);
+  await page.locator('#workbenchCategory-home').click();
+  await expect(page.locator('#workbenchMarketingHero')).toBeVisible();
 
   // 640 CSS px reproduce el reflow de un viewport de 1280 px con zoom al 200 %.
   await page.setViewportSize({ width: 640, height: 450 });
@@ -251,6 +301,12 @@ test('reflow, tema y WCAG A/AA del shell', async ({ extensionContext: context, e
     shell.getBoundingClientRect().right <= window.innerWidth
   ));
   expect(shellFitsViewport).toBe(true);
+  const landingFitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  expect(landingFitsViewport).toBe(true);
+  const primaryCtaHeight = await page.locator('#workbenchMarketingPrimaryCta').evaluate((button) => (
+    button.getBoundingClientRect().height
+  ));
+  expect(primaryCtaHeight).toBeGreaterThanOrEqual(44);
   const categoryBarScrolls = await page.locator('#workbenchCategoryNav').evaluate((nav) => nav.scrollWidth > nav.clientWidth);
   expect(categoryBarScrolls).toBe(true);
   await page.locator('#workbenchCategory-development').click();
@@ -284,6 +340,7 @@ test('reflow, tema y WCAG A/AA del shell', async ({ extensionContext: context, e
     .withTags(['wcag2a', 'wcag2aa'])
     .include('#workbenchShell')
     .include('#workbenchContextHeader')
+    .include('#appLandingPanel')
     .analyze();
   expect(results.violations).toEqual([]);
 });
