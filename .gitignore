@@ -40,6 +40,12 @@ node_modules/.vite/
 
 # Internal documentation
 docs/*
+!docs/UI_V2_NAVIGATION_REFRESH.md
+!docs/visuals/
+docs/visuals/*
+!docs/visuals/v2-home-dark-1280.png
+!docs/visuals/v2-home-light-1280.png
+!docs/visuals/v2-navigation-development-dark-1280.png
 
 # i18n / script generation artifacts
 scripts/_block*.txt

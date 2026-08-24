@@ -1,10 +1,5 @@
 import { state } from '../core/state.js';
-import {
-  getToolRecentsSnapshot,
-  isToolPinned,
-  loadToolRecents,
-  toggleToolPin
-} from '../core/toolRecents.js';
+import { loadToolRecents } from '../core/toolRecents.js';
 import {
   APP_NAV_MODE_HOME,
   TOOL_I18N,
@@ -22,16 +17,15 @@ import { ACTION_ICONS, CATEGORY_ICONS, STATE_ICONS, createIcon } from './iconReg
 import {
   WORKBENCH_CATEGORIES,
   WORKBENCH_WORKSPACES,
+  getCategoryById,
   getSearchText,
   getTabById,
-  getToolIcon,
   getWorkspaceById,
   getWorkspaceRouteForTool
 } from './workspaceRegistry.js';
 import { loadWorkbenchPrefs, saveWorkbenchPrefs } from './workbenchPrefs.js';
 
 const READ_ONLY_STORAGE_KEY = 'sfocOrgReadOnlyById';
-const COMPACT_QUERY = '(max-width: 1100px)';
 
 const HEADER_ACTION_TARGETS = Object.freeze({
   ApexTests: ['apexTestsRunBtn'],
@@ -54,24 +48,23 @@ const HEADER_ACTION_TARGETS = Object.freeze({
 });
 
 let prefs = null;
-let selectedCategoryId = 'home';
+let activeCategoryId = 'home';
+let openCategoryId = null;
 let activeWorkspaceId = null;
 let activeTabId = null;
 let pendingHistorySelection = null;
 let readOnlyByOrgId = {};
-let panelQuery = '';
 let initialized = false;
-let compactMedia = null;
 let headerActionObservers = [];
 let headerRenderSignature = '';
-let panelRenderSignature = '';
-let categoryBrowseOverride = false;
+let navigationRenderSignature = '';
 let workbenchNavigationDepth = 0;
 let navigationGeneration = 0;
 let prefsWriteQueue = Promise.resolve();
 let availabilityConfig = null;
 let availabilityLang = '';
 let availabilityCache = new Map();
+let lastInputWasKeyboard = false;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -119,325 +112,291 @@ function tabVisibility(tabInfo) {
   return result;
 }
 
-function visibleTabs(workspace) {
-  return workspace.tabs.filter((tabInfo) => tabVisibility(tabInfo).visible);
+function visibleTabs(item) {
+  return item.tabs.filter((tabInfo) => tabVisibility(tabInfo).visible);
 }
 
 function visibleWorkspaces(categoryId = null) {
-  return WORKBENCH_WORKSPACES.filter((workspace) => {
-    if (categoryId && workspace.categoryId !== categoryId) return false;
-    return visibleTabs(workspace).length > 0;
-  });
+  if (categoryId) {
+    const category = getCategoryById(categoryId);
+    return (category?.workspaceIds || [])
+      .map((workspaceId) => getWorkspaceById(workspaceId))
+      .filter((item) => item && visibleTabs(item).length > 0);
+  }
+  return WORKBENCH_CATEGORIES
+    .filter((category) => !category.direct)
+    .flatMap((category) => visibleWorkspaces(category.id));
 }
 
 function categoryLabel(categoryId) {
-  const category = WORKBENCH_CATEGORIES.find(({ id }) => id === categoryId);
+  const category = getCategoryById(categoryId);
   return category ? t(category.labelKey) : '';
 }
 
 function workspaceLabel(workspaceId) {
-  const workspace = getWorkspaceById(workspaceId);
-  return workspace ? t(workspace.labelKey) : '';
-}
-
-function tabLabel(workspaceId, tabId) {
-  const tabInfo = getTabById(workspaceId, tabId);
-  return tabInfo ? t(tabInfo.labelKey) : '';
-}
-
-function isCompact() {
-  return compactMedia?.matches === true;
-}
-
-function effectivePanelExpanded() {
-  if (!prefs?.panelExpanded) return false;
-  if (activeWorkspaceId === 'comparator' && !prefs.panelPinned) return false;
-  return true;
-}
-
-function syncShellLayoutAttributes() {
-  const expanded = effectivePanelExpanded();
-  document.body.dataset.workbenchPanel = expanded ? 'expanded' : 'collapsed';
-  document.body.dataset.workbenchPanelPinned = prefs?.panelPinned ? 'true' : 'false';
-  document.body.dataset.workbenchCompact = isCompact() ? 'true' : 'false';
-  const panel = document.getElementById('workbenchPanel');
-  const railToggle = document.getElementById('workbenchRailPanelToggle');
-  const backdrop = document.getElementById('workbenchPanelBackdrop');
-  panel?.setAttribute('aria-hidden', expanded ? 'false' : 'true');
-  railToggle?.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  backdrop?.classList.toggle('hidden', !(expanded && isCompact()));
-}
-
-async function updatePrefs(patch) {
-  prefs = await saveWorkbenchPrefs({ ...prefs, ...patch });
-  syncShellLayoutAttributes();
-}
-
-async function setPanelExpanded(expanded) {
-  await updatePrefs({ panelExpanded: !!expanded });
-  if (expanded) requestAnimationFrame(() => document.getElementById('workbenchToolSearch')?.focus());
-}
-
-function createRail() {
-  const rail = el('nav', 'workbench-rail');
-  rail.id = 'workbenchRail';
-  rail.setAttribute('aria-label', t('workbench.rail.label'));
-
-  const brand = el('div', 'workbench-rail-brand');
-  const logo = /** @type {HTMLImageElement} */ (el('img', 'workbench-rail-logo'));
-  logo.src = chrome.runtime.getURL('icons/icon-32.png');
-  logo.alt = '';
-  logo.width = 28;
-  logo.height = 28;
-  brand.appendChild(logo);
-  rail.appendChild(brand);
-
-  const items = el('div', 'workbench-rail-items');
-  const visibleCategoryIds = new Set(visibleWorkspaces().map(({ categoryId }) => categoryId));
-  for (const category of WORKBENCH_CATEGORIES) {
-    if (category.id !== 'home' && !visibleCategoryIds.has(category.id)) continue;
-    const label = t(category.labelKey);
-    const button = makeIconButton(`workbenchRail-${category.id}`, category.icon, label, 'workbench-rail-button');
-    button.dataset.categoryId = category.id;
-    button.setAttribute('aria-controls', 'workbenchPanel');
-    button.appendChild(el('span', 'workbench-rail-label', label));
-    button.addEventListener('click', () => void selectCategory(category.id));
-    items.appendChild(button);
-  }
-  rail.appendChild(items);
-
-  const foot = el('div', 'workbench-rail-foot');
-  const paletteLabel = `${t('workbench.command.open')} (${navigator.platform?.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl+K'})`;
-  const palette = makeIconButton('workbenchOpenCommandPalette', ACTION_ICONS.command, paletteLabel, 'workbench-rail-button');
-  palette.addEventListener('click', () => document.dispatchEvent(new CustomEvent('sfoc:open-command-palette')));
-  foot.appendChild(palette);
-  const panelToggle = makeIconButton('workbenchRailPanelToggle', ACTION_ICONS.expandPanel, t('workbench.panel.open'), 'workbench-rail-button');
-  panelToggle.setAttribute('aria-controls', 'workbenchPanel');
-  panelToggle.addEventListener('click', () => void setPanelExpanded(!effectivePanelExpanded()));
-  foot.appendChild(panelToggle);
-  rail.appendChild(foot);
-  return rail;
-}
-
-async function selectCategory(categoryId) {
-  selectedCategoryId = categoryId;
-  categoryBrowseOverride = categoryId !== 'home' && categoryId !== 'comparator';
-  if (categoryId === 'home') {
-    await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated: true });
-    await setPanelExpanded(true);
-    return;
-  }
-  if (categoryId === 'comparator') {
-    await navigateToWorkspaceTab('comparator', 'main', { userInitiated: true });
-    return;
-  }
-  if (!prefs.panelExpanded) await updatePrefs({ panelExpanded: true });
-  renderWorkbenchShell();
-}
-
-function createSectionHeading(key) {
-  return el('h3', 'workbench-panel-section-title', t(key));
+  const item = getWorkspaceById(workspaceId);
+  return item ? t(item.labelKey) : '';
 }
 
 function toolLabel(toolId) {
   return t(TOOL_I18N[toolId] || toolId);
 }
 
-function createToolLink(toolId, opts = {}) {
-  const route = getWorkspaceRouteForTool(toolId);
-  if (!route) return null;
-  const tabInfo = getTabById(route.workspaceId, route.tabId);
-  if (!tabInfo) return null;
-  const availability = tabVisibility(tabInfo);
-  if (!availability.visible) return null;
-  const row = el('div', 'workbench-tool-row');
-  const button = el('button', 'workbench-tool-link');
-  button.type = 'button';
-  button.dataset.toolId = toolId;
-  button.disabled = availability.disabled;
-  button.setAttribute('aria-disabled', availability.disabled ? 'true' : 'false');
-  if (availability.message) button.title = availability.message;
-  button.appendChild(createIcon(getToolIcon(toolId), { size: 16 }));
-  button.appendChild(el('span', 'workbench-tool-link-label', opts.label || toolLabel(toolId)));
-  if (availability.disabled) {
-    button.appendChild(createIcon(STATE_ICONS.locked, { size: 16, className: 'workbench-tool-lock' }));
-    const reason = el('span', 'sr-only', availability.message || t('workbench.feature.blocked'));
-    button.appendChild(reason);
-  }
-  button.addEventListener('click', () => {
-    if (availability.disabled) {
-      if (availability.message) showToast(availability.message, 'warn', { bypassCooldown: true });
-      return;
-    }
-    void navigateToWorkspaceTab(route.workspaceId, route.tabId, { userInitiated: true });
-  });
-  row.appendChild(button);
-
-  if (opts.favoriteControl !== false) {
-    const favoriteLabel = isToolPinned(toolId)
-      ? t('workbench.favorites.remove', { tool: toolLabel(toolId) })
-      : t('workbench.favorites.add', { tool: toolLabel(toolId) });
-    const favorite = makeIconButton('', ACTION_ICONS.favorite, favoriteLabel, 'workbench-favorite-button');
-    favorite.setAttribute('aria-pressed', isToolPinned(toolId) ? 'true' : 'false');
-    favorite.addEventListener('click', async () => {
-      await toggleToolPin(toolId);
-    });
-    row.appendChild(favorite);
-  }
-  return row;
+function translatedDescription(item) {
+  if (!item?.descriptionKey) return '';
+  const value = t(item.descriptionKey);
+  return value === item.descriptionKey ? '' : value;
 }
 
-function createWorkspaceButton(workspace) {
-  const button = el('button', 'workbench-workspace-button');
-  button.type = 'button';
-  button.dataset.workspaceId = workspace.id;
-  button.setAttribute('aria-current', workspace.id === activeWorkspaceId ? 'page' : 'false');
-  button.appendChild(createIcon(workspace.icon, { size: 20 }));
-  button.appendChild(el('span', 'workbench-workspace-label', t(workspace.labelKey)));
-  const preferredTabId = prefs.lastTabByWorkspace[workspace.id];
+function preferredTabForWorkspace(item) {
   const candidates = [
-    preferredTabId,
-    workspace.defaultTabId,
-    ...workspace.tabs.map(({ id }) => id)
+    prefs?.lastTabByWorkspace?.[item.id],
+    item.defaultTabId,
+    ...item.tabs.map(({ id }) => id)
   ].filter((id, index, all) => id && all.indexOf(id) === index);
-  const targetTab = candidates
-    .map((id) => getTabById(workspace.id, id))
-    .find((tabInfo) => tabInfo && tabVisibility(tabInfo).visible && !tabVisibility(tabInfo).disabled);
-  const blockedTab = visibleTabs(workspace).find((tabInfo) => tabVisibility(tabInfo).disabled);
+  return candidates
+    .map((id) => getTabById(item.id, id))
+    .find((tabInfo) => tabInfo && tabVisibility(tabInfo).visible && !tabVisibility(tabInfo).disabled) || null;
+}
+
+function blockedWorkspaceMessage(item) {
+  const blocked = visibleTabs(item).find((tabInfo) => tabVisibility(tabInfo).disabled);
+  return blocked ? tabVisibility(blocked).message : '';
+}
+
+function setSubbarAccessibility(open) {
+  const region = document.getElementById('workbenchSubbarRegion');
+  if (!region) return;
+  region.classList.toggle('is-open', open);
+  region.setAttribute('aria-hidden', open ? 'false' : 'true');
+  region.inert = !open;
+  document.body.dataset.workbenchSubbar = open ? 'open' : 'closed';
+}
+
+function closeToolSubbar({ restoreFocus = false } = {}) {
+  const triggerId = openCategoryId;
+  openCategoryId = null;
+  setSubbarAccessibility(false);
+  syncCategoryButtons();
+  if (restoreFocus && triggerId) {
+    requestAnimationFrame(() => document.getElementById(`workbenchCategory-${triggerId}`)?.focus());
+  }
+}
+
+function moveFocus(button, selector, key) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(key)) return false;
+  const container = button.parentElement;
+  const buttons = [...(container?.querySelectorAll(selector) || [])]
+    .filter((candidate) => !candidate.hidden && !candidate.disabled);
+  if (!buttons.length) return false;
+  let index = Math.max(0, buttons.indexOf(button));
+  if (key === 'ArrowRight') index = (index + 1) % buttons.length;
+  if (key === 'ArrowLeft') index = (index - 1 + buttons.length) % buttons.length;
+  if (key === 'Home') index = 0;
+  if (key === 'End') index = buttons.length - 1;
+  buttons[index]?.focus();
+  return true;
+}
+
+function handleCategoryKeydown(event) {
+  if (moveFocus(event.currentTarget, '.workbench-category-button', event.key)) event.preventDefault();
+}
+
+function handleToolNavKeydown(event) {
+  if (moveFocus(event.currentTarget, '.workbench-tool-button', event.key)) event.preventDefault();
+}
+
+async function selectHome() {
+  closeToolSubbar();
+  await navigateToModeAndTool(APP_NAV_MODE_HOME, '', { userInitiated: true });
+}
+
+async function selectDirectWorkspace(category, keyboardInitiated = false) {
+  closeToolSubbar();
+  const item = getWorkspaceById(category.directWorkspaceId);
+  const targetTab = item ? preferredTabForWorkspace(item) : null;
+  if (!item || !targetTab) {
+    const message = item ? blockedWorkspaceMessage(item) : '';
+    if (message) showToast(message, 'warn', { bypassCooldown: true });
+    return;
+  }
+  const navigated = await navigateToWorkspaceTab(item.id, targetTab.id, { userInitiated: true });
+  if (navigated && keyboardInitiated) {
+    requestAnimationFrame(() => document.getElementById('workbenchContextTitle')?.focus({ preventScroll: true }));
+  }
+}
+
+function openCategory(categoryId, { focusFirstTool = false } = {}) {
+  if (!visibleWorkspaces(categoryId).length) return;
+  if (openCategoryId === categoryId) {
+    closeToolSubbar({ restoreFocus: true });
+    return;
+  }
+  openCategoryId = categoryId;
+  renderToolSubbar();
+  syncCategoryButtons();
+  setSubbarAccessibility(true);
+  if (focusFirstTool) {
+    requestAnimationFrame(() => document.querySelector('#workbenchToolSubbar .workbench-tool-button:not(:disabled)')?.focus());
+  }
+}
+
+function createCategoryButton(category) {
+  const label = t(category.labelKey);
+  const button = el('button', 'workbench-category-button');
+  button.type = 'button';
+  button.id = `workbenchCategory-${category.id}`;
+  button.dataset.categoryId = category.id;
+  button.appendChild(createIcon(category.icon, { size: 20 }));
+  button.appendChild(el('span', 'workbench-category-label', label));
+  button.title = label;
+  if (category.direct) {
+    button.addEventListener('click', () => void selectHome());
+  } else if (category.directWorkspaceId) {
+    button.addEventListener('click', (event) => {
+      void selectDirectWorkspace(category, event.detail === 0 || lastInputWasKeyboard);
+    });
+  } else {
+    button.setAttribute('aria-controls', 'workbenchSubbarRegion');
+    button.setAttribute('aria-expanded', 'false');
+    button.addEventListener('click', () => openCategory(category.id));
+  }
+  button.addEventListener('keydown', handleCategoryKeydown);
+  return button;
+}
+
+function createPrimaryNavigation() {
+  const shell = el('div', 'workbench-shell');
+  shell.id = 'workbenchShell';
+
+  const primary = el('div', 'workbench-primary-bar');
+  const nav = el('nav', 'workbench-category-nav');
+  nav.id = 'workbenchCategoryNav';
+  nav.setAttribute('aria-label', t('workbench.navigation.label'));
+  for (const category of WORKBENCH_CATEGORIES) nav.appendChild(createCategoryButton(category));
+  primary.appendChild(nav);
+
+  shell.appendChild(primary);
+
+  const region = el('div', 'workbench-subbar-region');
+  region.id = 'workbenchSubbarRegion';
+  region.setAttribute('aria-hidden', 'true');
+  region.inert = true;
+  const inner = el('div', 'workbench-subbar-overflow');
+  const toolNav = el('nav', 'workbench-tool-subbar');
+  toolNav.id = 'workbenchToolSubbar';
+  toolNav.setAttribute('aria-label', t('workbench.subbar.label'));
+  inner.appendChild(toolNav);
+  region.appendChild(inner);
+  shell.appendChild(region);
+  return shell;
+}
+
+async function activateWorkspaceFromSubbar(item, targetTab, keyboardInitiated) {
+  const navigated = await navigateToWorkspaceTab(item.id, targetTab.id, { userInitiated: true });
+  if (!navigated) return;
+  closeToolSubbar();
+  if (keyboardInitiated) {
+    requestAnimationFrame(() => document.getElementById('workbenchContextTitle')?.focus({ preventScroll: true }));
+  }
+}
+
+function createWorkspaceNavButton(item) {
+  const targetTab = preferredTabForWorkspace(item);
+  const message = targetTab ? '' : blockedWorkspaceMessage(item);
+  const description = message || translatedDescription(item) || t(item.labelKey);
+  const button = el('button', 'workbench-tool-button');
+  button.type = 'button';
+  button.dataset.workspaceId = item.id;
+  button.title = description;
+  button.disabled = !targetTab;
+  button.setAttribute('aria-disabled', targetTab ? 'false' : 'true');
+  button.setAttribute('aria-current', item.id === activeWorkspaceId ? 'page' : 'false');
+  button.appendChild(createIcon(item.icon, { size: 20 }));
+  const copy = el('span', 'workbench-tool-copy');
+  copy.appendChild(el('span', 'workbench-tool-label', t(item.labelKey)));
+  if (visibleTabs(item).length > 1) {
+    const views = el('span', 'workbench-tool-views', t('workbench.subbar.views', { count: visibleTabs(item).length }));
+    copy.appendChild(views);
+  }
+  button.appendChild(copy);
   if (!targetTab) {
-    const message = blockedTab ? tabVisibility(blockedTab).message : '';
-    button.disabled = true;
-    button.setAttribute('aria-disabled', 'true');
-    if (message) button.title = message;
     button.appendChild(createIcon(STATE_ICONS.locked, { size: 16, className: 'workbench-tool-lock' }));
     if (message) button.appendChild(el('span', 'sr-only', message));
   }
-  button.addEventListener('click', () => {
-    if (targetTab) void navigateToWorkspaceTab(workspace.id, targetTab.id, { userInitiated: true });
+  button.addEventListener('keydown', handleToolNavKeydown);
+  button.addEventListener('click', (event) => {
+    if (!targetTab) return;
+    void activateWorkspaceFromSubbar(item, targetTab, event.detail === 0 || lastInputWasKeyboard);
   });
   return button;
 }
 
-function appendWorkspaceList(host) {
-  const section = el('section', 'workbench-panel-section workbench-panel-section--workspaces');
-  section.appendChild(createSectionHeading('workbench.panel.workspaces'));
-  const list = el('div', 'workbench-workspace-list');
-  const normalized = panelQuery.trim().toLocaleLowerCase();
-  let matches = 0;
-  for (const workspace of visibleWorkspaces(selectedCategoryId === 'home' ? null : selectedCategoryId)) {
-    if (normalized && !getSearchText(workspace, t).includes(normalized)) continue;
-    list.appendChild(createWorkspaceButton(workspace));
-    if (workspace.toolAliases?.length && !normalized && selectedCategoryId === workspace.categoryId) {
-      for (const alias of workspace.toolAliases) {
-        const canonicalWorkspace = getWorkspaceById(alias.workspaceId);
-        const row = createToolLink(alias.toolId, {
-          label: `${toolLabel(alias.toolId)} · ${canonicalWorkspace ? t(canonicalWorkspace.labelKey) : ''}`
-        });
-        if (row) list.appendChild(row);
-      }
-    }
-    if (normalized) {
-      for (const tabInfo of visibleTabs(workspace)) {
-        const haystack = `${t(tabInfo.labelKey)} ${toolLabel(tabInfo.toolId)} ${tabInfo.toolId}`.toLocaleLowerCase();
-        if (!haystack.includes(normalized)) continue;
-        const toolRow = createToolLink(tabInfo.toolId, { label: `${t(workspace.labelKey)} · ${t(tabInfo.labelKey)}` });
-        if (toolRow) list.appendChild(toolRow);
-      }
-    }
-    matches++;
+function renderToolSubbar() {
+  const host = document.getElementById('workbenchToolSubbar');
+  if (!host) return;
+  host.classList.add('is-switching');
+  host.replaceChildren();
+  if (openCategoryId) {
+    host.setAttribute('aria-label', t('workbench.subbar.categoryLabel', { category: categoryLabel(openCategoryId) }));
+    for (const item of visibleWorkspaces(openCategoryId)) host.appendChild(createWorkspaceNavButton(item));
   }
-  if (!matches) list.appendChild(el('p', 'workbench-panel-empty', t('workbench.search.empty')));
-  section.appendChild(list);
-  host.appendChild(section);
+  requestAnimationFrame(() => host.classList.remove('is-switching'));
 }
 
-function getPanelRenderSignature() {
-  const normalized = panelQuery.trim().toLocaleLowerCase();
-  const workspaces = visibleWorkspaces(selectedCategoryId === 'home' ? null : selectedCategoryId).map((workspace) => [
-    workspace.id,
-    visibleTabs(workspace).map((tabInfo) => {
-      const availability = tabVisibility(tabInfo);
-      return [tabInfo.id, availability.disabled, availability.message];
-    })
-  ]);
-  const pins = normalized ? getToolRecentsSnapshot().pins : null;
-  return JSON.stringify({ selectedCategoryId, normalized, workspaces, pins });
+function getNavigationSignature() {
+  return JSON.stringify(WORKBENCH_CATEGORIES.map((category) => [
+    category.id,
+    categoryLabel(category.id),
+    visibleWorkspaces(category.id).map((item) => [
+      item.id,
+      t(item.labelKey),
+      visibleTabs(item).map((tabInfo) => {
+        const availability = tabVisibility(tabInfo);
+        return [tabInfo.id, availability.disabled, availability.message];
+      })
+    ])
+  ]));
 }
 
-function syncActiveWorkspaceButtons() {
-  document.querySelectorAll('.workbench-workspace-button').forEach((button) => {
-    button.setAttribute('aria-current', button.getAttribute('data-workspace-id') === activeWorkspaceId ? 'page' : 'false');
-  });
-}
-
-export function renderWorkbenchPanel() {
-  const body = document.getElementById('workbenchPanelBody');
-  if (!body) return;
-  const signature = getPanelRenderSignature();
-  if (signature === panelRenderSignature) {
-    syncActiveWorkspaceButtons();
-    return;
-  }
-  panelRenderSignature = signature;
-  body.replaceChildren();
-  appendWorkspaceList(body);
-  syncActiveWorkspaceButtons();
-}
-
-function createPanel() {
-  const panel = el('aside', 'workbench-panel');
-  panel.id = 'workbenchPanel';
-  panel.setAttribute('aria-label', t('workbench.panel.label'));
-  const head = el('header', 'workbench-panel-head');
-  const titleWrap = el('div', 'workbench-panel-title-wrap');
-  titleWrap.appendChild(el('strong', 'workbench-panel-title', t('workbench.productName')));
-  titleWrap.appendChild(el('span', 'workbench-panel-subtitle', categoryLabel(selectedCategoryId)));
-  head.appendChild(titleWrap);
-  const controls = el('div', 'workbench-panel-controls');
-  const pin = makeIconButton('workbenchPanelPin', ACTION_ICONS.pin, t('workbench.panel.pin'), 'workbench-panel-control');
-  pin.setAttribute('aria-pressed', prefs.panelPinned ? 'true' : 'false');
-  pin.addEventListener('click', async () => {
-    await updatePrefs({ panelPinned: !prefs.panelPinned });
-    renderWorkbenchShell();
-  });
-  controls.appendChild(pin);
-  const close = makeIconButton('workbenchPanelClose', ACTION_ICONS.collapsePanel, t('workbench.panel.collapse'), 'workbench-panel-control');
-  close.addEventListener('click', () => void setPanelExpanded(false));
-  controls.appendChild(close);
-  head.appendChild(controls);
-  panel.appendChild(head);
-
-  const searchWrap = el('div', 'workbench-panel-search');
-  searchWrap.appendChild(createIcon(ACTION_ICONS.search, { size: 16 }));
-  const search = /** @type {HTMLInputElement} */ (el('input', 'workbench-panel-search-input'));
-  search.id = 'workbenchToolSearch';
-  search.type = 'search';
-  search.autocomplete = 'off';
-  search.placeholder = t('workbench.search.placeholder');
-  search.setAttribute('aria-label', t('workbench.search.label'));
-  search.setAttribute('aria-controls', 'workbenchPanelBody');
-  search.value = panelQuery;
-  search.addEventListener('input', () => {
-    panelQuery = search.value;
-    renderWorkbenchPanel();
-  });
-  search.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      if (search.value) {
-        panelQuery = '';
-        search.value = '';
-        renderWorkbenchPanel();
-      } else {
-        void setPanelExpanded(false);
-      }
+function syncCategoryButtons() {
+  for (const category of WORKBENCH_CATEGORIES) {
+    const button = document.getElementById(`workbenchCategory-${category.id}`);
+    if (!button) continue;
+    const visible = category.direct || visibleWorkspaces(category.id).length > 0;
+    button.hidden = !visible;
+    const current = category.id === activeCategoryId;
+    const open = category.id === openCategoryId;
+    button.classList.toggle('is-current', current);
+    button.classList.toggle('is-open', open);
+    button.setAttribute('aria-current', current ? 'page' : 'false');
+    if (category.directWorkspaceId) {
+      const item = getWorkspaceById(category.directWorkspaceId);
+      const targetTab = item ? preferredTabForWorkspace(item) : null;
+      const message = item && !targetTab ? blockedWorkspaceMessage(item) : '';
+      button.disabled = !targetTab;
+      button.setAttribute('aria-disabled', targetTab ? 'false' : 'true');
+      button.title = message || categoryLabel(category.id);
+      if (message) button.setAttribute('aria-description', message);
+      else button.removeAttribute('aria-description');
+    } else if (!category.direct) {
+      button.setAttribute('aria-expanded', open ? 'true' : 'false');
     }
-  });
-  searchWrap.appendChild(search);
-  panel.appendChild(searchWrap);
-  const body = el('div', 'workbench-panel-body');
-  body.id = 'workbenchPanelBody';
-  panel.appendChild(body);
-  return panel;
+  }
+}
+
+function renderWorkbenchNavigation() {
+  const signature = getNavigationSignature();
+  if (signature !== navigationRenderSignature) {
+    navigationRenderSignature = signature;
+    renderToolSubbar();
+  } else if (openCategoryId) {
+    document.querySelectorAll('.workbench-tool-button').forEach((button) => {
+      button.setAttribute('aria-current', button.dataset.workspaceId === activeWorkspaceId ? 'page' : 'false');
+    });
+  }
+  syncCategoryButtons();
+  setSubbarAccessibility(!!openCategoryId);
 }
 
 function selectedOrgIds(tabInfo) {
@@ -449,7 +408,7 @@ function selectedOrgIds(tabInfo) {
 
 function orgDisplayName(orgId) {
   const select = document.getElementById(state.leftOrgId === orgId ? 'leftOrg' : 'rightOrg');
-  const selectedText = /** @type {HTMLSelectElement | null} */ (select)?.selectedOptions?.[0]?.textContent?.trim();
+  const selectedText = select?.selectedOptions?.[0]?.textContent?.trim();
   if (selectedText) return selectedText;
   const org = state.orgsList.find((item) => item.id === orgId);
   return org?.label || t('workbench.org.unknown');
@@ -494,11 +453,12 @@ function actionIconForTarget(targetId) {
 }
 
 function createHeaderActionProxy(targetId) {
-  const target = /** @type {HTMLButtonElement | null} */ (document.getElementById(targetId));
+  const target = document.getElementById(targetId);
   if (!target) return null;
   const label = target.textContent?.trim() || target.getAttribute('aria-label') || target.title || t('workbench.action.open');
   const proxy = el('button', 'workbench-header-action');
   proxy.type = 'button';
+  proxy.title = label;
   proxy.appendChild(createIcon(actionIconForTarget(targetId), { size: 16 }));
   proxy.appendChild(el('span', '', label));
   const sync = () => {
@@ -516,23 +476,22 @@ function createHeaderActionProxy(targetId) {
 function createContextHeader() {
   const header = el('header', 'workbench-context-header');
   header.id = 'workbenchContextHeader';
-  header.addEventListener('click', (event) => event.stopPropagation());
   const main = el('div', 'workbench-context-main');
   const identity = el('div', 'workbench-context-identity');
   const breadcrumb = el('nav', 'workbench-breadcrumb');
   breadcrumb.setAttribute('aria-label', t('workbench.breadcrumb'));
-  const workspace = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
-  const category = categoryLabel(workspace?.categoryId || selectedCategoryId);
-  breadcrumb.appendChild(el('span', '', category));
+  const item = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
+  breadcrumb.appendChild(el('span', '', categoryLabel(item?.categoryId || activeCategoryId)));
   if (activeWorkspaceId) {
     breadcrumb.appendChild(el('span', 'workbench-breadcrumb-separator', '/'));
     breadcrumb.appendChild(el('span', '', workspaceLabel(activeWorkspaceId)));
   }
   identity.appendChild(breadcrumb);
   const titleRow = el('div', 'workbench-context-title-row');
-  titleRow.appendChild(createIcon(workspace?.icon || CATEGORY_ICONS.home, { size: 24 }));
-  const title = el('h1', 'workbench-context-title', workspace ? t(workspace.labelKey) : t('workbench.home.title'));
+  titleRow.appendChild(createIcon(item?.icon || CATEGORY_ICONS.home, { size: 24 }));
+  const title = el('h1', 'workbench-context-title', item ? t(item.labelKey) : t('workbench.home.title'));
   title.id = 'workbenchContextTitle';
+  title.tabIndex = -1;
   titleRow.appendChild(title);
   const currentTab = activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null;
   if (currentTab?.risk === 'write' || currentTab?.risk === 'destructive') {
@@ -544,6 +503,7 @@ function createContextHeader() {
   identity.appendChild(titleRow);
   main.appendChild(identity);
   main.appendChild(createOrgContext(currentTab));
+
   const actions = el('div', 'workbench-context-actions');
   for (const targetId of HEADER_ACTION_TARGETS[currentTab?.toolId] || []) {
     const proxy = createHeaderActionProxy(targetId);
@@ -552,26 +512,29 @@ function createContextHeader() {
   const help = makeIconButton('workbenchHelpBtn', ACTION_ICONS.help, t('workbench.action.help'));
   help.addEventListener('click', () => document.getElementById('appHelpBtn')?.click());
   actions.appendChild(help);
-  const theme = makeIconButton('workbenchThemeBtn', document.documentElement.dataset.uiTheme === 'light' ? ACTION_ICONS.darkTheme : ACTION_ICONS.lightTheme, t('workbench.action.theme'));
+  const themeIcon = document.documentElement.dataset.uiTheme === 'light' ? ACTION_ICONS.darkTheme : ACTION_ICONS.lightTheme;
+  const theme = makeIconButton('workbenchThemeBtn', themeIcon, t('workbench.action.theme'));
   theme.addEventListener('click', () => {
-    const input = /** @type {HTMLInputElement | null} */ (document.getElementById('appThemeToggleInput'));
-    input?.click();
-    requestAnimationFrame(renderWorkbenchHeader);
+    document.getElementById('appThemeToggleInput')?.click();
+    requestAnimationFrame(() => {
+      headerRenderSignature = '';
+      renderWorkbenchHeader();
+    });
   });
   actions.appendChild(theme);
   main.appendChild(actions);
   header.appendChild(main);
 
-  if (workspace && visibleTabs(workspace).length > 1) {
+  if (item && visibleTabs(item).length > 1) {
     const tabs = el('div', 'workbench-tabs');
     tabs.id = 'workbenchWorkspaceTabs';
     tabs.setAttribute('role', 'tablist');
-    tabs.setAttribute('aria-label', t('workbench.tabs.label', { workspace: t(workspace.labelKey) }));
-    for (const tabInfo of visibleTabs(workspace)) {
+    tabs.setAttribute('aria-label', t('workbench.tabs.label', { workspace: t(item.labelKey) }));
+    for (const tabInfo of visibleTabs(item)) {
       const availability = tabVisibility(tabInfo);
       const button = el('button', 'workbench-tab');
       button.type = 'button';
-      button.id = `workbenchTab-${workspace.id}-${tabInfo.id}`;
+      button.id = `workbenchTab-${item.id}-${tabInfo.id}`;
       button.dataset.tabId = tabInfo.id;
       button.setAttribute('role', 'tab');
       button.setAttribute('aria-selected', tabInfo.id === activeTabId ? 'true' : 'false');
@@ -579,8 +542,8 @@ function createContextHeader() {
       button.disabled = availability.disabled;
       button.textContent = t(tabInfo.labelKey);
       if (availability.message) button.title = availability.message;
-      button.addEventListener('click', () => void navigateToWorkspaceTab(workspace.id, tabInfo.id, { userInitiated: true }));
-      button.addEventListener('keydown', (event) => handleTabKeydown(event, workspace));
+      button.addEventListener('click', () => void navigateToWorkspaceTab(item.id, tabInfo.id, { userInitiated: true }));
+      button.addEventListener('keydown', (event) => handleTabKeydown(event, item));
       tabs.appendChild(button);
     }
     header.appendChild(tabs);
@@ -588,9 +551,9 @@ function createContextHeader() {
   return header;
 }
 
-function handleTabKeydown(event, workspace) {
+function handleTabKeydown(event, item) {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-  const tabs = visibleTabs(workspace).filter((item) => !tabVisibility(item).disabled);
+  const tabs = visibleTabs(item).filter((candidate) => !tabVisibility(candidate).disabled);
   if (!tabs.length) return;
   const currentIndex = Math.max(0, tabs.findIndex(({ id }) => id === activeTabId));
   let nextIndex = currentIndex;
@@ -599,25 +562,25 @@ function handleTabKeydown(event, workspace) {
   if (event.key === 'Home') nextIndex = 0;
   if (event.key === 'End') nextIndex = tabs.length - 1;
   event.preventDefault();
-  void navigateToWorkspaceTab(workspace.id, tabs[nextIndex].id, { userInitiated: true }).then(() => {
-    document.getElementById(`workbenchTab-${workspace.id}-${tabs[nextIndex].id}`)?.focus();
+  void navigateToWorkspaceTab(item.id, tabs[nextIndex].id, { userInitiated: true }).then(() => {
+    document.getElementById(`workbenchTab-${item.id}-${tabs[nextIndex].id}`)?.focus();
   });
 }
 
 export function renderWorkbenchHeader() {
   const editor = document.getElementById('editorContainer');
   if (!editor) return;
-  const workspace = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
+  const item = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
   const tabInfo = activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null;
   const orgSignature = selectedOrgIds(tabInfo).map((orgId) => {
     const env = environmentForOrg(orgId);
     return [orgId, orgDisplayName(orgId), env.className, !!readOnlyByOrgId[orgId]];
   });
-  const tabsSignature = workspace
-    ? visibleTabs(workspace).map((tab) => [tab.id, tabVisibility(tab).disabled, tabVisibility(tab).message])
+  const tabsSignature = item
+    ? visibleTabs(item).map((candidate) => [candidate.id, tabVisibility(candidate).disabled, tabVisibility(candidate).message])
     : [];
   const signature = JSON.stringify({
-    contextCategoryId: workspace?.categoryId || selectedCategoryId,
+    activeCategoryId,
     activeWorkspaceId,
     activeTabId,
     theme: document.documentElement.dataset.uiTheme || '',
@@ -631,36 +594,19 @@ export function renderWorkbenchHeader() {
   document.getElementById('workbenchContextHeader')?.remove();
   const header = createContextHeader();
   const classicHeader = editor.querySelector('.app-mode-tabs-wrap');
-  editor.insertBefore(header, classicHeader || editor.firstChild);
-}
-
-function syncActiveRail() {
-  document.querySelectorAll('.workbench-rail-button[data-category-id]').forEach((button) => {
-    const active = button.getAttribute('data-category-id') === selectedCategoryId;
-    button.setAttribute('aria-current', active ? 'page' : 'false');
-    button.classList.toggle('is-active', active);
-  });
+  editor.insertBefore(header, classicHeader || editor.children[1] || null);
 }
 
 export function renderWorkbenchShell() {
   if (!initialized) return;
-  const shell = document.getElementById('workbenchShell');
-  if (shell && !document.getElementById('workbenchRail')) {
-    shell.append(createRail(), createPanel());
-  }
-  const subtitle = document.querySelector('.workbench-panel-subtitle');
-  if (subtitle) subtitle.textContent = categoryLabel(selectedCategoryId);
-  document.getElementById('workbenchPanelPin')?.setAttribute('aria-pressed', prefs.panelPinned ? 'true' : 'false');
-  renderWorkbenchPanel();
-  syncActiveRail();
-  syncShellLayoutAttributes();
+  renderWorkbenchNavigation();
   renderWorkbenchHeader();
 }
 
 function validHistorySelection(value, toolId) {
-  const workspace = getWorkspaceById(value?.workspaceId);
-  const tabInfo = workspace && getTabById(workspace.id, value?.tabId);
-  return tabInfo && tabInfo.toolId === toolId ? { workspaceId: workspace.id, tabId: tabInfo.id } : null;
+  const item = getWorkspaceById(value?.workspaceId);
+  const tabInfo = item && getTabById(item.id, value?.tabId);
+  return tabInfo && tabInfo.toolId === toolId ? { workspaceId: item.id, tabId: tabInfo.id } : null;
 }
 
 function syncFromLegacyNavigation(event = null) {
@@ -672,11 +618,17 @@ function syncFromLegacyNavigation(event = null) {
   }
   if (workbenchNavigationDepth > 0) return;
   const toolId = document.getElementById('typeSelect')?.value || '';
-  if (categoryBrowseOverride && toolId) return;
+  const currentRoute = toolId ? getWorkspaceRouteForTool(toolId) : null;
+  const sameSelection = state.appNavMode === APP_NAV_MODE_HOME
+    ? activeCategoryId === 'home' && !activeWorkspaceId
+    : currentRoute?.workspaceId === activeWorkspaceId && getTabById(activeWorkspaceId, activeTabId)?.toolId === toolId;
+  // La navegación Classic emite un evento redundante en cada click del documento.
+  // Mientras se explora una categoría no debe cerrar la subbarra si la ruta no cambió.
+  if (openCategoryId && !pendingHistorySelection && sameSelection) return;
   if (state.appNavMode === APP_NAV_MODE_HOME || !toolId) {
     activeWorkspaceId = null;
     activeTabId = null;
-    selectedCategoryId = 'home';
+    activeCategoryId = 'home';
   } else {
     const fromHistory = validHistorySelection(pendingHistorySelection || history.state?.sfocWorkbench, toolId);
     const route = fromHistory || getWorkspaceRouteForTool(toolId);
@@ -684,11 +636,12 @@ function syncFromLegacyNavigation(event = null) {
       const selectionChanged = activeWorkspaceId !== route.workspaceId || activeTabId !== route.tabId;
       activeWorkspaceId = route.workspaceId;
       activeTabId = route.tabId;
-      selectedCategoryId = getWorkspaceById(route.workspaceId)?.categoryId || 'home';
+      activeCategoryId = getWorkspaceById(route.workspaceId)?.categoryId || 'home';
       if (selectionChanged) void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
     }
   }
   pendingHistorySelection = null;
+  closeToolSubbar();
   renderWorkbenchShell();
 }
 
@@ -709,10 +662,9 @@ function writeWorkbenchHistoryState(workspaceId, tabId, opts = {}) {
 }
 
 export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
-  const workspace = getWorkspaceById(workspaceId);
-  const tabInfo = workspace && getTabById(workspaceId, tabId);
-  if (!workspace || !tabInfo) return false;
-  categoryBrowseOverride = false;
+  const item = getWorkspaceById(workspaceId);
+  const tabInfo = item && getTabById(workspaceId, tabId);
+  if (!item || !tabInfo) return false;
   const availability = tabVisibility(tabInfo);
   if (!availability.visible || availability.disabled) {
     if (availability.message) showToast(availability.message, 'warn', { bypassCooldown: true });
@@ -724,7 +676,7 @@ export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
   const sameLegacyTool = state.appNavMode === tabInfo.legacyMode && currentToolId === tabInfo.toolId;
   activeWorkspaceId = workspaceId;
   activeTabId = tabId;
-  selectedCategoryId = workspace.categoryId;
+  activeCategoryId = item.categoryId;
   document.body.dataset.workbenchWorkspace = workspaceId;
   document.body.dataset.workbenchTab = tabId;
   renderWorkbenchShell();
@@ -768,26 +720,111 @@ async function loadReadOnlyMap() {
   }
 }
 
+function decorateLanding() {
+  document.getElementById('appLandingPinnedHeading')?.closest('.app-landing-tools-section')?.remove();
+  document.querySelector('.app-landing-tools-wrap')?.remove();
+
+  const header = document.querySelector('.app-landing-header');
+  if (header && !document.getElementById('workbenchLandingLogo')) {
+    const logoWrap = el('div', 'workbench-landing-logo-wrap');
+    const logo = el('img', 'workbench-landing-logo');
+    logo.id = 'workbenchLandingLogo';
+    logo.src = chrome.runtime.getURL('icons/icon-32.png');
+    logo.alt = '';
+    logo.width = 40;
+    logo.height = 40;
+    logoWrap.appendChild(logo);
+    header.prepend(logoWrap);
+
+    const actions = el('div', 'workbench-landing-actions');
+    const search = el('button', 'workbench-landing-search');
+    search.type = 'button';
+    search.appendChild(createIcon(ACTION_ICONS.search, { size: 20 }));
+    search.appendChild(el('span', '', t('workbench.landing.search')));
+    search.appendChild(el('kbd', '', navigator.platform?.toLowerCase().includes('mac') ? '⌘K' : 'Ctrl+K'));
+    search.addEventListener('click', () => document.dispatchEvent(new CustomEvent('sfoc:open-command-palette')));
+    actions.appendChild(search);
+    const shortcuts = el('div', 'workbench-landing-shortcuts');
+    for (const [keys, labelKey] of [
+      ['Ctrl+Enter', 'workbench.shortcut.run'],
+      ['Ctrl+S', 'workbench.shortcut.save'],
+      ['?', 'workbench.shortcut.help']
+    ]) {
+      const chip = el('span', 'workbench-shortcut-chip');
+      chip.appendChild(el('kbd', '', keys));
+      chip.appendChild(el('span', '', t(labelKey)));
+      shortcuts.appendChild(chip);
+    }
+    actions.appendChild(shortcuts);
+    header.appendChild(actions);
+  }
+
+  document.querySelectorAll('.app-landing-card').forEach((card, index) => {
+    if (card.querySelector('.workbench-benefit-icon')) return;
+    const icons = [
+      CATEGORY_ICONS.comparator,
+      CATEGORY_ICONS.development,
+      CATEGORY_ICONS.metadata,
+      CATEGORY_ICONS.security,
+      CATEGORY_ICONS.operations,
+      CATEGORY_ICONS.dataApi
+    ];
+    const icon = el('span', 'workbench-benefit-icon');
+    icon.appendChild(createIcon(icons[index] || CATEGORY_ICONS.home, { size: 20 }));
+    card.prepend(icon);
+  });
+}
+
+function decorateV2Surfaces() {
+  document.body.classList.add('workbench-v2-decorated');
+  const quickOpenTitle = document.getElementById('quickOpenTitle');
+  const quickOpenSubtitle = document.querySelector('.quick-open-subtitle');
+  if (quickOpenTitle) quickOpenTitle.textContent = t('workbench.command.title');
+  if (quickOpenSubtitle) quickOpenSubtitle.textContent = t('workbench.command.description');
+  document.querySelectorAll('.sfoc-tool-panel').forEach((panel) => {
+    panel.classList.add('workbench-tool-surface');
+    panel.querySelector('h2')?.classList.add('workbench-native-panel-title');
+  });
+  const leftOrg = document.getElementById('leftOrg');
+  const rightOrg = document.getElementById('rightOrg');
+  leftOrg?.setAttribute('aria-label', t('workbench.org.source'));
+  rightOrg?.setAttribute('aria-label', t('workbench.org.target'));
+  leftOrg?.parentElement?.setAttribute('data-workbench-label', t('workbench.org.source'));
+  rightOrg?.parentElement?.setAttribute('data-workbench-label', t('workbench.org.target'));
+  decorateLanding();
+}
+
 export function getWorkbenchSnapshot() {
   return {
     activeWorkspaceId,
     activeTabId,
-    selectedCategoryId,
-    panelExpanded: effectivePanelExpanded(),
-    panelPinned: prefs?.panelPinned === true
+    selectedCategoryId: activeCategoryId,
+    activeCategoryId,
+    openCategoryId,
+    panelExpanded: false,
+    panelPinned: false
   };
 }
 
 export function getVisibleWorkbenchSearchEntries() {
   const entries = [];
-  for (const workspace of visibleWorkspaces()) {
-    entries.push({ type: 'workspace', workspaceId: workspace.id, tabId: workspace.defaultTabId, label: t(workspace.labelKey), searchText: getSearchText(workspace, t) });
-    for (const tabInfo of visibleTabs(workspace)) {
+  for (const item of visibleWorkspaces()) {
+    const defaultTab = preferredTabForWorkspace(item) || visibleTabs(item)[0];
+    if (!defaultTab) continue;
+    entries.push({
+      type: 'workspace', workspaceId: item.id, tabId: defaultTab.id,
+      label: t(item.labelKey), searchText: getSearchText(item, t)
+    });
+    const seen = new Set();
+    for (const tabInfo of visibleTabs(item)) {
+      const key = `${tabInfo.toolId}\u0000${tabInfo.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
       const availability = tabVisibility(tabInfo);
       entries.push({
-        type: 'tool', workspaceId: workspace.id, tabId: tabInfo.id, toolId: tabInfo.toolId,
-        label: t(tabInfo.labelKey), workspaceLabel: t(workspace.labelKey),
-        searchText: `${getSearchText(workspace, t)} ${t(tabInfo.labelKey)} ${toolLabel(tabInfo.toolId)}`.toLocaleLowerCase(),
+        type: 'tool', workspaceId: item.id, tabId: tabInfo.id, toolId: tabInfo.toolId,
+        label: t(tabInfo.labelKey), workspaceLabel: t(item.labelKey),
+        searchText: `${getSearchText(item, t)} ${t(tabInfo.labelKey)} ${toolLabel(tabInfo.toolId)}`.toLocaleLowerCase(),
         disabled: availability.disabled, message: availability.message
       });
     }
@@ -798,44 +835,43 @@ export function getVisibleWorkbenchSearchEntries() {
 export async function setupWorkbenchShell() {
   if (initialized) return;
   prefs = await loadWorkbenchPrefs();
-  void Promise.all([loadToolRecents(), loadReadOnlyMap()]);
-  // Classic conserva su bloque de recientes. En V2 no forma parte de la
-  // navegacion ni del Inicio, por lo que se retira tambien del arbol accesible.
+  await Promise.all([loadToolRecents(), loadReadOnlyMap()]);
   document.querySelector('.app-landing-tools-section--recents')?.remove();
-  compactMedia = window.matchMedia(COMPACT_QUERY);
-  const shell = el('div', 'workbench-shell');
-  shell.id = 'workbenchShell';
-  shell.addEventListener('click', (event) => event.stopPropagation());
-  document.body.insertBefore(shell, document.body.firstChild);
-  const backdrop = el('button', 'workbench-panel-backdrop hidden');
-  backdrop.id = 'workbenchPanelBackdrop';
-  backdrop.type = 'button';
-  backdrop.setAttribute('aria-label', t('workbench.panel.collapse'));
-  backdrop.addEventListener('click', (event) => {
-    event.stopPropagation();
-    void setPanelExpanded(false);
-  });
-  document.body.appendChild(backdrop);
+  decorateV2Surfaces();
+
+  const editor = document.getElementById('editorContainer');
+  if (!editor) return;
+  const shell = createPrimaryNavigation();
+  editor.insertBefore(shell, editor.firstChild);
   initialized = true;
+  document.body.dataset.workbenchSubbar = 'closed';
   syncFromLegacyNavigation();
 
   document.addEventListener('sfoc:navigationchange', syncFromLegacyNavigation);
-  document.addEventListener('sfoc:tool-recents-change', renderWorkbenchPanel);
+  document.addEventListener('pointerdown', () => { lastInputWasKeyboard = false; }, true);
+  document.addEventListener('keydown', (event) => {
+    lastInputWasKeyboard = true;
+    if (event.key === 'Escape' && openCategoryId) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeToolSubbar({ restoreFocus: true });
+    }
+  }, true);
+  document.addEventListener('click', (event) => {
+    if (openCategoryId && !shell.contains(event.target)) closeToolSubbar();
+  });
   window.addEventListener('popstate', (event) => {
-    categoryBrowseOverride = false;
     pendingHistorySelection = event.state?.sfocWorkbench || null;
   });
   for (const id of ['leftOrg', 'rightOrg']) {
     const select = document.getElementById(id);
     select?.addEventListener('change', () => requestAnimationFrame(renderWorkbenchHeader));
-    if (select) {
-      new MutationObserver(() => requestAnimationFrame(renderWorkbenchHeader)).observe(select, { childList: true });
-    }
+    if (select) new MutationObserver(() => requestAnimationFrame(renderWorkbenchHeader)).observe(select, { childList: true });
   }
-  compactMedia.addEventListener?.('change', () => syncShellLayoutAttributes());
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[READ_ONLY_STORAGE_KEY]) {
       readOnlyByOrgId = changes[READ_ONLY_STORAGE_KEY].newValue || {};
+      headerRenderSignature = '';
       renderWorkbenchHeader();
     }
   });

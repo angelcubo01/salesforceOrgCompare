@@ -1,5 +1,7 @@
 # UI 2.0 Workbench: arquitectura, migración y validación
 
+> **Documento histórico.** La navegación lateral descrita aquí fue sustituida el 2026-08-24 por la [navegación superior y renovación visual de UI v2](./UI_V2_NAVIGATION_REFRESH.md). Los contratos de compatibilidad y el aislamiento de Classic continúan vigentes.
+
 Fecha de cierre: 2026-08-19. Rama: `feature/code-ui-v2`. Base: `main@650d7de`.
 
 ## 1. Resultado y diagnóstico de la navegación Classic

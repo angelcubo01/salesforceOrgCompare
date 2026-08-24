@@ -11,11 +11,25 @@ import {
 import { TOOL_ICONS, USED_ICON_NAMES } from '../code/workbench/iconRegistry.js';
 
 describe('workspaceRegistry', () => {
-  it('declara las diez entradas del rail en orden estable', () => {
+  it('declara Inicio y las cinco categorías superiores en orden estable', () => {
     expect(WORKBENCH_CATEGORIES.map(({ id }) => id)).toEqual([
-      'home', 'comparator', 'development', 'dataApi', 'diagnostics',
-      'analysis', 'operations', 'metadata', 'security', 'advanced'
+      'home', 'comparator', 'development', 'analysis', 'monitoring', 'manifests'
     ]);
+    expect(WORKBENCH_CATEGORIES[0]).toMatchObject({ id: 'home', direct: true, workspaceIds: [] });
+    expect(WORKBENCH_CATEGORIES[1]).toMatchObject({
+      id: 'comparator', directWorkspaceId: 'comparator', workspaceIds: ['comparator']
+    });
+  });
+
+  it('asigna cada workspace a una sola categoría y conserva solo las fusiones aprobadas', () => {
+    const configured = WORKBENCH_CATEGORIES.flatMap(({ workspaceIds }) => workspaceIds);
+    expect(configured).toHaveLength(WORKBENCH_WORKSPACES.length);
+    expect(new Set(configured).size).toBe(configured.length);
+    expect(new Set(configured)).toEqual(new Set(WORKBENCH_WORKSPACES.map(({ id }) => id)));
+    expect(WORKBENCH_WORKSPACES.filter(({ tabs }) => tabs.length > 1).map(({ id }) => id)).toEqual([
+      'apex-quality', 'code-studio', 'diagnostics', 'dependencies', 'data-compare'
+    ]);
+    expect(WORKBENCH_WORKSPACES.some(({ toolAliases }) => toolAliases?.length)).toBe(false);
   });
 
   it('resuelve cada Tool ID legacy exactamente a un workspace y tab válidos', () => {

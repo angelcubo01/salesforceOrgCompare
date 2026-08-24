@@ -45,7 +45,7 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   const classic = await openExtensionPage(context, extensionId, 'code/code.html');
   await waitForCodeBoot(classic);
   await expect(classic.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
-  await expect(classic.locator('#workbenchRail')).toBeHidden();
+  await expect(classic.locator('#workbenchShell')).toHaveCount(0);
   await expect(classic.locator('.app-mode-tabs-wrap')).toBeVisible();
 
   const popup = await openExtensionPage(context, extensionId, 'popup/popup.html');
@@ -63,9 +63,10 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   await expect(classic.locator('body')).toHaveAttribute('data-ui-mode', 'classic');
   await expect(classic.locator('.app-landing-tools-section--recents')).toBeVisible();
   await expect(v2.locator('.app-landing-tools-section--recents')).toHaveCount(0);
-  await expect(v2.locator('#appLandingPinnedList')).toContainText('SOQL');
-  await expect(v2.locator('.workbench-tool-row')).toHaveCount(0);
-  await expect(v2.locator('#workbenchPanel')).not.toContainText(/Ultima herramienta|Last tool|Recientes|Recent/i);
+  await expect(v2.locator('#appLandingPinnedList')).toHaveCount(0);
+  await expect(v2.locator('.workbench-category-button')).toHaveCount(6);
+  await expect(v2.locator('#workbenchPanel, #workbenchRail, #workbenchPanelBackdrop')).toHaveCount(0);
+  await expect(v2.locator('#workbenchLandingCategories')).toHaveCount(0);
 
   await v2.keyboard.press('Control+K');
   await expect(v2.locator('#quickOpenOverlay')).toHaveAttribute('aria-hidden', 'false');
@@ -78,38 +79,62 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   expect(sharedPrefs.sfocWorkbenchPrefs.panelExpanded).toBe(true);
 });
 
-test('rail, panel, tabs y command palette son operables por teclado', async ({ extensionContext: context, extensionId }) => {
+test('barra superior, subbarra, tabs y command palette son operables por teclado', async ({ extensionContext: context, extensionId }) => {
   const page = await openExtensionPage(context, extensionId, 'code/code.html');
   await waitForCodeBoot(page);
-  await expect(page.locator('#workbenchRail')).toBeVisible();
-  await expect(page.locator('.workbench-rail-button[data-category-id]')).toHaveCount(10);
+  await expect(page.locator('#workbenchShell')).toBeVisible();
+  await expect(page.locator('.workbench-category-button')).toHaveCount(6);
 
-  await page.locator('#workbenchRail-development').click();
-  await expect(page.locator('#workbenchPanel')).toHaveAttribute('aria-hidden', 'false');
-  await expect(page.locator('.workbench-panel-section:not(.workbench-panel-section--workspaces)')).toHaveCount(0);
-  await expect(page.locator('.workbench-workspace-meta')).toHaveCount(0);
-  const apexWorkspaceButton = page.getByRole('button', { name: 'Apex Quality' });
-  await apexWorkspaceButton.evaluate((button) => { window.__sfocApexWorkspaceButton = button; });
+  const comparator = page.locator('#workbenchCategory-comparator');
+  await comparator.click();
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'comparator');
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
+  await expect(comparator).not.toHaveAttribute('aria-expanded');
+  await expect.poll(() => page.evaluate(() => Object.fromEntries(new URL(location.href).searchParams))).toMatchObject({
+    nav: 'comparator', op: 'Comparator'
+  });
+  await page.locator('#workbenchCategory-home').click();
+  await expect(page.locator('#workbenchContextTitle')).toHaveText('Inicio');
+
+  const development = page.locator('#workbenchCategory-development');
+  await development.click();
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'false');
+  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveCount(7);
+  const apexWorkspaceButton = page.getByRole('button', { name: /Calidad Apex/ });
   await apexWorkspaceButton.click();
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
   const testsTab = page.locator('#workbenchTab-apex-quality-tests');
   await expect(testsTab).toHaveAttribute('aria-selected', 'true', { timeout: 500 });
   await testsTab.press('ArrowRight');
   await expect(page.locator('#workbenchTab-apex-quality-runs')).toHaveAttribute('aria-selected', 'true', { timeout: 500 });
-
-  const panelButtonWasPreserved = await page.evaluate(() => (
-    document.querySelector('.workbench-workspace-button[data-workspace-id="apex-quality"]') === window.__sfocApexWorkspaceButton
-  ));
-  expect(panelButtonWasPreserved).toBe(true);
+  await expect.poll(() => page.evaluate(() => history.state?.sfocWorkbench?.tabId)).toBe('runs');
 
   await page.goBack();
   await expect(page.locator('#workbenchTab-apex-quality-tests')).toHaveAttribute('aria-selected', 'true');
   await page.goForward();
   await expect(page.locator('#workbenchTab-apex-quality-runs')).toHaveAttribute('aria-selected', 'true');
 
-  await page.getByRole('button', { name: 'Code Studio' }).click();
+  await development.click();
+  await page.getByRole('button', { name: /Editar código/ }).click();
   await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'code-studio', { timeout: 500 });
-  await page.getByRole('button', { name: 'Apex Quality' }).click();
+  await development.click();
+  await page.getByRole('button', { name: /Calidad Apex/ }).click();
   await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'apex-quality', { timeout: 500 });
+
+  await development.click();
+  await development.click();
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
+  await development.click();
+  await page.locator('#workbenchCategory-analysis').click();
+  await expect(page.locator('#workbenchToolSubbar')).toContainText('Analizar permisos');
+  await page.locator('#workbenchCategory-analysis').press('Escape');
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
+  await expect(page.locator('#workbenchCategory-analysis')).toBeFocused();
+
+  await development.click();
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'false');
+  await page.locator('#workbenchContextHeader').click({ position: { x: 8, y: 8 } });
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
 
   await page.keyboard.press('Control+K');
   await expect(page.locator('#quickOpenOverlay')).toHaveAttribute('aria-hidden', 'false');
@@ -122,43 +147,71 @@ test('rail, panel, tabs y command palette son operables por teclado', async ({ e
   await page.locator('#quickOpenInput').press('Escape');
   await expect(page.locator('#quickOpenOverlay')).toHaveAttribute('aria-hidden', 'true');
 
-  await page.locator('#workbenchPanelClose').click();
-  await expect(page.locator('#workbenchRailPanelToggle')).toHaveAttribute('aria-expanded', 'false');
-  await page.locator('#workbenchRailPanelToggle').click();
-  await expect(page.locator('#workbenchRailPanelToggle')).toHaveAttribute('aria-expanded', 'true');
 });
 
 const legacyRoutes = [
-  ['development', 'ApexCoverageCompare', 'apex-quality', 'coverage'],
-  ['development', 'LightningQuickEdit', 'code-studio', 'lwc-aura'],
-  ['analysis', 'ObjectDescribe', 'data-api', 'schema'],
-  ['analysis', 'FieldDependency', 'dependencies', 'fields'],
-  ['analysis', 'CustomMetadataCompare', 'data-compare', 'custom-metadata'],
-  ['monitoring', 'OrgLimits', 'org-operations', 'limits'],
-  ['manifests', 'GeneratePackageXml', 'metadata-tools', 'package-xml']
+  ['comparator', 'Comparator', 'comparator', 'main', 'standardComparePanel'],
+  ['development', 'ApexTests', 'apex-quality', 'runs', 'apexTestsPanel'],
+  ['development', 'ApexCoverageCompare', 'apex-quality', 'coverage', 'apexCoverageComparePanel'],
+  ['development', 'QuickEdit', 'code-studio', 'apex-vf', 'quickEditPanel'],
+  ['development', 'LightningQuickEdit', 'code-studio', 'lwc-aura', 'lightningQuickEditPanel'],
+  ['development', 'AnonymousApex', 'anonymous-apex', 'main', 'anonymousApexPanel'],
+  ['development', 'QueryExplorer', 'query-explorer', 'main', 'queryExplorerPanel'],
+  ['development', 'RestExplorer', 'rest-explorer', 'main', 'restExplorerPanel'],
+  ['development', 'DebugLogBrowser', 'diagnostics', 'logs', 'debugLogBrowserPanel'],
+  ['development', 'EventMonitor', 'event-monitor', 'main', 'eventMonitorPanel'],
+  ['analysis', 'FieldDependency', 'field-dependency', 'main', 'fieldDependencyPanel'],
+  ['analysis', 'DependencyExplorer', 'dependencies', 'metadata', 'dependencyExplorerPanel'],
+  ['analysis', 'PermissionDiff', 'security-access', 'main', 'permissionDiffPanel'],
+  ['analysis', 'CustomSettingsCompare', 'data-compare', 'custom-settings', 'customSettingsComparePanel'],
+  ['analysis', 'CustomMetadataCompare', 'data-compare', 'custom-metadata', 'customMetadataComparePanel'],
+  ['analysis', 'RecordCompare', 'data-compare', 'records', 'recordComparePanel'],
+  ['analysis', 'ObjectDescribe', 'object-describe', 'main', 'objectDescribePanel'],
+  ['analysis', 'DataWorkbench', 'data-workbench', 'main', 'dataWorkbenchPanel'],
+  ['monitoring', 'EnvironmentStatus', 'org-environments', 'main', 'environmentStatusPanel'],
+  ['monitoring', 'OrgLimits', 'org-limits', 'main', 'orgLimitsPanel'],
+  ['monitoring', 'DeployStatus', 'deploy-status', 'main', 'deployStatusPanel'],
+  ['monitoring', 'BulkJobMonitor', 'bulk-job-monitor', 'main', 'bulkJobMonitorPanel'],
+  ['monitoring', 'SetupAuditTrail', 'setup-audit', 'main', 'setupAuditTrailPanel'],
+  ['monitoring', 'FieldHistory', 'field-history', 'main', 'fieldHistoryPanel'],
+  ['manifests', 'GeneratePackageXml', 'generate-package', 'main', 'generatePackageXmlPanel'],
+  ['manifests', 'MetadataTypeCompare', 'metadata-type-compare', 'main', 'metadataTypeComparePanel']
 ];
 
-for (const [nav, op, workspace, tab] of legacyRoutes) {
-  test(`ruta legacy ${op} abre ${workspace}/${tab}`, async ({ extensionContext: context, extensionId }) => {
-    const page = await openExtensionPage(context, extensionId, `code/code.html?nav=${nav}&op=${op}`);
-    await waitForCodeBoot(page);
-    await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', workspace);
-    await expect(page.locator('body')).toHaveAttribute('data-workbench-tab', tab);
+test('los 26 Tool IDs conservan ruta, workspace, tab, titulo y panel visible', async ({ extensionContext: context, extensionId }) => {
+  test.setTimeout(120_000);
+  const page = await openExtensionPage(context, extensionId, 'code/code.html');
+  const runtimeErrors = [];
+  page.on('pageerror', (error) => runtimeErrors.push(`pageerror: ${error.message}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') runtimeErrors.push(`console: ${message.text()}`);
   });
-}
+  for (const [nav, op, workspace, tab, panelId] of legacyRoutes) {
+    const route = new URL(page.url());
+    route.search = new URLSearchParams({ nav, op }).toString();
+    await page.goto(route.href, { waitUntil: 'domcontentloaded' });
+    await waitForCodeBoot(page);
+    await expect(page.locator('body'), `${op}: workspace`).toHaveAttribute('data-workbench-workspace', workspace);
+    await expect(page.locator('body'), `${op}: tab`).toHaveAttribute('data-workbench-tab', tab);
+    await expect(page.locator('#typeSelect'), `${op}: Tool ID`).toHaveValue(op);
+    await expect(page.locator('#workbenchContextTitle'), `${op}: titulo contextual`).not.toHaveText('');
+    await expect(page.locator(`#${panelId}`), `${op}: panel`).toBeVisible();
+  }
+  expect(runtimeErrors).toEqual([]);
+});
 
 test('atrás/adelante y estado interno conservan el workspace', async ({ extensionContext: context, extensionId }) => {
   const page = await openExtensionPage(context, extensionId, 'code/code.html?nav=development&op=QueryExplorer');
   await waitForCodeBoot(page);
-  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'data-api');
-  await page.locator('#workbenchRail-development').click();
-  await expect(page.locator('#workbenchPanelBody')).toContainText('Code Studio');
-  await page.getByRole('button', { name: 'Code Studio' }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'query-explorer');
+  await page.locator('#workbenchCategory-development').click();
+  await expect(page.locator('#workbenchToolSubbar')).toContainText('Editar código');
+  await page.getByRole('button', { name: /Editar código/ }).click();
   await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'code-studio');
   await expect(page).toHaveURL(/op=QuickEdit/);
   await page.goBack();
   await expect(page).toHaveURL(/op=QueryExplorer/);
-  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'data-api');
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'query-explorer');
   await page.goForward();
   await expect(page).toHaveURL(/op=QuickEdit/);
   await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'code-studio');
@@ -189,25 +242,41 @@ test('reflow, tema y WCAG A/AA del shell', async ({ extensionContext: context, e
   const page = await openExtensionPage(context, extensionId, 'code/code.html');
   await waitForCodeBoot(page);
   await page.setViewportSize({ width: 1024, height: 768 });
-  await expect(page.locator('body')).toHaveAttribute('data-workbench-compact', 'true');
-  await expect(page.locator('#workbenchPanelBackdrop')).toBeVisible();
+  await expect(page.locator('#workbenchShell')).toBeVisible();
+  await expect(page.locator('#workbenchOpenCommandPalette')).toHaveCount(0);
 
   // 640 CSS px reproduce el reflow de un viewport de 1280 px con zoom al 200 %.
   await page.setViewportSize({ width: 640, height: 450 });
-  await expect(page.locator('body')).toHaveAttribute('data-workbench-compact', 'true');
-  await expect(page.locator('#workbenchRail')).toBeVisible();
   const shellFitsViewport = await page.locator('#workbenchShell').evaluate((shell) => (
     shell.getBoundingClientRect().right <= window.innerWidth
   ));
   expect(shellFitsViewport).toBe(true);
+  const categoryBarScrolls = await page.locator('#workbenchCategoryNav').evaluate((nav) => nav.scrollWidth > nav.clientWidth);
+  expect(categoryBarScrolls).toBe(true);
+  await page.locator('#workbenchCategory-development').click();
+  const toolBarScrolls = await page.locator('.workbench-subbar-overflow').evaluate((nav) => nav.scrollWidth > nav.clientWidth);
+  expect(toolBarScrolls).toBe(true);
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await expect(page.locator('body')).toHaveAttribute('data-workbench-compact', 'false');
+  const categoryCenterOffset = await page.locator('#workbenchCategoryNav').evaluate((nav) => {
+    const buttons = [...nav.querySelectorAll('.workbench-category-button')];
+    const first = buttons[0].getBoundingClientRect();
+    const last = buttons.at(-1).getBoundingClientRect();
+    return Math.abs(((first.left + last.right) / 2) - (window.innerWidth / 2));
+  });
+  expect(categoryCenterOffset).toBeLessThan(2);
+  const subbarCenterOffset = await page.locator('#workbenchToolSubbar').evaluate((nav) => {
+    const buttons = [...nav.querySelectorAll('.workbench-tool-button')];
+    const first = buttons[0].getBoundingClientRect();
+    const last = buttons.at(-1).getBoundingClientRect();
+    return Math.abs(((first.left + last.right) / 2) - (window.innerWidth / 2));
+  });
+  expect(subbarCenterOffset).toBeLessThan(2);
 
   await page.evaluate(async () => chrome.storage.local.set({ soc_language: 'en' }));
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForCodeBoot(page);
-  await expect(page.locator('#workbenchRail-development')).toHaveAttribute('aria-label', 'Development');
+  await expect(page.locator('#workbenchCategory-development')).toContainText('Development');
 
   await page.locator('#workbenchThemeBtn').click();
   await expect(page.locator('html')).toHaveAttribute('data-ui-theme', 'light');
