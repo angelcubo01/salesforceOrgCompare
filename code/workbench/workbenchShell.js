@@ -799,6 +799,9 @@ export async function setupWorkbenchShell() {
   if (initialized) return;
   prefs = await loadWorkbenchPrefs();
   void Promise.all([loadToolRecents(), loadReadOnlyMap()]);
+  // Classic conserva su bloque de recientes. En V2 no forma parte de la
+  // navegacion ni del Inicio, por lo que se retira tambien del arbol accesible.
+  document.querySelector('.app-landing-tools-section--recents')?.remove();
   compactMedia = window.matchMedia(COMPACT_QUERY);
   const shell = el('div', 'workbench-shell');
   shell.id = 'workbenchShell';

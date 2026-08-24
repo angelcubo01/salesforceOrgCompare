@@ -9,7 +9,7 @@ Classic concentra la navegación en menús superiores, conserva el Tool ID activ
 UI 2.0 añade una capa Workbench sobre esos contratos, no otra aplicación:
 
 - Rail permanente de 60 px con diez categorías, estado seleccionado con icono, borde, texto accesible y `aria-current`.
-- Panel de 264 px expandible y fijable, dedicado únicamente a búsqueda y workspaces de la categoría. Favoritas permanecen en Inicio y en la command palette; “Última herramienta” y “Recientes” no se presentan en los menús V2.
+- Panel de 264 px expandible y fijable, dedicado únicamente a búsqueda y workspaces de la categoría. Favoritas permanecen en Inicio y en la command palette; “Última herramienta” y “Recientes” no se presentan en los menús V2 y el bloque de recientes tampoco se monta en su Inicio.
 - Cabecera contextual con breadcrumb, herramienta, tabs, orgs, entorno, solo lectura, riesgo, acciones proxy, ayuda y tema.
 - Command palette con `Ctrl/Cmd+K`; `Ctrl/Cmd+Shift+P` sigue siendo compatible.
 - Los paneles existentes permanecen montados. Los adaptadores seleccionan vistas internas existentes y conservan filtros, scroll y editores.

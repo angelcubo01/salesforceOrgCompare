@@ -339,10 +339,6 @@ body[data-ui-mode='v2'] .app-landing-tools-wrap {
   grid-template-columns: minmax(0, 1fr);
 }
 
-body[data-ui-mode='v2'] .app-landing-tools-section--recents {
-  display: none;
-}
-
 .workbench-panel-section {
   margin: 12px 0 0;
 }
