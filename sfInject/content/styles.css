@@ -3,7 +3,7 @@
  * No se importa la hoja global: estas reglas viven dentro del DOM de Salesforce
  * (Lightning o Classic) y deben permanecer completamente namespaced.
  */
-:where(.sfoc-inject-toast, .sfoc-utf-filter, .sfoc-utf-badge) {
+:where(.sfoc-inject-toast, .sfoc-utf-filter, .sfoc-utf-badge, .sfoc-deploy-inline-panel) {
   --sfoc-inject-surface: #ffffff;
   --sfoc-inject-text: #181818;
   --sfoc-inject-muted: #444f5e;
@@ -14,6 +14,147 @@
   --sfoc-inject-focus: #0176d3;
   --sfoc-inject-shadow: 0 4px 16px rgba(24, 24, 24, 0.2);
 }
+
+/* Deployment Status: capa compacta, alineada con SLDS y Classic/Visualforce. */
+.sfoc-deploy-inline-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: -1px 0.45rem -1px 0;
+  padding: 0;
+  border: 1px solid #c9c9c9;
+  border-radius: 0.25rem;
+  color: #0176d3;
+  background: #fff;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+  font: 700 1.15rem/1 Arial, sans-serif;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.sfoc-deploy-inline-toggle:hover {
+  border-color: #0176d3;
+  background: #f3f9fd;
+  box-shadow: 0 0 3px rgba(1, 118, 211, 0.35);
+}
+
+.sfoc-deploy-inline-toggle[aria-expanded='true'] {
+  border-color: #0176d3;
+  background: #eaf5fe;
+  color: #0b5cab;
+}
+
+.sfoc-deploy-inline-toggle:focus-visible,
+.sfoc-deploy-inline-apex:focus-visible,
+.sfoc-deploy-inline-retry:focus-visible {
+  outline: 2px solid var(--sfoc-inject-focus);
+  outline-offset: 2px;
+}
+
+.sfoc-deploy-inline-detail-row > td {
+  padding: 0 !important;
+  border-top: 0 !important;
+  background: #f8fafc;
+}
+
+.sfoc-deploy-inline-panel {
+  margin: 0.5rem 0.75rem 0.65rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #c9c9c9;
+  border-left: 4px solid #0176d3;
+  border-radius: 0.25rem;
+  background: var(--sfoc-inject-surface);
+  color: var(--sfoc-inject-text);
+  font: 0.75rem/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.sfoc-deploy-inline-title {
+  margin: 0.9rem 0 0.35rem;
+  color: #032d60;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.0125rem;
+}
+
+.sfoc-deploy-inline-title:first-child { margin-top: 0; }
+
+.sfoc-deploy-inline-table {
+  width: 100%;
+  margin: 0 0 0.75rem;
+  border: 1px solid #dddbda;
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 0.1875rem;
+  overflow: hidden;
+  table-layout: auto;
+}
+
+.sfoc-deploy-inline-table th,
+.sfoc-deploy-inline-table td {
+  padding: 0.42rem 0.55rem;
+  border: 0;
+  border-bottom: 1px solid #e5e5e5;
+  text-align: left;
+  vertical-align: top;
+}
+
+.sfoc-deploy-inline-table th {
+  color: #3e3e3c;
+  background: #f3f3f3;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sfoc-deploy-inline-table tbody tr:last-child td { border-bottom: 0; }
+.sfoc-deploy-inline-table tbody tr:nth-child(even) td { background: #fafaf9; }
+.sfoc-deploy-inline-secondary { margin-top: 0.15rem; color: #706e6b; font-size: 0.6875rem; }
+.sfoc-deploy-inline-stack { max-width: 25rem; color: #3e3e3c; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 0.6875rem; white-space: pre-wrap; word-break: break-word; }
+.sfoc-deploy-inline-apex { color: #0176d3; font-weight: 600; text-decoration: none; cursor: pointer; }
+.sfoc-deploy-inline-apex:hover { color: #0b5cab; text-decoration: underline; }
+.sfoc-deploy-inline-loading, .sfoc-deploy-inline-empty { color: #706e6b; font-style: italic; }
+.sfoc-deploy-inline-error { color: #ba0517; font-weight: 600; }
+.sfoc-deploy-inline-message { margin: 0 0 0.65rem; padding: 0.45rem 0.55rem; border-radius: 0.1875rem; background: #fef1ee; color: #ba0517; white-space: pre-wrap; word-break: break-word; }
+.sfoc-deploy-inline-retry { margin-top: 0.55rem; padding: 0.28rem 0.65rem; border: 1px solid #0176d3; border-radius: 0.25rem; color: #0176d3; background: #fff; font-weight: 600; cursor: pointer; }
+.sfoc-deploy-inline-retry:hover { background: #f3f9fd; }
+
+/* Deployment detail: selectores y enlaces de fuente, aislados del estilo Visualforce. */
+.sfoc-deploy-detail-org-picker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 12rem;
+  padding: 0.2rem 0;
+}
+
+.sfoc-deploy-detail-org-select {
+  max-width: 17rem;
+  min-height: 1.65rem;
+  padding: 0.1rem 1.5rem 0.1rem 0.4rem;
+  border: 1px solid #b0adab;
+  border-radius: 0.25rem;
+  color: #181818;
+  background: #fff;
+  font: 0.75rem/1.25 -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  vertical-align: middle;
+}
+
+.sfoc-deploy-detail-org-select:hover:not(:disabled) { border-color: #0176d3; }
+.sfoc-deploy-detail-org-select:disabled { color: #706e6b; background: #f3f3f3; cursor: not-allowed; }
+.sfoc-deploy-detail-org-select:focus-visible,
+.sfoc-deploy-detail-source-link:focus-visible { outline: 2px solid #0176d3; outline-offset: 2px; }
+.sfoc-deploy-detail-source-link { color: #0176d3; font-size: 10px !important; font-weight: 600; text-decoration: none; cursor: pointer; }
+.sfoc-deploy-detail-source-link:hover { color: #0b5cab; text-decoration: underline; }
+.sfoc-deploy-detail-stack { padding: 0.45rem 0.55rem; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; font-size: 10px !important; line-height: 1.4; color: #181818; }
+.sfoc-deploy-detail-error-message { font-size: 10px !important; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sfoc-deploy-detail-stack-frame { margin-top: 0.3rem; padding: 0.38rem 0.5rem; border: 1px solid #e5e5e5; border-radius: 0.2rem; background: #fff; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 10px !important; line-height: 1.4; overflow-wrap: anywhere; }
+.sfoc-deploy-detail-stack-frame .sfoc-deploy-detail-source-link { display: block; }
+.sfoc-deploy-detail-stack-note { margin-top: 0.3rem; color: #706e6b; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 10px !important; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Enlaces SFOC: heredan link-button / slds-text-link nativos de Debug Logs */
 
@@ -117,7 +258,12 @@ span.sfoc-utf-badge {
 @media (forced-colors: active) {
   .sfoc-inject-toast,
   .sfoc-utf-badge.slds-badge,
-  span.sfoc-utf-badge {
+  span.sfoc-utf-badge,
+  .sfoc-deploy-inline-panel,
+  .sfoc-deploy-inline-toggle,
+  .sfoc-deploy-inline-retry,
+  .sfoc-deploy-detail-org-select,
+  .sfoc-deploy-detail-source-link {
     border: 1px solid CanvasText;
     forced-color-adjust: auto;
   }
@@ -126,7 +272,12 @@ span.sfoc-utf-badge {
 @media (prefers-reduced-motion: reduce) {
   .sfoc-inject-toast,
   .sfoc-utf-filter,
-  .sfoc-utf-badge {
+  .sfoc-utf-badge,
+  .sfoc-deploy-inline-panel,
+  .sfoc-deploy-inline-toggle,
+  .sfoc-deploy-inline-retry,
+  .sfoc-deploy-detail-org-select,
+  .sfoc-deploy-detail-source-link {
     animation: none;
     transition: none;
   }

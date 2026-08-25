@@ -21,6 +21,16 @@ export const SF_INJECT_SHIPPED = /** @type {const} */ ([
     id: 'userTraceFlagsEnhance',
     settingsLabelKey: 'settings.sfInjectUserTraceFlagsEnhance',
     settingsHintKey: 'settings.sfInjectUserTraceFlagsEnhanceHint'
+  },
+  {
+    id: 'deployStatusInlineDetails',
+    settingsLabelKey: 'settings.sfInjectDeployStatusInlineDetails',
+    settingsHintKey: 'settings.sfInjectDeployStatusInlineDetailsHint'
+  },
+  {
+    id: 'deployStatusDetailSourceLinks',
+    settingsLabelKey: 'settings.sfInjectDeployStatusDetailSourceLinks',
+    settingsHintKey: 'settings.sfInjectDeployStatusDetailSourceLinksHint'
   }
 ]);
 

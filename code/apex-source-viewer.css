@@ -48,6 +48,21 @@ body {
   white-space: nowrap;
 }
 
+.apex-src-viewer-org {
+  flex-shrink: 0;
+  max-width: min(34vw, 25rem);
+  padding: 4px 8px;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.1);
+  color: #bae6fd;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .apex-src-viewer-download {
   flex-shrink: 0;
   cursor: pointer;
@@ -74,6 +89,79 @@ body {
   min-height: 0;
 }
 
+.apex-src-viewer-tabs {
+  display: flex;
+  gap: 2px;
+  min-height: 34px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 8px 0;
+  border-bottom: 1px solid var(--asv-border);
+  flex: 0 0 auto;
+}
+
+.apex-src-tab-wrap { display: flex; flex: 0 0 auto; min-width: 0; }
+.apex-src-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 22rem;
+  min-width: 8rem;
+  border: 0;
+  border-radius: 0;
+  background: rgba(30, 41, 59, .55);
+  color: var(--asv-text);
+  cursor: pointer;
+  padding: 6px 7px 6px 10px;
+  font-size: 12px;
+}
+.apex-src-tab.is-active { background: var(--asv-bg); box-shadow: inset 0 1px 0 var(--asv-border); color: #7dd3fc; }
+.apex-src-tab.is-error { color: #fca5a5; }
+.apex-src-tab-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apex-src-tab-loading { color: inherit; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.apex-src-tab-close { flex: 0 0 auto; align-self: stretch; margin-left: -1px; border: 0; background: rgba(30, 41, 59, .55); color: var(--asv-text); cursor: pointer; font-size: 17px; line-height: 1; padding: 0 8px; border-radius: 0; }
+.apex-src-tab.is-active + .apex-src-tab-close { background: var(--asv-bg); box-shadow: inset 0 1px 0 var(--asv-border); }
+.apex-src-tab-close:hover, .apex-src-tab-close:focus-visible { color: #fda4af; background: rgba(244, 63, 94, .16); }
+.apex-src-tab-retry { align-self: center; margin-left: 4px; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; font-size: 11px; padding: 3px 5px; }
+.apex-src-tab-retry:hover, .apex-src-tab-retry:focus-visible { background: rgba(56, 189, 248, .18); }
+.apex-src-tab:focus-visible, .apex-src-tab-close:focus-visible { outline: 2px solid var(--asv-accent); outline-offset: -2px; }
+.apex-src-tab-spinner { width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: apex-src-spin .7s linear infinite; }
+.apex-src-tab-pending { color: #fbbf24; font-size: 18px; line-height: 8px; }
+.apex-src-tab-error { display: inline-grid; place-items: center; width: 13px; height: 13px; border-radius: 50%; background: #dc2626; color: white; font-weight: 700; }
+.apex-src-viewer-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.apex-src-viewer-error-state { padding: 7px 12px; border-bottom: 1px solid rgba(248, 113, 113, .42); background: rgba(127, 29, 29, .18); color: #fecaca; font-size: 12px; }
+.apex-src-viewer-empty { display: grid; place-content: center; gap: 12px; flex: 1; text-align: center; }
+.apex-src-viewer-empty[hidden] { display: none; }
+.apex-src-viewer-empty button { justify-self: center; cursor: pointer; padding: 6px 12px; border: 1px solid var(--asv-border); border-radius: 6px; background: transparent; color: inherit; }
+@keyframes apex-src-spin { to { transform: rotate(360deg); } }
+
+.apex-src-viewer-notice,
+.apex-src-definition-picker {
+  position: fixed;
+  z-index: 20;
+  border: 1px solid var(--asv-border);
+  border-radius: 6px;
+  background: #1e293b;
+  color: var(--asv-text);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.32);
+  font-size: 12px;
+}
+
+.apex-src-viewer-notice { right: 16px; bottom: 16px; max-width: 28rem; padding: 9px 12px; }
+.apex-src-definition-picker { right: 16px; top: 52px; display: grid; gap: 8px; padding: 10px; min-width: 18rem; }
+.apex-src-definition-picker label { font-weight: 600; }
+.apex-src-definition-picker select { max-width: 28rem; padding: 5px; }
+.apex-src-definition-picker button { padding: 5px 8px; border: 1px solid var(--asv-border); border-radius: 4px; cursor: pointer; }
+.apex-src-nav-symbol {
+  background: rgba(56, 189, 248, 0.16);
+  border-bottom: 1px solid #38bdf8;
+  border-radius: 3px;
+  box-shadow: inset 0 -1px 0 rgba(125, 211, 252, 0.45);
+  color: #bae6fd !important;
+  cursor: pointer;
+  text-decoration: none;
+}
+
 .apex-src-line-highlight {
   background: rgba(244, 114, 182, 0.18);
 }
@@ -92,6 +180,32 @@ html[data-ui-theme='light'] .apex-src-viewer-download {
   color: #1f3f61;
 }
 
+html[data-ui-theme='light'] .apex-src-tab,
+html[data-ui-theme='light'] .apex-src-tab-close { background: #eef2f7; }
+html[data-ui-theme='light'] .apex-src-tab.is-active,
+html[data-ui-theme='light'] .apex-src-tab.is-active + .apex-src-tab-close { background: #fff; }
+html[data-ui-theme='light'] .apex-src-viewer-error-state { background: #fff1f2; color: #991b1b; }
+
+html[data-ui-theme='light'] .apex-src-viewer-org {
+  border-color: rgba(47, 95, 159, 0.28);
+  background: rgba(47, 95, 159, 0.1);
+  color: #1f3f61;
+}
+
 html[data-ui-theme='light'] .apex-src-line-highlight {
   background: rgba(219, 39, 119, 0.12);
+}
+
+html[data-ui-theme='light'] .apex-src-nav-symbol {
+  background: rgba(37, 99, 235, 0.12);
+  border-bottom-color: #2563eb;
+  box-shadow: inset 0 -1px 0 rgba(37, 99, 235, 0.28);
+  color: #1d4ed8 !important;
+}
+
+html[data-ui-theme='light'] .apex-src-viewer-notice,
+html[data-ui-theme='light'] .apex-src-definition-picker {
+  background: #fff;
+  color: #181818;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16);
 }

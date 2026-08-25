@@ -21,7 +21,39 @@
       "sfInject.userTraceFlags.extendMaxWindow": "La traza ya alcanza el m\xE1ximo de 24 horas.",
       "sfInject.userTraceFlags.errorNoSession": "Sesi\xF3n no disponible. Inicia sesi\xF3n en Salesforce.",
       "sfInject.userTraceFlags.errorOrgNotSaved": "Entorno no guardado en SFOC.",
-      "sfInject.userTraceFlags.emptyFiltered": "No hay trazas que cumplan el filtro."
+      "sfInject.userTraceFlags.emptyFiltered": "No hay trazas que cumplan el filtro.",
+      "sfInject.deployStatus.toggleOpen": "Mostrar detalles del despliegue fallido",
+      "sfInject.deployStatus.toggleClose": "Ocultar detalles del despliegue fallido",
+      "sfInject.deployStatus.loading": "Cargando detalles del despliegue\u2026",
+      "sfInject.deployStatus.retry": "Reintentar",
+      "sfInject.deployStatus.empty": "Salesforce no devolvi\xF3 detalles para este despliegue.",
+      "sfInject.deployStatus.components": "Fallos de componentes",
+      "sfInject.deployStatus.tests": "Fallos de tests",
+      "sfInject.deployStatus.globalError": "Error general",
+      "sfInject.deployStatus.coverageWarnings": "Avisos de cobertura",
+      "sfInject.deployStatus.apiName": "API Name",
+      "sfInject.deployStatus.type": "Type",
+      "sfInject.deployStatus.line": "Line",
+      "sfInject.deployStatus.column": "Column",
+      "sfInject.deployStatus.errorMessage": "Error Message",
+      "sfInject.deployStatus.apexClass": "Apex Class",
+      "sfInject.deployStatus.testMethod": "Test Method",
+      "sfInject.deployStatus.stackTrace": "Stack Trace",
+      "sfInject.deployStatus.time": "Time",
+      "sfInject.deployStatus.openApex": "Ctrl+clic para abrir en SFOC",
+      "sfInject.deployStatus.errorNoSession": "Sesi\xF3n no disponible. Inicia sesi\xF3n en Salesforce.",
+      "sfInject.deployStatus.errorOrgNotSaved": "Entorno no guardado en SFOC.",
+      "sfInject.deployStatus.errorOpenApex": "No se pudo abrir la clase Apex en SFOC.",
+      "sfInject.deployStatus.errorLoad": "No se pudieron cargar los detalles del despliegue.",
+      "sfInject.deployDetailSource.orgLabel": "Organizaci\xF3n para abrir el c\xF3digo",
+      "sfInject.deployDetailSource.noOrgs": "No hay organizaciones conectadas",
+      "sfInject.deployDetailSource.chooseOrg": "Selecciona una organizaci\xF3n",
+      "sfInject.deployDetailSource.selectOrg": "Selecciona una organizaci\xF3n para abrir el c\xF3digo.",
+      "sfInject.deployDetailSource.openHint": "Ctrl/Cmd+clic para abrir en SFOC",
+      "sfInject.deployDetailSource.noSession": "La organizaci\xF3n seleccionada no tiene una sesi\xF3n activa.",
+      "sfInject.deployDetailSource.orgNotSaved": "La organizaci\xF3n seleccionada ya no est\xE1 guardada en SFOC.",
+      "sfInject.deployDetailSource.classNotFound": "La clase Apex no existe en la organizaci\xF3n seleccionada.",
+      "sfInject.deployDetailSource.openError": "No se pudo abrir la clase Apex en SFOC."
     },
     en: {
       "sfInject.debugLogOpenViewer.button": "Open in SFOC",
@@ -42,7 +74,39 @@
       "sfInject.userTraceFlags.extendMaxWindow": "The trace already reaches the 24-hour maximum.",
       "sfInject.userTraceFlags.errorNoSession": "Session unavailable. Sign in to Salesforce.",
       "sfInject.userTraceFlags.errorOrgNotSaved": "Org not saved in SFOC.",
-      "sfInject.userTraceFlags.emptyFiltered": "No traces match the current filter."
+      "sfInject.userTraceFlags.emptyFiltered": "No traces match the current filter.",
+      "sfInject.deployStatus.toggleOpen": "Show failed deployment details",
+      "sfInject.deployStatus.toggleClose": "Hide failed deployment details",
+      "sfInject.deployStatus.loading": "Loading deployment details\u2026",
+      "sfInject.deployStatus.retry": "Retry",
+      "sfInject.deployStatus.empty": "Salesforce returned no details for this deployment.",
+      "sfInject.deployStatus.components": "Component failures",
+      "sfInject.deployStatus.tests": "Test failures",
+      "sfInject.deployStatus.globalError": "General error",
+      "sfInject.deployStatus.coverageWarnings": "Coverage warnings",
+      "sfInject.deployStatus.apiName": "API Name",
+      "sfInject.deployStatus.type": "Type",
+      "sfInject.deployStatus.line": "Line",
+      "sfInject.deployStatus.column": "Column",
+      "sfInject.deployStatus.errorMessage": "Error Message",
+      "sfInject.deployStatus.apexClass": "Apex Class",
+      "sfInject.deployStatus.testMethod": "Test Method",
+      "sfInject.deployStatus.stackTrace": "Stack Trace",
+      "sfInject.deployStatus.time": "Time",
+      "sfInject.deployStatus.openApex": "Ctrl+click to open in SFOC",
+      "sfInject.deployStatus.errorNoSession": "Session unavailable. Sign in to Salesforce.",
+      "sfInject.deployStatus.errorOrgNotSaved": "Org not saved in SFOC.",
+      "sfInject.deployStatus.errorOpenApex": "Could not open the Apex class in SFOC.",
+      "sfInject.deployStatus.errorLoad": "Could not load deployment details.",
+      "sfInject.deployDetailSource.orgLabel": "Org used to open source",
+      "sfInject.deployDetailSource.noOrgs": "No connected organizations",
+      "sfInject.deployDetailSource.chooseOrg": "Select an organization",
+      "sfInject.deployDetailSource.selectOrg": "Select an organization to open source.",
+      "sfInject.deployDetailSource.openHint": "Ctrl/Cmd+click to open in SFOC",
+      "sfInject.deployDetailSource.noSession": "The selected organization has no active session.",
+      "sfInject.deployDetailSource.orgNotSaved": "The selected organization is no longer saved in SFOC.",
+      "sfInject.deployDetailSource.classNotFound": "The Apex class does not exist in the selected organization.",
+      "sfInject.deployDetailSource.openError": "Could not open the Apex class in SFOC."
     }
   };
   function sfInjectT(lang, key) {
@@ -126,6 +190,33 @@
       return { ok: false, reason: "MESSAGE_FAILED" };
     }
   }
+  async function fetchDeployStatusInlineDetail(orgId, asyncId) {
+    try {
+      return await sfInjectSend({ type: "sfInject:getDeployStatusDetail", orgId, asyncId });
+    } catch {
+      return { ok: false, reason: "MESSAGE_FAILED" };
+    }
+  }
+  async function openDeployStatusApexSource(opts) {
+    try {
+      return await sfInjectSend({
+        type: "sfInject:openApexSource",
+        orgId: opts.orgId,
+        classId: opts.classId,
+        className: opts.className,
+        initialLine: opts.initialLine
+      });
+    } catch {
+      return { ok: false, reason: "MESSAGE_FAILED" };
+    }
+  }
+  async function fetchActiveSavedOrgsForDeployDetail() {
+    try {
+      return await sfInjectSend({ type: "sfInject:listActiveSavedOrgsForDeployDetail" });
+    } catch {
+      return { ok: false, reason: "MESSAGE_FAILED" };
+    }
+  }
   async function extendUserTraceFlag(opts) {
     try {
       return await sfInjectSend({
@@ -174,17 +265,17 @@
     function walk(node) {
       if (!node || typeof node.querySelectorAll !== "function") return;
       try {
-        for (const el of node.querySelectorAll(selector)) {
-          if (seen.has(el)) continue;
-          seen.add(el);
-          out.push(el);
+        for (const el2 of node.querySelectorAll(selector)) {
+          if (seen.has(el2)) continue;
+          seen.add(el2);
+          out.push(el2);
         }
       } catch {
       }
       try {
         if (node instanceof Element && node.shadowRoot) walk(node.shadowRoot);
-        for (const el of node.querySelectorAll("*")) {
-          if (el.shadowRoot) walk(el.shadowRoot);
+        for (const el2 of node.querySelectorAll("*")) {
+          if (el2.shadowRoot) walk(el2.shadowRoot);
         }
       } catch {
       }
@@ -207,10 +298,10 @@
     "analizar",
     "borrar"
   ]);
-  function actionLinkLabel(el) {
-    const text = (el.textContent || "").trim().toLowerCase();
+  function actionLinkLabel(el2) {
+    const text = (el2.textContent || "").trim().toLowerCase();
     if (text) return text;
-    const aria = (el.getAttribute("aria-label") || el.getAttribute("title") || "").trim().toLowerCase();
+    const aria = (el2.getAttribute("aria-label") || el2.getAttribute("title") || "").trim().toLowerCase();
     return aria;
   }
   function isNativeDebugLogActionLink(link) {
@@ -249,11 +340,11 @@
       const id = extractApexLogId(String(raw || ""));
       if (id) return id.slice(0, 15);
     }
-    for (const el of queryAllDeep(row, "a[href], button[onclick], [data-href], [onclick]")) {
-      const href = el.getAttribute("href") || el.getAttribute("data-href") || "";
+    for (const el2 of queryAllDeep(row, "a[href], button[onclick], [data-href], [onclick]")) {
+      const href = el2.getAttribute("href") || el2.getAttribute("data-href") || "";
       const fromHref = extractApexLogId(href);
       if (fromHref) return fromHref.slice(0, 15);
-      const onclick = el.getAttribute("onclick") || "";
+      const onclick = el2.getAttribute("onclick") || "";
       const fromOnclick = extractApexLogId(onclick);
       if (fromOnclick) return fromOnclick.slice(0, 15);
     }
@@ -472,16 +563,16 @@
   var TRACE_FORM_ID = "Apex_Trace_List:traceForm";
   var MONITORED_FORM_ID = "Apex_Trace_List:monitoredUsersForm";
   var ORDER_APPLIED_ATTR = "data-sfoc-debug-logs-order";
-  function containsUserTraceFlags(el) {
-    if (!el || typeof el.querySelector !== "function") return false;
-    if (el.querySelector(`[id="${MONITORED_FORM_ID}"]`)) return true;
-    for (const h2 of el.querySelectorAll("h2.mainTitle")) {
+  function containsUserTraceFlags(el2) {
+    if (!el2 || typeof el2.querySelector !== "function") return false;
+    if (el2.querySelector(`[id="${MONITORED_FORM_ID}"]`)) return true;
+    for (const h2 of el2.querySelectorAll("h2.mainTitle")) {
       if (/user trace flags/i.test((h2.textContent || "").trim())) return true;
     }
     return false;
   }
-  function findOuterTbodyRow(el, excludeTr = null) {
-    let node = el;
+  function findOuterTbodyRow(el2, excludeTr = null) {
+    let node = el2;
     while (node) {
       if (node.tagName === "TR" && node.parentElement?.tagName === "TBODY" && node !== excludeTr && containsUserTraceFlags(node)) {
         return (
@@ -660,12 +751,12 @@
     try {
       const doc = document;
       if (!doc.body) return;
-      const el = doc.createElement("div");
-      el.className = `sfoc-inject-toast${isError ? " sfoc-inject-toast--error" : ""}`;
-      el.setAttribute("role", isError ? "alert" : "status");
-      el.textContent = message;
-      doc.body.appendChild(el);
-      setTimeout(() => el.remove(), 4e3);
+      const el2 = doc.createElement("div");
+      el2.className = `sfoc-inject-toast${isError ? " sfoc-inject-toast--error" : ""}`;
+      el2.setAttribute("role", isError ? "alert" : "status");
+      el2.textContent = message;
+      doc.body.appendChild(el2);
+      setTimeout(() => el2.remove(), 4e3);
     } catch {
     }
   }
@@ -728,10 +819,10 @@
       return null;
     }
   }
-  function actionLinkLabel2(el) {
-    const text = (el.textContent || "").trim().toLowerCase().replace(/\s+/g, " ");
+  function actionLinkLabel2(el2) {
+    const text = (el2.textContent || "").trim().toLowerCase().replace(/\s+/g, " ");
     if (text && text.length < 40) return text;
-    return (el.getAttribute("aria-label") || el.getAttribute("title") || "").trim().toLowerCase().split(/[\s—–-]+/)[0];
+    return (el2.getAttribute("aria-label") || el2.getAttribute("title") || "").trim().toLowerCase().split(/[\s—–-]+/)[0];
   }
   function normalizeUserId(raw) {
     const decoded = decodeSalesforceHref(raw);
@@ -788,13 +879,13 @@
     } catch {
       els = queryAllDeep(row, "a[href], [onclick], input[value], input[name]");
     }
-    for (const el of els) {
+    for (const el2 of els) {
       for (const chunk of [
-        el.getAttribute("href") || "",
-        el.getAttribute("onclick") || "",
-        el.getAttribute("value") || "",
-        el.getAttribute("name") || "",
-        el.getAttribute("title") || ""
+        el2.getAttribute("href") || "",
+        el2.getAttribute("onclick") || "",
+        el2.getAttribute("value") || "",
+        el2.getAttribute("name") || "",
+        el2.getAttribute("title") || ""
       ]) {
         const id = normalizeTraceFlagId(chunk);
         if (id) return id;
@@ -810,11 +901,11 @@
     } catch {
       els = queryAllDeep(row, "a[href], [onclick], input[value]");
     }
-    for (const el of els) {
+    for (const el2 of els) {
       for (const chunk of [
-        el.getAttribute("href") || "",
-        el.getAttribute("onclick") || "",
-        el.getAttribute("value") || ""
+        el2.getAttribute("href") || "",
+        el2.getAttribute("onclick") || "",
+        el2.getAttribute("value") || ""
       ]) {
         const id = normalizeUserId(chunk);
         if (id) return id;
@@ -868,8 +959,8 @@
     } catch {
       return "";
     }
-    const cell = cells[index];
-    return cell ? (cell.textContent || "").trim() : "";
+    const cell2 = cells[index];
+    return cell2 ? (cell2.textContent || "").trim() : "";
   }
   function findUserTraceFlagRows(doc) {
     const table = findUserTraceFlagsTable(doc);
@@ -980,10 +1071,10 @@
     badge.textContent = badgeText;
     if (expirationColIndex >= 0) {
       const cells = row.querySelectorAll("td, th");
-      const cell = cells[expirationColIndex];
-      if (cell) {
-        cell.appendChild(ownerDoc.createTextNode(" "));
-        cell.appendChild(badge);
+      const cell2 = cells[expirationColIndex];
+      if (cell2) {
+        cell2.appendChild(ownerDoc.createTextNode(" "));
+        cell2.appendChild(badge);
         return;
       }
     }
@@ -994,12 +1085,12 @@
     }
   }
   function removeExpiredBadge(row) {
-    row.querySelectorAll(`[${BADGE_ATTR}]`).forEach((el) => el.remove());
+    row.querySelectorAll(`[${BADGE_ATTR}]`).forEach((el2) => el2.remove());
   }
   function clearSyntheticTraceRows(doc) {
     const table = findUserTraceFlagsTable(doc);
     if (!table) return;
-    table.querySelectorAll(`tr[${SYNTHETIC_ROW_ATTR}]`).forEach((el) => el.remove());
+    table.querySelectorAll(`tr[${SYNTHETIC_ROW_ATTR}]`).forEach((el2) => el2.remove());
   }
   function setUserTraceFlagsPagerHidden(doc, hide) {
     if (!hide) {
@@ -1009,16 +1100,16 @@
       } catch {
         return;
       }
-      for (const el of marked) {
-        if (el.closest?.('[id="Apex_Trace_List:traceForm"]')) continue;
-        const prev = el.getAttribute(NATIVE_PAGER_HIDDEN_ATTR);
+      for (const el2 of marked) {
+        if (el2.closest?.('[id="Apex_Trace_List:traceForm"]')) continue;
+        const prev = el2.getAttribute(NATIVE_PAGER_HIDDEN_ATTR);
         const htmlEl = (
           /** @type {HTMLElement} */
-          el
+          el2
         );
         if (prev) htmlEl.style.display = prev;
         else htmlEl.style.removeProperty("display");
-        el.removeAttribute(NATIVE_PAGER_HIDDEN_ATTR);
+        el2.removeAttribute(NATIVE_PAGER_HIDDEN_ATTR);
       }
       return;
     }
@@ -1028,22 +1119,22 @@
     const root = sectionCell || doc;
     const nodes = [];
     try {
-      for (const el of root.querySelectorAll(
+      for (const el2 of root.querySelectorAll(
         ".bNext, .fewerMore, .listElementBottomNav, .withFilter, .bFilterView, form#filter_element"
       )) {
-        if (el.closest?.('[id="Apex_Trace_List:traceForm"]')) continue;
-        nodes.push(el);
+        if (el2.closest?.('[id="Apex_Trace_List:traceForm"]')) continue;
+        nodes.push(el2);
       }
     } catch {
       return;
     }
-    for (const el of nodes) {
+    for (const el2 of nodes) {
       const htmlEl = (
         /** @type {HTMLElement} */
-        el
+        el2
       );
-      if (!el.hasAttribute(NATIVE_PAGER_HIDDEN_ATTR)) {
-        el.setAttribute(NATIVE_PAGER_HIDDEN_ATTR, htmlEl.style.display || "");
+      if (!el2.hasAttribute(NATIVE_PAGER_HIDDEN_ATTR)) {
+        el2.setAttribute(NATIVE_PAGER_HIDDEN_ATTR, htmlEl.style.display || "");
       }
       htmlEl.style.display = "none";
     }
@@ -1513,11 +1604,634 @@
     }
   };
 
+  // sfInject/content/matchers/deployStatusPages.js
+  var DEPLOY_STATUS_SETUP_RE = /^\/lightning\/setup\/DeployStatus\/(?:page|home)\/?$/i;
+  var DEPLOY_STATUS_CLASSIC_FRAME_RE = /^\/changemgmt\/monitorDeployment\.apexp$/i;
+  var DEPLOY_STATUS_DETAIL_CLASSIC_FRAME_RE = /^\/changemgmt\/monitorDeploymentsDetails\.apexp$/i;
+  function toUrl2(value) {
+    if (!value) return null;
+    try {
+      return value instanceof URL ? value : new URL(String(value), "https://example.invalid");
+    } catch {
+      return null;
+    }
+  }
+  function isSalesforceHost(hostname) {
+    const host = String(hostname || "").toLowerCase();
+    return [
+      ".lightning.force.com",
+      ".salesforce-setup.com",
+      ".my.salesforce-setup.com",
+      ".my.salesforce.com",
+      ".salesforce.com"
+    ].some((suffix) => host.endsWith(suffix));
+  }
+  function isDeployStatusSetupPage(value) {
+    const url = toUrl2(value);
+    return !!(url && isSalesforceHost(url.hostname) && DEPLOY_STATUS_SETUP_RE.test(url.pathname));
+  }
+  function isDeployStatusClassicFrame(value) {
+    const url = toUrl2(value);
+    return !!(url && isSalesforceHost(url.hostname) && DEPLOY_STATUS_CLASSIC_FRAME_RE.test(url.pathname));
+  }
+  function isDeployStatusInjectPage(value) {
+    return isDeployStatusSetupPage(value) || isDeployStatusClassicFrame(value);
+  }
+  function isDeployStatusDetailSetupPage(value) {
+    const url = toUrl2(value);
+    if (!url || !isSalesforceHost(url.hostname) || !DEPLOY_STATUS_SETUP_RE.test(url.pathname)) return false;
+    let address = url.searchParams.get("address") || "";
+    try {
+      address = decodeURIComponent(address);
+    } catch {
+    }
+    return /^\/changemgmt\/monitorDeploymentsDetails\.apexp(?:[?&]|$)/i.test(address);
+  }
+  function isDeployStatusDetailClassicFrame(value) {
+    const url = toUrl2(value);
+    return !!(url && isSalesforceHost(url.hostname) && DEPLOY_STATUS_DETAIL_CLASSIC_FRAME_RE.test(url.pathname));
+  }
+  function isDeployStatusDetailInjectPage(value) {
+    return isDeployStatusDetailSetupPage(value) || isDeployStatusDetailClassicFrame(value);
+  }
+
+  // sfInject/content/injectors/deployStatusInlineDetailsDom.js
+  var INTEGRATION_ID4 = "deployStatusInlineDetails";
+  var FAILED_TABLE_SELECTOR = 'table[id$=":FailedDeploymentsList"]';
+  var FAILED_TBODY_SELECTOR = 'tbody[id$=":FailedDeploymentsList:tb"]';
+  var ASYNC_ID_RE = /\b(0Af[a-zA-Z0-9]{12}(?:[a-zA-Z0-9]{3})?)\b/;
+  function normalizeDeployAsyncId(value) {
+    const match = String(value || "").match(ASYNC_ID_RE);
+    return match ? match[1] : null;
+  }
+  function extractDeployAsyncIdFromRow(row) {
+    if (!row) return null;
+    const cell2 = row.querySelector('td[id$=":name"]');
+    const fromCell = normalizeDeployAsyncId(cell2?.textContent || "");
+    if (fromCell) return fromCell;
+    for (const link of row.querySelectorAll("a[href]")) {
+      const fromHref = normalizeDeployAsyncId(link.getAttribute("href") || "");
+      if (fromHref) return fromHref;
+    }
+    return null;
+  }
+  function findFailedDeploymentsTable(doc) {
+    return doc?.querySelector(FAILED_TABLE_SELECTOR) || null;
+  }
+  function findFailedDeploymentRows(doc) {
+    const table = findFailedDeploymentsTable(doc);
+    if (!table) return [];
+    const tbody = table.querySelector(FAILED_TBODY_SELECTOR) || table.tBodies?.[0];
+    if (!tbody) return [];
+    return [...tbody.querySelectorAll(":scope > tr.dataRow")];
+  }
+  function isDeployStatusTableDocument(doc) {
+    return !!findFailedDeploymentsTable(doc);
+  }
+  function findDeployActionCell(row) {
+    return row?.querySelector("td.actionColumn") || null;
+  }
+  function deployRowColspan(row) {
+    return Math.max(1, row?.querySelectorAll(":scope > td, :scope > th").length || 1);
+  }
+  function normalizeComponentType(value) {
+    return String(value || "").replace(/[\s_\-]/g, "").toLowerCase();
+  }
+  function isApexClassComponent(value) {
+    return normalizeComponentType(value) === "apexclass";
+  }
+  function extractApexClassAndLineFromStackTrace(stackTrace) {
+    const text = String(stackTrace || "");
+    const match = /Class\.([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z_][A-Za-z0-9_]*:\s*line\s+(\d+)/i.exec(text);
+    if (!match) return { className: "", initialLine: void 0 };
+    const initialLine = Number(match[2]);
+    return { className: match[1], initialLine: Number.isSafeInteger(initialLine) && initialLine > 0 ? initialLine : void 0 };
+  }
+  function asRows(value) {
+    return Array.isArray(value) ? value : [];
+  }
+  function buildDeployDetailModel(detail) {
+    const soap = detail?.soap || detail || {};
+    const componentFailures = asRows(soap.componentFailures).map((item) => ({
+      fullName: String(item?.fullName || ""),
+      componentType: String(item?.componentType || ""),
+      lineNumber: Number.isFinite(Number(item?.lineNumber)) ? Number(item.lineNumber) : null,
+      columnNumber: Number.isFinite(Number(item?.columnNumber)) ? Number(item.columnNumber) : null,
+      problem: String(item?.problem || ""),
+      problemType: String(item?.problemType || ""),
+      fileName: String(item?.fileName || "")
+    }));
+    const testFailures = asRows(soap.runTestResult?.failures).map((item) => ({
+      className: String(item?.className || ""),
+      methodName: String(item?.methodName || ""),
+      message: String(item?.message || ""),
+      stackTrace: String(item?.stackTrace || ""),
+      time: String(item?.time || "")
+    }));
+    return {
+      componentFailures,
+      testFailures,
+      errorMessage: String(soap.errorMessage || detail?.row?.errorMessage || ""),
+      coverageWarnings: asRows(soap.runTestResult?.codeCoverageWarnings).map((item) => String(item?.message || item || "")).filter(Boolean)
+    };
+  }
+
+  // sfInject/content/injectors/deployStatusInlineDetails.js
+  function el(doc, tag, className, text) {
+    const node = doc.createElement(tag);
+    if (className) node.className = className;
+    if (text != null) node.textContent = String(text);
+    return node;
+  }
+  function sectionTitle(doc, text) {
+    return el(doc, "h3", "sfoc-deploy-inline-title", text);
+  }
+  function appendCell(row, value, className = "") {
+    row.appendChild(el(row.ownerDocument, "td", className, value || "\u2014"));
+  }
+  function appendTable(doc, headers, rows) {
+    const table = el(doc, "table", "sfoc-deploy-inline-table");
+    const thead = doc.createElement("thead");
+    const hr = doc.createElement("tr");
+    headers.forEach((header) => hr.appendChild(el(doc, "th", "", header)));
+    thead.appendChild(hr);
+    const tbody = doc.createElement("tbody");
+    rows.forEach((row) => tbody.appendChild(row));
+    table.append(thead, tbody);
+    return table;
+  }
+  function errorText(res, lang) {
+    if (res?.reason === "NO_SID") return sfInjectT(lang, "sfInject.deployStatus.errorNoSession");
+    if (res?.reason === "ORG_NOT_SAVED") return sfInjectT(lang, "sfInject.deployStatus.errorOrgNotSaved");
+    return res?.error || sfInjectT(lang, "sfInject.deployStatus.errorLoad");
+  }
+  function validLine(value) {
+    const n = Number(value);
+    return Number.isSafeInteger(n) && n > 0 ? n : void 0;
+  }
+  function createRenderer(doc, ctx) {
+    const apexHint = sfInjectT(ctx.lang, "sfInject.deployStatus.openApex");
+    const apexLink = (className, initialLine) => {
+      const link = el(doc, "a", "sfoc-deploy-inline-apex", className);
+      link.href = "#";
+      link.title = apexHint;
+      link.setAttribute("aria-label", `${className}. ${apexHint}`);
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.ctrlKey && !event.metaKey) return;
+        void openDeployStatusApexSource({ orgId: ctx.orgId, className, initialLine }).then((res) => {
+          if (!res?.ok) ctx.onError?.(errorText(res, ctx.lang).replace(sfInjectT(ctx.lang, "sfInject.deployStatus.errorLoad"), sfInjectT(ctx.lang, "sfInject.deployStatus.errorOpenApex")));
+        });
+      });
+      return link;
+    };
+    return (panel, model) => {
+      panel.replaceChildren();
+      const hasComponents = model.componentFailures.length > 0;
+      const hasTests = model.testFailures.length > 0;
+      if (hasComponents) {
+        panel.appendChild(sectionTitle(doc, sfInjectT(ctx.lang, "sfInject.deployStatus.components")));
+        const rows = model.componentFailures.map((failure) => {
+          const row = doc.createElement("tr");
+          if (isApexClassComponent(failure.componentType) && failure.fullName) {
+            const cell2 = doc.createElement("td");
+            cell2.appendChild(apexLink(failure.fullName, validLine(failure.lineNumber)));
+            row.appendChild(cell2);
+          } else appendCell(row, failure.fullName);
+          appendCell(row, failure.componentType);
+          appendCell(row, failure.lineNumber);
+          appendCell(row, failure.columnNumber);
+          const message = failure.problem;
+          const secondary = [failure.problemType, failure.fileName].filter(Boolean).join(" \xB7 ");
+          const messageCell = el(doc, "td", "", message || "\u2014");
+          if (secondary) messageCell.appendChild(el(doc, "div", "sfoc-deploy-inline-secondary", secondary));
+          row.appendChild(messageCell);
+          return row;
+        });
+        panel.appendChild(appendTable(doc, [
+          sfInjectT(ctx.lang, "sfInject.deployStatus.apiName"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.type"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.line"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.column"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.errorMessage")
+        ], rows));
+      }
+      if (hasTests) {
+        panel.appendChild(sectionTitle(doc, sfInjectT(ctx.lang, "sfInject.deployStatus.tests")));
+        const rows = model.testFailures.map((failure) => {
+          const row = doc.createElement("tr");
+          const pos = extractApexClassAndLineFromStackTrace(failure.stackTrace);
+          const className = failure.className || pos.className;
+          if (className) {
+            const cell2 = doc.createElement("td");
+            cell2.appendChild(apexLink(className, pos.initialLine));
+            row.appendChild(cell2);
+          } else appendCell(row, "");
+          appendCell(row, failure.methodName);
+          appendCell(row, failure.message);
+          appendCell(row, failure.stackTrace, "sfoc-deploy-inline-stack");
+          appendCell(row, failure.time);
+          return row;
+        });
+        panel.appendChild(appendTable(doc, [
+          sfInjectT(ctx.lang, "sfInject.deployStatus.apexClass"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.testMethod"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.errorMessage"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.stackTrace"),
+          sfInjectT(ctx.lang, "sfInject.deployStatus.time")
+        ], rows));
+      }
+      if (model.errorMessage) panel.append(sectionTitle(doc, sfInjectT(ctx.lang, "sfInject.deployStatus.globalError")), el(doc, "div", "sfoc-deploy-inline-message", model.errorMessage));
+      if (model.coverageWarnings.length) panel.append(sectionTitle(doc, sfInjectT(ctx.lang, "sfInject.deployStatus.coverageWarnings")), el(doc, "div", "sfoc-deploy-inline-message", model.coverageWarnings.join(" \xB7 ")));
+      if (!hasComponents && !hasTests && !model.errorMessage && !model.coverageWarnings.length) panel.appendChild(el(doc, "div", "sfoc-deploy-inline-empty", sfInjectT(ctx.lang, "sfInject.deployStatus.empty")));
+    };
+  }
+  function mountDeployStatusInlineDetails(doc, ctx) {
+    const openIds = /* @__PURE__ */ new Set();
+    const detailCache = /* @__PURE__ */ new Map();
+    const renderDetail = createRenderer(doc, ctx);
+    let mounted = true;
+    const detailIdFor = (asyncId) => `sfoc-deploy-inline-detail-${asyncId}`;
+    const removeDetail = (asyncId) => doc.getElementById(detailIdFor(asyncId))?.remove();
+    const showDetail = async (row, asyncId) => {
+      removeDetail(asyncId);
+      const detailRow = doc.createElement("tr");
+      detailRow.id = detailIdFor(asyncId);
+      detailRow.className = "sfoc-deploy-inline-detail-row";
+      detailRow.setAttribute("data-sfoc-inject", INTEGRATION_ID4);
+      detailRow.setAttribute("data-sfoc-async-id", asyncId);
+      const cell2 = doc.createElement("td");
+      cell2.colSpan = deployRowColspan(row);
+      const panel = el(doc, "div", "sfoc-deploy-inline-panel");
+      panel.setAttribute("role", "region");
+      panel.setAttribute("aria-live", "polite");
+      panel.appendChild(el(doc, "div", "sfoc-deploy-inline-loading", sfInjectT(ctx.lang, "sfInject.deployStatus.loading")));
+      cell2.appendChild(panel);
+      detailRow.appendChild(cell2);
+      row.after(detailRow);
+      let response = detailCache.get(asyncId);
+      if (!response) {
+        const request = fetchDeployStatusInlineDetail(ctx.orgId, asyncId);
+        detailCache.set(asyncId, request);
+        response = request;
+      }
+      const res = await response;
+      if (!res?.ok) {
+        detailCache.delete(asyncId);
+        if (!mounted || !openIds.has(asyncId) || !detailRow.isConnected) return;
+        panel.replaceChildren();
+        panel.appendChild(el(doc, "div", "sfoc-deploy-inline-error", errorText(res, ctx.lang)));
+        const retry = el(doc, "button", "sfoc-deploy-inline-retry", sfInjectT(ctx.lang, "sfInject.deployStatus.retry"));
+        retry.type = "button";
+        retry.addEventListener("click", () => void showDetail(row, asyncId));
+        panel.appendChild(retry);
+        return;
+      }
+      detailCache.set(asyncId, res);
+      if (!mounted || !openIds.has(asyncId) || !detailRow.isConnected) return;
+      renderDetail(panel, buildDeployDetailModel(res.detail));
+    };
+    const inject = () => {
+      for (const row of findFailedDeploymentRows(doc)) {
+        const asyncId = extractDeployAsyncIdFromRow(row);
+        const cell2 = findDeployActionCell(row);
+        if (!asyncId || !cell2 || cell2.querySelector(`[data-sfoc-inject="${INTEGRATION_ID4}"]`)) continue;
+        const button = el(doc, "button", "sfoc-deploy-inline-toggle", "\u203A");
+        button.type = "button";
+        button.setAttribute("data-sfoc-inject", INTEGRATION_ID4);
+        button.setAttribute("data-sfoc-async-id", asyncId);
+        button.setAttribute("aria-controls", detailIdFor(asyncId));
+        button.setAttribute("aria-expanded", openIds.has(asyncId) ? "true" : "false");
+        button.setAttribute("aria-label", sfInjectT(ctx.lang, openIds.has(asyncId) ? "sfInject.deployStatus.toggleClose" : "sfInject.deployStatus.toggleOpen"));
+        button.title = button.getAttribute("aria-label") || "";
+        button.addEventListener("click", () => {
+          if (openIds.has(asyncId)) {
+            openIds.delete(asyncId);
+            removeDetail(asyncId);
+            button.textContent = "\u203A";
+            button.setAttribute("aria-expanded", "false");
+            button.setAttribute("aria-label", sfInjectT(ctx.lang, "sfInject.deployStatus.toggleOpen"));
+          } else {
+            openIds.add(asyncId);
+            button.textContent = "\u2304";
+            button.setAttribute("aria-expanded", "true");
+            button.setAttribute("aria-label", sfInjectT(ctx.lang, "sfInject.deployStatus.toggleClose"));
+            void showDetail(row, asyncId);
+          }
+        });
+        cell2.prepend(button);
+        if (openIds.has(asyncId)) void showDetail(row, asyncId);
+      }
+    };
+    const stopObserver = mountDebouncedDomObserver(doc, inject, { debounceMs: 250, cooldownMs: 30 });
+    return () => {
+      mounted = false;
+      stopObserver();
+      doc.querySelectorAll(`[data-sfoc-inject="${INTEGRATION_ID4}"]`).forEach((node) => node.remove());
+    };
+  }
+  function isParentDeployStatusPage() {
+    try {
+      return isDeployStatusInjectPage(window.top.location.href);
+    } catch {
+      return isDeployStatusInjectPage(location.href);
+    }
+  }
+  var deployStatusInlineDetailsIntegration = {
+    id: INTEGRATION_ID4,
+    isParentPageActive: isParentDeployStatusPage,
+    isFrameRelevant: isDeployStatusTableDocument,
+    mount: mountDeployStatusInlineDetails,
+    retryInject(doc) {
+      return isDeployStatusTableDocument(doc);
+    }
+  };
+
+  // sfInject/content/injectors/deployStatusDetailSourceLinksDom.js
+  var INTEGRATION_ID5 = "deployStatusDetailSourceLinks";
+  var COMPONENT_ERRORS_SELECTOR = 'table[id$=":componentErrorsTable"], table.componentErrorsTable';
+  var TEST_ERRORS_SELECTOR = 'table[id$=":testErrorsTable"], table.testErrorsTable, table[id$=":apexTestFailuresTable"], table.apexTestFailuresTable';
+  function fallbackTableByHeading(doc, labels) {
+    for (const block of doc?.querySelectorAll?.(".bPageBlock, .apexDefaultPageBlock") || []) {
+      const heading = String(block.querySelector(".pbHeader .pbTitle, .pbHeader h1, .pbHeader h2, .pbHeader h3, .mainTitle")?.textContent || "").trim().toLowerCase();
+      if (!labels.some((label) => heading === label)) continue;
+      const table = block.querySelector("table.list");
+      if (table) return table;
+    }
+    return null;
+  }
+  function findComponentErrorsTable(doc) {
+    return doc?.querySelector(COMPONENT_ERRORS_SELECTOR) || fallbackTableByHeading(doc, ["component errors", "errores de componentes"]);
+  }
+  function findTestErrorsTable(doc) {
+    return doc?.querySelector(TEST_ERRORS_SELECTOR) || fallbackTableByHeading(doc, ["test errors", "errores de prueba", "errores de tests", "apex test failures", "fallos de pruebas apex"]);
+  }
+  function isDeployStatusDetailDocument(doc) {
+    return !!(findComponentErrorsTable(doc) || findTestErrorsTable(doc));
+  }
+  function findDetailRows(table) {
+    const tbody = table?.querySelector('tbody[id$=":tb"]') || table?.tBodies?.[0];
+    return tbody ? [...tbody.querySelectorAll(":scope > tr.dataRow")] : [];
+  }
+  function cell(row, suffix) {
+    return row?.querySelector(`td[id$=":${suffix}"]`) || null;
+  }
+  function cellByHeader(row, labels) {
+    const table = row?.closest?.("table");
+    const headers = table ? [...table.querySelectorAll("thead th, tr.headerRow th, tr.headerRow td")] : [];
+    const index = headers.findIndex((header) => {
+      const value = String(header.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+      return labels.some((label) => value === label || value.includes(label));
+    });
+    if (index < 0) return null;
+    return row.querySelectorAll(":scope > td")[index] || null;
+  }
+  function extractComponentErrorRow(row) {
+    const type = cell(row, "type")?.textContent?.trim() || "";
+    const className = cell(row, "apiName")?.textContent?.trim() || "";
+    const line = Number(cell(row, "line")?.textContent?.trim());
+    return {
+      className: /^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(className) ? className : "",
+      isApexClass: isApexClassComponent(type),
+      initialLine: Number.isSafeInteger(line) && line > 0 ? line : void 0,
+      classCell: cell(row, "apiName")
+    };
+  }
+  function extractTestErrorRow(row) {
+    const classCell = cell(row, "className") || cell(row, "class") || cell(row, "name") || row?.querySelector('td[id$=":testClass"]') || cellByHeader(row, ["class name", "test class", "clase"]);
+    const stackCell = cell(row, "stackTrace") || row?.querySelector('td[id$=":stacktrace"]') || cell(row, "errorMessage") || cellByHeader(row, ["stack trace", "error message", "mensaje de error"]);
+    const className = classCell?.textContent?.trim() || "";
+    const frames = parseApexStackTraceFrames(stackCell?.textContent || "");
+    return {
+      className: /^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(className) ? className : "",
+      classCell,
+      stackCell,
+      initialLine: frames.find((frame) => frame.className === className)?.initialLine
+    };
+  }
+  function parseApexStackTraceFrames(value) {
+    const text = String(value || "");
+    const frames = [];
+    const re = /Class\.([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z_][A-Za-z0-9_]*:\s*line\s+(\d+)(?:,\s*column\s+\d+)?/gi;
+    let match;
+    while (match = re.exec(text)) {
+      const initialLine = Number(match[2]);
+      if (!Number.isSafeInteger(initialLine) || initialLine <= 0) continue;
+      frames.push({ className: match[1], initialLine, start: match.index, end: match.index + match[0].length });
+    }
+    return frames;
+  }
+  function splitTestErrorMessage(value, frames = parseApexStackTraceFrames(value)) {
+    const text = String(value || "");
+    const stackLabel = /stack\s*trace\s*:/i.exec(text);
+    const traceStart = stackLabel ? stackLabel.index : frames[0]?.start ?? text.length;
+    return {
+      message: text.slice(0, traceStart).trim(),
+      trace: text.slice(traceStart),
+      frames
+    };
+  }
+  function findDetailSectionHeaderHost(table) {
+    const block = table?.closest(".bPageBlock, .apexDefaultPageBlock") || table?.parentElement;
+    return block?.querySelector(".pbHeader td:last-child") || null;
+  }
+
+  // sfInject/content/injectors/deployStatusDetailSourceLinks.js
+  function sourceError(res, lang) {
+    if (res?.reason === "NO_SID") return sfInjectT(lang, "sfInject.deployDetailSource.noSession");
+    if (res?.reason === "ORG_NOT_SAVED") return sfInjectT(lang, "sfInject.deployDetailSource.orgNotSaved");
+    if (res?.reason === "NOT_FOUND") return sfInjectT(lang, "sfInject.deployDetailSource.classNotFound");
+    return res?.error || sfInjectT(lang, "sfInject.deployDetailSource.openError");
+  }
+  function mountDeployStatusDetailSourceLinks(doc, ctx) {
+    let selectedOrgId = ctx.orgId || "";
+    let orgs = [];
+    let active = true;
+    const selectorClass = "sfoc-deploy-detail-org-select";
+    const openSource = (className, initialLine) => {
+      if (!selectedOrgId) {
+        ctx.onError?.(sfInjectT(ctx.lang, "sfInject.deployDetailSource.selectOrg"));
+        return;
+      }
+      void openDeployStatusApexSource({ orgId: selectedOrgId, className, initialLine }).then((res) => {
+        if (!res?.ok) ctx.onError?.(sourceError(res, ctx.lang));
+      });
+    };
+    const createLink = (className, initialLine, label = className) => {
+      const link = doc.createElement("a");
+      link.className = "sfoc-deploy-detail-source-link";
+      link.setAttribute("role", "link");
+      link.tabIndex = 0;
+      link.textContent = label;
+      const hint = sfInjectT(ctx.lang, "sfInject.deployDetailSource.openHint");
+      link.title = hint;
+      link.setAttribute("aria-label", `${className}. ${hint}`);
+      const activate = (event) => {
+        if (!event.ctrlKey && !event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openSource(className, initialLine);
+      };
+      link.addEventListener("click", activate);
+      link.addEventListener("keydown", (event) => {
+        if ((event.key === "Enter" || event.key === " ") && (event.ctrlKey || event.metaKey)) activate(event);
+      });
+      return link;
+    };
+    const restoreCell = (cell2) => {
+      const original = cell2.getAttribute("data-sfoc-detail-original");
+      if (original == null) return;
+      cell2.textContent = original;
+      cell2.removeAttribute("data-sfoc-detail-original");
+    };
+    const injectComponentLinks = (table) => {
+      for (const row of findDetailRows(table)) {
+        const item = extractComponentErrorRow(row);
+        if (!item.isApexClass || !item.className || !item.classCell || item.classCell.hasAttribute("data-sfoc-detail-original")) continue;
+        item.classCell.setAttribute("data-sfoc-detail-original", item.classCell.textContent || "");
+        item.classCell.replaceChildren(createLink(item.className, item.initialLine));
+      }
+    };
+    const injectTestLinks = (table) => {
+      for (const row of findDetailRows(table)) {
+        const item = extractTestErrorRow(row);
+        if (item.className && item.classCell && !item.classCell.hasAttribute("data-sfoc-detail-original")) {
+          item.classCell.setAttribute("data-sfoc-detail-original", item.classCell.textContent || "");
+          item.classCell.replaceChildren(createLink(item.className, item.initialLine));
+        }
+        if (!item.stackCell || item.stackCell.hasAttribute("data-sfoc-detail-original")) continue;
+        const original = item.stackCell.textContent || "";
+        const frames = parseApexStackTraceFrames(original);
+        if (!frames.length) continue;
+        item.stackCell.setAttribute("data-sfoc-detail-original", original);
+        item.stackCell.classList.add("sfoc-deploy-detail-stack");
+        const detail = splitTestErrorMessage(original, frames);
+        const fragment = doc.createDocumentFragment();
+        if (detail.message) {
+          const message = doc.createElement("div");
+          message.className = "sfoc-deploy-detail-error-message";
+          message.textContent = detail.message;
+          fragment.appendChild(message);
+        }
+        const stack = doc.createDocumentFragment();
+        const traceOffset = original.length - detail.trace.length;
+        let cursor = 0;
+        for (const frame of frames) {
+          const frameStart = frame.start - traceOffset;
+          const frameEnd = frame.end - traceOffset;
+          const between = detail.trace.slice(cursor, frameStart).replace(/stack\s*trace\s*:/ig, "").trim();
+          if (between) {
+            const note = doc.createElement("div");
+            note.className = "sfoc-deploy-detail-stack-note";
+            note.textContent = between;
+            stack.appendChild(note);
+          }
+          const frameRow = doc.createElement("div");
+          frameRow.className = "sfoc-deploy-detail-stack-frame";
+          frameRow.appendChild(createLink(frame.className, frame.initialLine, original.slice(frame.start, frame.end)));
+          stack.appendChild(frameRow);
+          cursor = frameEnd;
+        }
+        const tail = detail.trace.slice(cursor).replace(/stack\s*trace\s*:/ig, "").trim();
+        if (tail) {
+          const note = doc.createElement("div");
+          note.className = "sfoc-deploy-detail-stack-note";
+          note.textContent = tail;
+          stack.appendChild(note);
+        }
+        fragment.appendChild(stack);
+        item.stackCell.replaceChildren(fragment);
+      }
+    };
+    const syncSelects = () => {
+      for (const select of doc.querySelectorAll(`select.${selectorClass}`)) select.value = selectedOrgId;
+    };
+    const createSelect = () => {
+      const select = doc.createElement("select");
+      select.className = selectorClass;
+      select.setAttribute("data-sfoc-inject", INTEGRATION_ID5);
+      select.setAttribute("aria-label", sfInjectT(ctx.lang, "sfInject.deployDetailSource.orgLabel"));
+      select.title = sfInjectT(ctx.lang, "sfInject.deployDetailSource.orgLabel");
+      if (!orgs.length) {
+        const option = new Option(sfInjectT(ctx.lang, "sfInject.deployDetailSource.noOrgs"), "");
+        select.appendChild(option);
+        select.disabled = true;
+        return select;
+      }
+      if (!selectedOrgId) select.appendChild(new Option(sfInjectT(ctx.lang, "sfInject.deployDetailSource.chooseOrg"), ""));
+      for (const org of orgs) select.appendChild(new Option(org.label, org.id));
+      select.value = selectedOrgId;
+      select.addEventListener("change", () => {
+        selectedOrgId = select.value || "";
+        syncSelects();
+      });
+      return select;
+    };
+    const injectSelectors = () => {
+      for (const table of [findComponentErrorsTable(doc), findTestErrorsTable(doc)].filter(Boolean)) {
+        const host = findDetailSectionHeaderHost(table);
+        if (!host || host.querySelector(`[data-sfoc-inject="${INTEGRATION_ID5}"]`)) continue;
+        const wrap = doc.createElement("span");
+        wrap.className = "sfoc-deploy-detail-org-picker";
+        wrap.setAttribute("data-sfoc-inject", INTEGRATION_ID5);
+        wrap.appendChild(createSelect());
+        host.replaceChildren(wrap);
+      }
+    };
+    const inject = () => {
+      const components = findComponentErrorsTable(doc);
+      const tests = findTestErrorsTable(doc);
+      injectSelectors();
+      if (components) injectComponentLinks(components);
+      if (tests) injectTestLinks(tests);
+    };
+    const loadOrgs = async () => {
+      const response = await fetchActiveSavedOrgsForDeployDetail();
+      orgs = response?.ok && Array.isArray(response.orgs) ? response.orgs : [];
+      if (!orgs.some((org) => org.id === selectedOrgId)) selectedOrgId = orgs.some((org) => org.id === ctx.orgId) ? ctx.orgId : "";
+      doc.querySelectorAll(`[data-sfoc-inject="${INTEGRATION_ID5}"]`).forEach((node) => node.remove());
+      if (active) inject();
+    };
+    const onStorageChanged = (changes, area) => {
+      if (area === "sync" && (changes.savedOrgs || changes.savedOrgOrder || changes.orgAliases || changes.orgGroups)) void loadOrgs();
+    };
+    chrome.storage.onChanged.addListener(onStorageChanged);
+    void loadOrgs();
+    const stopObserver = mountDebouncedDomObserver(doc, inject, { debounceMs: 250, cooldownMs: 30 });
+    return () => {
+      active = false;
+      stopObserver();
+      chrome.storage.onChanged.removeListener(onStorageChanged);
+      doc.querySelectorAll("[data-sfoc-detail-original]").forEach(restoreCell);
+      doc.querySelectorAll(`[data-sfoc-inject="${INTEGRATION_ID5}"]`).forEach((node) => node.remove());
+    };
+  }
+  function isParentDeployStatusDetailPage() {
+    try {
+      return isDeployStatusDetailInjectPage(window.top.location.href);
+    } catch {
+      return isDeployStatusDetailInjectPage(location.href);
+    }
+  }
+  var deployStatusDetailSourceLinksIntegration = {
+    id: INTEGRATION_ID5,
+    requiresSavedOrg: false,
+    isParentPageActive: isParentDeployStatusDetailPage,
+    isFrameRelevant: isDeployStatusDetailDocument,
+    mount: mountDeployStatusDetailSourceLinks,
+    retryInject(doc) {
+      return isDeployStatusDetailDocument(doc);
+    }
+  };
+
   // sfInject/content/injectors/registry.js
   var SF_INJECT_CONTENT_INTEGRATIONS = [
     debugLogOpenViewerIntegration,
     debugLogsTableOrderIntegration,
-    userTraceFlagsEnhanceIntegration
+    userTraceFlagsEnhanceIntegration,
+    deployStatusInlineDetailsIntegration,
+    deployStatusDetailSourceLinksIntegration
   ];
 
   // sfInject/lib/instanceUrl.js
@@ -1564,6 +2278,16 @@
         id: "userTraceFlagsEnhance",
         settingsLabelKey: "settings.sfInjectUserTraceFlagsEnhance",
         settingsHintKey: "settings.sfInjectUserTraceFlagsEnhanceHint"
+      },
+      {
+        id: "deployStatusInlineDetails",
+        settingsLabelKey: "settings.sfInjectDeployStatusInlineDetails",
+        settingsHintKey: "settings.sfInjectDeployStatusInlineDetailsHint"
+      },
+      {
+        id: "deployStatusDetailSourceLinks",
+        settingsLabelKey: "settings.sfInjectDeployStatusDetailSourceLinks",
+        settingsHintKey: "settings.sfInjectDeployStatusDetailSourceLinksHint"
       }
     ]
   );
@@ -1671,16 +2395,20 @@
       teardownAll();
       return;
     }
+    const enabledRelevantIntegrations = relevantIntegrations.filter(
+      (item) => isSfInjectIntegrationEnabled(settings, item.id)
+    );
+    const allowsNoSavedOrg = enabledRelevantIntegrations.some((item) => item.requiresSavedOrg === false);
     const instanceUrl = instanceUrlFromLocation();
     const orgRes = await resolveActiveSavedOrg(instanceUrl);
-    if (!orgRes?.ok || !orgRes.orgId) {
+    if ((!orgRes?.ok || !orgRes.orgId) && !allowsNoSavedOrg) {
       setInjectStatus("org-not-saved");
       teardownAll();
       return;
     }
     const lang = bootstrapRes.lang === "en" ? "en" : "es";
     const ctx = {
-      orgId: orgRes.orgId,
+      orgId: orgRes?.ok && orgRes.orgId ? orgRes.orgId : "",
       lang,
       prefs: settings.prefs || {},
       onError: (msg) => showInjectToast(msg, true)
@@ -1693,6 +2421,10 @@
         continue;
       }
       if (!isSfInjectIntegrationEnabled(settings, integration.id)) {
+        teardownIntegration(integration.id);
+        continue;
+      }
+      if (!ctx.orgId && integration.requiresSavedOrg !== false) {
         teardownIntegration(integration.id);
         continue;
       }

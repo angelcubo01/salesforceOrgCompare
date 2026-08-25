@@ -109,9 +109,13 @@ async function bootstrap() {
     return;
   }
 
+  const enabledRelevantIntegrations = relevantIntegrations.filter((item) =>
+    isSfInjectIntegrationEnabled(settings, item.id)
+  );
+  const allowsNoSavedOrg = enabledRelevantIntegrations.some((item) => item.requiresSavedOrg === false);
   const instanceUrl = instanceUrlFromLocation();
   const orgRes = await resolveActiveSavedOrg(instanceUrl);
-  if (!orgRes?.ok || !orgRes.orgId) {
+  if ((!orgRes?.ok || !orgRes.orgId) && !allowsNoSavedOrg) {
     setInjectStatus('org-not-saved');
     teardownAll();
     return;
@@ -119,7 +123,7 @@ async function bootstrap() {
 
   const lang = bootstrapRes.lang === 'en' ? 'en' : 'es';
   const ctx = {
-    orgId: orgRes.orgId,
+    orgId: orgRes?.ok && orgRes.orgId ? orgRes.orgId : '',
     lang,
     prefs: settings.prefs || {},
     onError: (msg) => showInjectToast(msg, true)
@@ -135,6 +139,11 @@ async function bootstrap() {
     }
 
     if (!isSfInjectIntegrationEnabled(settings, integration.id)) {
+      teardownIntegration(integration.id);
+      continue;
+    }
+
+    if (!ctx.orgId && integration.requiresSavedOrg !== false) {
       teardownIntegration(integration.id);
       continue;
     }

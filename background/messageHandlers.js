@@ -77,7 +77,14 @@ import {
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
 import { fetchAllEnvironmentStatusRows, fetchSessionDetailForOrg, invalidateDescribeCacheForOrg } from './environmentStatus.js';
 import { pollDeployStatus, fetchDeployDetail, cancelDeployRequest } from '../shared/deployStatusApi.js';
+import { fetchApexClassSource } from '../shared/apexClassSource.js';
 import { resolveDeployCoverageLineSets } from '../shared/apexCoverageLines.js';
+import {
+  findApexSymbolAt,
+  inferApexCallOwner,
+  isApexIdentifier,
+  resolveDefinitionInApexClass
+} from '../shared/apexSourceDefinitions.js';
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
 function queryExplorerCatchErrorPayload(e) {
@@ -970,6 +977,7 @@ export function installMessageHandlers() {
                 downloadFileName: message.downloadFileName,
                 defaultTab: message.defaultTab,
                 orgId: message.orgId,
+                orgLabel: message.orgLabel,
                 instanceUrl: message.instanceUrl,
                 logId: message.logId
               });
@@ -993,6 +1001,7 @@ export function installMessageHandlers() {
               ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {}),
               ...(v.defaultTab ? { defaultTab: v.defaultTab } : {}),
               ...(v.orgId ? { orgId: v.orgId } : {}),
+              ...(v.orgLabel ? { orgLabel: v.orgLabel } : {}),
               ...(v.instanceUrl ? { instanceUrl: v.instanceUrl } : {}),
               ...(v.logId ? { logId: v.logId } : {})
             });
@@ -4580,6 +4589,65 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'apexSource:resolveDefinition': {
+            const orgId = String(message.orgId || '');
+            const currentClassName = String(message.currentClassName || '').trim();
+            const source = String(message.source || '');
+            const lineNumber = Number(message.lineNumber);
+            const column = Number(message.column);
+            if (!orgId || !isApexIdentifier(currentClassName) || source.length > 2_000_000 || !Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(column) || column < 1) {
+              reply({ ok: false, reason: 'INVALID_REQUEST' });
+              break;
+            }
+            const symbol = findApexSymbolAt(source, lineNumber, column);
+            if (!symbol) {
+              reply({ ok: false, reason: 'NOT_NAVIGABLE' });
+              break;
+            }
+            const owner = inferApexCallOwner(source, currentClassName, symbol, lineNumber, column);
+            if (!owner || !isApexIdentifier(owner)) {
+              reply({ ok: false, reason: 'UNRESOLVED_OWNER' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, reason: 'ORG_NOT_SAVED' });
+              break;
+            }
+            const localRow = { Id: '', Name: currentClassName, Body: source };
+            if (owner === currentClassName && symbol.kind !== 'class') {
+              const local = resolveDefinitionInApexClass(localRow, symbol.name, symbol.kind, symbol.argumentCount);
+              reply(local);
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const soql = `SELECT Id, Name, Body, SymbolTable FROM ApexClass WHERE Name = '${escapeSoqlLiteral(owner)}' LIMIT 1`;
+              const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+              const row = rows?.[0];
+              if (!row) {
+                reply({ ok: false, reason: 'NOT_FOUND' });
+                break;
+              }
+              if (!String(row.Body || '').trim()) {
+                reply({ ok: false, reason: 'SOURCE_UNAVAILABLE' });
+                break;
+              }
+              if (symbol.kind === 'class') {
+                reply({ ok: true, definition: { kind: 'class', classId: String(row.Id || ''), className: String(row.Name || owner), methodName: '', lineNumber: 1, column: 1, body: String(row.Body) } });
+                break;
+              }
+              reply(resolveDefinitionInApexClass(row, symbol.name, symbol.kind, symbol.argumentCount));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
           case 'apexTests:getTestClassSource': {
             const { orgId, classId, className } = message;
             if (!classId && !className) {
@@ -4598,35 +4666,15 @@ export function installMessageHandlers() {
               break;
             }
             try {
-              let soql;
-              if (classId) {
-                soql = `SELECT Name, Body FROM ApexClass WHERE Id = '${escapeSoqlLiteral(String(classId))}' LIMIT 1`;
-              } else {
-                soql = `SELECT Id, Name, Body FROM ApexClass WHERE Name = '${escapeSoqlLiteral(String(className))}' LIMIT 1`;
-              }
-              let rows = [];
-              try {
-                rows = (await restQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
-              } catch {
-                rows = [];
-              }
-              if (!rows.length) {
-                try {
-                  rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
-                } catch {
-                  rows = [];
-                }
-              }
-              const row = rows && rows[0];
-              const bodyText = row && row.Body != null ? String(row.Body) : '';
-              if (!bodyText) {
+              const source = await fetchApexClassSource(org, sid, { classId, className });
+              if (!source) {
                 reply({ ok: false, error: 'NOT_FOUND' });
                 break;
               }
               reply({
                 ok: true,
-                name: row.Name != null ? String(row.Name) : '',
-                body: bodyText
+                name: source.name,
+                body: source.body
               });
             } catch (e) {
               replyHandlerError(reply, e);

@@ -17,6 +17,7 @@
       </button>
       <img class="sfoc-viewer-brand-logo" src="../icons/icon-32.png" width="32" height="32" alt="" aria-hidden="true" />
       <span id="apexSrcViewerTitle" class="apex-src-viewer-title"></span>
+      <span id="apexSrcViewerOrg" class="apex-src-viewer-org" hidden></span>
       <button
         type="button"
         id="apexSrcViewerDownload"
@@ -26,6 +27,13 @@
         Descargar
       </button>
     </header>
+    <div id="apexSrcViewerTabs" class="apex-src-viewer-tabs" role="tablist" aria-label="Clases Apex abiertas"></div>
+    <div id="apexSrcViewerLive" class="apex-src-viewer-live" role="status" aria-live="polite" aria-atomic="true"></div>
+    <div id="apexSrcViewerError" class="apex-src-viewer-error-state" role="alert" hidden></div>
+    <div id="apexSrcViewerEmpty" class="apex-src-viewer-empty" hidden>
+      <p>No hay clases abiertas</p>
+      <button type="button" id="apexSrcViewerEmptyBack">Volver</button>
+    </div>
     <div id="apexSrcViewerMount" class="apex-src-viewer-editor"></div>
     <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
     <script src="./editor/monaco-amd-config.js"></script>

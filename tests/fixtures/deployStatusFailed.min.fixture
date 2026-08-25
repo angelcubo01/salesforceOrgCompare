@@ -1,0 +1,3 @@
+<!doctype html>
+<table id="MonitorDeploymentsPage:deploymentsForm:listFailed:FailedDeploymentsList"><tbody id="MonitorDeploymentsPage:deploymentsForm:listFailed:FailedDeploymentsList:tb"><tr class="dataRow"><td class="actionColumn"><a href="javascript:srcUp('/changemgmt/monitorDeploymentsDetails.apexp?asyncId=0Af000000000001');">View Details</a></td><td id="MonitorDeploymentsPage:deploymentsForm:listFailed:FailedDeploymentsList:0:name">0Af000000000001</td></tr></tbody></table>
+<table id="MonitorDeploymentsPage:deploymentsForm:listSucceeded:SucceededDeploymentsList"><tbody><tr class="dataRow"><td class="actionColumn">Native action</td></tr></tbody></table>

@@ -77,6 +77,39 @@ export async function fetchUserTraceFlags(orgId) {
   }
 }
 
+/** @param {string} orgId @param {string} asyncId */
+export async function fetchDeployStatusInlineDetail(orgId, asyncId) {
+  try {
+    return await sfInjectSend({ type: 'sfInject:getDeployStatusDetail', orgId, asyncId });
+  } catch {
+    return { ok: false, reason: 'MESSAGE_FAILED' };
+  }
+}
+
+/** @param {{ orgId: string, classId?: string, className: string, initialLine?: number }} opts */
+export async function openDeployStatusApexSource(opts) {
+  try {
+    return await sfInjectSend({
+      type: 'sfInject:openApexSource',
+      orgId: opts.orgId,
+      classId: opts.classId,
+      className: opts.className,
+      initialLine: opts.initialLine
+    });
+  } catch {
+    return { ok: false, reason: 'MESSAGE_FAILED' };
+  }
+}
+
+/** @returns {Promise<{ ok: boolean, orgs?: Array<{ id: string, label: string }>, reason?: string }>} */
+export async function fetchActiveSavedOrgsForDeployDetail() {
+  try {
+    return await sfInjectSend({ type: 'sfInject:listActiveSavedOrgsForDeployDetail' });
+  } catch {
+    return { ok: false, reason: 'MESSAGE_FAILED' };
+  }
+}
+
 /**
  * @param {object} opts
  * @param {string} opts.orgId

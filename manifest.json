@@ -66,7 +66,18 @@
         "https://*.salesforce.com/setup/ui/listApexTraces.apexp*",
         "https://*.my.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
         "https://*.sandbox.my.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
-        "https://*.salesforce-setup.com/setup/ui/listApexTraces.apexp*"
+        "https://*.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
+        "https://*.lightning.force.com/lightning/setup/DeployStatus/*",
+        "https://*.salesforce-setup.com/lightning/setup/DeployStatus/*",
+        "https://*.my.salesforce-setup.com/lightning/setup/DeployStatus/*",
+        "https://*.my.salesforce.com/changemgmt/monitorDeployment.apexp*",
+        "https://*.salesforce.com/changemgmt/monitorDeployment.apexp*",
+        "https://*.my.salesforce-setup.com/changemgmt/monitorDeployment.apexp*",
+        "https://*.salesforce-setup.com/changemgmt/monitorDeployment.apexp*"
+        ,"https://*.my.salesforce.com/changemgmt/monitorDeploymentsDetails.apexp*"
+        ,"https://*.salesforce.com/changemgmt/monitorDeploymentsDetails.apexp*"
+        ,"https://*.my.salesforce-setup.com/changemgmt/monitorDeploymentsDetails.apexp*"
+        ,"https://*.salesforce-setup.com/changemgmt/monitorDeploymentsDetails.apexp*"
       ],
       "js": ["sfInject/content/bundle.js"],
       "css": ["sfInject/content/styles.css"],

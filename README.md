@@ -156,6 +156,8 @@ Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFO
 - Opt-in in Settings → Salesforce UI Integration
 - **Open in SFOC** on Apex Debug Logs (Lightning Setup and Classic list)
 - Reorder Debug Logs table above User Trace Flags (with pagination)
+- **Deployment Status → Inline error details** for failed deployments only; opt-in, supports multiple expanded rows, and Ctrl+click opens Apex classes in SFOC.
+- **Deployment detail → Open Apex classes** adds an org selector and Ctrl+click/Cmd+click source links for Component Errors, Test Errors, and Apex stack-trace frames.
 
 ### Popup & Settings
 

@@ -7,6 +7,9 @@ import {
   queryApexLogsInWindow,
   queryUserDebugTraceFlags
 } from '../../shared/salesforceApi.js';
+import { fetchDeployDetail } from '../../shared/deployStatusApi.js';
+import { fetchApexClassSource } from '../../shared/apexClassSource.js';
+import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { instanceUrlsReferToSameOrg } from '../../shared/orgDiscovery.js';
 import { loadLang } from '../../shared/i18n.js';
 import {
@@ -18,9 +21,10 @@ import {
 } from '../lib/settings.js';
 import { normalizeTraceFlagId } from '../content/matchers/traceFlagIds.js';
 import { stageApexViewerPayload } from '../../background/apexViewerStaging.js';
-import { buildOrgFromActiveTab, loadSavedOrgs, resolveSidForOrg } from '../../background/orgHelpers.js';
+import { buildOrgFromActiveTab, checkOrgAuthStatus, getOrderedSavedOrgs, loadSavedOrgs, resolveSidForOrg } from '../../background/orgHelpers.js';
 import { instanceUrlFromLocationUrl } from '../lib/instanceUrl.js';
 import { isApexDebugLogsInjectPage, normalizeApexLogId } from '../content/matchers/debugLogPages.js';
+import { isDeployStatusDetailInjectPage, isDeployStatusInjectPage } from '../content/matchers/deployStatusPages.js';
 
 function sanitizeLogFileName(logId) {
   return String(logId || 'log')
@@ -49,6 +53,45 @@ function isDebugLogsPageSender(sender) {
   );
   return candidates.some((u) => isApexDebugLogsInjectPage(u));
 }
+
+/** Content script de Setup > Deployment Status o de su iframe Visualforce. */
+export function isDeployStatusPageSender(sender) {
+  const candidates = [sender?.url, sender?.tab?.url].filter(
+    (u) => typeof u === 'string' && u.length > 0
+  );
+  return candidates.some((u) => isDeployStatusInjectPage(u) || isDeployStatusDetailInjectPage(u));
+}
+
+function isDeployStatusDetailPageSender(sender) {
+  const candidates = [sender?.url, sender?.tab?.url].filter((u) => typeof u === 'string' && u.length > 0);
+  return candidates.some((u) => isDeployStatusDetailInjectPage(u));
+}
+
+/** @param {unknown} value */
+export function normalizeDeployStatusAsyncId(value) {
+  const m = String(value || '').match(/\b(0Af[a-zA-Z0-9]{12}(?:[a-zA-Z0-9]{3})?)\b/);
+  return m ? m[1] : null;
+}
+
+/** @param {unknown} value */
+export function normalizeApexClassId(value) {
+  const m = String(value || '').match(/\b(01p[a-zA-Z0-9]{12}(?:[a-zA-Z0-9]{3})?)\b/);
+  return m ? m[1] : null;
+}
+
+/** @param {unknown} value */
+export function normalizeApexClassName(value) {
+  const name = String(value || '').trim();
+  return /^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(name) ? name : null;
+}
+
+/** @param {unknown} value */
+export function normalizeInitialLine(value) {
+  if (value == null || value === '') return undefined;
+  const line = Number(value);
+  return Number.isSafeInteger(line) && line > 0 && line <= 1000000 ? line : null;
+}
+
 
 /**
  * @param {string | undefined} instanceUrl
@@ -165,10 +208,109 @@ export async function handleSfInjectMessage(message, sender) {
       }
     }
     case 'sfInject:resolveActiveOrg': {
-      if (!isExtensionUiSender(sender) && !isDebugLogsPageSender(sender)) {
+      if (!isExtensionUiSender(sender) && !isDebugLogsPageSender(sender) && !isDeployStatusPageSender(sender)) {
         return { ok: false, reason: 'FORBIDDEN' };
       }
       return resolveSavedOrgForInstance(message.instanceUrl, sender?.tab?.id);
+    }
+    case 'sfInject:getDeployStatusDetail': {
+      // El SOAP de detalle queda ligado exclusivamente al listado de despliegues de la pestaña.
+      const candidates = [sender?.url, sender?.tab?.url].filter((u) => typeof u === 'string' && u.length > 0);
+      if (!candidates.some((u) => isDeployStatusInjectPage(u) && !isDeployStatusDetailInjectPage(u))) return { ok: false, reason: 'FORBIDDEN' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'deployStatusInlineDetails')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const asyncId = normalizeDeployStatusAsyncId(message.asyncId);
+      if (!asyncId) return { ok: false, reason: 'INVALID_ASYNC_ID' };
+      const orgId = typeof message.orgId === 'string' ? message.orgId : '';
+      const saved = await loadSavedOrgs();
+      const org = saved[orgId];
+      if (!org) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      const senderOrg = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+      if (!senderOrg.ok || senderOrg.orgId !== orgId) return { ok: false, reason: 'FORBIDDEN' };
+      const sid = await resolveSidForOrg(org);
+      if (!sid) return { ok: false, reason: 'NO_SID' };
+      try {
+        const detail = await fetchDeployDetail(org.instanceUrl, sid, org.apiVersion, asyncId);
+        return detail ? { ok: true, detail } : { ok: false, reason: 'NOT_FOUND' };
+      } catch (e) {
+        return { ok: false, error: e?.message || 'DEPLOY_DETAIL_FAILED' };
+      }
+    }
+    case 'sfInject:listActiveSavedOrgsForDeployDetail': {
+      if (!isDeployStatusDetailPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'deployStatusDetailSourceLinks')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const [ordered, extras] = await Promise.all([
+        getOrderedSavedOrgs(),
+        chrome.storage.sync.get(['orgAliases', 'orgGroups'])
+      ]);
+      const statuses = await Promise.all(ordered.map(async (org) => ({
+        org,
+        active: (await checkOrgAuthStatus(org)) === 'active'
+      })));
+      return {
+        ok: true,
+        orgs: statuses
+          .filter((item) => item.active)
+          .map(({ org }) => ({
+            id: String(org.id),
+            label: buildOrgPicklistLabel(org, { aliases: extras.orgAliases || {}, groups: extras.orgGroups || {} })
+          }))
+      };
+    }
+    case 'sfInject:openApexSource': {
+      if (!isDeployStatusPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      await loadSfInjectSettings();
+      const isDetailSender = isDeployStatusDetailPageSender(sender);
+      const integrationId = isDetailSender ? 'deployStatusDetailSourceLinks' : 'deployStatusInlineDetails';
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), integrationId)) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const classId = message.classId == null || message.classId === '' ? undefined : normalizeApexClassId(message.classId);
+      const className = normalizeApexClassName(message.className);
+      const initialLine = normalizeInitialLine(message.initialLine);
+      if ((!classId && message.classId) || !className || initialLine === null) {
+        return { ok: false, reason: 'INVALID_APEX_SOURCE_REQUEST' };
+      }
+      const orgId = typeof message.orgId === 'string' ? message.orgId : '';
+      const saved = await loadSavedOrgs();
+      const org = saved[orgId];
+      if (!org) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      // En el detalle se puede comparar la fuente contra cualquier org guardada elegida.
+      // El listado inline conserva la restricción de org origen para no relajar su lectura de deploy.
+      if (!isDetailSender) {
+        const senderOrg = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+        if (!senderOrg.ok || senderOrg.orgId !== orgId) return { ok: false, reason: 'FORBIDDEN' };
+      }
+      const sid = await resolveSidForOrg(org);
+      if (!sid) return { ok: false, reason: 'NO_SID' };
+      try {
+        const source = await fetchApexClassSource(org, sid, { classId, className });
+        if (!source) return { ok: false, reason: 'NOT_FOUND' };
+        const prefs = await chrome.storage.sync.get(['orgAliases', 'orgGroups']);
+        const stagedId = stageApexViewerPayload(`Apex Class · ${source.name}`, source.body, {
+          initialLine,
+          downloadFileName: `${source.name}.cls`,
+          orgId,
+          orgLabel: buildOrgPicklistLabel(org, { aliases: prefs.orgAliases || {}, groups: prefs.orgGroups || {} }),
+          instanceUrl: org.instanceUrl
+        });
+        const params = new URLSearchParams({ staged: stagedId });
+        if (initialLine) params.set('line', String(initialLine));
+        const tabOpts = { url: chrome.runtime.getURL(`code/apex-source-viewer.html?${params}`), active: true };
+        if (sender?.tab?.id != null) {
+          tabOpts.openerTabId = sender.tab.id;
+          if (sender.tab.index != null) tabOpts.index = sender.tab.index + 1;
+        }
+        await chrome.tabs.create(tabOpts);
+        return { ok: true, opened: true };
+      } catch (e) {
+        return { ok: false, error: e?.message || 'OPEN_APEX_SOURCE_FAILED' };
+      }
     }
     case 'sfInject:listDebugLogs': {
       if (!isDebugLogsPageSender(sender)) {

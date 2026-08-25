@@ -19,6 +19,7 @@ function prune() {
  *   downloadFileName?: string,
  *   defaultTab?: string,
  *   orgId?: string,
+ *   orgLabel?: string,
  *   instanceUrl?: string,
  *   logId?: string
  * }} [options]
@@ -40,6 +41,7 @@ export function stageApexViewerPayload(title, content, options = {}) {
     ...(df ? { downloadFileName: df } : {}),
     ...(options.defaultTab ? { defaultTab: String(options.defaultTab) } : {}),
     ...(options.orgId ? { orgId: String(options.orgId) } : {}),
+    ...(options.orgLabel ? { orgLabel: String(options.orgLabel) } : {}),
     ...(options.instanceUrl ? { instanceUrl: String(options.instanceUrl) } : {}),
     ...(options.logId ? { logId: String(options.logId) } : {}),
     at: Date.now()
@@ -60,6 +62,7 @@ export function takeApexViewerPayload(id) {
         ...(v.downloadFileName ? { downloadFileName: v.downloadFileName } : {}),
         ...(v.defaultTab ? { defaultTab: v.defaultTab } : {}),
         ...(v.orgId ? { orgId: v.orgId } : {}),
+        ...(v.orgLabel ? { orgLabel: v.orgLabel } : {}),
         ...(v.instanceUrl ? { instanceUrl: v.instanceUrl } : {}),
         ...(v.logId ? { logId: v.logId } : {})
       }

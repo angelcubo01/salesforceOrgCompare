@@ -200,7 +200,13 @@ describe('sfInject manifest privacy', () => {
     const matches = manifest.content_scripts?.flatMap((cs) => cs.matches || []) || [];
     expect(matches.length).toBeGreaterThan(0);
     for (const m of matches) {
-      expect(m.includes('ApexDebugLogs') || m.includes('listApexTraces.apexp')).toBe(true);
+      expect(
+          m.includes('ApexDebugLogs') ||
+          m.includes('listApexTraces.apexp') ||
+          m.includes('DeployStatus') ||
+          m.includes('monitorDeployment.apexp') ||
+          m.includes('monitorDeploymentsDetails.apexp')
+      ).toBe(true);
       expect(m).not.toBe('https://*.salesforce.com/*');
       expect(m).not.toBe('https://*.lightning.force.com/*');
     }
