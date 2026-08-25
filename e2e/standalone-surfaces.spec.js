@@ -155,7 +155,7 @@ test.afterEach(async ({ extensionContext }) => {
   expect(runtimeErrors).toEqual([]);
 });
 
-test('popup: ancho natural 640 px, reflow, teclado, foco contenido y WCAG A/AA', async ({
+test('popup: ancho real fijo de 640 px, teclado, foco contenido y WCAG A/AA', async ({
   extensionContext: context,
   extensionId,
   extensionWorker
@@ -164,12 +164,12 @@ test('popup: ancho natural 640 px, reflow, teclado, foco contenido y WCAG A/AA',
   const page = await openExtensionPage(context, extensionId, 'popup/popup.html');
   await expect(page.locator('#savedListLoading')).toBeHidden();
   await expect(page.locator('.popup-brand-logo')).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.getBoundingClientRect().width)).toBe(640);
-
-  for (const width of [320, 360, 400, 480, 640]) {
-    await page.setViewportSize({ width, height: 760 });
-    await assertNoGlobalOverflow(page);
-  }
+  expect(await page.evaluate(() => ({
+    width: document.documentElement.getBoundingClientRect().width,
+    minWidth: getComputedStyle(document.documentElement).minWidth
+  }))).toEqual({ width: 640, minWidth: '640px' });
+  await page.setViewportSize({ width: 640, height: 760 });
+  await assertNoGlobalOverflow(page);
 
   await page.locator('#openPopupHelpBtn').click();
   await expect(page.locator('#popupHelpModal')).toHaveAttribute('aria-hidden', 'false');

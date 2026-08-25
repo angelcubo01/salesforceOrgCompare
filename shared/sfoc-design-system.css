@@ -192,8 +192,9 @@ html[data-sfoc-document] :where(code, pre, kbd, samp, .mono, [class*='-mono']) {
 /* Popup compacto. */
 html[data-sfoc-document='popup'],
 html[data-sfoc-document='popup'] body {
-  width: min(var(--sfoc-popup-width), 100vw);
-  max-width: 100vw;
+  width: var(--sfoc-popup-width);
+  min-width: var(--sfoc-popup-width);
+  max-width: none;
 }
 
 html[data-sfoc-document='popup'] body {
