@@ -1,6 +1,7 @@
 import { t } from '../../shared/i18n.js';
 import { createIcon, STATE_ICONS } from '../workbench/iconRegistry.js';
 import { state } from '../core/state.js';
+import { activateDialogFocus, deactivateDialogFocus } from '../../shared/dialogFocus.js';
 
 const READ_ONLY_STORAGE_KEY = 'sfocOrgReadOnlyById';
 
@@ -11,6 +12,144 @@ let previousFocus = null;
 /** @type {(() => void) | null} */
 let activeOnClose = null;
 let closing = false;
+
+const overlayEntries = [];
+let backgroundSnapshot = [];
+let previousBodyOverflow = '';
+
+export function ensureSfocOverlayRoot() {
+  let root = document.getElementById('sfocOverlayRoot');
+  if (root) return root;
+  root = document.createElement('div');
+  root.id = 'sfocOverlayRoot';
+  root.setAttribute('aria-live', 'off');
+  document.body.appendChild(root);
+  return root;
+}
+
+function setBackgroundLocked(locked) {
+  const root = document.getElementById('sfocOverlayRoot');
+  if (locked) {
+    if (!backgroundSnapshot.length) {
+      backgroundSnapshot = [...document.body.children]
+        .filter((node) => node !== root && node.id !== 'toastContainer')
+        .map((node) => ({ node, inert: node.inert }));
+      for (const { node } of backgroundSnapshot) node.inert = true;
+      previousBodyOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+    }
+    document.body.dataset.sfocModalOpen = 'true';
+    return;
+  }
+  for (const { node, inert } of backgroundSnapshot) {
+    if (node.isConnected) node.inert = inert;
+  }
+  backgroundSnapshot = [];
+  document.body.style.overflow = previousBodyOverflow;
+  previousBodyOverflow = '';
+  delete document.body.dataset.sfocModalOpen;
+}
+
+function refreshOverlayStack() {
+  overlayEntries.forEach((entry, index) => {
+    const top = index === overlayEntries.length - 1;
+    entry.node.inert = !top;
+    entry.node.dataset.overlayDepth = String(index + 1);
+    entry.node.setAttribute('aria-hidden', top ? 'false' : 'true');
+  });
+  setBackgroundLocked(overlayEntries.length > 0);
+}
+
+function handleOverlayKeyboard(event) {
+  const entry = overlayEntries.at(-1);
+  if (!entry) return;
+  if (event.key === 'Escape' && entry.escapeSafe) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    entry.onEscape?.();
+    return;
+  }
+  if (event.key === 'F5' || (event.key === 'Enter' && (event.ctrlKey || event.metaKey))) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+}
+
+if (typeof document !== 'undefined') document.addEventListener('keydown', handleOverlayKeyboard, true);
+
+/**
+ * Monta un modal existente en el portal global. El nodo vuelve exactamente a su
+ * posición original al cerrar, lo que permite reutilizarlo como vista inline.
+ */
+export function mountSfocOverlay(node, {
+  dialog = node?.querySelector?.('[role="dialog"], [role="alertdialog"]'),
+  initialFocus = null,
+  restoreFocus = document.activeElement,
+  onEscape = null,
+  escapeSafe = true,
+  restore = true
+} = {}) {
+  if (!node) return null;
+  const existing = overlayEntries.find((entry) => entry.node === node);
+  if (existing) return existing;
+  document.dispatchEvent(new CustomEvent('sfoc:overlay-will-open'));
+  const root = ensureSfocOverlayRoot();
+  const parent = node.parentNode;
+  const placeholder = restore && parent ? document.createComment(`sfoc-overlay:${node.id || 'modal'}`) : null;
+  if (placeholder && parent) parent.insertBefore(placeholder, node);
+  const origin = restoreFocus instanceof HTMLElement ? restoreFocus : null;
+  const entry = { node, dialog, placeholder, parent, origin, onEscape, escapeSafe, restore };
+  node.classList.add('sfoc-overlay-layer');
+  node.classList.remove('hidden');
+  node.setAttribute('aria-hidden', 'false');
+  root.appendChild(node);
+  overlayEntries.push(entry);
+  refreshOverlayStack();
+  if (dialog) {
+    if (!dialog.hasAttribute('tabindex') && !dialog.querySelector('button, input, select, textarea, [href], [tabindex]')) {
+      dialog.tabIndex = -1;
+    }
+    activateDialogFocus(dialog, { initialFocus, restoreFocus: origin });
+  }
+  document.dispatchEvent(new CustomEvent('sfoc:overlay-opened', { detail: { node, depth: overlayEntries.length } }));
+  return entry;
+}
+
+export function unmountSfocOverlay(node, { remove = false, restoreFocus = true } = {}) {
+  const index = overlayEntries.findIndex((entry) => entry.node === node);
+  if (index < 0) {
+    node?.classList?.add('hidden');
+    node?.setAttribute?.('aria-hidden', 'true');
+    return false;
+  }
+  if (index !== overlayEntries.length - 1) return false;
+  const [entry] = overlayEntries.splice(index, 1);
+  if (entry.dialog) deactivateDialogFocus(entry.dialog, { restore: false });
+  entry.node.inert = false;
+  entry.node.classList.remove('sfoc-overlay-layer');
+  entry.node.classList.add('hidden');
+  entry.node.setAttribute('aria-hidden', 'true');
+  delete entry.node.dataset.overlayDepth;
+  if (remove) {
+    entry.node.remove();
+    entry.placeholder?.remove();
+  } else if (entry.restore && entry.placeholder?.parentNode) {
+    entry.placeholder.parentNode.insertBefore(entry.node, entry.placeholder);
+    entry.placeholder.remove();
+  } else if (entry.parent?.isConnected) {
+    entry.parent.appendChild(entry.node);
+  }
+  refreshOverlayStack();
+  if (restoreFocus && entry.origin?.isConnected) {
+    try { entry.origin.focus(); } catch { /* El invocador pudo quedar deshabilitado. */ }
+  }
+  document.dispatchEvent(new CustomEvent('sfoc:overlay-closed', { detail: { node, depth: overlayEntries.length } }));
+  return true;
+}
+
+export function isSfocOverlayOpen(node = null) {
+  return node ? overlayEntries.some((entry) => entry.node === node) : overlayEntries.length > 0;
+}
 
 const VARIANT_ICONS = Object.freeze({
   standard: STATE_ICONS.info,
@@ -34,6 +173,12 @@ function appendBody(target, body) {
   else if (body) target.appendChild(body);
 }
 
+export function matchesSfocConfirmationText(value, requiredText) {
+  const normalize = (input) => String(input || '').normalize('NFKC').trim().toLocaleUpperCase();
+  const expected = normalize(requiredText);
+  return !!expected && normalize(value) === expected;
+}
+
 /**
  * Modal común con foco contenido, restauración de foco y confirmación tipada opcional.
  *
@@ -52,6 +197,7 @@ function appendBody(target, body) {
  *   dismissOnBackdrop?: boolean;
  *   requiredText?: string;
  *   requiredTextLabel?: string;
+ *   requiredTextHint?: string;
  *   onConfirm?: () => void | boolean | Promise<void | boolean>;
  *   onClose?: () => void;
  * }} opts
@@ -100,13 +246,24 @@ export function openSfocModal(opts) {
     const field = document.createElement('label');
     field.className = 'sfoc-modal-confirm-field';
     const label = document.createElement('span');
+    label.className = 'sfoc-modal-confirm-label';
     label.textContent = opts.requiredTextLabel || t('modal.typeToConfirm', { value: opts.requiredText });
+    const token = document.createElement('strong');
+    token.className = 'sfoc-modal-confirm-token';
+    token.textContent = opts.requiredText;
     requiredInput = document.createElement('input');
     requiredInput.type = 'text';
     requiredInput.autocomplete = 'off';
     requiredInput.spellcheck = false;
+    requiredInput.placeholder = opts.requiredText;
     requiredInput.setAttribute('aria-describedby', descriptionId);
-    field.append(label, requiredInput);
+    field.append(label, token, requiredInput);
+    if (opts.requiredTextHint) {
+      const hint = document.createElement('small');
+      hint.className = 'sfoc-modal-confirm-hint';
+      hint.textContent = opts.requiredTextHint;
+      field.appendChild(hint);
+    }
     bodyEl.appendChild(field);
   }
 
@@ -148,7 +305,8 @@ export function openSfocModal(opts) {
         errorEl.classList.remove('hidden');
       } finally {
         if (openModalEl === backdrop) {
-          confirmBtn.disabled = !!opts.requiredText && requiredInput?.value !== opts.requiredText;
+          confirmBtn.disabled = !!opts.requiredText
+            && !matchesSfocConfirmationText(requiredInput?.value, opts.requiredText);
           cancelBtn.disabled = false;
           panel.removeAttribute('aria-busy');
         }
@@ -158,47 +316,38 @@ export function openSfocModal(opts) {
   }
 
   if (requiredInput && confirmBtn) {
-    requiredInput.addEventListener('input', () => {
-      confirmBtn.disabled = requiredInput.value !== opts.requiredText;
+    const syncTypedConfirmation = () => {
+      const matches = matchesSfocConfirmationText(requiredInput.value, opts.requiredText);
+      confirmBtn.disabled = !matches;
+      requiredInput.classList.toggle('is-valid', matches);
+      requiredInput.setAttribute('data-confirmation-match', matches ? 'true' : 'false');
+    };
+    requiredInput.addEventListener('input', syncTypedConfirmation);
+    requiredInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || confirmBtn.disabled) return;
+      event.preventDefault();
+      confirmBtn.click();
     });
   }
 
   panel.append(heading, bodyEl, actions);
   backdrop.appendChild(panel);
-  document.body.appendChild(backdrop);
   openModalEl = backdrop;
 
   backdrop.addEventListener('click', (event) => {
     if (dismissOnBackdrop && event.target === backdrop) closeSfocModal();
   });
-  panel.addEventListener('keydown', (event) => {
-    if (event.key !== 'Tab') return;
-    const focusable = focusableElements(panel);
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable.at(-1);
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+  const initialFocus = requiredInput || (
+    confirmBtn && variant !== 'destructive' && variant !== 'production' ? confirmBtn : cancelBtn
+  );
+  mountSfocOverlay(backdrop, {
+    dialog: panel,
+    initialFocus,
+    restoreFocus: previousFocus,
+    restore: false,
+    escapeSafe,
+    onEscape: () => closeSfocModal()
   });
-  document.addEventListener('keydown', onEscape, true);
-
-  queueMicrotask(() => {
-    if (requiredInput) requiredInput.focus();
-    else if (confirmBtn && variant !== 'destructive' && variant !== 'production') confirmBtn.focus();
-    else cancelBtn.focus();
-  });
-
-  function onEscape(event) {
-    if (event.key !== 'Escape' || openModalEl !== backdrop || !escapeSafe) return;
-    event.preventDefault();
-    closeSfocModal();
-  }
-  backdrop.__sfocEscapeHandler = onEscape;
   return { backdrop, panel, confirmButton: confirmBtn, cancelButton: cancelBtn, requiredInput };
 }
 
@@ -212,6 +361,7 @@ export function openSfocModal(opts) {
  *   icon?: string;
  *   requiredText?: string;
  *   requiredTextLabel?: string;
+ *   requiredTextHint?: string;
  *   escapeSafe?: boolean;
  * }} opts
  */
@@ -243,6 +393,7 @@ export function confirmSfocToolAction(description, confirmLabel, options = {}) {
     icon: options.icon,
     requiredText: options.requiredText,
     requiredTextLabel: options.requiredTextLabel,
+    requiredTextHint: options.requiredTextHint,
     escapeSafe: options.escapeSafe
   });
 }
@@ -271,7 +422,7 @@ export function requiresTypedOrgConfirmation(isSandbox, risk) {
 
 /**
  * Confirmación de escritura con org, entorno y read-only visibles. Producción y
- * entornos desconocidos requieren escribir el nombre visible de la org.
+ * entornos desconocidos requieren escribir una palabra de confirmación simple.
  */
 export async function confirmSfocOrgAction({
   orgId,
@@ -291,16 +442,39 @@ export async function confirmSfocOrgAction({
   }
 
   const body = document.createElement('div');
+  body.className = `sfoc-modal-risk-content sfoc-modal-risk-content--${risk}`;
+  const kicker = document.createElement('span');
+  kicker.className = 'sfoc-modal-risk-kicker';
+  kicker.textContent = t('modal.finalReview');
   const orgLine = document.createElement('div');
   orgLine.className = 'sfoc-modal-org-context';
-  orgLine.appendChild(createIcon(context.environment.icon, { size: 20 }));
+  const orgIcon = document.createElement('span');
+  orgIcon.className = 'sfoc-modal-org-icon';
+  orgIcon.appendChild(createIcon(context.environment.icon, { size: 22 }));
+  const orgCopy = document.createElement('span');
+  orgCopy.className = 'sfoc-modal-org-copy';
+  const orgCaption = document.createElement('span');
+  orgCaption.className = 'sfoc-modal-org-caption';
+  orgCaption.textContent = t('modal.targetEnvironment');
   const orgText = document.createElement('strong');
-  orgText.textContent = `${context.label} · ${context.environment.label} · ${readOnly ? t('workbench.org.readOnly') : t('modal.accessWritable')}`;
-  orgLine.appendChild(orgText);
+  orgText.textContent = context.label;
+  const orgMeta = document.createElement('span');
+  orgMeta.className = 'sfoc-modal-org-meta';
+  orgMeta.textContent = `${context.environment.label} · ${readOnly ? t('workbench.org.readOnly') : t('modal.accessWritable')}`;
+  orgCopy.append(orgCaption, orgText, orgMeta);
+  orgLine.append(orgIcon, orgCopy);
   const descriptionEl = document.createElement('p');
+  descriptionEl.className = 'sfoc-modal-risk-description';
   if (typeof description === 'string') descriptionEl.textContent = description;
   else if (description) descriptionEl.appendChild(description);
-  body.append(orgLine, descriptionEl);
+  const riskNote = document.createElement('p');
+  riskNote.className = 'sfoc-modal-risk-note';
+  riskNote.textContent = t(risk === 'destructive'
+    ? 'modal.riskDestructiveNote'
+    : context.environment.productionLike
+      ? 'modal.riskProductionNote'
+      : 'modal.riskStandardNote');
+  body.append(kicker, orgLine, descriptionEl, riskNote);
 
   if (readOnly) {
     const warning = document.createElement('p');
@@ -320,14 +494,18 @@ export async function confirmSfocOrgAction({
   }
 
   const needsTypedConfirmation = requiresTypedOrgConfirmation(context.org?.isSandbox, risk);
+  const confirmationWord = t('modal.confirmationWord');
   return confirmSfocAction({
     title,
     description: body,
     confirmLabel,
     variant: context.environment.productionLike ? 'production' : variant,
-    requiredText: needsTypedConfirmation ? context.label : undefined,
+    requiredText: needsTypedConfirmation ? confirmationWord : undefined,
     requiredTextLabel: needsTypedConfirmation
-      ? t('modal.typeOrgToConfirm', { org: context.label })
+      ? t('modal.confirmationPrompt')
+      : undefined,
+    requiredTextHint: needsTypedConfirmation
+      ? t('modal.confirmationHint')
       : undefined
   });
 }
@@ -342,8 +520,7 @@ export function closeSfocModal(options = {}) {
   openModalEl = null;
   previousFocus = null;
   activeOnClose = null;
-  if (modal?.__sfocEscapeHandler) document.removeEventListener('keydown', modal.__sfocEscapeHandler, true);
-  modal?.remove();
+  if (modal) unmountSfocOverlay(modal, { remove: true, restoreFocus: false });
   if (options.notify !== false) onClose?.();
   if (focusTarget?.focus) {
     try {

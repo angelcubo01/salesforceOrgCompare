@@ -22,7 +22,7 @@ import {
 } from '../shared/popupControls.js';
 import { setupPopupHelp, refreshPopupHelpModalContent } from './popupHelp.js';
 import { setupPopupWelcome, maybeShowPopupWelcome, refreshPopupWelcomeContent } from './popupWelcome.js';
-import { setupPopupUiModeToggle } from './uiModeToggle.js';
+import { UI_MODE_V2, loadUiMode, saveUiMode } from '../shared/uiMode.js';
 
 async function bg(message) {
   return await chrome.runtime.sendMessage(message);
@@ -114,6 +114,12 @@ async function applyPopupLangChange(lang) {
   if (sel) sel.value = getCurrentLang();
   await refresh();
   await setupPopupControls(null);
+}
+
+async function ensurePopupUiModeV2() {
+  const currentMode = await loadUiMode();
+  if (currentMode === UI_MODE_V2) return currentMode;
+  return await saveUiMode(UI_MODE_V2);
 }
 
 function rowGroupKey(li) {
@@ -589,7 +595,7 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   applyStaticTranslations();
   setupPopupHelp();
   setupPopupWelcome();
-  await setupPopupUiModeToggle();
+  await ensurePopupUiModeV2();
   await initPosthogClient();
   const ph = getPosthogClient();
   const refreshed = await refreshFeatureFlagsIfStale(ph);

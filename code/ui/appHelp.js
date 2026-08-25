@@ -17,8 +17,12 @@ import {
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import {
   dismissDriverOnboardingForNavigation,
-  startDriverToolOnboarding
+  getActiveDriverOnboardingTool,
+  startDriverToolOnboarding,
+  stopDriverToolOnboarding
 } from './driverOnboarding.js';
+import { waitForPosthogSurveyPopupToClose } from './posthogSurveyGate.js';
+import { mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 
 const APP_NAV_MODE_HOME = 'home';
 
@@ -30,6 +34,25 @@ let modalKind = null;
 
 /** @type {string | null} */
 let onboardingToolId = null;
+
+let posthogSurveyOrderingReady = false;
+
+function ensurePosthogSurveyTourOrdering() {
+  if (posthogSurveyOrderingReady || typeof window === 'undefined') return;
+  posthogSurveyOrderingReady = true;
+  window.addEventListener('PHSurveyShown', () => {
+    const interruptedTool = getActiveDriverOnboardingTool();
+    if (!interruptedTool) return;
+    void (async () => {
+      // No se marca como visto: el recorrido debe poder comenzar de nuevo al cerrar PostHog.
+      await stopDriverToolOnboarding('cancelled');
+      await waitForPosthogSurveyPopupToClose();
+      if (getSelectedArtifactType() === interruptedTool) {
+        await maybeShowToolOnboarding(interruptedTool);
+      }
+    })();
+  });
+}
 
 function isV2() {
   return document.body?.dataset.uiMode === 'v2';
@@ -166,12 +189,14 @@ function showModal() {
   const modal = document.getElementById('appHelpModal');
   if (!modal) return;
   syncModalChrome();
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
-  (modalKind === 'onboarding'
+  const initialFocus = (modalKind === 'onboarding'
     ? document.getElementById('appHelpModalPrimaryBtn')
     : document.getElementById('appHelpModalCloseBtn')
-  )?.focus();
+  );
+  mountSfocOverlay(modal, {
+    initialFocus,
+    onEscape: () => void closeHelpModal()
+  });
 }
 
 export function openHelpModal() {
@@ -200,8 +225,7 @@ export function openToolOnboardingModal(tool) {
 function hideModal() {
   const modal = document.getElementById('appHelpModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
   modalKind = null;
   onboardingToolId = null;
 }
@@ -241,6 +265,7 @@ async function markToolSeen(tool) {
  */
 export async function startToolOnboarding(tool, options = {}) {
   if (!tool || !ALL_ONBOARDING_TOOLS.includes(tool)) return false;
+  if (isV2()) ensurePosthogSurveyTourOrdering();
   if (!prefsLoaded) await loadPrefs();
   if (!options.force && hasSeenTool(prefsCache, tool)) return false;
 
@@ -248,6 +273,9 @@ export async function startToolOnboarding(tool, options = {}) {
     openToolOnboardingModal(tool);
     return true;
   }
+
+  await waitForPosthogSurveyPopupToClose();
+  if (!options.manual && getSelectedArtifactType() !== tool) return false;
 
   return startDriverToolOnboarding(tool, {
     manual: options.manual === true,

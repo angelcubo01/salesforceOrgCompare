@@ -1,6 +1,8 @@
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   LEGACY_TOOL_ROUTES,
+  WORKBENCH_HEADER_ACTIONS,
   WORKBENCH_CATEGORIES,
   WORKBENCH_WORKSPACES,
   getCanonicalToolIds,
@@ -28,11 +30,11 @@ describe('workspaceRegistry', () => {
     expect(new Set(configured).size).toBe(configured.length);
     expect(new Set(configured)).toEqual(new Set(WORKBENCH_WORKSPACES.map(({ id }) => id)));
     expect(WORKBENCH_WORKSPACES.filter(({ tabs }) => tabs.length > 1).map(({ id }) => id)).toEqual([
-      'apex-quality', 'code-studio', 'diagnostics', 'dependencies', 'data-compare'
+      'code-studio', 'data-compare'
     ]);
     expect(WORKBENCH_WORKSPACES.some(({ toolAliases }) => toolAliases?.length)).toBe(false);
     expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'development')?.workspaceIds).toEqual([
-      'apex-quality', 'code-studio', 'anonymous-apex', 'query-explorer', 'rest-explorer'
+      'apex-quality', 'apex-coverage', 'code-studio', 'anonymous-apex', 'query-explorer', 'rest-explorer'
     ]);
     expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'monitoring')?.workspaceIds).toEqual([
       'diagnostics', 'event-monitor', 'org-environments', 'org-limits', 'deploy-status',
@@ -40,6 +42,15 @@ describe('workspaceRegistry', () => {
     ]);
     expect(getWorkspaceById('diagnostics')?.categoryId).toBe('monitoring');
     expect(getWorkspaceById('event-monitor')?.categoryId).toBe('monitoring');
+  });
+
+  it('mantiene Calidad Apex, Logs y trazas y Dependencias sin vistas internas', () => {
+    for (const workspaceId of ['apex-quality', 'diagnostics', 'dependencies']) {
+      expect(getWorkspaceById(workspaceId)?.tabs.map(({ id }) => id), workspaceId).toEqual(['main']);
+    }
+    expect(getWorkspaceRouteForTool('ApexCoverageCompare')).toEqual({
+      workspaceId: 'apex-coverage', tabId: 'main'
+    });
   });
 
   it('resuelve cada Tool ID legacy exactamente a un workspace y tab válidos', () => {
@@ -67,5 +78,33 @@ describe('workspaceRegistry', () => {
       expect(workspace.tabs.every(({ panelId }) => typeof panelId === 'string' && panelId)).toBe(true);
       expect(USED_ICON_NAMES).toContain(workspace.icon);
     }
+  });
+
+  it('declara las acciones de cabecera sin inferir presentaciÃ³n desde el DOM legacy', async () => {
+    const html = await readFile(new URL('../code/code.html', import.meta.url), 'utf8');
+    const actions = Object.values(WORKBENCH_HEADER_ACTIONS);
+    expect(new Set(actions.map(({ id }) => id)).size).toBe(actions.length);
+    for (const action of actions) {
+      expect(action).toMatchObject({
+        id: expect.any(String),
+        labelKey: expect.any(String),
+        icon: expect.any(String),
+        variant: expect.stringMatching(/^(primary|secondary|destructive)$/),
+        risk: expect.stringMatching(/^(read|write|destructive)$/),
+        priority: expect.any(Number),
+        allowOverflow: expect.any(Boolean),
+        state: { sourceId: expect.any(String), disabled: 'source', loading: 'source' },
+        handler: { type: 'dispatch-click', targetId: expect.any(String) }
+      });
+      expect(html).toContain(`id="${action.handler.targetId}"`);
+      expect(USED_ICON_NAMES).toContain(action.icon);
+    }
+    expect(getWorkspaceById('comparator')?.tabs[0].actions).toEqual([]);
+    expect(getWorkspaceById('apex-quality')?.tabs[0].actions.map(({ id }) => id)).toEqual([
+      'apex-run', 'apex-select-run', 'apex-profiles', 'apex-runner-settings', 'apex-clear-runs'
+    ]);
+    expect(getWorkspaceById('diagnostics')?.tabs[0].actions.map(({ id }) => id)).toEqual([
+      'logs-refresh', 'logs-view-traces', 'logs-analyze-local', 'logs-delete-all'
+    ]);
   });
 });

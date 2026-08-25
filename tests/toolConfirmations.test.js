@@ -16,6 +16,11 @@ const migratedTools = [
   'restExplorerPanel.js'
 ];
 
+const migratedFiles = [
+  ['code/setup/setupListeners.js', '../code/setup/setupListeners.js'],
+  ['popup/settings.js', '../popup/settings.js']
+];
+
 describe('tool confirmations', () => {
   it('no usa confirmaciones nativas en herramientas fuera del Comparator', async () => {
     for (const file of migratedTools) {
@@ -24,8 +29,10 @@ describe('tool confirmations', () => {
     }
   });
 
-  it('mantiene la excepción interna del Comparator fuera de la migración', async () => {
-    const source = await readFile(new URL('../code/setup/setupListeners.js', import.meta.url), 'utf8');
-    expect(source).toContain('window.confirm(');
+  it('también elimina confirmaciones nativas en setup y ajustes', async () => {
+    for (const [label, relativePath] of migratedFiles) {
+      const source = await readFile(new URL(relativePath, import.meta.url), 'utf8');
+      expect(source, label).not.toContain('window.confirm(');
+    }
   });
 });

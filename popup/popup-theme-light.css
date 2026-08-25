@@ -163,30 +163,6 @@ html[data-ui-theme="light"] .section-hint {
   color: var(--sfoc-light-text-muted);
 }
 
-html[data-ui-theme="light"] .popup-ui-mode {
-  border-color: var(--sfoc-light-border);
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.08), var(--sfoc-light-bg-elevated));
-}
-
-html[data-ui-theme="light"] .popup-ui-mode__title {
-  color: var(--sfoc-light-text);
-}
-
-html[data-ui-theme="light"] .popup-ui-mode__badge {
-  border-color: rgba(37, 99, 235, 0.45);
-  color: #1e40af;
-  background: rgba(37, 99, 235, 0.1);
-}
-
-html[data-ui-theme="light"] .popup-ui-mode__help {
-  color: var(--sfoc-light-text-muted);
-}
-
-html[data-ui-theme="light"] .popup-ui-mode__track {
-  border-color: var(--sfoc-light-border);
-  background: #cbd5e1;
-}
-
 html[data-ui-theme="light"] .popup-telemetry-notice--info,
 html[data-ui-theme="light"] .popup-telemetry-notice {
   border-color: rgba(37, 99, 235, 0.28);

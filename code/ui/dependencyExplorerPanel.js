@@ -14,7 +14,6 @@ import {
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
-import { renderDependencyGraph } from '../workbench/dependencyGraphView.js';
 
 /** @type {{ id: string, name: string, displayName: string, type: string, seedTypeId: string } | null} */
 let selectedComponent = null;
@@ -611,7 +610,6 @@ async function runAnalyze() {
         }
       });
     }
-    refreshDependencyExplorerGraph();
   } catch (e) {
     void handleToolError(e, { artifact_type: 'DependencyExplorer', phase: 'analyze' });
     if (gen === analyzeGeneration) {
@@ -691,50 +689,6 @@ export function resetDependencyExplorerPanel() {
   if (status) status.textContent = '';
   const moreBtn = document.getElementById('depExplorerMoreBtn');
   if (moreBtn) moreBtn.disabled = true;
-  refreshDependencyExplorerGraph();
-}
-
-export function getDependencyExplorerGraphData() {
-  if (!lastAnalysis?.left || !selectedComponent) return null;
-  return {
-    root: {
-      id: selectedComponent.id,
-      name: selectedComponent.displayName || selectedComponent.name,
-      displayName: selectedComponent.displayName || selectedComponent.name,
-      type: selectedComponent.type || selectedComponent.seedTypeId || 'Metadata'
-    },
-    nodes: lastAnalysis.left.nodes || [],
-    edges: lastAnalysis.left.edges || [],
-    truncated: lastAnalysis.left.truncated === true
-  };
-}
-
-function ensureDependencyGraphHost() {
-  const inner = document.querySelector('.dep-explorer-panel-inner');
-  if (!inner) return null;
-  let host = document.getElementById('dependencyExplorerGraphHost');
-  if (!host) {
-    host = document.createElement('section');
-    host.id = 'dependencyExplorerGraphHost';
-    host.className = 'dependency-explorer-graph-host hidden';
-    host.setAttribute('aria-label', t('workbench.graph.label'));
-    inner.appendChild(host);
-  }
-  return host;
-}
-
-export function refreshDependencyExplorerGraph() {
-  const host = document.getElementById('dependencyExplorerGraphHost');
-  if (!host || host.classList.contains('hidden')) return;
-  renderDependencyGraph(host, getDependencyExplorerGraphData(), t);
-}
-
-export function setDependencyExplorerGraphVisible(visible) {
-  const host = ensureDependencyGraphHost();
-  const categories = document.getElementById('depExplorerCategories');
-  host?.classList.toggle('hidden', !visible);
-  categories?.classList.toggle('hidden', !!visible);
-  if (visible && host) renderDependencyGraph(host, getDependencyExplorerGraphData(), t);
 }
 
 export function refreshDependencyExplorerPanel() {

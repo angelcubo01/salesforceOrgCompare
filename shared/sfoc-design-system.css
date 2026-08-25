@@ -63,12 +63,15 @@
   --sfoc-focus-ring: 0 0 0 3px color-mix(in srgb, var(--sfoc-color-focus) 34%, transparent);
   --sfoc-transition-fast: 120ms ease;
   --sfoc-transition: var(--sfoc-transition-fast);
+  --sfoc-z-content: 0;
   --sfoc-z-tool-panel: 120;
   --sfoc-z-org-popup: 400;
   --sfoc-z-app-chrome: 450;
   --sfoc-z-app-submenu: 500;
   --sfoc-z-modal: 1200;
-  --sfoc-z-overlay: 1400;
+  --sfoc-z-modal-nested: 1300;
+  --sfoc-z-special-overlay: 1400;
+  --sfoc-z-overlay: var(--sfoc-z-special-overlay);
   --sfoc-z-toast: 1500;
   --sfoc-z-help: 1501;
   --sfoc-z-logi: 1502;
@@ -89,6 +92,51 @@
   --sfoc-warn: var(--sfoc-color-warning);
   --sfoc-danger: var(--sfoc-color-danger);
   --sfoc-info: var(--sfoc-color-info);
+}
+
+/* Portal de overlays compartido. Los hijos se apilan por orden DOM, de modo que
+   un modal anidado siempre queda por encima sin z-index locales arbitrarios. */
+#sfocOverlayRoot {
+  position: fixed;
+  inset: 0;
+  z-index: var(--sfoc-z-modal, 1200);
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#sfocOverlayRoot:empty { display: none; }
+
+#sfocOverlayRoot > .sfoc-overlay-layer {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: auto !important;
+  pointer-events: auto;
+}
+
+#sfocOverlayRoot > .sfoc-overlay-layer > :where(
+  .apex-tests-coverage-modal-backdrop,
+  .anonymous-apex-log-picker-backdrop,
+  .debug-log-trace-modal-backdrop,
+  .feature-controls-tool-modal-backdrop,
+  .app-help-modal-backdrop,
+  [data-sfoc-modal-backdrop]
+) {
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+#sfocOverlayRoot > .debug-log-edit-trace-modal.sfoc-overlay-layer {
+  display: grid;
+  place-items: center;
+  padding: var(--sfoc-space-4, 16px);
+  background: rgb(2 6 23 / 0.72);
+}
+
+#sfocOverlayRoot > .debug-log-edit-trace-modal.sfoc-overlay-layer .debug-log-edit-trace-modal-inner {
+  position: relative;
+  margin: 0;
 }
 
 :is(html[data-sfoc-document][data-ui-theme='light'], html[data-ui-theme='light'] body[data-ui-mode='v2']) {
@@ -254,7 +302,6 @@ html[data-sfoc-document='popup'] .title-subtitle,
 html[data-sfoc-document='popup'] .section-hint,
 html[data-sfoc-document='popup'] .muted,
 html[data-sfoc-document='popup'] .org-meta,
-html[data-sfoc-document='popup'] .popup-ui-mode__help,
 html[data-sfoc-document='popup'] .popup-footer {
   color: var(--sfoc-color-text-secondary);
 }
@@ -304,30 +351,10 @@ html[data-sfoc-document='popup'] .popup-welcome-primary:hover:not(:disabled) {
   color: #ffffff;
 }
 
-html[data-sfoc-document='popup'] .popup-ui-mode {
-  margin-block: 12px 4px;
-  padding: 10px 2px 10px 0;
-  border: 0;
-  border-bottom: 1px solid var(--sfoc-color-border);
-  border-radius: 0;
-  background: transparent;
-}
-
-html[data-sfoc-document='popup'] .popup-ui-mode__badge,
 html[data-sfoc-document='popup'] .org-group-tag {
   border-color: color-mix(in srgb, var(--sfoc-color-info) 45%, var(--sfoc-color-border));
   background: color-mix(in srgb, var(--sfoc-color-info) 12%, transparent);
   color: var(--sfoc-color-info);
-}
-
-html[data-sfoc-document='popup'] .popup-ui-mode__track {
-  border-color: var(--sfoc-color-border-strong);
-  background: var(--sfoc-color-surface-elevated);
-}
-
-html[data-sfoc-document='popup'] .popup-ui-mode__input:checked + .popup-ui-mode__track {
-  border-color: var(--sfoc-color-primary);
-  background: var(--sfoc-color-primary);
 }
 
 html[data-sfoc-document='popup'] h3 {

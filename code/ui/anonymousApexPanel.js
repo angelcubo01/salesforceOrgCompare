@@ -13,7 +13,12 @@ import { guardToolAction } from './featureControlsUi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { renderVscodeTabBar } from './vscodeTabs.js';
 import { bindRunShortcut } from './runShortcut.js';
-import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
+import {
+  confirmSfocOrgAction,
+  confirmSfocToolAction,
+  mountSfocOverlay,
+  unmountSfocOverlay
+} from './sfocModal.js';
 
 import {
   createTabId,
@@ -548,17 +553,16 @@ async function quickSaveCurrentScript() {
 
 function closeScriptsModal() {
   const modal = document.getElementById('anonymousApexScriptsModal');
-  if (modal) {
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
-  }
+  if (modal) unmountSfocOverlay(modal);
 }
 
 function openScriptsModal() {
   const modal = document.getElementById('anonymousApexScriptsModal');
   if (modal) {
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
+    mountSfocOverlay(modal, {
+      initialFocus: document.getElementById('anonymousApexScriptNameInput'),
+      onEscape: closeScriptsModal
+    });
   }
   refreshSavedScriptsUi();
   syncSaveButtonLabel();
@@ -916,8 +920,7 @@ function closeLogPickerModal() {
   const body = document.getElementById('anonymousApexLogPickerBody');
   if (body) body.innerHTML = '';
   if (modal) {
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+    unmountSfocOverlay(modal);
   }
 }
 
@@ -950,8 +953,15 @@ function openLogPickerModal(options) {
       closeLogPickerModal();
       r?.(null);
     };
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
+    mountSfocOverlay(modal, {
+      initialFocus: body.querySelector('button'),
+      onEscape: () => {
+        const r = logPickerResolve;
+        logPickerResolve = null;
+        closeLogPickerModal();
+        r?.(null);
+      }
+    });
   });
 }
 

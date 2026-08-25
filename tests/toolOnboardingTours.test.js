@@ -43,23 +43,32 @@ describe('toolOnboardingTours', () => {
     }
   });
 
-  it('solo permite interaccion en vistas, pestanas y filtros no operativos', () => {
+  it('solo permite interaccion en filtros y controles no operativos', () => {
     const safeAnchors = Object.values(TOOL_ONBOARDING_TOURS)
       .flatMap(({ steps }) => steps)
       .filter(({ interaction }) => interaction === ONBOARDING_INTERACTION_SAFE)
       .map(({ anchor }) => anchor);
     expect(new Set(safeAnchors)).toEqual(new Set([
-      '#workbenchWorkspaceTabs',
       '#debugLogBrowserFilters',
       '#permissionDiffSectionTabs',
       '#dataWorkbenchTabImport'
     ]));
   });
 
-  it('consolida solo las vistas aprobadas sin fusionar estados de herramientas', () => {
-    expect(TOOL_ONBOARDING_TOURS.ApexTests.canonicalTabId).toBe('tests');
-    expect(TOOL_ONBOARDING_TOURS.DebugLogBrowser.canonicalTabId).toBe('logs');
-    expect(TOOL_ONBOARDING_TOURS.DependencyExplorer.canonicalTabId).toBe('metadata');
+  it('no incluye un paso de pestanas en Apex Quality, Metadata Dependencies ni Log Traces', () => {
+    for (const toolId of ['ApexTests', 'DependencyExplorer', 'DebugLogBrowser']) {
+      expect(TOOL_ONBOARDING_TOURS[toolId].steps.some(({ id }) => id === 'views'), toolId).toBe(false);
+      expect(TOOL_ONBOARDING_TOURS[toolId].steps.some(({ anchor }) => anchor === '#workbenchWorkspaceTabs'), toolId)
+        .toBe(false);
+    }
+    expect(TOOL_ONBOARDING_TOURS.ApexTests.steps.find(({ id }) => id === 'prepare')?.anchor)
+      .toBe('[data-action-id="apex-select-run"]');
+  });
+
+  it('usa la pantalla única de las herramientas sin fusionar sus estados', () => {
+    expect(getToolOnboardingTour('ApexTests').route.tabId).toBe('main');
+    expect(getToolOnboardingTour('DebugLogBrowser').route.tabId).toBe('main');
+    expect(getToolOnboardingTour('DependencyExplorer').route.tabId).toBe('main');
     expect(TOOL_ONBOARDING_TOURS.ApexCoverageCompare).not.toBe(TOOL_ONBOARDING_TOURS.ApexTests);
     expect(TOOL_ONBOARDING_TOURS.CustomSettingsCompare).not.toBe(TOOL_ONBOARDING_TOURS.CustomMetadataCompare);
     expect(TOOL_ONBOARDING_TOURS.RecordCompare).not.toBe(TOOL_ONBOARDING_TOURS.CustomSettingsCompare);

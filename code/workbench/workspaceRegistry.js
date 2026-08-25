@@ -1,4 +1,4 @@
-import { CATEGORY_ICONS, TOOL_ICONS } from './iconRegistry.js';
+import { ACTION_ICONS, CATEGORY_ICONS, TOOL_ICONS } from './iconRegistry.js';
 
 /**
  * Arquitectura de información exclusiva de UI v2.
@@ -16,7 +16,7 @@ export const WORKBENCH_CATEGORIES = Object.freeze([
   {
     id: 'development', labelKey: 'workbench.category.development', icon: CATEGORY_ICONS.development,
     workspaceIds: Object.freeze([
-      'apex-quality', 'code-studio', 'anonymous-apex', 'query-explorer',
+      'apex-quality', 'apex-coverage', 'code-studio', 'anonymous-apex', 'query-explorer',
       'rest-explorer'
     ])
   },
@@ -40,8 +40,68 @@ export const WORKBENCH_CATEGORIES = Object.freeze([
   }
 ]);
 
-const tab = (id, labelKey, toolId, legacyMode, panelId, orgScope = 'single', risk = 'read') =>
-  Object.freeze({ id, labelKey, toolId, legacyMode, panelId, orgScope, risk });
+const action = ({
+  id, labelKey, icon, targetId, variant = 'secondary', risk = 'read', priority = 50,
+  allowOverflow = true, visibleWhen = 'always', disabledReasonKey = ''
+}) => Object.freeze({
+  id,
+  labelKey,
+  icon,
+  variant,
+  risk,
+  priority,
+  allowOverflow,
+  visibleWhen,
+  disabledReasonKey,
+  state: Object.freeze({ sourceId: targetId, disabled: 'source', loading: 'source' }),
+  handler: Object.freeze({ type: 'dispatch-click', targetId })
+});
+
+/**
+ * Acciones generales de UI v2. Las etiquetas y los iconos son declarativos y no
+ * se obtienen del DOM legacy. `handler.targetId` reutiliza el handler de negocio
+ * ya registrado por cada herramienta; la presentación permanece desacoplada.
+ */
+export const WORKBENCH_HEADER_ACTIONS = Object.freeze({
+  apexRun: action({ id: 'apex-run', labelKey: 'apexTests.runButton', icon: ACTION_ICONS.run, targetId: 'apexTestsRunBtn', variant: 'primary', risk: 'write', priority: 1, allowOverflow: false, visibleWhen: 'source-context' }),
+  apexSelectRun: action({ id: 'apex-select-run', labelKey: 'apexTests.openRunner', icon: ACTION_ICONS.run, targetId: 'apexTestsOpenRunnerBtn', variant: 'primary', priority: 1, allowOverflow: false, visibleWhen: 'source-context' }),
+  apexClearRuns: action({ id: 'apex-clear-runs', labelKey: 'apexTests.runsClearHistory', icon: ACTION_ICONS.delete, targetId: 'apexTestsClearRunsBtn', variant: 'destructive', risk: 'destructive', priority: 90, visibleWhen: 'source-context' }),
+  apexProfiles: action({ id: 'apex-profiles', labelKey: 'apexTests.profilesBtn', icon: 'file-code', targetId: 'apexTestsProfilesBtn', priority: 70, visibleWhen: 'source-context' }),
+  apexRunnerSettings: action({ id: 'apex-runner-settings', labelKey: 'apexTests.runnerSettingsBtn', icon: ACTION_ICONS.settings, targetId: 'apexTestsRunnerSettingsBtn', priority: 80, visibleWhen: 'source-context' }),
+  coverageRefresh: action({ id: 'coverage-refresh', labelKey: 'coverageCompare.refresh', icon: ACTION_ICONS.refresh, targetId: 'apexCoverageCompareRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  anonymousRun: action({ id: 'anonymous-run', labelKey: 'anonymousApex.run', icon: ACTION_ICONS.run, targetId: 'anonymousApexRunBtn', variant: 'primary', risk: 'destructive', priority: 1, allowOverflow: false }),
+  anonymousScripts: action({ id: 'anonymous-scripts', labelKey: 'anonymousApex.savedScripts', icon: 'file-code', targetId: 'anonymousApexOpenScriptsModalBtn', priority: 40 }),
+  anonymousSave: action({ id: 'anonymous-save', labelKey: 'anonymousApex.saveCurrentScript', icon: ACTION_ICONS.save, targetId: 'anonymousApexQuickSaveBtn', priority: 50 }),
+  queryRun: action({ id: 'query-run', labelKey: 'queryExplorer.run', icon: ACTION_ICONS.run, targetId: 'queryExplorerRunBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  querySaved: action({ id: 'query-saved', labelKey: 'queryExplorer.openSavedQueries', icon: 'database-search', targetId: 'queryExplorerOpenSavedModalBtn', priority: 40 }),
+  queryCopyLink: action({ id: 'query-copy-link', labelKey: 'queryExplorer.copyLink', icon: ACTION_ICONS.copy, targetId: 'queryExplorerCopyLinkBtn', priority: 60 }),
+  querySave: action({ id: 'query-save', labelKey: 'queryExplorer.saveCurrentQuery', icon: ACTION_ICONS.save, targetId: 'queryExplorerQuickSaveBtn', priority: 50 }),
+  restSend: action({ id: 'rest-send', labelKey: 'restExplorer.send', icon: ACTION_ICONS.forward, targetId: 'restExplorerSendBtn', variant: 'primary', risk: 'write', priority: 1, allowOverflow: false }),
+  fieldDependenciesLoad: action({ id: 'field-dependencies-load', labelKey: 'fieldDep.getDependencies', icon: ACTION_ICONS.search, targetId: 'fieldDepRetrieveBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  dependenciesAnalyze: action({ id: 'dependencies-analyze', labelKey: 'depExplorer.analyze', icon: ACTION_ICONS.search, targetId: 'depExplorerAnalyzeBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  customSettingsRefresh: action({ id: 'custom-settings-refresh', labelKey: 'customSettingsCompare.refresh', icon: ACTION_ICONS.refresh, targetId: 'customSettingsCompareRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  customMetadataRefresh: action({ id: 'custom-metadata-refresh', labelKey: 'customMetadataCompare.refresh', icon: ACTION_ICONS.refresh, targetId: 'customMetadataCompareRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  recordsCompare: action({ id: 'records-compare', labelKey: 'recordCompare.compare', icon: 'arrows-diff', targetId: 'recordCompareBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  objectDescribe: action({ id: 'object-describe', labelKey: 'objectDescribe.describe', icon: 'schema', targetId: 'objectDescribeDescribeBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  dataLoadRecord: action({ id: 'data-load-record', labelKey: 'dataWorkbench.loadRecord', icon: ACTION_ICONS.download, targetId: 'dataWorkbenchLoadRecordBtn', variant: 'primary', priority: 1, allowOverflow: false, visibleWhen: 'source-context' }),
+  dataCreateRecord: action({ id: 'data-create-record', labelKey: 'dataWorkbench.create', icon: 'database-cog', targetId: 'dataWorkbenchCreateBtn', risk: 'write', priority: 50, visibleWhen: 'source-context' }),
+  dataImportRun: action({ id: 'data-import-run', labelKey: 'dataImport.run', icon: ACTION_ICONS.run, targetId: 'dataWorkbenchImportRunBtn', variant: 'primary', risk: 'write', priority: 2, allowOverflow: false, visibleWhen: 'source-context' }),
+  eventLoadChannels: action({ id: 'event-load-channels', labelKey: 'eventMonitor.loadChannels', icon: ACTION_ICONS.refresh, targetId: 'eventMonitorLoadChannelsBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  environmentRefresh: action({ id: 'environment-refresh', labelKey: 'envStatus.refresh', icon: ACTION_ICONS.refresh, targetId: 'environmentStatusRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  limitsRefresh: action({ id: 'limits-refresh', labelKey: 'orgLimits.refresh', icon: ACTION_ICONS.refresh, targetId: 'orgLimitsRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  deployRefresh: action({ id: 'deploy-refresh', labelKey: 'deployStatus.refresh', icon: ACTION_ICONS.refresh, targetId: 'deployStatusRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  bulkLoad: action({ id: 'bulk-load', labelKey: 'bulkJob.load', icon: ACTION_ICONS.download, targetId: 'bulkJobLoadBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  logsRefresh: action({ id: 'logs-refresh', labelKey: 'debugLogs.refresh', icon: ACTION_ICONS.refresh, targetId: 'debugLogBrowserRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  logsViewTraces: action({ id: 'logs-view-traces', labelKey: 'debugLogs.viewTraces', icon: 'timeline-event', targetId: 'debugLogBrowserViewTracesBtn', priority: 30 }),
+  logsAnalyzeLocal: action({ id: 'logs-analyze-local', labelKey: 'debugLogs.analyzeLocal', icon: 'file-search', targetId: 'debugLogBrowserAnalyzeLocalBtn', priority: 40 }),
+  logsDeleteAll: action({ id: 'logs-delete-all', labelKey: 'debugLogs.deleteAll', icon: ACTION_ICONS.delete, targetId: 'debugLogBrowserDeleteAllBtn', variant: 'destructive', risk: 'destructive', priority: 90 }),
+  packageDownload: action({ id: 'package-download', labelKey: 'genPkg.download', icon: ACTION_ICONS.download, targetId: 'generatePkgDownloadXml', variant: 'primary', priority: 1, allowOverflow: false }),
+  packageRetrieve: action({ id: 'package-retrieve', labelKey: 'genPkg.retrieveBtn', icon: 'package-export', targetId: 'generatePkgRetrieveBtn', priority: 30 }),
+  metadataCompare: action({ id: 'metadata-compare', labelKey: 'metadataTypeCompare.compareBtn', icon: 'arrows-diff', targetId: 'metadataTypeCompareRunBtn', variant: 'primary', priority: 1, allowOverflow: false })
+});
+
+const tab = (id, labelKey, toolId, legacyMode, panelId, orgScope = 'single', risk = 'read', actions = []) =>
+  Object.freeze({ id, labelKey, toolId, legacyMode, panelId, orgScope, risk, actions: Object.freeze(actions) });
 
 const workspace = ({
   id, categoryId, labelKey, descriptionKey, icon, defaultTabId = 'main',
@@ -67,14 +127,21 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
   }),
   workspace({
     id: 'apex-quality', categoryId: 'development', labelKey: 'workbench.workspace.apexQuality',
-    descriptionKey: 'workbench.workspace.apexQualityDescription', icon: 'test-pipe', defaultTabId: 'tests',
-    aliases: ['apex tests', 'coverage'], keywords: ['tests', 'coverage', 'ejecuciones', 'resultados'],
-    tabs: [
-      tab('tests', 'workbench.tab.tests', 'ApexTests', 'development', 'apexTestsPanel'),
-      tab('runs', 'workbench.tab.runs', 'ApexTests', 'development', 'apexTestsPanel'),
-      tab('results', 'workbench.tab.results', 'ApexTests', 'development', 'apexTestsPanel'),
-      tab('coverage', 'workbench.tab.coverage', 'ApexCoverageCompare', 'development', 'apexCoverageComparePanel', 'dual')
-    ]
+    descriptionKey: 'workbench.workspace.apexQualityDescription', icon: 'test-pipe',
+    aliases: ['apex tests'], keywords: ['tests', 'ejecuciones', 'resultados'],
+    tabs: [tab('main', 'workbench.tab.tests', 'ApexTests', 'development', 'apexTestsPanel', 'single', 'write', [
+      WORKBENCH_HEADER_ACTIONS.apexRun,
+      WORKBENCH_HEADER_ACTIONS.apexSelectRun,
+      WORKBENCH_HEADER_ACTIONS.apexProfiles,
+      WORKBENCH_HEADER_ACTIONS.apexRunnerSettings,
+      WORKBENCH_HEADER_ACTIONS.apexClearRuns
+    ])]
+  }),
+  workspace({
+    id: 'apex-coverage', categoryId: 'development', labelKey: 'workbench.workspace.apexCoverage',
+    descriptionKey: 'workbench.workspace.apexCoverageDescription', icon: 'chart-donut',
+    aliases: ['coverage'], keywords: ['apex', 'coverage', 'cobertura'],
+    tabs: [tab('main', 'workbench.tab.coverage', 'ApexCoverageCompare', 'development', 'apexCoverageComparePanel', 'dual', 'read', [WORKBENCH_HEADER_ACTIONS.coverageRefresh])]
   }),
   workspace({
     id: 'code-studio', categoryId: 'development', labelKey: 'workbench.workspace.codeStudio',
@@ -89,49 +156,48 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     id: 'anonymous-apex', categoryId: 'development', labelKey: 'workbench.workspace.anonymousApex',
     descriptionKey: 'workbench.workspace.anonymousApexDescription', icon: 'terminal-2',
     aliases: ['execute anonymous'], keywords: ['apex', 'script', 'technical'],
-    tabs: [tab('main', 'workbench.tab.anonymousApex', 'AnonymousApex', 'development', 'anonymousApexPanel', 'single', 'destructive')]
+    tabs: [tab('main', 'workbench.tab.anonymousApex', 'AnonymousApex', 'development', 'anonymousApexPanel', 'single', 'destructive', [WORKBENCH_HEADER_ACTIONS.anonymousRun, WORKBENCH_HEADER_ACTIONS.anonymousScripts, WORKBENCH_HEADER_ACTIONS.anonymousSave])]
   }),
   workspace({
     id: 'query-explorer', categoryId: 'development', labelKey: 'workbench.workspace.queryExplorer',
     descriptionKey: 'workbench.workspace.queryExplorerDescription', icon: 'database-search',
     aliases: ['query', 'soql', 'sosl'], keywords: ['database', 'consulta'],
-    tabs: [tab('main', 'workbench.tab.query', 'QueryExplorer', 'development', 'queryExplorerPanel')]
+    tabs: [tab('main', 'workbench.tab.query', 'QueryExplorer', 'development', 'queryExplorerPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.queryRun, WORKBENCH_HEADER_ACTIONS.querySaved, WORKBENCH_HEADER_ACTIONS.querySave, WORKBENCH_HEADER_ACTIONS.queryCopyLink])]
   }),
   workspace({
     id: 'rest-explorer', categoryId: 'development', labelKey: 'workbench.workspace.restExplorer',
     descriptionKey: 'workbench.workspace.restExplorerDescription', icon: 'api',
     aliases: ['api', 'rest'], keywords: ['endpoint', 'request'],
-    tabs: [tab('main', 'workbench.tab.rest', 'RestExplorer', 'development', 'restExplorerPanel', 'single', 'write')]
+    tabs: [tab('main', 'workbench.tab.rest', 'RestExplorer', 'development', 'restExplorerPanel', 'single', 'write', [WORKBENCH_HEADER_ACTIONS.restSend])]
   }),
   workspace({
     id: 'diagnostics', categoryId: 'monitoring', labelKey: 'workbench.workspace.diagnostics',
-    descriptionKey: 'workbench.workspace.diagnosticsDescription', icon: 'file-search', defaultTabId: 'logs',
+    descriptionKey: 'workbench.workspace.diagnosticsDescription', icon: 'file-search',
     aliases: ['debug'], keywords: ['logs', 'trace flags', 'trazas'],
-    tabs: [
-      tab('logs', 'workbench.tab.logs', 'DebugLogBrowser', 'development', 'debugLogBrowserPanel'),
-      tab('trace-flags', 'workbench.tab.traceFlags', 'DebugLogBrowser', 'development', 'debugLogBrowserPanel', 'single', 'write')
-    ]
+    tabs: [tab('main', 'workbench.tab.logs', 'DebugLogBrowser', 'development', 'debugLogBrowserPanel', 'single', 'write', [
+      WORKBENCH_HEADER_ACTIONS.logsRefresh,
+      WORKBENCH_HEADER_ACTIONS.logsViewTraces,
+      WORKBENCH_HEADER_ACTIONS.logsAnalyzeLocal,
+      WORKBENCH_HEADER_ACTIONS.logsDeleteAll
+    ])]
   }),
   workspace({
     id: 'event-monitor', categoryId: 'monitoring', labelKey: 'workbench.workspace.eventMonitor',
     descriptionKey: 'workbench.workspace.eventMonitorDescription', icon: 'activity',
     aliases: ['events'], keywords: ['streaming', 'platform event'],
-    tabs: [tab('main', 'workbench.tab.events', 'EventMonitor', 'development', 'eventMonitorPanel')]
+    tabs: [tab('main', 'workbench.tab.events', 'EventMonitor', 'development', 'eventMonitorPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.eventLoadChannels])]
   }),
   workspace({
     id: 'field-dependency', categoryId: 'analysis', labelKey: 'workbench.workspace.fieldDependency',
     descriptionKey: 'workbench.workspace.fieldDependencyDescription', icon: 'list-tree',
     aliases: ['picklist'], keywords: ['fields', 'dependent picklist'],
-    tabs: [tab('main', 'workbench.tab.fields', 'FieldDependency', 'analysis', 'fieldDependencyPanel', 'dual')]
+    tabs: [tab('main', 'workbench.tab.fields', 'FieldDependency', 'analysis', 'fieldDependencyPanel', 'dual', 'read', [WORKBENCH_HEADER_ACTIONS.fieldDependenciesLoad])]
   }),
   workspace({
     id: 'dependencies', categoryId: 'analysis', labelKey: 'workbench.workspace.dependencies',
-    descriptionKey: 'workbench.workspace.dependenciesDescription', icon: 'hierarchy-3', defaultTabId: 'metadata',
-    aliases: ['dependencies'], keywords: ['metadata', 'graph', 'grafo'],
-    tabs: [
-      tab('metadata', 'workbench.tab.metadata', 'DependencyExplorer', 'analysis', 'dependencyExplorerPanel'),
-      tab('graph', 'workbench.tab.graph', 'DependencyExplorer', 'analysis', 'dependencyExplorerPanel')
-    ]
+    descriptionKey: 'workbench.workspace.dependenciesDescription', icon: 'hierarchy-3',
+    aliases: ['dependencies'], keywords: ['metadata', 'dependencias'],
+    tabs: [tab('main', 'workbench.tab.metadata', 'DependencyExplorer', 'analysis', 'dependencyExplorerPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.dependenciesAnalyze])]
   }),
   workspace({
     id: 'security-access', categoryId: 'analysis', labelKey: 'workbench.workspace.securityAccess',
@@ -144,46 +210,46 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     descriptionKey: 'workbench.workspace.dataCompareDescription', icon: 'table-options', defaultTabId: 'custom-settings',
     aliases: ['record compare'], keywords: ['settings', 'custom metadata', 'records'],
     tabs: [
-      tab('custom-settings', 'workbench.tab.customSettings', 'CustomSettingsCompare', 'analysis', 'customSettingsComparePanel', 'dual'),
-      tab('custom-metadata', 'workbench.tab.customMetadata', 'CustomMetadataCompare', 'analysis', 'customMetadataComparePanel', 'dual'),
-      tab('records', 'workbench.tab.records', 'RecordCompare', 'analysis', 'recordComparePanel', 'dual')
+      tab('custom-settings', 'workbench.tab.customSettings', 'CustomSettingsCompare', 'analysis', 'customSettingsComparePanel', 'dual', 'read', [WORKBENCH_HEADER_ACTIONS.customSettingsRefresh]),
+      tab('custom-metadata', 'workbench.tab.customMetadata', 'CustomMetadataCompare', 'analysis', 'customMetadataComparePanel', 'dual', 'read', [WORKBENCH_HEADER_ACTIONS.customMetadataRefresh]),
+      tab('records', 'workbench.tab.records', 'RecordCompare', 'analysis', 'recordComparePanel', 'dual', 'read', [WORKBENCH_HEADER_ACTIONS.recordsCompare])
     ]
   }),
   workspace({
     id: 'object-describe', categoryId: 'analysis', labelKey: 'workbench.workspace.objectDescribe',
     descriptionKey: 'workbench.workspace.objectDescribeDescription', icon: 'schema',
     aliases: ['schema', 'describe'], keywords: ['object', 'fields'],
-    tabs: [tab('main', 'workbench.tab.schema', 'ObjectDescribe', 'analysis', 'objectDescribePanel')]
+    tabs: [tab('main', 'workbench.tab.schema', 'ObjectDescribe', 'analysis', 'objectDescribePanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.objectDescribe])]
   }),
   workspace({
     id: 'data-workbench', categoryId: 'analysis', labelKey: 'workbench.workspace.dataWorkbench',
     descriptionKey: 'workbench.workspace.dataWorkbenchDescription', icon: 'database-cog',
     aliases: ['record editor', 'import'], keywords: ['data', 'csv', 'dml'],
-    tabs: [tab('main', 'workbench.tab.data', 'DataWorkbench', 'analysis', 'dataWorkbenchPanel', 'single', 'write')]
+    tabs: [tab('main', 'workbench.tab.data', 'DataWorkbench', 'analysis', 'dataWorkbenchPanel', 'single', 'write', [WORKBENCH_HEADER_ACTIONS.dataLoadRecord, WORKBENCH_HEADER_ACTIONS.dataImportRun, WORKBENCH_HEADER_ACTIONS.dataCreateRecord])]
   }),
   workspace({
     id: 'org-environments', categoryId: 'monitoring', labelKey: 'workbench.workspace.orgEnvironments',
     descriptionKey: 'workbench.workspace.orgEnvironmentsDescription', icon: 'heartbeat',
     aliases: ['org status'], keywords: ['health', 'environment'],
-    tabs: [tab('main', 'workbench.tab.health', 'EnvironmentStatus', 'monitoring', 'environmentStatusPanel')]
+    tabs: [tab('main', 'workbench.tab.health', 'EnvironmentStatus', 'monitoring', 'environmentStatusPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.environmentRefresh])]
   }),
   workspace({
     id: 'org-limits', categoryId: 'monitoring', labelKey: 'workbench.workspace.orgLimits',
     descriptionKey: 'workbench.workspace.orgLimitsDescription', icon: 'gauge',
     aliases: ['limits'], keywords: ['quota', 'usage'],
-    tabs: [tab('main', 'workbench.tab.limits', 'OrgLimits', 'monitoring', 'orgLimitsPanel')]
+    tabs: [tab('main', 'workbench.tab.limits', 'OrgLimits', 'monitoring', 'orgLimitsPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.limitsRefresh])]
   }),
   workspace({
     id: 'deploy-status', categoryId: 'monitoring', labelKey: 'workbench.workspace.deployStatus',
     descriptionKey: 'workbench.workspace.deployStatusDescription', icon: 'rocket',
     aliases: ['deployments'], keywords: ['deploy', 'deployment'],
-    tabs: [tab('main', 'workbench.tab.deployments', 'DeployStatus', 'monitoring', 'deployStatusPanel')]
+    tabs: [tab('main', 'workbench.tab.deployments', 'DeployStatus', 'monitoring', 'deployStatusPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.deployRefresh])]
   }),
   workspace({
     id: 'bulk-job-monitor', categoryId: 'monitoring', labelKey: 'workbench.workspace.bulkJobMonitor',
     descriptionKey: 'workbench.workspace.bulkJobMonitorDescription', icon: 'stack-forward',
     aliases: ['bulk'], keywords: ['jobs', 'bulk api'],
-    tabs: [tab('main', 'workbench.tab.bulk', 'BulkJobMonitor', 'monitoring', 'bulkJobMonitorPanel', 'single', 'write')]
+    tabs: [tab('main', 'workbench.tab.bulk', 'BulkJobMonitor', 'monitoring', 'bulkJobMonitorPanel', 'single', 'write', [WORKBENCH_HEADER_ACTIONS.bulkLoad])]
   }),
   workspace({
     id: 'setup-audit', categoryId: 'monitoring', labelKey: 'workbench.workspace.setupAudit',
@@ -201,20 +267,20 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     id: 'generate-package', categoryId: 'manifests', labelKey: 'workbench.workspace.generatePackage',
     descriptionKey: 'workbench.workspace.generatePackageDescription', icon: 'file-code-2',
     aliases: ['manifest'], keywords: ['package xml', 'metadata'],
-    tabs: [tab('main', 'workbench.tab.packageXml', 'GeneratePackageXml', 'manifests', 'generatePackageXmlPanel')]
+    tabs: [tab('main', 'workbench.tab.packageXml', 'GeneratePackageXml', 'manifests', 'generatePackageXmlPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.packageDownload, WORKBENCH_HEADER_ACTIONS.packageRetrieve])]
   }),
   workspace({
     id: 'metadata-type-compare', categoryId: 'manifests', labelKey: 'workbench.workspace.metadataTypeCompare',
     descriptionKey: 'workbench.workspace.metadataTypeCompareDescription', icon: 'package-export',
     aliases: ['metadata types'], keywords: ['compare', 'manifest'],
-    tabs: [tab('main', 'workbench.tab.compareTypes', 'MetadataTypeCompare', 'manifests', 'metadataTypeComparePanel', 'dual')]
+    tabs: [tab('main', 'workbench.tab.compareTypes', 'MetadataTypeCompare', 'manifests', 'metadataTypeComparePanel', 'dual', 'read', [WORKBENCH_HEADER_ACTIONS.metadataCompare])]
   })
 ]);
 
 export const LEGACY_TOOL_ROUTES = Object.freeze({
   Comparator: { workspaceId: 'comparator', tabId: 'main' },
-  ApexTests: { workspaceId: 'apex-quality', tabId: 'runs' },
-  ApexCoverageCompare: { workspaceId: 'apex-quality', tabId: 'coverage' },
+  ApexTests: { workspaceId: 'apex-quality', tabId: 'main' },
+  ApexCoverageCompare: { workspaceId: 'apex-coverage', tabId: 'main' },
   QuickEdit: { workspaceId: 'code-studio', tabId: 'apex-vf' },
   LightningQuickEdit: { workspaceId: 'code-studio', tabId: 'lwc-aura' },
   AnonymousApex: { workspaceId: 'anonymous-apex', tabId: 'main' },
@@ -222,10 +288,10 @@ export const LEGACY_TOOL_ROUTES = Object.freeze({
   RestExplorer: { workspaceId: 'rest-explorer', tabId: 'main' },
   ObjectDescribe: { workspaceId: 'object-describe', tabId: 'main' },
   DataWorkbench: { workspaceId: 'data-workbench', tabId: 'main' },
-  DebugLogBrowser: { workspaceId: 'diagnostics', tabId: 'logs' },
+  DebugLogBrowser: { workspaceId: 'diagnostics', tabId: 'main' },
   EventMonitor: { workspaceId: 'event-monitor', tabId: 'main' },
   FieldDependency: { workspaceId: 'field-dependency', tabId: 'main' },
-  DependencyExplorer: { workspaceId: 'dependencies', tabId: 'metadata' },
+  DependencyExplorer: { workspaceId: 'dependencies', tabId: 'main' },
   CustomSettingsCompare: { workspaceId: 'data-compare', tabId: 'custom-settings' },
   CustomMetadataCompare: { workspaceId: 'data-compare', tabId: 'custom-metadata' },
   RecordCompare: { workspaceId: 'data-compare', tabId: 'records' },

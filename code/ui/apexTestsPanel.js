@@ -3,7 +3,12 @@ import { bg } from '../core/bridge.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
-import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
+import {
+  confirmSfocOrgAction,
+  confirmSfocToolAction,
+  mountSfocOverlay,
+  unmountSfocOverlay
+} from './sfocModal.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
 import { logApexTestFailureUsage, logApexTestRunUsage } from './apexTestUsageLog.js';
@@ -571,15 +576,16 @@ async function renderProfilesModalList() {
 function closeApexTestsProfilesModal() {
   const modal = document.getElementById('apexTestsProfilesModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
 }
 
 function openApexTestsProfilesModal() {
   const modal = document.getElementById('apexTestsProfilesModal');
   if (!modal) return;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: document.getElementById('apexTestsProfileName'),
+    onEscape: closeApexTestsProfilesModal
+  });
   void renderProfilesModalList();
 }
 
@@ -601,8 +607,7 @@ let runnerSettingsPatternsSnapshot = null;
 function closeApexTestsRunnerSettingsModal() {
   const modal = document.getElementById('apexTestsRunnerSettingsModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
 }
 
 async function openApexTestsRunnerSettingsModal() {
@@ -616,8 +621,10 @@ async function openApexTestsRunnerSettingsModal() {
   runnerSettingsPatternsSnapshot = String(cfg.apexTestsClassNameLikePatterns ?? '');
   if (patternsInp) patternsInp.value = runnerSettingsPatternsSnapshot;
   if (skipCb) skipCb.checked = cfg.apexTestsSkipCodeCoverage === true;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: patternsInp,
+    onEscape: closeApexTestsRunnerSettingsModal
+  });
 }
 
 async function saveApexTestsRunnerSettings() {

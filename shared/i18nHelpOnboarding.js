@@ -317,11 +317,9 @@ export const helpOnboardingEs = {
     'Ejecuta tests automatizados y revisa resultados sin salir de la aplicación.',
   'onboarding.tool.ApexTests.step1': 'Selecciona el entorno arriba a la izquierda.',
   'onboarding.tool.ApexTests.step2':
-    'Elige clases, métodos o suites y lanza la ejecución; el progreso aparece en pantalla.',
+    'Pulsa Ejecutar tests para abrir el runner, elegir clases, métodos o suites y lanzar la ejecución.',
   'onboarding.tool.ApexTests.step3':
     'Abre resultados, cobertura por línea o exporta el informe cuando termine.',
-  'onboarding.tool.ApexTests.views':
-    'Tests prepara una ejecución; Ejecuciones y Resultados permiten seguirla y revisar fallos. Cobertura tiene su propio recorrido.',
 
   'onboarding.tool.QuickEdit.title': 'Editor Apex',
   'onboarding.tool.QuickEdit.lead':
@@ -364,8 +362,6 @@ export const helpOnboardingEs = {
   'onboarding.tool.DebugLogBrowser.step2': 'Filtra por usuario, aplicación o rango de fechas.',
   'onboarding.tool.DebugLogBrowser.step3':
     'Abre un log en el visor estructurado para ver consultas, errores y límites sin leer el archivo entero.',
-  'onboarding.tool.DebugLogBrowser.views':
-    'Logs muestra y filtra ejecuciones. Trace Flags gestiona la captura de nuevos logs; el tour nunca creará ni modificará una traza.',
 
   'onboarding.tool.ApexCoverageCompare.title': 'Comparar cobertura Apex',
   'onboarding.tool.ApexCoverageCompare.lead':
@@ -391,8 +387,6 @@ export const helpOnboardingEs = {
   'onboarding.tool.DependencyExplorer.step2':
     'Pulsa Analizar. Activa comparación entre entornos si quieres ver diferencias de dependencias.',
   'onboarding.tool.DependencyExplorer.step3': 'Exporta resumen, CSV o package.xml desde el menú ⋯.',
-  'onboarding.tool.DependencyExplorer.views':
-    'Metadata presenta el listado analizado y Grafo muestra visualmente las relaciones sin ejecutar un análisis nuevo.',
 
   'onboarding.tool.PermissionDiff.title': 'Analizador de permisos',
   'onboarding.tool.PermissionDiff.lead':
@@ -852,11 +846,9 @@ export const helpOnboardingEn = {
     'Run automated tests and review results without leaving the app.',
   'onboarding.tool.ApexTests.step1': 'Select the org in the top-left dropdown.',
   'onboarding.tool.ApexTests.step2':
-    'Pick classes, methods, or suites and start a run; progress appears on screen.',
+    'Press Run tests to open the runner, choose classes, methods, or suites, and start the execution.',
   'onboarding.tool.ApexTests.step3':
     'Open results, line coverage, or export the report when finished.',
-  'onboarding.tool.ApexTests.views':
-    'Tests prepares a run; Runs and Results let you follow it and review failures. Coverage has its own tour.',
 
   'onboarding.tool.QuickEdit.title': 'Apex Editor',
   'onboarding.tool.QuickEdit.lead':
@@ -899,8 +891,6 @@ export const helpOnboardingEn = {
   'onboarding.tool.DebugLogBrowser.step2': 'Filter by user, application, or date range.',
   'onboarding.tool.DebugLogBrowser.step3':
     'Open a log in the structured viewer to see queries, errors, and limits without reading the whole file.',
-  'onboarding.tool.DebugLogBrowser.views':
-    'Logs lists and filters executions. Trace Flags controls capture of new logs; this tour never creates or changes a trace.',
 
   'onboarding.tool.ApexCoverageCompare.title': 'Compare Apex coverage',
   'onboarding.tool.ApexCoverageCompare.lead':
@@ -926,8 +916,6 @@ export const helpOnboardingEn = {
   'onboarding.tool.DependencyExplorer.step2':
     'Press Analyze. Enable org comparison if you want dependency differences.',
   'onboarding.tool.DependencyExplorer.step3': 'Export summary, CSV, or package.xml from the ⋯ menu.',
-  'onboarding.tool.DependencyExplorer.views':
-    'Metadata shows the analyzed list and Graph visualizes relationships without running another analysis.',
 
   'onboarding.tool.PermissionDiff.title': 'Permission analyzer',
   'onboarding.tool.PermissionDiff.lead':

@@ -28,7 +28,12 @@ import {
 } from '../../shared/apexTestRunJobPrune.js';
 import { apexTestRunHasFailures } from '../../shared/apexTestRunStatus.js';
 import { sfApexIdKey, apexRunMatchesStoredJobId } from '../../shared/apexTestJobIdMatch.js';
-import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
+import {
+  confirmSfocOrgAction,
+  confirmSfocToolAction,
+  mountSfocOverlay,
+  unmountSfocOverlay
+} from './sfocModal.js';
 
 const STORAGE_KEY = 'apexTestRunJobs';
 const MAX_POLLS_ALL_MISSING = 10;
@@ -333,8 +338,7 @@ export function initApexTestsCoverageModal() {
   const backdrop = modal?.querySelector('[data-apex-coverage-close]');
   const close = () => {
     if (!modal) return;
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+    unmountSfocOverlay(modal);
   };
   closeBtn?.addEventListener('click', close);
   backdrop?.addEventListener('click', close);
@@ -353,8 +357,7 @@ export function initApexTestsViewTestModal() {
   const backdrop = modal?.querySelector('[data-apex-view-test-close]');
   const close = () => {
     if (!modal) return;
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+    unmountSfocOverlay(modal);
     viewTestPickContext = null;
     if (body) body.innerHTML = '';
   };
@@ -384,8 +387,7 @@ export function initApexTestsViewLogModal() {
   const backdrop = modal?.querySelector('[data-apex-view-log-close]');
   const close = () => {
     if (!modal) return;
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+    unmountSfocOverlay(modal);
     if (body) body.innerHTML = '';
   };
   closeBtn?.addEventListener('click', close);
@@ -535,8 +537,10 @@ function openViewTestPicker(orgId, runBody) {
     });
     body.appendChild(lab);
   });
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: body.querySelector('input, button'),
+    onEscape: () => document.getElementById('apexTestsViewTestModalClose')?.click()
+  });
 }
 
 function formatCoveragePercent(p) {
@@ -549,8 +553,10 @@ async function openRunCoverageModal(orgId, jobIdForApi) {
   const modal = document.getElementById('apexTestsCoverageModal');
   const body = document.getElementById('apexTestsCoverageModalBody');
   if (!modal || !body) return;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: document.getElementById('apexTestsCoverageModalClose'),
+    onEscape: () => document.getElementById('apexTestsCoverageModalClose')?.click()
+  });
   await loadExtensionSettings();
   const minCoveragePercent = getApexTestsCoverageMinPercent();
   const titleEl = document.getElementById('apexTestsCoverageModalTitle');
@@ -872,8 +878,7 @@ function openViewLogRecordsModal(orgId, job, displayJobId, logs) {
   const dj = String(displayJobId);
 
   const closeModal = () => {
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
+    unmountSfocOverlay(modal);
     body.innerHTML = '';
   };
 
@@ -913,8 +918,10 @@ function openViewLogRecordsModal(orgId, job, displayJobId, logs) {
   scroll.appendChild(tbl);
   body.appendChild(scroll);
 
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: document.getElementById('apexTestsViewLogModalClose'),
+    onEscape: () => document.getElementById('apexTestsViewLogModalClose')?.click()
+  });
 }
 
 async function openTestRunLogTab(orgId, job, displayJobId, opts = {}) {

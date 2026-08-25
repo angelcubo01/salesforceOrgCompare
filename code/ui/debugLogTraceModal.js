@@ -4,6 +4,7 @@ import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getApexTestsTraceDebugLevel } from '../../shared/extensionSettings.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
+import { mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 
 const SEARCH_DEBOUNCE_MS = 280;
 const MIN_SUGGEST_LEN = 2;
@@ -213,8 +214,7 @@ async function loadDebugLevels() {
 function closeModal() {
   const { modal } = els();
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
   hideSuggestions();
   clearSelectedUser();
 }
@@ -243,10 +243,8 @@ export function openDebugLogTraceModal() {
   clearSelectedUser();
   setDefaultDates();
   if (submitBtn) submitBtn.disabled = false;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, { initialFocus: userInput, onEscape: closeModal });
   void loadDebugLevels();
-  userInput?.focus();
 }
 
 /** @returns {string|null} mensaje de error i18n o null si válido */

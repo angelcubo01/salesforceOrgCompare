@@ -6,6 +6,7 @@ import {
   navigateToModeAndTool
 } from '../ui/appModeNav.js';
 import { showToast } from '../ui/toast.js';
+import { ensureSfocOverlayRoot } from '../ui/sfocModal.js';
 import {
   getToolNotice,
   isModeVisible,
@@ -28,29 +29,10 @@ import {
   getWorkspaceById,
   getWorkspaceRouteForTool
 } from './workspaceRegistry.js';
+import { getWorkspaceAdapter } from './workspaceAdapters.js';
 import { loadWorkbenchPrefs, saveWorkbenchPrefs } from './workbenchPrefs.js';
 
 const READ_ONLY_STORAGE_KEY = 'sfocOrgReadOnlyById';
-
-const HEADER_ACTION_TARGETS = Object.freeze({
-  ApexTests: ['apexTestsRunBtn'],
-  ApexCoverageCompare: ['apexCoverageCompareRefreshBtn'],
-  AnonymousApex: ['anonymousApexRunBtn'],
-  QueryExplorer: ['queryExplorerRunBtn'],
-  RestExplorer: ['restExplorerSendBtn'],
-  ObjectDescribe: ['objectDescribeDescribeBtn'],
-  DataWorkbench: ['dataWorkbenchLoadRecordBtn'],
-  EventMonitor: ['eventMonitorLoadChannelsBtn'],
-  DependencyExplorer: ['depExplorerAnalyzeBtn'],
-  RecordCompare: ['recordCompareBtn'],
-  EnvironmentStatus: ['environmentStatusRefreshBtn'],
-  OrgLimits: ['orgLimitsRefreshBtn'],
-  DeployStatus: ['deployStatusRefreshBtn'],
-  BulkJobMonitor: ['bulkJobLoadBtn'],
-  GeneratePackageXml: ['generatePkgDownloadXml'],
-  MetadataTypeCompare: ['metadataTypeCompareRunBtn'],
-  DebugLogBrowser: ['debugLogBrowserRefreshBtn']
-});
 
 let prefs = null;
 let activeCategoryId = 'home';
@@ -70,6 +52,8 @@ let availabilityConfig = null;
 let availabilityLang = '';
 let availabilityCache = new Map();
 let lastInputWasKeyboard = false;
+let openHeaderMoreMenu = null;
+let openHeaderMoreButton = null;
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -429,31 +413,199 @@ function environmentForOrg(orgId) {
   return { key: 'workbench.environment.unknown', icon: STATE_ICONS.unknownEnvironment, className: 'unknown' };
 }
 
-function actionIconForTarget(targetId) {
-  if (/refresh|load/i.test(targetId)) return ACTION_ICONS.refresh;
-  if (/download|export/i.test(targetId)) return ACTION_ICONS.download;
-  return ACTION_ICONS.run;
+function closeHeaderMoreMenu({ restoreFocus = false } = {}) {
+  if (!openHeaderMoreMenu) return;
+  openHeaderMoreMenu.hidden = true;
+  openHeaderMoreButton?.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) openHeaderMoreButton?.focus();
+  openHeaderMoreMenu = null;
+  openHeaderMoreButton = null;
 }
 
-function createHeaderActionProxy(targetId) {
-  const target = document.getElementById(targetId);
-  if (!target) return null;
-  const label = target.textContent?.trim() || target.getAttribute('aria-label') || target.title || t('workbench.action.open');
-  const proxy = el('button', 'workbench-header-action');
-  proxy.type = 'button';
-  proxy.title = label;
-  proxy.appendChild(createIcon(actionIconForTarget(targetId), { size: 16 }));
-  proxy.appendChild(el('span', '', label));
+function sourceContextVisible(source) {
+  if (!source) return false;
+  let current = source;
+  while (current && !current.classList?.contains('sfoc-tool-panel')) {
+    if (current !== source && (current.hidden || current.classList?.contains('hidden') || current.getAttribute?.('aria-hidden') === 'true')) {
+      return false;
+    }
+    current = current.parentElement;
+  }
+  return true;
+}
+
+function actionState(action) {
+  const sourceId = action.state?.sourceId || action.handler?.targetId;
+  const source = sourceId ? document.getElementById(sourceId) : null;
+  const disabled = action.state?.disabled === 'source'
+    ? !source || source.disabled || source.getAttribute('aria-disabled') === 'true'
+    : false;
+  const loading = action.state?.loading === 'source' && !!source && (
+    source.getAttribute('aria-busy') === 'true' ||
+    source.dataset.loading === 'true' ||
+    source.dataset.busy === 'true' ||
+    source.classList.contains('is-loading') ||
+    source.classList.contains('loading')
+  );
+  const visible = action.visibleWhen === 'source-context' ? sourceContextVisible(source) : true;
+  return { source, disabled, loading, visible };
+}
+
+async function invokeHeaderAction(action) {
+  if (action.handler?.type === 'navigate-tab') {
+    await navigateToWorkspaceTab(action.handler.workspaceId, action.handler.tabId, { userInitiated: true });
+    return;
+  }
+  if (action.handler?.type === 'dispatch-click') {
+    const source = document.getElementById(action.handler.targetId);
+    if (!source || source.disabled || source.getAttribute('aria-disabled') === 'true') return;
+    source.click();
+  }
+}
+
+function observeHeaderActionState(action, sync) {
+  const sourceId = action.state?.sourceId || action.handler?.targetId;
+  const source = sourceId ? document.getElementById(sourceId) : null;
+  if (!source) return;
+  const observer = new MutationObserver(sync);
+  let current = source;
+  while (current && !current.classList?.contains('sfoc-tool-panel')) {
+    observer.observe(current, {
+      attributes: true,
+      attributeFilter: ['disabled', 'hidden', 'class', 'aria-disabled', 'aria-busy', 'aria-hidden', 'data-loading', 'data-busy']
+    });
+    current = current.parentElement;
+  }
+  headerActionObservers.push(observer);
+}
+
+function createHeaderAction(action, { menuItem = false } = {}) {
+  const label = t(action.labelKey);
+  const button = el('button', menuItem
+    ? `workbench-more-action workbench-header-action--${action.variant}`
+    : `workbench-header-action workbench-header-action--${action.variant}`);
+  button.type = 'button';
+  button.dataset.actionId = action.id;
+  button.dataset.actionPriority = String(action.priority);
+  if (menuItem) button.setAttribute('role', 'menuitem');
+  const icon = createIcon(action.icon, { size: 16, className: 'workbench-action-icon' });
+  const spinner = createIcon(STATE_ICONS.loading, { size: 16, className: 'workbench-action-spinner' });
+  const labelEl = el('span', 'workbench-action-label', label);
+  button.append(icon, spinner, labelEl);
+  let inferredLoading = false;
+  let inferredLoadingTimer = 0;
   const sync = () => {
-    proxy.disabled = target.disabled || target.classList.contains('hidden') || target.hidden;
-    proxy.setAttribute('aria-disabled', proxy.disabled ? 'true' : 'false');
+    const current = actionState(action);
+    if (inferredLoading && !current.disabled && !current.loading) {
+      inferredLoading = false;
+      window.clearTimeout(inferredLoadingTimer);
+      inferredLoadingTimer = 0;
+    }
+    const loading = current.loading || inferredLoading;
+    button.hidden = !current.visible;
+    button.disabled = current.disabled || loading;
+    button.classList.toggle('is-loading', loading);
+    button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
+    button.setAttribute('aria-busy', loading ? 'true' : 'false');
+    const reason = loading
+      ? t('workbench.action.loading', { action: label })
+      : current.disabled
+        ? t(action.disabledReasonKey || 'workbench.action.unavailable')
+        : label;
+    button.title = reason;
+    button.setAttribute('aria-label', label);
   };
   sync();
-  proxy.addEventListener('click', () => target.click());
-  const observer = new MutationObserver(sync);
-  observer.observe(target, { attributes: true, attributeFilter: ['disabled', 'hidden', 'class'] });
-  headerActionObservers.push(observer);
-  return proxy;
+  observeHeaderActionState(action, sync);
+  button.addEventListener('click', () => {
+    closeHeaderMoreMenu();
+    const before = actionState(action);
+    if (before.disabled || before.loading || !before.visible) return;
+    // Los handlers legacy suelen deshabilitar su botÃ³n de forma sÃ­ncrona al
+    // iniciar. La cabecera anticipa un frame y mantiene el spinner mientras la
+    // fuente siga disabled/busy, sin leer ni sustituir su etiqueta.
+    inferredLoading = action.handler?.type === 'dispatch-click';
+    sync();
+    void invokeHeaderAction(action).finally(() => queueMicrotask(() => {
+      const after = actionState(action);
+      if (!after.disabled && !after.loading) inferredLoading = false;
+      if (inferredLoading) {
+        window.clearTimeout(inferredLoadingTimer);
+        inferredLoadingTimer = window.setTimeout(() => {
+          inferredLoading = false;
+          sync();
+        }, 60_000);
+      }
+      sync();
+    }));
+  });
+  return button;
+}
+
+function shouldUseMoreMenu(actions) {
+  if (!actions.some((action) => action.allowOverflow)) return false;
+  return window.matchMedia('(max-width: 1120px)').matches;
+}
+
+function handleMoreMenuKeydown(event) {
+  const menu = event.currentTarget;
+  const items = [...menu.querySelectorAll('[role="menuitem"]:not([hidden]):not(:disabled)')];
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    closeHeaderMoreMenu({ restoreFocus: true });
+    return;
+  }
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || !items.length) return;
+  event.preventDefault();
+  let index = Math.max(0, items.indexOf(document.activeElement));
+  if (event.key === 'ArrowDown') index = (index + 1) % items.length;
+  if (event.key === 'ArrowUp') index = (index - 1 + items.length) % items.length;
+  if (event.key === 'Home') index = 0;
+  if (event.key === 'End') index = items.length - 1;
+  items[index]?.focus();
+}
+
+function createMoreActions(actions) {
+  const wrap = el('div', 'workbench-more-actions');
+  const label = t('workbench.action.more');
+  const button = makeIconButton('workbenchMoreActionsBtn', ACTION_ICONS.more, label, 'workbench-more-trigger');
+  const menu = el('div', 'workbench-more-menu');
+  menu.id = 'workbenchMoreActionsMenu';
+  menu.hidden = true;
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', label);
+  button.setAttribute('aria-haspopup', 'menu');
+  button.setAttribute('aria-controls', menu.id);
+  button.setAttribute('aria-expanded', 'false');
+  for (const action of actions) menu.appendChild(createHeaderAction(action, { menuItem: true }));
+  button.addEventListener('click', () => {
+    const opening = menu.hidden;
+    closeHeaderMoreMenu();
+    if (!opening) return;
+    menu.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    openHeaderMoreMenu = menu;
+    openHeaderMoreButton = button;
+    requestAnimationFrame(() => menu.querySelector('[role="menuitem"]:not([hidden]):not(:disabled)')?.focus());
+  });
+  menu.addEventListener('keydown', handleMoreMenuKeydown);
+  wrap.append(button, menu);
+  return wrap;
+}
+
+function markMovedActionSources(actions) {
+  document.querySelectorAll('.is-workbench-action-source').forEach((source) => {
+    source.classList.remove('is-workbench-action-source');
+    delete source.dataset.workbenchActionSource;
+  });
+  for (const action of actions) {
+    if (action.handler?.type !== 'dispatch-click') continue;
+    const source = document.getElementById(action.handler.targetId);
+    if (!source) continue;
+    source.classList.add('is-workbench-action-source');
+    source.dataset.workbenchActionSource = action.id;
+  }
 }
 
 function createContextHeader() {
@@ -473,10 +625,14 @@ function createContextHeader() {
   identity.appendChild(breadcrumb);
   const titleRow = el('div', 'workbench-context-title-row');
   titleRow.appendChild(createIcon(item?.icon || CATEGORY_ICONS.home, { size: 24 }));
+  const titleCopy = el('div', 'workbench-context-title-copy');
   const title = el('h1', 'workbench-context-title', item ? t(item.labelKey) : t('workbench.home.title'));
   title.id = 'workbenchContextTitle';
   title.tabIndex = -1;
-  titleRow.appendChild(title);
+  titleCopy.appendChild(title);
+  const description = item ? translatedDescription(item) : '';
+  if (description) titleCopy.appendChild(el('p', 'workbench-context-description', description));
+  titleRow.appendChild(titleCopy);
   const currentTab = activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null;
   if (currentTab?.risk === 'write' || currentTab?.risk === 'destructive') {
     const risk = el('span', `workbench-risk-badge workbench-risk-badge--${currentTab.risk}`);
@@ -488,10 +644,16 @@ function createContextHeader() {
   main.appendChild(identity);
 
   const actions = el('div', 'workbench-context-actions');
-  for (const targetId of HEADER_ACTION_TARGETS[currentTab?.toolId] || []) {
-    const proxy = createHeaderActionProxy(targetId);
-    if (proxy) actions.appendChild(proxy);
-  }
+  const configuredActions = [...(getWorkspaceAdapter(activeWorkspaceId)?.getHeaderActions({
+    workspaceId: activeWorkspaceId,
+    tabId: activeTabId
+  }) || currentTab?.actions || [])].sort((left, right) => left.priority - right.priority);
+  markMovedActionSources(configuredActions);
+  const useMore = shouldUseMoreMenu(configuredActions);
+  const directActions = useMore ? configuredActions.filter((action) => !action.allowOverflow) : configuredActions;
+  const overflowActions = useMore ? configuredActions.filter((action) => action.allowOverflow) : [];
+  for (const action of directActions) actions.appendChild(createHeaderAction(action));
+  if (overflowActions.length) actions.appendChild(createMoreActions(overflowActions));
   const help = makeIconButton('workbenchHelpBtn', ACTION_ICONS.help, t('workbench.action.help'));
   help.addEventListener('click', () => document.getElementById('appHelpBtn')?.click());
   actions.appendChild(help);
@@ -568,6 +730,7 @@ export function renderWorkbenchHeader() {
     activeWorkspaceId,
     activeTabId,
     theme: document.documentElement.dataset.uiTheme || '',
+    compactActions: window.matchMedia('(max-width: 1120px)').matches,
     orgSignature,
     tabsSignature
   });
@@ -575,6 +738,7 @@ export function renderWorkbenchHeader() {
   headerRenderSignature = signature;
   for (const observer of headerActionObservers) observer.disconnect();
   headerActionObservers = [];
+  closeHeaderMoreMenu();
   document.getElementById('workbenchContextHeader')?.remove();
   const header = createContextHeader();
   const classicHeader = editor.querySelector('.app-mode-tabs-wrap');
@@ -976,7 +1140,32 @@ function decorateV2Surfaces() {
   if (quickOpenSubtitle) quickOpenSubtitle.textContent = t('workbench.command.description');
   document.querySelectorAll('.sfoc-tool-panel').forEach((panel) => {
     panel.classList.add('workbench-tool-surface');
-    panel.querySelector('h2')?.classList.add('workbench-native-panel-title');
+    const title = panel.querySelector('h2');
+    const subtitle = panel.querySelector('.sfoc-panel-subtitle, .permission-diff-subtitle');
+    title?.classList.add('workbench-legacy-tool-heading');
+    subtitle?.classList.add('workbench-legacy-tool-description');
+    title?.setAttribute('aria-hidden', 'true');
+    subtitle?.setAttribute('aria-hidden', 'true');
+    for (const [node, attribute] of [[title, 'aria-labelledby'], [subtitle, 'aria-describedby']]) {
+      if (!node?.id) continue;
+      document.querySelectorAll(`[${attribute}~="${node.id}"]`).forEach((owner) => {
+        const remaining = String(owner.getAttribute(attribute) || '')
+          .split(/\s+/)
+          .filter((id) => id && id !== node.id);
+        if (remaining.length) owner.setAttribute(attribute, remaining.join(' '));
+        else owner.removeAttribute(attribute);
+      });
+    }
+    if (title) {
+      const group = title.parentElement;
+      if (group && group !== panel && [...group.children].every((child) => child === title || child === subtitle)) {
+        group.classList.add('workbench-legacy-heading-group');
+      }
+      const header = group?.parentElement;
+      if (header && header !== panel && [...header.children].every((child) => child === group || child.classList.contains('workbench-legacy-tool-description'))) {
+        header.classList.add('workbench-legacy-header-only');
+      }
+    }
   });
   const leftOrg = document.getElementById('leftOrg');
   const rightOrg = document.getElementById('rightOrg');
@@ -1028,6 +1217,7 @@ export function getVisibleWorkbenchSearchEntries() {
 export async function setupWorkbenchShell() {
   if (initialized) return;
   prefs = await loadWorkbenchPrefs();
+  ensureSfocOverlayRoot();
   await Promise.all([loadToolRecents(), loadReadOnlyMap()]);
   document.querySelector('.app-landing-tools-section--recents')?.remove();
   decorateV2Surfaces();
@@ -1045,6 +1235,7 @@ export async function setupWorkbenchShell() {
   document.addEventListener('pointerdown', () => { lastInputWasKeyboard = false; }, true);
   document.addEventListener('keydown', (event) => {
     lastInputWasKeyboard = true;
+    if (document.body.dataset.sfocModalOpen === 'true') return;
     if (event.key === 'Escape' && openCategoryId) {
       event.preventDefault();
       event.stopPropagation();
@@ -1053,6 +1244,17 @@ export async function setupWorkbenchShell() {
   }, true);
   document.addEventListener('click', (event) => {
     if (openCategoryId && !shell.contains(event.target)) closeToolSubbar();
+    if (openHeaderMoreMenu && !openHeaderMoreMenu.parentElement?.contains(event.target)) closeHeaderMoreMenu();
+  });
+  document.addEventListener('sfoc:overlay-will-open', () => {
+    closeToolSubbar();
+    closeHeaderMoreMenu();
+  });
+  window.addEventListener('resize', () => {
+    const compact = window.matchMedia('(max-width: 1120px)').matches;
+    if (compact === (JSON.parse(headerRenderSignature || '{}').compactActions ?? compact)) return;
+    headerRenderSignature = '';
+    renderWorkbenchHeader();
   });
   window.addEventListener('popstate', (event) => {
     pendingHistorySelection = event.state?.sfocWorkbench || null;

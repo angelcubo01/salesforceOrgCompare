@@ -27,11 +27,6 @@ const guide = (toolId, id, anchor, role, index, interaction = BLOCKED, options =
 const result = (toolId, anchor) =>
   step('result', anchor, 'onboarding.common.resultTitle', `help.tool.${toolId}.body3`);
 
-const tabs = (toolId, anchor) =>
-  step('views', anchor, 'onboarding.common.viewsTitle', `onboarding.tool.${toolId}.views`, SAFE, {
-    advanceOnClick: true
-  });
-
 const standardTour = (toolId, panel, anchors) => Object.freeze({
   toolId,
   steps: Object.freeze([
@@ -49,12 +44,10 @@ export const TOOL_ONBOARDING_TOURS = Object.freeze({
   }),
   ApexTests: Object.freeze({
     toolId: 'ApexTests',
-    canonicalTabId: 'tests',
     steps: Object.freeze([
       overview('ApexTests', '#apexTestsPanel'),
-      tabs('ApexTests', '#workbenchWorkspaceTabs'),
       guide('ApexTests', 'context', '#orgDropdowns', 'context', 1),
-      guide('ApexTests', 'prepare', '#apexTestsRunBtn', 'prepare', 2),
+      guide('ApexTests', 'prepare', '[data-action-id="apex-select-run"]', 'prepare', 2),
       guide('ApexTests', 'action', '#apexTestsPanel', 'action', 3),
       result('ApexTests', '#apexTestsPanel')
     ])
@@ -77,10 +70,8 @@ export const TOOL_ONBOARDING_TOURS = Object.freeze({
   }),
   DebugLogBrowser: Object.freeze({
     toolId: 'DebugLogBrowser',
-    canonicalTabId: 'logs',
     steps: Object.freeze([
       overview('DebugLogBrowser', '#debugLogBrowserPanel'),
-      tabs('DebugLogBrowser', '#workbenchWorkspaceTabs'),
       guide('DebugLogBrowser', 'context', '#orgDropdowns', 'context', 1),
       guide('DebugLogBrowser', 'prepare', '#debugLogBrowserFilters', 'prepare', 2, SAFE),
       guide('DebugLogBrowser', 'action', '#debugLogBrowserTableWrap', 'action', 3),
@@ -102,10 +93,8 @@ export const TOOL_ONBOARDING_TOURS = Object.freeze({
   }),
   DependencyExplorer: Object.freeze({
     toolId: 'DependencyExplorer',
-    canonicalTabId: 'metadata',
     steps: Object.freeze([
       overview('DependencyExplorer', '#dependencyExplorerPanel'),
-      tabs('DependencyExplorer', '#workbenchWorkspaceTabs'),
       guide('DependencyExplorer', 'context', '#depExplorerTypeSelect', 'context', 1),
       guide('DependencyExplorer', 'prepare', '#depExplorerAnalyzeBtn', 'prepare', 2),
       guide('DependencyExplorer', 'action', '#depExplorerMoreBtn', 'action', 3),

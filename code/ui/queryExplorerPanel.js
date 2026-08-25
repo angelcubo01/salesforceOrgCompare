@@ -6,7 +6,7 @@ import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { bindRunShortcut } from './runShortcut.js';
-import { confirmSfocToolAction } from './sfocModal.js';
+import { confirmSfocToolAction, mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 
 function showQueryExplorerErrorToast(e) {
   const msg = String(e?.message || e);
@@ -829,17 +829,16 @@ function syncSaveQueryButtonLabels() {
 
 function closeQueryExplorerSavedModal() {
   const modal = document.getElementById('queryExplorerSavedQueriesModal');
-  if (modal) {
-    modal.classList.add('hidden');
-    modal.setAttribute('aria-hidden', 'true');
-  }
+  if (modal) unmountSfocOverlay(modal);
 }
 
 function openQueryExplorerSavedModal() {
   const modal = document.getElementById('queryExplorerSavedQueriesModal');
   if (modal) {
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
+    mountSfocOverlay(modal, {
+      initialFocus: document.getElementById('queryExplorerQueryNameInput'),
+      onEscape: closeQueryExplorerSavedModal
+    });
   }
   refreshSavedQueriesListUi();
   syncSaveQueryButtonLabels();

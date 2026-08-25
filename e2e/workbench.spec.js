@@ -121,7 +121,7 @@ test('la Home adapta sus capacidades a sfoc_feature_controls', async ({ extensio
   await expect(page.locator('#workbenchCapabilityGrid .workbench-capability-card')).toHaveCount(5);
 });
 
-test('barra superior, subbarra, tabs y command palette son operables por teclado', async ({ extensionContext: context, extensionId }) => {
+test('barra superior, subbarra, herramientas sin vistas y command palette son operables por teclado', async ({ extensionContext: context, extensionId }) => {
   const page = await openExtensionPage(context, extensionId, 'code/code.html');
   await waitForCodeBoot(page);
   await expect(page.locator('#workbenchShell')).toBeVisible();
@@ -129,6 +129,10 @@ test('barra superior, subbarra, tabs y command palette son operables por teclado
 
   await page.locator('#workbenchMarketingPrimaryCta').click();
   await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'comparator');
+  await expect.poll(async () => {
+    const width = await page.locator('.sidebar').evaluate((element) => element.getBoundingClientRect().width);
+    return width;
+  }).toBeGreaterThan(260);
   await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('#workbenchOrgContext')).toHaveCount(0);
   await expect(page.locator('.org-dropdown-left .org-cd-trigger')).toBeVisible();
@@ -150,20 +154,22 @@ test('barra superior, subbarra, tabs y command palette son operables por teclado
   const development = page.locator('#workbenchCategory-development');
   await development.click();
   await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'false');
-  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveCount(5);
+  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveCount(6);
   const apexWorkspaceButton = page.getByRole('button', { name: /Calidad Apex/ });
   await apexWorkspaceButton.click();
   await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'true');
-  const testsTab = page.locator('#workbenchTab-apex-quality-tests');
-  await expect(testsTab).toHaveAttribute('aria-selected', 'true', { timeout: 500 });
-  await testsTab.press('ArrowRight');
-  await expect(page.locator('#workbenchTab-apex-quality-runs')).toHaveAttribute('aria-selected', 'true', { timeout: 500 });
-  await expect.poll(() => page.evaluate(() => history.state?.sfocWorkbench?.tabId)).toBe('runs');
-
-  await page.goBack();
-  await expect(page.locator('#workbenchTab-apex-quality-tests')).toHaveAttribute('aria-selected', 'true');
-  await page.goForward();
-  await expect(page.locator('#workbenchTab-apex-quality-runs')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-tab', 'main');
+  await expect(page.locator('#workbenchWorkspaceTabs')).toHaveCount(0);
+  await expect(page.locator('[data-action-id="apex-run"]')).toBeHidden();
+  await expect(page.locator('[data-action-id="apex-select-run"]')).toBeVisible();
+  await page.locator('[data-action-id="apex-select-run"]').click();
+  await expect(page.locator('#apexTestsRunnerView')).toBeVisible();
+  await expect(page.locator('[data-action-id="apex-select-run"]')).toBeHidden();
+  await expect(page.locator('[data-action-id="apex-run"]')).toBeVisible();
+  await page.locator('#apexTestsBackToHubBtn').click();
+  await expect(page.locator('#apexTestsHubView')).toBeVisible();
+  await expect(page.locator('[data-action-id="apex-run"]')).toBeHidden();
+  await expect(page.locator('[data-action-id="apex-select-run"]')).toBeVisible();
 
   await development.click();
   await page.getByRole('button', { name: /Editar código/ }).click();
@@ -200,19 +206,42 @@ test('barra superior, subbarra, tabs y command palette son operables por teclado
 
 });
 
+test('Calidad Apex, Logs y trazas y Metadata Dependencies no renderizan vistas internas', async ({
+  extensionContext: context,
+  extensionId
+}) => {
+  const page = await openExtensionPage(context, extensionId, 'code/code.html?nav=development&op=ApexTests');
+  for (const route of [
+    { nav: 'development', op: 'ApexTests', workspace: 'apex-quality', panel: 'apexTestsPanel', source: 'apexTestsOpenRunnerBtn', action: 'apex-select-run' },
+    { nav: 'development', op: 'DebugLogBrowser', workspace: 'diagnostics', panel: 'debugLogBrowserPanel', source: 'debugLogBrowserViewTracesBtn', action: 'logs-view-traces' },
+    { nav: 'analysis', op: 'DependencyExplorer', workspace: 'dependencies', panel: 'dependencyExplorerPanel', source: 'depExplorerAnalyzeBtn', action: 'dependencies-analyze' }
+  ]) {
+    await page.goto(`chrome-extension://${extensionId}/code/code.html?nav=${route.nav}&op=${route.op}`);
+    await waitForCodeBoot(page);
+    await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', route.workspace);
+    await expect(page.locator('body')).toHaveAttribute('data-workbench-tab', 'main');
+    await expect(page.locator('#workbenchWorkspaceTabs')).toHaveCount(0);
+    await expect(page.locator(`#${route.panel}`)).toBeVisible();
+    await expect(page.locator(`#${route.source}`)).toBeHidden();
+    await expect(page.locator(`[data-action-id="${route.action}"]`)).toBeVisible();
+  }
+  await expect(page.locator('#dependencyExplorerGraphHost')).toHaveCount(0);
+  await expect(page.locator('#debugLogViewTracesInlineHost')).toHaveCount(0);
+});
+
 const legacyRoutes = [
   ['comparator', 'Comparator', 'comparator', 'main', 'standardComparePanel'],
-  ['development', 'ApexTests', 'apex-quality', 'runs', 'apexTestsPanel'],
-  ['development', 'ApexCoverageCompare', 'apex-quality', 'coverage', 'apexCoverageComparePanel'],
+  ['development', 'ApexTests', 'apex-quality', 'main', 'apexTestsPanel'],
+  ['development', 'ApexCoverageCompare', 'apex-coverage', 'main', 'apexCoverageComparePanel'],
   ['development', 'QuickEdit', 'code-studio', 'apex-vf', 'quickEditPanel'],
   ['development', 'LightningQuickEdit', 'code-studio', 'lwc-aura', 'lightningQuickEditPanel'],
   ['development', 'AnonymousApex', 'anonymous-apex', 'main', 'anonymousApexPanel'],
   ['development', 'QueryExplorer', 'query-explorer', 'main', 'queryExplorerPanel'],
   ['development', 'RestExplorer', 'rest-explorer', 'main', 'restExplorerPanel'],
-  ['development', 'DebugLogBrowser', 'diagnostics', 'logs', 'debugLogBrowserPanel'],
+  ['development', 'DebugLogBrowser', 'diagnostics', 'main', 'debugLogBrowserPanel'],
   ['development', 'EventMonitor', 'event-monitor', 'main', 'eventMonitorPanel'],
   ['analysis', 'FieldDependency', 'field-dependency', 'main', 'fieldDependencyPanel'],
-  ['analysis', 'DependencyExplorer', 'dependencies', 'metadata', 'dependencyExplorerPanel'],
+  ['analysis', 'DependencyExplorer', 'dependencies', 'main', 'dependencyExplorerPanel'],
   ['analysis', 'PermissionDiff', 'security-access', 'main', 'permissionDiffPanel'],
   ['analysis', 'CustomSettingsCompare', 'data-compare', 'custom-settings', 'customSettingsComparePanel'],
   ['analysis', 'CustomMetadataCompare', 'data-compare', 'custom-metadata', 'customMetadataComparePanel'],

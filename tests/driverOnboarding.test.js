@@ -130,24 +130,16 @@ describe('driverOnboarding lifecycle', () => {
     expect(getActiveDriverOnboardingTool()).toBe(null);
   });
 
-  it('restaura la pestana previa despues de una repeticion manual', async () => {
+  it('no intenta cambiar de vista en una herramienta de pantalla única', async () => {
     installFakeDom(['ApexTests']);
-    document.body.dataset.workbenchTab = 'runs';
-    const testsTab = new FakeElement('workbenchTab-apex-quality-tests');
-    testsTab.click = () => { document.body.dataset.workbenchTab = 'tests'; };
-    const runsTab = new FakeElement('workbenchTab-apex-quality-runs');
-    runsTab.click = () => { document.body.dataset.workbenchTab = 'runs'; };
-    document.getElementById = (id) => ({
-      'workbenchTab-apex-quality-tests': testsTab,
-      'workbenchTab-apex-quality-runs': runsTab
-    })[id] || null;
+    document.body.dataset.workbenchTab = 'main';
     const sessions = installFakeDriver();
 
     await startDriverToolOnboarding('ApexTests', { manual: true });
-    expect(document.body.dataset.workbenchTab).toBe('tests');
+    expect(document.body.dataset.workbenchTab).toBe('main');
     sessions[0].config.onDoneClick();
     await Promise.resolve();
-    expect(document.body.dataset.workbenchTab).toBe('runs');
+    expect(document.body.dataset.workbenchTab).toBe('main');
   });
 
   it('no marca como visto si Driver.js falla antes de mostrarse', async () => {

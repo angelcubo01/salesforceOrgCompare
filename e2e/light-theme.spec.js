@@ -80,6 +80,7 @@ test.beforeEach(async ({ extensionWorker }) => {
       actions: {}
     },
     sfocToolRecents: { recents: [], pins: [] },
+    sfocOrgReadOnlyById: {},
     sfocWorkbenchPrefs: { panelExpanded: true, panelPinned: false, lastTabByWorkspace: {} },
     sfocOnboardingSeen: {
       tools: seenTools,
@@ -153,13 +154,58 @@ test('Home, command palette y modales cumplen WCAG A/AA en tema claro', async ({
           ? 'Esta acción elimina todos los logs de la org y no se puede deshacer.'
           : 'Se encolará una ejecución de tests Apex en Mi Sandbox.',
         confirmLabel: modalVariant === 'destructive' ? 'Eliminar logs' : 'Ejecutar tests',
-        variant: modalVariant
+        variant: modalVariant,
+        ...(modalVariant === 'production' ? {
+          requiredText: 'CONFIRMO',
+          requiredTextLabel: 'Confirma que has revisado el destino y el alcance',
+          requiredTextHint: 'No necesitas introducir el nombre de la empresa.'
+        } : {})
       });
     }, variant);
     const modal = await analyze(page, ['.sfoc-modal-backdrop']);
     expect(formatViolations(modal.violations), variant).toEqual([]);
     await page.keyboard.press('Escape');
   }
+});
+
+test('la confirmacion de riesgo usa CONFIRMO y no el nombre de la empresa', async ({
+  extensionContext: context,
+  extensionId
+}) => {
+  const page = await openExtensionPage(context, extensionId, 'code/code.html');
+  await waitForCodeBoot(page);
+  await page.evaluate(async () => {
+    const [{ confirmSfocOrgAction }, { state }] = await Promise.all([
+      import('./ui/sfocModal.js'),
+      import('./core/state.js')
+    ]);
+    state.orgsList = [{
+      id: 'prod-e2e',
+      alias: 'Contact Center PROD',
+      isSandbox: false,
+      instanceUrl: 'https://example.my.salesforce.com'
+    }];
+    void confirmSfocOrgAction({
+      orgId: 'prod-e2e',
+      title: 'Desplegar en produccion',
+      description: 'Todo listo para desplegar el componente en este entorno.',
+      confirmLabel: 'Desplegar',
+      risk: 'write'
+    });
+  });
+
+  const modal = page.locator('.sfoc-modal-panel--production');
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.sfoc-modal-org-copy strong')).toHaveText('Contact Center PROD');
+  await expect(modal.locator('.sfoc-modal-confirm-token')).toHaveText('CONFIRMO');
+
+  const input = modal.locator('.sfoc-modal-confirm-field input');
+  const confirm = modal.locator('.sfoc-modal-actions .sfoc-btn--danger');
+  await input.fill('Contact Center PROD');
+  await expect(confirm).toBeDisabled();
+  await input.fill(' confirmo ');
+  await expect(input).toHaveClass(/is-valid/);
+  await expect(confirm).toBeEnabled();
 });
 
 test('reflow y controles táctiles no provocan scroll global accidental', async ({

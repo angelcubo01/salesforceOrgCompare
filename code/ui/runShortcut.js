@@ -9,6 +9,7 @@ import { getSelectedArtifactType } from './artifactTypeUi.js';
 export function bindRunShortcut(artifactType, runFn, opts = {}) {
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+    if (document.body.dataset.sfocModalOpen === 'true') return;
     if (getSelectedArtifactType() !== artifactType) return;
     if (!opts.allowInMonaco && isMonacoFocused()) return;
     const target = /** @type {HTMLElement | null} */ (e.target);

@@ -13,7 +13,7 @@ import { randomStagingId } from '../../shared/randomId.js';
 import { showToast } from './toast.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { getReturnContext, returnToQuickEditEditor } from '../lib/quickEditDeployContext.js';
-import { confirmSfocOrgAction } from './sfocModal.js';
+import { confirmSfocOrgAction, mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 
 const POLL_ACTIVE_MS = 3000;
 const POLL_IDLE_MS = 15000;
@@ -1066,8 +1066,7 @@ function updateDeployCoverageButton(row, soap) {
 function closeDeployCoverageModal() {
   const modal = document.getElementById('deployStatusCoverageModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
   const body = document.getElementById('deployStatusCoverageModalBody');
   if (body) body.innerHTML = '';
 }
@@ -1197,8 +1196,10 @@ async function openDeployCoverageModal() {
   const body = document.getElementById('deployStatusCoverageModalBody');
   if (!modal || !body) return;
 
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: document.getElementById('deployStatusCoverageModalClose'),
+    onEscape: closeDeployCoverageModal
+  });
 
   const titleEl = document.getElementById('deployStatusCoverageModalTitle');
   if (titleEl) {

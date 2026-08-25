@@ -73,7 +73,56 @@ test('Query Explorer se muestra una vez, se puede repetir desde Ayuda y respeta 
   await expect(page.locator('.driver-popover')).toHaveCount(0);
 });
 
-test('Calidad Apex usa un tour por Tool ID y comienza ApexTests en Tests', async ({
+test('el tour espera a que se cierre un popup de encuesta PostHog', async ({
+  extensionContext: context,
+  extensionId,
+  extensionWorker
+}) => {
+  await configureOnboarding(extensionWorker, ['QueryExplorer']);
+  const page = await context.newPage();
+  await page.addInitScript(() => {
+    const installSurveyHost = () => {
+      if (!document.body) {
+        requestAnimationFrame(installSurveyHost);
+        return;
+      }
+      const host = document.createElement('div');
+      host.className = 'PostHogSurvey-onboarding-e2e';
+      host.setAttribute('data-posthog-survey-test', '1');
+      document.body.appendChild(host);
+    };
+    installSurveyHost();
+  });
+  await page.goto(
+    `chrome-extension://${extensionId}/code/code.html?nav=development&op=QueryExplorer`,
+    { waitUntil: 'domcontentloaded' }
+  );
+  await waitForCodeBoot(page);
+
+  await expect(page.locator('[data-posthog-survey-test="1"]')).toBeAttached();
+  await expect(page.locator('.driver-popover')).toHaveCount(0);
+
+  await page.locator('[data-posthog-survey-test="1"]').evaluate((host) => host.remove());
+  await expect(page.locator('.driver-popover')).toBeVisible();
+  await expect(page.locator('.driver-popover-title')).toContainText('Explorador de consultas');
+
+  await page.evaluate(() => {
+    const host = document.createElement('div');
+    host.className = 'PostHogSurvey-onboarding-interruption-e2e';
+    host.setAttribute('data-posthog-survey-interruption-test', '1');
+    document.body.appendChild(host);
+    window.dispatchEvent(new Event('PHSurveyShown'));
+  });
+  await expect(page.locator('.driver-popover')).toHaveCount(0);
+  expect(await page.evaluate(async () => (
+    await chrome.storage.local.get('sfocOnboardingSeen')
+  ).sfocOnboardingSeen?.tools?.QueryExplorer || false)).toBe(false);
+
+  await page.locator('[data-posthog-survey-interruption-test="1"]').evaluate((host) => host.remove());
+  await expect(page.locator('.driver-popover')).toBeVisible();
+});
+
+test('Calidad Apex y Cobertura mantienen tours separados sin vistas internas', async ({
   extensionContext: context,
   extensionId,
   extensionWorker
@@ -82,8 +131,12 @@ test('Calidad Apex usa un tour por Tool ID y comienza ApexTests en Tests', async
   const page = await openExtensionPage(context, extensionId, 'code/code.html?nav=development&op=ApexTests');
   await waitForCodeBoot(page);
 
-  await expect(page.locator('body')).toHaveAttribute('data-workbench-tab', 'tests');
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-tab', 'main');
+  await expect(page.locator('#workbenchWorkspaceTabs')).toHaveCount(0);
   await expect(page.locator('.driver-popover-title')).toContainText('Hub de tests Apex');
+  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await page.getByRole('button', { name: 'Siguiente' }).click();
+  await expect(page.locator('[data-action-id="apex-select-run"]')).toHaveClass(/driver-active-element/);
   await page.locator('.sfoc-driver-skip').click();
   await expect.poll(() => page.evaluate(async () => (
     await chrome.storage.local.get('sfocOnboardingSeen')
@@ -92,7 +145,10 @@ test('Calidad Apex usa un tour por Tool ID y comienza ApexTests en Tests', async
     await chrome.storage.local.get('sfocOnboardingSeen')
   ).sfocOnboardingSeen?.tools?.ApexCoverageCompare || false)).toBe(false);
 
-  await page.locator('#workbenchTab-apex-quality-coverage').click();
+  await page.locator('#workbenchCategory-development').click();
+  await page.getByRole('button', { name: /Cobertura Apex/ }).click();
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'apex-coverage');
+  await expect(page.locator('#workbenchWorkspaceTabs')).toHaveCount(0);
   await expect(page.locator('.driver-popover-title')).toContainText('Comparar cobertura Apex');
   await page.keyboard.press('Escape');
   await expect.poll(() => page.evaluate(async () => (

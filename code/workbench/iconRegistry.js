@@ -87,7 +87,8 @@ export const ACTION_ICONS = Object.freeze({
   expandPanel: 'layout-sidebar-left-expand',
   command: 'command',
   back: 'chevron-left',
-  forward: 'chevron-right'
+  forward: 'chevron-right',
+  more: 'dots'
 });
 
 export const USED_ICON_NAMES = Object.freeze(

@@ -340,6 +340,7 @@ function runQuickOpenSearch() {
 }
 
 export function openQuickOpen() {
+  if (document.body.dataset.sfocModalOpen === 'true') return;
   const overlay = document.getElementById('quickOpenOverlay');
   const input = /** @type {HTMLInputElement | null} */ (document.getElementById('quickOpenInput'));
   const results = document.getElementById('quickOpenResults');
@@ -462,6 +463,7 @@ export function setupQuickOpen() {
       if (isCommandPaletteShortcut(event)) {
         event.preventDefault();
         event.stopPropagation();
+        if (document.body.dataset.sfocModalOpen === 'true') return;
         toggleQuickOpen();
         return;
       }
@@ -473,4 +475,7 @@ export function setupQuickOpen() {
     },
     true
   );
+  document.addEventListener('sfoc:overlay-will-open', () => {
+    if (isOpen) closeQuickOpen();
+  });
 }
