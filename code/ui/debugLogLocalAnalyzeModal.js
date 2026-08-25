@@ -3,6 +3,7 @@ import { parseLocalApexLogPreview } from '../../shared/salesforceApi.js';
 import { formatLogSize } from '../../shared/apexLogParser.js';
 import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
+import { mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 
 const LOCAL_LOG_MAX_BYTES = 30 * 1024 * 1024;
 const PLACEHOLDER = '—';
@@ -85,8 +86,7 @@ function renderPreview(file, preview) {
 function closeModal() {
   const { modal } = els();
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
   resetModalState();
 }
 
@@ -94,9 +94,7 @@ export function openDebugLogLocalAnalyzeModal() {
   const { modal, dropzone } = els();
   if (!modal) return;
   resetModalState();
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
-  dropzone?.focus();
+  mountSfocOverlay(modal, { initialFocus: dropzone, onEscape: closeModal });
 }
 
 function readFileAsText(file) {

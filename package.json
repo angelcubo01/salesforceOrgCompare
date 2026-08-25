@@ -5,12 +5,15 @@
   "description": "Chrome extension to compare Salesforce org metadata",
   "type": "module",
   "scripts": {
-    "prepare": "node sfInject/bundle.mjs",
+    "prepare": "npm run vendor:driver && node sfInject/bundle.mjs",
+    "vendor:driver": "node sync-driver-vendor.mjs",
     "test": "vitest run",
     "build:sf-inject": "node sfInject/bundle.mjs",
     "pretest": "node tests/ensureTelemetryConfig.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "test:logi-proxy": "vitest run --config vitest.logi-proxy.config.js",
     "posthog:survey": "node scripts/createPosthogCsatSurvey.mjs",
     "posthog:survey:update": "node scripts/createPosthogCsatSurvey.mjs",
@@ -45,10 +48,15 @@
     "pack:chrome": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack-chrome-store.ps1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
+    "@vitest/coverage-v8": "^3.1.4",
     "esbuild": "^0.25.0",
     "posthog-js": "^1.379.0",
-    "@vitest/coverage-v8": "^3.1.4",
     "vitest": "^3.1.4",
     "wrangler": "^4.110.0"
+  },
+  "dependencies": {
+    "driver.js": "1.8.0"
   }
 }

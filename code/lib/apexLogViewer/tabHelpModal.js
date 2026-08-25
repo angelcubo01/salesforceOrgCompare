@@ -1,4 +1,5 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
+import { activateDialogFocus, deactivateDialogFocus } from '../../../shared/dialogFocus.js';
 import { APEX_LOG_TABS } from './tabs.js';
 import { APEX_LOG_TAB_ICONS } from './tabIcons.js';
 import {
@@ -38,7 +39,10 @@ function ensureModal() {
 }
 
 export function closeTabHelpModal() {
-  if (modalEl) modalEl.hidden = true;
+  if (modalEl) {
+    modalEl.hidden = true;
+    deactivateDialogFocus(modalEl);
+  }
 }
 
 /**
@@ -100,6 +104,7 @@ export function openTabHelpModal(t, focusTabId) {
     bodyEl.innerHTML = renderDetailedTabHelp(t, focusTabId);
     modal.hidden = false;
     bodyEl.scrollTop = 0;
+    activateDialogFocus(modal, { initialFocus: closeBtn });
     return;
   }
 
@@ -118,6 +123,7 @@ export function openTabHelpModal(t, focusTabId) {
     </article>`;
   }).join('');
   modal.hidden = false;
+  activateDialogFocus(modal, { initialFocus: closeBtn });
 }
 
 /**
@@ -147,6 +153,7 @@ export function openCustomTabHelp(t, tabId, titleKey) {
   bodyEl.innerHTML = `<article class="apex-log-help-detail" id="apex-log-help-${tabId}">${sections}</article>`;
   modal.hidden = false;
   bodyEl.scrollTop = 0;
+  activateDialogFocus(modal, { initialFocus: closeBtn });
 }
 
 /**

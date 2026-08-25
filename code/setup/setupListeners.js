@@ -43,6 +43,7 @@ import { refreshCustomSettingsComparePanel } from '../ui/customSettingsComparePa
 import { refreshCustomMetadataComparePanel } from '../ui/customMetadataComparePanel.js';
 import { refreshRecordComparePanel } from '../ui/recordComparePanel.js';
 import { onDeployStatusOrgChange } from '../ui/deployStatusPanel.js';
+import { confirmSfocAction } from '../ui/sfocModal.js';
 import { t } from '../../shared/i18n.js';
 import { syncCompareUrlFromState } from '../lib/compareDeepLink.js';
 import { hideSidebarSearchResults } from '../ui/searchSetup.js';
@@ -230,8 +231,13 @@ export function setupCopyAll() {
 export function setupClearHistoryButton() {
   const clearBtn = document.getElementById('clearHistoryButton');
   if (clearBtn) {
-    clearBtn.addEventListener('click', () => {
-      if (!window.confirm(t('code.clearSavedFilesConfirm'))) return;
+    clearBtn.addEventListener('click', async () => {
+      if (!await confirmSfocAction({
+        title: t('code.clearSavedFiles'),
+        description: t('code.clearSavedFilesConfirm'),
+        confirmLabel: t('code.clearSavedFiles'),
+        variant: 'destructive'
+      })) return;
       removeAllItems();
     });
   }

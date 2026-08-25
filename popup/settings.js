@@ -27,6 +27,7 @@ import {
   getOrCreateTelemetryInstallId,
   applyTelemetryInstallIdFromBackup
 } from '../shared/telemetryInstallId.js';
+import { confirmSfocAction } from '../code/ui/sfocModal.js';
 import {
   APEX_TEST_RUN_PROFILES_STORAGE_KEY,
   mergeApexTestRunProfiles,
@@ -178,6 +179,10 @@ function applyStaticTranslations() {
   });
   document.querySelectorAll('[data-i18n-title]').forEach((elem) => {
     elem.title = t(elem.getAttribute('data-i18n-title'));
+  });
+  document.querySelectorAll('[data-i18n-aria-label]').forEach((elem) => {
+    const key = elem.getAttribute('data-i18n-aria-label');
+    if (key) elem.setAttribute('aria-label', t(key));
   });
 }
 
@@ -461,7 +466,6 @@ function wireOrgsBackup() {
   });
 
   document.getElementById('settingsImportReplace')?.addEventListener('click', () => {
-    // Debe ser síncrono en el gesto del usuario; confirm() antes rompe la activación.
     fileInput?.click();
   });
 
@@ -469,7 +473,12 @@ function wireOrgsBackup() {
     const f = fileInput.files && fileInput.files[0];
     fileInput.value = '';
     if (!f) return;
-    if (!confirm(t('settings.backupImportReplaceConfirm'))) return;
+    if (!await confirmSfocAction({
+      title: t('settings.backupImportReplace'),
+      description: t('settings.backupImportReplaceConfirm'),
+      confirmLabel: t('settings.backupImportReplace'),
+      variant: 'destructive'
+    })) return;
     setStatus('');
     let data;
     try {

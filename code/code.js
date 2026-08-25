@@ -128,6 +128,7 @@ import { refreshLandingToolRecents } from './ui/landingRecentsUi.js';
 import { ensureExtensionExceptionReporting } from '../shared/posthogClient.js';
 import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.js';
 import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
+import { applyUiModeToDocument, loadUiMode } from '../shared/uiMode.js';
 
 function applyStaticTranslations() {
   const brandLogo = document.getElementById('sidebarBrandLogo');
@@ -168,8 +169,13 @@ function applyLandingDiscoverBanner() {
 }
 
 async function init() {
-  await Promise.all([loadLang(), loadExtensionSettings()]);
+  const uiModePromise = loadUiMode();
+  const workbenchModulePromise = uiModePromise.then((mode) => (
+    mode === 'v2' ? import('./workbench/workbenchShell.js') : null
+  ));
+  const [, , uiMode] = await Promise.all([loadLang(), loadExtensionSettings(), uiModePromise]);
   applyUiThemeToDocument(document);
+  applyUiModeToDocument(document, uiMode);
 
   await bootstrapFeatureControls();
   setupFeatureControlsUi();
@@ -177,6 +183,12 @@ async function init() {
   applyStaticTranslations();
   applyLandingFooterLinks();
   applyLandingDiscoverBanner();
+
+  // El shell solo lee estado local y monta la capa exterior. Arrancarlo aquí permite
+  // solapar ese trabajo con la navegación legacy sin adelantar el estado "ready".
+  const workbenchSetupPromise = uiMode === 'v2'
+    ? workbenchModulePromise.then(({ setupWorkbenchShell }) => setupWorkbenchShell())
+    : null;
 
   const typeSelect = document.getElementById('typeSelect');
   let urlDeepLink = parseCompareDeepLink(window.location.search);
@@ -210,6 +222,7 @@ async function init() {
   }
   applyArtifactTypeUi();
   applyFeatureControlsUi();
+  if (workbenchSetupPromise) await workbenchSetupPromise;
   revealAppNavigation();
   void refreshLandingToolRecents();
   void maybeShowToolOnboarding(getSelectedArtifactType());
@@ -307,6 +320,11 @@ async function init() {
   setupBulkJobMonitorPanel();
   setupEventMonitorPanel();
   setupDependencyExplorerPanel();
+  if (uiMode === 'v2') {
+    document.dispatchEvent(new CustomEvent('sfoc:navigationchange', {
+      detail: { source: 'tool-handlers-ready' }
+    }));
+  }
   renderEditor();
   refreshGeneratePackageXmlTypes();
   void refreshMetadataTypeComparePanel();

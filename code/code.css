@@ -14,12 +14,15 @@
   --sfoc-query-border: #555;
   --sfoc-query-text: #e0e0e0;
   /* Capas de apilamiento (de menor a mayor) */
+  --sfoc-z-content: 0;
   --sfoc-z-tool-panel: 120;
   --sfoc-z-org-popup: 400;
   --sfoc-z-app-chrome: 450;
   --sfoc-z-app-submenu: 500;
   --sfoc-z-modal: 1200;
-  --sfoc-z-overlay: 1400;
+  --sfoc-z-modal-nested: 1300;
+  --sfoc-z-special-overlay: 1400;
+  --sfoc-z-overlay: var(--sfoc-z-special-overlay);
   --sfoc-query-placeholder: #888;
   --sfoc-query-inner-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
   --sfoc-query-focus-border: #e0e0e0;
@@ -430,7 +433,7 @@ body {
 .content { display: flex; height: 100%; }
 
 .sidebar { 
-  width: 260px; 
+  width: 320px;
   min-width: 200px;
   max-width: 500px;
   min-height: 0;
@@ -547,13 +550,33 @@ body.sidebar-collapsed .sidebar {
 .sidebar-search-input-row {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   min-height: 32px;
 }
 
-.sidebar-search-input-row .sfoc-query-input {
+.sidebar-search-field,
+.compare-list-filter-field {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  position: relative;
+}
+
+.sidebar-search-input-row .sidebar-search-field .sfoc-query-input,
+.compare-list-filter-field .compare-list-filter {
   flex: 1;
   min-width: 0;
+}
+
+.sidebar-field-icon,
+.compare-list-filter-icon {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  flex: 0 0 auto;
+  color: #8fa3bb;
+  pointer-events: none;
 }
 
 .sidebar-search-input-row .sidebar-action-btn,
@@ -607,7 +630,7 @@ body.sidebar-collapsed .sidebar {
   color: #cccccc;
   box-shadow: inset 0 -1px 0 #2b2b2b;
   min-height: 32px;
-  padding: 6px 12px;
+  padding: 6px 12px 6px 34px;
   font-size: 13px;
   line-height: 20px;
 }
@@ -1038,7 +1061,7 @@ body.artifact-no-operation .type-select {
   gap: 4px;
 }
 
-.compare-list-toolbar-row .compare-list-filter {
+.compare-list-toolbar-row .compare-list-filter-field {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -1102,6 +1125,9 @@ body.artifact-no-operation .type-select {
 }
 
 .compare-list-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   flex-shrink: 0;
   padding: 8px 12px 5px;
   font-size: 11px;
@@ -1139,7 +1165,7 @@ body.artifact-no-operation .type-select {
   width: 100%;
   font-size: 13px;
   line-height: 20px;
-  padding: 6px 12px;
+  padding: 6px 12px 6px 34px;
   min-height: 32px;
   border: none;
   border-radius: 0;
@@ -1726,9 +1752,9 @@ body.artifact-apex-tests #editorContainer.editor {
 
 /* Modal de herramienta: solo cubre #editorBodyWrap (menú y banner global quedan libres). */
 .feature-controls-tool-modal {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  z-index: 400;
+  z-index: var(--sfoc-z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2966,7 +2992,7 @@ body.artifact-apex-tests #editorContainer.editor {
 .apex-tests-runs-more-menu {
   display: none;
   position: fixed;
-  z-index: 500;
+  z-index: var(--sfoc-z-app-submenu);
   min-width: 200px;
   padding: 4px 0;
   background: #1e293b;
@@ -4970,34 +4996,75 @@ body.artifact-apex-tests #editorContainer.editor {
   align-items: center;
   justify-content: center;
   padding: var(--sfoc-space-4);
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(2, 6, 23, 0.66);
+  backdrop-filter: blur(5px);
 }
 .sfoc-modal-panel {
-  width: min(520px, calc(100vw - 32px));
+  position: relative;
+  width: min(560px, calc(100vw - 32px));
   max-height: min(80vh, 640px);
   overflow: auto;
-  padding: var(--sfoc-space-5);
-  border-radius: var(--sfoc-radius-lg);
+  padding: 0;
+  border-radius: 18px;
   border: 1px solid var(--sfoc-border);
   background: var(--sfoc-bg-panel);
   color: var(--sfoc-text);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+}
+.sfoc-modal-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--sfoc-accent);
+}
+.sfoc-modal-panel--production::before {
+  background: var(--sfoc-warn);
+}
+.sfoc-modal-panel--destructive::before,
+.sfoc-modal-panel--error::before {
+  background: var(--sfoc-danger);
 }
 .sfoc-modal-title {
-  margin: 0 0 var(--sfoc-space-3);
-  font-size: 16px;
-  font-weight: 600;
+  margin: 0;
+  font-size: 19px;
+  font-weight: 720;
+  letter-spacing: -0.015em;
 }
 .sfoc-modal-body {
-  margin-bottom: var(--sfoc-space-4);
+  margin: 0;
+  padding: 20px 24px 4px;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--sfoc-text-muted);
 }
 .sfoc-modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--sfoc-space-2);
+  gap: 10px;
+  margin-top: 18px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--sfoc-border);
+  background: color-mix(in srgb, var(--sfoc-bg-elevated) 42%, transparent);
+}
+.sfoc-modal-actions .sfoc-btn {
+  min-height: 42px;
+  padding-inline: 18px;
+}
+
+@media (max-width: 560px) {
+  .sfoc-modal-body {
+    padding: 18px 18px 2px;
+  }
+
+  .sfoc-modal-actions {
+    flex-direction: column-reverse;
+    padding: 14px 18px 18px;
+  }
+
+  .sfoc-modal-actions .sfoc-btn {
+    width: 100%;
+  }
 }
 
 .toast:has(.toast-title) {
@@ -5452,6 +5519,7 @@ body.artifact-apex-tests #editorContainer.editor {
   border-top: 1px solid #1e293b;
   padding-top: 12px;
   margin-top: 0;
+  gap: 8px;
 }
 .app-help-modal-foot.hidden {
   display: none;
@@ -5469,6 +5537,27 @@ body.artifact-apex-tests #editorContainer.editor {
 }
 .app-help-modal-primary:hover {
   background: #334155;
+}
+.app-help-modal-tour {
+  min-height: 38px;
+  padding: 8px 16px;
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  background: #0c4a6e;
+  color: #f0f9ff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+.app-help-modal-tour:hover {
+  background: #075985;
+}
+.app-help-modal-tour:focus-visible,
+.app-help-modal-primary:focus-visible,
+.app-help-modal-close:focus-visible {
+  outline: 3px solid #7dd3fc;
+  outline-offset: 2px;
 }
 
 .app-landing-help-hint {
@@ -6063,13 +6152,13 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 .anonymous-apex-log-picker-modal {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: var(--sfoc-z-modal);
 }
 
 .anonymous-apex-scripts-modal {
   position: fixed;
   inset: 0;
-  z-index: 1250;
+  z-index: var(--sfoc-z-modal-nested);
 }
 
 .anonymous-apex-scripts-modal-panel.anonymous-apex-log-picker-panel {
@@ -7349,7 +7438,7 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 1200;
+  z-index: var(--sfoc-z-toast);
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -8490,7 +8579,7 @@ body.artifact-query-explorer-compare .query-explorer-split {
 }
 
 #debugLogTraceModal {
-  z-index: 1310;
+  z-index: var(--sfoc-z-modal-nested);
 }
 
 .debug-log-trace-modal-backdrop {
@@ -10778,7 +10867,7 @@ body.artifact-lightning-quick-edit .quick-edit-panel-inner {
 .quick-open-overlay {
   position: fixed;
   inset: 0;
-  z-index: 1400;
+  z-index: var(--sfoc-z-special-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12360,15 +12449,15 @@ body.quick-open-active {
 .sfoc-tool-danger-btn,
 .data-workbench-danger-btn,
 .streaming-delete-btn {
-  border-color: rgba(248, 113, 113, 0.45) !important;
-  color: #fca5a5 !important;
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
 }
 
 .sfoc-tool-danger-btn:hover,
 .data-workbench-danger-btn:hover,
 .streaming-delete-btn:hover {
-  background: rgba(127, 29, 29, 0.35) !important;
-  border-color: rgba(248, 113, 113, 0.65) !important;
+  background: rgba(127, 29, 29, 0.35);
+  border-color: rgba(248, 113, 113, 0.65);
 }
 
 .sfoc-table-actions {

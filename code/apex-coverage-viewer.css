@@ -1,12 +1,3 @@
-:root {
-  --sfoc-bg-app: #0f172a;
-  --sfoc-text: #e2e8f0;
-  --sfoc-border: #334155;
-  --acv-bg: var(--sfoc-bg-app);
-  --acv-border: var(--sfoc-border);
-  --acv-text: var(--sfoc-text);
-}
-
 html,
 body {
   margin: 0;
@@ -237,12 +228,6 @@ body.apex-cov-split-active .apex-cov-viewer-legend {
 
 .monaco-editor .sfoc-cov-line-uncovered {
   background-color: rgba(239, 68, 68, 0.26) !important;
-}
-
-html[data-ui-theme='light'] {
-  --acv-bg: #f5f7fb;
-  --acv-border: #b8c6d6;
-  --acv-text: #0f172a;
 }
 
 html[data-ui-theme='light'] .apex-cov-viewer-toolbar {

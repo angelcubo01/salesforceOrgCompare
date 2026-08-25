@@ -1157,6 +1157,16 @@ html[data-ui-theme="light"] .app-help-modal-primary:hover {
   background: #e2e8f0;
 }
 
+html[data-ui-theme="light"] .app-help-modal-tour {
+  border-color: #0176d3;
+  background: #0176d3;
+  color: #ffffff;
+}
+
+html[data-ui-theme="light"] .app-help-modal-tour:hover {
+  background: #0b5cab;
+}
+
 html[data-ui-theme="light"] .app-landing-help-hint {
   color: var(--sfoc-light-text-muted);
 }
@@ -1874,11 +1884,11 @@ html[data-ui-theme="light"] .apex-coverage-compare-panel-inner {
   color: #334155;
 }
 
-html[data-ui-theme="light"] .sfoc-diff-added-line {
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .sfoc-diff-added-line {
   background-color: rgba(16, 185, 129, 0.18) !important;
 }
 
-html[data-ui-theme="light"] .sfoc-diff-removed-line {
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .sfoc-diff-removed-line {
   background-color: rgba(244, 63, 94, 0.16) !important;
 }
 
@@ -3287,17 +3297,17 @@ html[data-ui-theme="light"] .data-workbench-tab.active {
   color: #1d4ed8;
 }
 
-html[data-ui-theme="light"] .sfoc-tool-danger-btn,
-html[data-ui-theme="light"] .data-workbench-danger-btn,
-html[data-ui-theme="light"] .streaming-delete-btn {
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .sfoc-tool-danger-btn,
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .data-workbench-danger-btn,
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .streaming-delete-btn {
   border-color: rgba(220, 38, 38, 0.45) !important;
   color: #b91c1c !important;
   background: #fef2f2 !important;
 }
 
-html[data-ui-theme="light"] .sfoc-tool-danger-btn:hover,
-html[data-ui-theme="light"] .data-workbench-danger-btn:hover,
-html[data-ui-theme="light"] .streaming-delete-btn:hover {
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .sfoc-tool-danger-btn:hover,
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .data-workbench-danger-btn:hover,
+html[data-ui-theme="light"] body:not([data-ui-mode="v2"]) .streaming-delete-btn:hover {
   background: #fee2e2 !important;
   border-color: #dc2626 !important;
   color: #991b1b !important;

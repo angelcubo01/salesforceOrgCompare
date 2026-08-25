@@ -31,6 +31,9 @@ shared/telemetryConfig.js
 # Test artifacts (tests/ is versioned)
 coverage/
 *.lcov
+test-results/
+playwright-report/
+blob-report/
 
 # Vitest / Vite cache
 node_modules/.vite/

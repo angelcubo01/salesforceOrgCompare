@@ -22,6 +22,7 @@ import {
 } from '../shared/popupControls.js';
 import { setupPopupHelp, refreshPopupHelpModalContent } from './popupHelp.js';
 import { setupPopupWelcome, maybeShowPopupWelcome, refreshPopupWelcomeContent } from './popupWelcome.js';
+import { UI_MODE_V2, loadUiMode, saveUiMode } from '../shared/uiMode.js';
 
 async function bg(message) {
   return await chrome.runtime.sendMessage(message);
@@ -113,6 +114,12 @@ async function applyPopupLangChange(lang) {
   if (sel) sel.value = getCurrentLang();
   await refresh();
   await setupPopupControls(null);
+}
+
+async function ensurePopupUiModeV2() {
+  const currentMode = await loadUiMode();
+  if (currentMode === UI_MODE_V2) return currentMode;
+  return await saveUiMode(UI_MODE_V2);
 }
 
 function rowGroupKey(li) {
@@ -555,16 +562,20 @@ function showOpenAppOverlay() {
   document.body.classList.add('popup-opening-app');
 }
 
+async function openCodeApp() {
+  showOpenAppOverlay();
+  const lang = getCurrentLang();
+  const url = chrome.runtime.getURL(`code/code.html?lang=${encodeURIComponent(lang)}`);
+  await chrome.tabs.create({ url });
+}
+
 document.getElementById('openCodeBtn').addEventListener('click', async (e) => {
   const btn = /** @type {HTMLButtonElement | null} */ (e.currentTarget);
   if (btn?.disabled) {
     e.preventDefault();
     return;
   }
-  showOpenAppOverlay();
-  const lang = getCurrentLang();
-  const url = chrome.runtime.getURL(`code/code.html?lang=${encodeURIComponent(lang)}`);
-  await chrome.tabs.create({ url });
+  await openCodeApp();
 });
 
 document.getElementById('openSettingsBtn')?.addEventListener('click', async () => {
@@ -578,10 +589,13 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   applyUiThemeToDocument(document);
   await loadLang();
   document.documentElement.lang = getCurrentLang() === 'en' ? 'en' : 'es';
+  const versionEl = document.getElementById('popupVersion');
+  if (versionEl) versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   setupPopupLanguageSelect();
   applyStaticTranslations();
   setupPopupHelp();
   setupPopupWelcome();
+  await ensurePopupUiModeV2();
   await initPosthogClient();
   const ph = getPosthogClient();
   const refreshed = await refreshFeatureFlagsIfStale(ph);

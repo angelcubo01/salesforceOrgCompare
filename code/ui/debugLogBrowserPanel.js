@@ -7,6 +7,7 @@ import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { getDebugLogsDefaultRangeHours } from '../../shared/extensionSettings.js';
+import { confirmSfocOrgAction } from './sfocModal.js';
 
 const CONTEXT_PLACEHOLDER = '—';
 
@@ -600,7 +601,12 @@ export function setupDebugLogBrowserPanel() {
         showToast(t('debugLogs.selectOrg'), 'error');
         return;
       }
-      if (!window.confirm(t('debugLogs.deleteAllConfirm'))) return;
+      if (!await confirmSfocOrgAction({
+        orgId: state.leftOrgId,
+        description: t('debugLogs.deleteAllConfirm'),
+        confirmLabel: t('modal.action.deleteLogs'),
+        risk: 'destructive'
+      })) return;
       deleteAllBtn.disabled = true;
       showToastWithSpinner(t('debugLogs.deletingAll'));
       try {

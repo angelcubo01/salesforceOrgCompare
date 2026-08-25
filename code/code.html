@@ -4,6 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Salesforce Org Compare</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../icons/icon-16.png" />
     <style>
       body.app-nav-booting .content {
         visibility: hidden;
@@ -12,7 +14,7 @@
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 1500;
+        z-index: var(--sfoc-z-boot, 1600);
         flex-direction: column;
         align-items: center;
         justify-content: center;
@@ -32,6 +34,12 @@
         border-radius: 50%;
         animation: app-boot-spin 0.7s linear infinite;
       }
+      .app-boot-splash-logo {
+        display: block;
+        width: 112px;
+        height: auto;
+        object-fit: contain;
+      }
       @keyframes app-boot-spin {
         to {
           transform: rotate(360deg);
@@ -50,9 +58,14 @@
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
     <link rel="stylesheet" href="./code.css" />
     <link rel="stylesheet" href="./code-theme-light.css" />
+    <link rel="stylesheet" href="./workbench/workbench.css" />
+    <link rel="stylesheet" href="./workbench/workbench-refresh.css" />
+    <link rel="stylesheet" href="../vendor/driver.js/driver.css" />
+    <link rel="stylesheet" href="../shared/sfoc-design-system.css" />
   </head>
   <body class="app-nav-booting">
     <div id="appBootSplash" class="app-boot-splash" role="status" aria-live="polite" aria-busy="true">
+      <img class="app-boot-splash-logo" src="../icons/logo-horizontal.png" width="112" height="74" alt="" aria-hidden="true" />
       <span class="app-boot-splash-spinner" aria-hidden="true"></span>
       <p id="appBootSplashText" class="app-boot-splash-text" data-i18n="popup.openingApp"></p>
     </div>
@@ -76,7 +89,13 @@
             <div id="searchPanel" class="search sidebar-search-panel">
               <label for="searchInput" class="sidebar-search-label" data-i18n="code.searchTitle">Búsqueda</label>
               <div class="sidebar-search-input-row">
-                <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholderComparator" placeholder="Buscar componentes (mín. 1 carácter)" maxlength="64" />
+                <div class="sidebar-search-field">
+                  <svg class="sidebar-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <path d="m20 20-3.5-3.5"></path>
+                  </svg>
+                  <input id="searchInput" class="sfoc-query-input" type="text" data-i18n-placeholder="code.searchPlaceholderComparator" placeholder="Buscar componentes (mín. 1 carácter)" maxlength="64" />
+                </div>
                 <button type="button" id="packageXmlLoadBtn" class="sidebar-action-btn" data-i18n-title="code.loadPackageXmlTitle" data-i18n-aria-label="code.loadPackageXmlTitle">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -94,29 +113,42 @@
           <div
             id="compareListPinnedTitle"
             class="compare-list-section-title hidden"
-            data-i18n="list.pinnedTitle"
           >
-            Fijados
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 17v5"></path>
+              <path d="m5 17 2-5V4h10v8l2 5z"></path>
+            </svg>
+            <span data-i18n="list.pinnedTitle">Fijados</span>
           </div>
           <ul id="leftListPinned" class="list compare-list-pinned hidden" data-i18n-aria-label="code.ariaPinned"></ul>
           <div
             id="compareListUnpinnedTitle"
             class="compare-list-section-title hidden"
-            data-i18n="list.unpinnedTitle"
           >
-            Recientemente vistos
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 8v4l2 2"></path>
+              <path d="M3.05 11a9 9 0 1 1 .5 4M3 20v-5h5"></path>
+            </svg>
+            <span data-i18n="list.unpinnedTitle">Recientemente vistos</span>
           </div>
           <div id="compareListToolbar" class="compare-list-toolbar hidden" data-i18n-aria-label="code.ariaCompareList">
             <div class="compare-list-toolbar-row">
-              <input
-                id="compareListFilter"
-                class="sfoc-query-input compare-list-filter"
-                type="search"
-                autocomplete="off"
-                spellcheck="false"
-                data-i18n-placeholder="list.filterPlaceholder"
-                placeholder="Filtrar lista…"
-              />
+              <div class="compare-list-filter-field">
+                <svg class="compare-list-filter-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 6h18"></path>
+                  <path d="M6 12h12"></path>
+                  <path d="M10 18h4"></path>
+                </svg>
+                <input
+                  id="compareListFilter"
+                  class="sfoc-query-input compare-list-filter"
+                  type="search"
+                  autocomplete="off"
+                  spellcheck="false"
+                  data-i18n-placeholder="list.filterPlaceholder"
+                  placeholder="Filtrar lista…"
+                />
+              </div>
               <button id="clearHistoryButton" type="button" class="clear-history-button sidebar-action-btn" data-i18n-title="code.clearSavedFiles">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                   <polyline points="3 6 5 6 21 6"></polyline>
@@ -371,7 +403,7 @@
               <p id="appLandingDiscoverBannerText" class="app-landing-discover-banner-text"></p>
             </div>
             <div class="app-landing-tools-wrap">
-              <section class="app-landing-tools-section" aria-labelledby="appLandingRecentsHeading">
+              <section class="app-landing-tools-section app-landing-tools-section--recents" aria-labelledby="appLandingRecentsHeading">
                 <h2 id="appLandingRecentsHeading" class="app-landing-tools-heading" data-i18n="code.landingRecents">Recientes</h2>
                 <div id="appLandingRecentsList" class="app-landing-tools-list-host"></div>
               </section>
@@ -3370,25 +3402,41 @@
     >
       <div id="quickOpenBackdrop" class="quick-open-backdrop" tabindex="-1"></div>
       <div class="quick-open-shell">
-        <input
-          id="quickOpenInput"
-          class="quick-open-input sfoc-query-input"
-          type="search"
-          autocomplete="off"
-          spellcheck="false"
-          data-i18n-placeholder="quickOpen.placeholder"
-          placeholder="Buscar metadatos, herramientas o ficheros…"
-          maxlength="120"
-          aria-controls="quickOpenResults"
-          aria-autocomplete="list"
-          aria-expanded="false"
-        />
+        <header class="quick-open-header">
+          <div>
+            <h2 id="quickOpenTitle" class="quick-open-title" data-i18n="quickOpen.title">Command palette</h2>
+            <p class="quick-open-subtitle" data-i18n="quickOpen.subtitle">Herramientas, workspaces, metadata y scripts</p>
+          </div>
+          <button type="button" id="quickOpenCloseBtn" class="quick-open-close" data-i18n="help.close">Cerrar</button>
+        </header>
+        <div class="quick-open-input-wrap">
+          <input
+            id="quickOpenInput"
+            class="quick-open-input sfoc-query-input"
+            type="search"
+            role="combobox"
+            autocomplete="off"
+            spellcheck="false"
+            data-i18n-placeholder="quickOpen.placeholder"
+            placeholder="Buscar metadatos, herramientas o ficheros…"
+            maxlength="120"
+            aria-controls="quickOpenResults"
+            aria-autocomplete="list"
+            aria-expanded="false"
+          />
+          <kbd id="quickOpenShortcutHint" class="quick-open-shortcut-hint">Ctrl+K</kbd>
+        </div>
         <div
           id="quickOpenResults"
-          class="quick-open-results hidden"
+          class="quick-open-results"
           role="listbox"
           aria-live="polite"
         ></div>
+        <footer class="quick-open-footer" aria-hidden="true">
+          <span>↑↓ <span data-i18n="quickOpen.hintNavigate">navegar</span></span>
+          <span>Enter <span data-i18n="quickOpen.hintOpen">abrir</span></span>
+          <span>Esc <span data-i18n="quickOpen.hintClose">cerrar</span></span>
+        </footer>
       </div>
     </div>
     <div id="toastContainer" class="toast-container"></div>
@@ -3415,6 +3463,9 @@
         </header>
         <div id="appHelpModalBody" class="app-help-modal-body"></div>
         <footer id="appHelpModalFooter" class="app-help-modal-foot hidden">
+          <button type="button" id="appHelpModalTourBtn" class="app-help-modal-tour hidden" data-i18n="onboarding.common.startTour">
+            Iniciar tour
+          </button>
           <button type="button" id="appHelpModalPrimaryBtn" class="app-help-modal-primary" data-i18n="onboarding.gotIt">
             Entendido
           </button>

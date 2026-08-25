@@ -1,0 +1,1128 @@
+/*
+ * Salesforce Org Compare · sistema visual compartido.
+ *
+ * Aislamiento:
+ * - Las páginas independientes optan explícitamente con data-sfoc-document.
+ * - La aplicación principal solo recibe estos tokens bajo body[data-ui-mode="v2"].
+ * - Classic/v1 no coincide con ningún selector de esta hoja.
+ * - La UI inyectada usa una capa compatible propia en sfInject/content/styles.css,
+ *   porque se ejecuta dentro del DOM de Salesforce y no debe cargar reglas globales.
+ */
+
+:is(html[data-sfoc-document], body[data-ui-mode='v2']) {
+  color-scheme: dark;
+
+  /* Color */
+  --sfoc-color-canvas: #0b1220;
+  --sfoc-color-surface: #111c2e;
+  --sfoc-color-surface-subtle: #17243a;
+  --sfoc-color-surface-elevated: #1d2c45;
+  --sfoc-color-text: #f3f6fb;
+  --sfoc-color-text-secondary: #b7c3d4;
+  --sfoc-color-text-disabled: #7f8da1;
+  --sfoc-color-border: #354760;
+  --sfoc-color-border-strong: #4b607b;
+  --sfoc-color-primary: #0b5cab;
+  --sfoc-color-primary-hover: #014486;
+  --sfoc-color-primary-soft: #163a5f;
+  --sfoc-color-focus: #1b96ff;
+  --sfoc-color-selection: #123f68;
+  --sfoc-color-hover: #1a2c45;
+  --sfoc-color-success: #45c65a;
+  --sfoc-color-warning: #f9b642;
+  --sfoc-color-danger: #fe5c5c;
+  --sfoc-color-info: #5eb4ff;
+  --sfoc-color-production: #f87171;
+  --sfoc-color-sandbox: #5eb4ff;
+  --sfoc-color-readonly: #b8a1ff;
+  --sfoc-color-code-added: #0f3b32;
+  --sfoc-color-code-added-text: #9be8bd;
+  --sfoc-color-code-removed: #45212a;
+  --sfoc-color-code-removed-text: #ffb3bd;
+
+  /* Dimensiones */
+  --sfoc-font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+  --sfoc-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  --sfoc-control-height-sm: 32px;
+  --sfoc-control-height: 38px;
+  --sfoc-control-height-touch: 42px;
+  --sfoc-popup-width: 640px;
+  --sfoc-radius-sm: 4px;
+  --sfoc-radius-md: 8px;
+  --sfoc-radius-lg: 12px;
+  --sfoc-radius-pill: 999px;
+  --sfoc-space-1: 4px;
+  --sfoc-space-2: 8px;
+  --sfoc-space-3: 12px;
+  --sfoc-space-4: 16px;
+  --sfoc-space-5: 20px;
+  --sfoc-space-6: 24px;
+  --sfoc-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.28);
+  --sfoc-shadow-md: 0 8px 24px rgb(0 0 0 / 0.28);
+  --sfoc-shadow-modal: 0 20px 48px rgb(0 0 0 / 0.42);
+  --sfoc-focus-ring: 0 0 0 3px color-mix(in srgb, var(--sfoc-color-focus) 34%, transparent);
+  --sfoc-transition-fast: 120ms ease;
+  --sfoc-transition: var(--sfoc-transition-fast);
+  --sfoc-z-content: 0;
+  --sfoc-z-tool-panel: 120;
+  --sfoc-z-org-popup: 400;
+  --sfoc-z-app-chrome: 450;
+  --sfoc-z-app-submenu: 500;
+  --sfoc-z-modal: 1200;
+  --sfoc-z-modal-nested: 1300;
+  --sfoc-z-special-overlay: 1400;
+  --sfoc-z-overlay: var(--sfoc-z-special-overlay);
+  --sfoc-z-toast: 1500;
+  --sfoc-z-help: 1501;
+  --sfoc-z-logi: 1502;
+  --sfoc-z-boot: 1600;
+
+  /* Alias de compatibilidad para las hojas actuales. */
+  --sfoc-bg-app: var(--sfoc-color-canvas);
+  --sfoc-bg-panel: var(--sfoc-color-surface);
+  --sfoc-bg-elevated: var(--sfoc-color-surface-elevated);
+  --sfoc-surface-2: var(--sfoc-color-surface-subtle);
+  --sfoc-border: var(--sfoc-color-border);
+  --sfoc-border-strong: var(--sfoc-color-border-strong);
+  --sfoc-text: var(--sfoc-color-text);
+  --sfoc-text-muted: var(--sfoc-color-text-secondary);
+  --sfoc-accent: var(--sfoc-color-primary);
+  --sfoc-accent-strong: var(--sfoc-color-primary-hover);
+  --sfoc-success: var(--sfoc-color-success);
+  --sfoc-warn: var(--sfoc-color-warning);
+  --sfoc-danger: var(--sfoc-color-danger);
+  --sfoc-info: var(--sfoc-color-info);
+}
+
+/* Portal de overlays compartido. Los hijos se apilan por orden DOM, de modo que
+   un modal anidado siempre queda por encima sin z-index locales arbitrarios. */
+#sfocOverlayRoot {
+  position: fixed;
+  inset: 0;
+  z-index: var(--sfoc-z-modal, 1200);
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#sfocOverlayRoot:empty { display: none; }
+
+#sfocOverlayRoot > .sfoc-overlay-layer {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: auto !important;
+  pointer-events: auto;
+}
+
+#sfocOverlayRoot > .sfoc-overlay-layer > :where(
+  .apex-tests-coverage-modal-backdrop,
+  .anonymous-apex-log-picker-backdrop,
+  .debug-log-trace-modal-backdrop,
+  .feature-controls-tool-modal-backdrop,
+  .app-help-modal-backdrop,
+  [data-sfoc-modal-backdrop]
+) {
+  position: fixed !important;
+  inset: 0 !important;
+}
+
+#sfocOverlayRoot > .debug-log-edit-trace-modal.sfoc-overlay-layer {
+  display: grid;
+  place-items: center;
+  padding: var(--sfoc-space-4, 16px);
+  background: rgb(2 6 23 / 0.72);
+}
+
+#sfocOverlayRoot > .debug-log-edit-trace-modal.sfoc-overlay-layer .debug-log-edit-trace-modal-inner {
+  position: relative;
+  margin: 0;
+}
+
+:is(html[data-sfoc-document][data-ui-theme='light'], html[data-ui-theme='light'] body[data-ui-mode='v2']) {
+  color-scheme: light;
+  --sfoc-color-canvas: #f3f5f8;
+  --sfoc-color-surface: #ffffff;
+  --sfoc-color-surface-subtle: #f6f8fb;
+  --sfoc-color-surface-elevated: #eef2f7;
+  --sfoc-color-text: #181818;
+  --sfoc-color-text-secondary: #444f5e;
+  --sfoc-color-text-disabled: #687789;
+  --sfoc-color-border: #c5ceda;
+  --sfoc-color-border-strong: #8f9daf;
+  --sfoc-color-primary: #0b5cab;
+  --sfoc-color-primary-hover: #014486;
+  --sfoc-color-primary-soft: #eaf5fe;
+  --sfoc-color-focus: #0176d3;
+  --sfoc-color-selection: #d8edff;
+  --sfoc-color-hover: #eef4fa;
+  --sfoc-color-success: #2e844a;
+  --sfoc-color-warning: #a96404;
+  --sfoc-color-danger: #ba0517;
+  --sfoc-color-info: #0b5cab;
+  --sfoc-color-production: #ba0517;
+  --sfoc-color-sandbox: #0b5cab;
+  --sfoc-color-readonly: #5a3ea6;
+  --sfoc-color-code-added: #dff7e8;
+  --sfoc-color-code-added-text: #1b5e36;
+  --sfoc-color-code-removed: #fde7e9;
+  --sfoc-color-code-removed-text: #8e1725;
+  --sfoc-shadow-sm: 0 1px 2px rgb(24 24 24 / 0.12);
+  --sfoc-shadow-md: 0 8px 24px rgb(24 24 24 / 0.14);
+  --sfoc-shadow-modal: 0 20px 48px rgb(24 24 24 / 0.24);
+
+  /* Alias temporales consumidos por hojas locales mientras se reducen reglas. */
+  --sfoc-light-bg-page: var(--sfoc-color-canvas);
+  --sfoc-light-bg-surface: var(--sfoc-color-surface-elevated);
+  --sfoc-light-bg-elevated: var(--sfoc-color-surface);
+  --sfoc-light-bg-input: var(--sfoc-color-surface);
+  --sfoc-light-bg-hover: var(--sfoc-color-hover);
+  --sfoc-light-border: var(--sfoc-color-border);
+  --sfoc-light-border-subtle: var(--sfoc-color-border);
+  --sfoc-light-text: var(--sfoc-color-text);
+  --sfoc-light-text-muted: var(--sfoc-color-text-secondary);
+  --sfoc-light-text-placeholder: var(--sfoc-color-text-disabled);
+  --sfoc-light-shadow: var(--sfoc-shadow-sm);
+}
+
+/* Base de los documentos independientes. */
+html[data-sfoc-document],
+html[data-sfoc-document] body {
+  box-sizing: border-box;
+  background: var(--sfoc-color-canvas);
+  color: var(--sfoc-color-text);
+  font-family: var(--sfoc-font-sans);
+}
+
+html[data-sfoc-document] *,
+html[data-sfoc-document] *::before,
+html[data-sfoc-document] *::after {
+  box-sizing: inherit;
+}
+
+html[data-sfoc-document] :where(button, input, select, textarea) {
+  font: inherit;
+}
+
+html[data-sfoc-document] :where(button, [role='button'], a, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--sfoc-color-focus);
+  outline-offset: 2px;
+  box-shadow: var(--sfoc-focus-ring);
+}
+
+html[data-sfoc-document] :where(button, input, select, textarea):disabled,
+html[data-sfoc-document] [aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+html[data-sfoc-document] :where(input:not([type='checkbox']):not([type='radio']):not([type='range']), select, textarea) {
+  min-height: var(--sfoc-control-height);
+  border: 1px solid var(--sfoc-color-border-strong);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+}
+
+html[data-sfoc-document] :where(input, textarea)::placeholder {
+  color: var(--sfoc-color-text-disabled);
+  opacity: 1;
+}
+
+html[data-sfoc-document] :where(a) {
+  color: var(--sfoc-color-info);
+}
+
+html[data-sfoc-document] :where(code, pre, kbd, samp, .mono, [class*='-mono']) {
+  font-family: var(--sfoc-font-mono);
+}
+
+/* Popup compacto. */
+html[data-sfoc-document='popup'],
+html[data-sfoc-document='popup'] body {
+  width: var(--sfoc-popup-width);
+  min-width: var(--sfoc-popup-width);
+  max-width: none;
+}
+
+html[data-sfoc-document='popup'] body {
+  overflow-x: hidden;
+  border: 0;
+  border-radius: 0;
+  background: var(--sfoc-color-canvas);
+  box-shadow: none;
+}
+
+html[data-sfoc-document='popup'] .topbar {
+  margin: -8px -12px 0;
+  padding: 12px;
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-surface);
+  box-shadow: none;
+}
+
+html[data-sfoc-document='popup'] .title {
+  min-width: 0;
+  flex: 1;
+  flex-direction: row;
+  align-items: center;
+  gap: 9px;
+}
+
+html[data-sfoc-document='popup'] .popup-brand-logo {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+}
+
+html[data-sfoc-document='popup'] .popup-welcome-logo {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  object-fit: contain;
+}
+
+html[data-sfoc-document='popup'] .popup-brand-copy {
+  min-width: 0;
+}
+
+html[data-sfoc-document='popup'] .title-main {
+  color: var(--sfoc-color-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+html[data-sfoc-document='popup'] .title-subtitle,
+html[data-sfoc-document='popup'] .section-hint,
+html[data-sfoc-document='popup'] .muted,
+html[data-sfoc-document='popup'] .org-meta,
+html[data-sfoc-document='popup'] .popup-footer {
+  color: var(--sfoc-color-text-secondary);
+}
+
+html[data-sfoc-document='popup'] button {
+  min-height: var(--sfoc-control-height);
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-sfoc-document='popup'] button:hover:not(:disabled) {
+  border-color: var(--sfoc-color-border-strong);
+  background: var(--sfoc-color-hover);
+  color: var(--sfoc-color-text);
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-sfoc-document='popup'] .setup-btn,
+html[data-sfoc-document='popup'] .popup-help-modal-close,
+html[data-sfoc-document='popup'] .popup-welcome-close {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: var(--sfoc-radius-md);
+}
+
+html[data-sfoc-document='popup'] #openCodeBtn,
+html[data-sfoc-document='popup'] .popup-welcome-primary {
+  min-height: 40px;
+  border-color: var(--sfoc-color-primary);
+  background: var(--sfoc-color-primary);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+html[data-sfoc-document='popup'] #openCodeBtn:hover:not(:disabled),
+html[data-sfoc-document='popup'] .popup-welcome-primary:hover:not(:disabled) {
+  border-color: var(--sfoc-color-primary-hover);
+  background: var(--sfoc-color-primary-hover);
+  color: #ffffff;
+}
+
+html[data-sfoc-document='popup'] .org-group-tag {
+  border-color: color-mix(in srgb, var(--sfoc-color-info) 45%, var(--sfoc-color-border));
+  background: color-mix(in srgb, var(--sfoc-color-info) 12%, transparent);
+  color: var(--sfoc-color-info);
+}
+
+html[data-sfoc-document='popup'] h3 {
+  color: var(--sfoc-color-text);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+html[data-sfoc-document='popup'] .row {
+  min-width: 0;
+  min-height: 48px;
+  margin: 0;
+  padding: 9px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--sfoc-color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-sfoc-document='popup'] .row:hover {
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-hover);
+}
+
+html[data-sfoc-document='popup'] .drag-handle {
+  color: var(--sfoc-color-text-disabled);
+}
+
+html[data-sfoc-document='popup'] .org-name {
+  color: var(--sfoc-color-text);
+}
+
+html[data-sfoc-document='popup'] .org-name[data-auth-status='active'] {
+  color: var(--sfoc-color-success);
+}
+
+html[data-sfoc-document='popup'] .org-name[data-auth-status='expired'] {
+  color: var(--sfoc-color-danger);
+}
+
+html[data-sfoc-document='popup'] .row button.small,
+html[data-sfoc-document='popup'] .org-actions-trigger,
+html[data-sfoc-document='popup'] .alias-edit-btn {
+  min-height: 36px;
+}
+
+html[data-sfoc-document='popup'] .popup-telemetry-notice {
+  border-radius: var(--sfoc-radius-md);
+  box-shadow: none;
+}
+
+html[data-sfoc-document='popup'] .popup-help-modal-backdrop,
+html[data-sfoc-document='popup'] .popup-welcome-backdrop {
+  background: rgb(3 12 24 / 0.66);
+  backdrop-filter: blur(2px);
+}
+
+html[data-sfoc-document='popup'] .popup-help-modal-panel,
+html[data-sfoc-document='popup'] .popup-welcome-panel {
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-lg);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+  box-shadow: var(--sfoc-shadow-modal);
+}
+
+html[data-sfoc-document='popup'] .popup-help-modal-panel {
+  max-width: min(520px, calc(100vw - 24px));
+}
+
+html[data-sfoc-document='popup'] .popup-help-modal-head,
+html[data-sfoc-document='popup'] .popup-welcome-top,
+html[data-sfoc-document='popup'] .popup-welcome-foot {
+  border-color: var(--sfoc-color-border);
+}
+
+html[data-sfoc-document='popup'] .popup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--sfoc-color-border);
+  font-size: 10px;
+}
+
+@media (max-width: 400px) {
+  html[data-sfoc-document='popup'] .topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  html[data-sfoc-document='popup'] .topbar-right {
+    width: 100%;
+  }
+
+  html[data-sfoc-document='popup'] #openCodeBtn {
+    flex: 1;
+  }
+
+  html[data-sfoc-document='popup'] .title-subtitle {
+    display: none;
+  }
+
+  html[data-sfoc-document='popup'] .row {
+    gap: 5px;
+  }
+
+  html[data-sfoc-document='popup'] .org-group-tag {
+    max-width: 76px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* Ajustes: una superficie, secciones y separadores; no una tarjeta por preferencia. */
+html[data-sfoc-document='settings'] body {
+  background: var(--sfoc-color-canvas);
+}
+
+html[data-sfoc-document='settings'] .settings-shell {
+  width: min(760px, 100%);
+  max-width: 760px;
+  padding: 28px 24px 48px;
+}
+
+html[data-sfoc-document='settings'] .settings-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-color: var(--sfoc-color-border);
+}
+
+html[data-sfoc-document='settings'] .settings-brand-logo {
+  display: block;
+  width: 88px;
+  height: 58px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+html[data-sfoc-document='settings'] .settings-heading-copy {
+  min-width: 0;
+}
+
+html[data-sfoc-document='settings'] .settings-title {
+  color: var(--sfoc-color-text);
+}
+
+html[data-sfoc-document='settings'] .settings-lead,
+html[data-sfoc-document='settings'] .settings-hint,
+html[data-sfoc-document='settings'] .settings-status,
+html[data-sfoc-document='settings'] .settings-logi-mode-desc,
+html[data-sfoc-document='settings'] .settings-logi-model-price,
+html[data-sfoc-document='settings'] .settings-logi-usage-pct {
+  color: var(--sfoc-color-text-secondary);
+}
+
+html[data-sfoc-document='settings'] .settings-main {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-lg);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-sm);
+}
+
+html[data-sfoc-document='settings'] .settings-card,
+html[data-sfoc-document='settings'] .settings-advanced {
+  margin: 0;
+  padding: 24px;
+  border: 0;
+  border-bottom: 1px solid var(--sfoc-color-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+html[data-sfoc-document='settings'] .settings-card:last-child {
+  border-bottom: 0;
+}
+
+html[data-sfoc-document='settings'] .settings-card-title {
+  margin-bottom: 16px;
+  color: var(--sfoc-color-text);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-sfoc-document='settings'] .settings-label,
+html[data-sfoc-document='settings'] .settings-checkbox-row,
+html[data-sfoc-document='settings'] .settings-subheading,
+html[data-sfoc-document='settings'] .settings-adv-section-title,
+html[data-sfoc-document='settings'] .settings-version-row,
+html[data-sfoc-document='settings'] .settings-logi-mode-title,
+html[data-sfoc-document='settings'] .settings-logi-usage-title,
+html[data-sfoc-document='settings'] .settings-logi-model-name {
+  color: var(--sfoc-color-text);
+}
+
+html[data-sfoc-document='settings'] :where(.settings-select, .settings-number, .settings-text, .settings-logi-select, .settings-logi-input) {
+  min-height: var(--sfoc-control-height);
+  padding: 8px 11px;
+  border: 1px solid var(--sfoc-color-border-strong);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+}
+
+html[data-sfoc-document='settings'] :where(.settings-select, .settings-number, .settings-text, .settings-logi-select, .settings-logi-input):hover {
+  border-color: var(--sfoc-color-focus);
+}
+
+html[data-sfoc-document='settings'][data-ui-theme='light'] :where(.settings-select, .settings-logi-select) {
+  background-color: #ffffff;
+}
+
+html[data-sfoc-document='settings'] .settings-sf-inject-integrations,
+html[data-sfoc-document='settings'] .settings-logi-panel,
+html[data-sfoc-document='settings'] .settings-logi-usage {
+  margin-top: 14px;
+  padding: 2px 0 2px 14px;
+  border: 0;
+  border-left: 3px solid var(--sfoc-color-border-strong);
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-sfoc-document='settings'] .settings-logi-mode-card {
+  border-color: var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: transparent;
+}
+
+html[data-sfoc-document='settings'] .settings-logi-mode-card:has(input:checked) {
+  border-color: var(--sfoc-color-primary);
+  background: var(--sfoc-color-primary-soft);
+}
+
+html[data-sfoc-document='settings'] .settings-logi-models {
+  padding: 0;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: transparent;
+}
+
+html[data-sfoc-document='settings'] .settings-logi-model-row,
+html[data-sfoc-document='settings'] .settings-logi-model-row:first-child {
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--sfoc-color-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+html[data-sfoc-document='settings'] .settings-logi-model-row:last-child {
+  border-bottom: 0;
+}
+
+html[data-sfoc-document='settings'] .settings-advanced {
+  padding: 0;
+}
+
+html[data-sfoc-document='settings'] .settings-advanced-summary {
+  min-height: 48px;
+  padding: 15px 24px;
+  color: var(--sfoc-color-text);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+html[data-sfoc-document='settings'] .settings-advanced-inner {
+  padding: 20px 24px 24px;
+  border-color: var(--sfoc-color-border);
+}
+
+html[data-sfoc-document='settings'] :where(.settings-secondary, .settings-primary, .settings-logi-model-btn) {
+  min-height: var(--sfoc-control-height);
+  padding: 7px 14px;
+  border: 1px solid var(--sfoc-color-border-strong);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-sfoc-document='settings'] :where(.settings-secondary, .settings-primary, .settings-logi-model-btn):hover:not(:disabled) {
+  border-color: var(--sfoc-color-focus);
+  background: var(--sfoc-color-hover);
+  transform: none;
+}
+
+html[data-sfoc-document='settings'] .settings-primary-action {
+  border-color: var(--sfoc-color-primary);
+  background: var(--sfoc-color-primary);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+html[data-sfoc-document='settings'] .settings-primary-action:hover:not(:disabled) {
+  border-color: var(--sfoc-color-primary-hover);
+  background: var(--sfoc-color-primary-hover);
+  color: #ffffff;
+}
+
+html[data-sfoc-document='settings'] .settings-danger-action {
+  border-color: color-mix(in srgb, var(--sfoc-color-danger) 60%, var(--sfoc-color-border));
+  color: var(--sfoc-color-danger);
+}
+
+html[data-sfoc-document='settings'] .settings-beta-badge {
+  border-color: color-mix(in srgb, var(--sfoc-color-warning) 45%, var(--sfoc-color-border));
+  background: color-mix(in srgb, var(--sfoc-color-warning) 12%, transparent);
+  color: var(--sfoc-color-warning);
+}
+
+html[data-sfoc-document='settings'][data-ui-theme='light'] .settings-beta-badge {
+  color: #774100;
+}
+
+html[data-sfoc-document='settings'] .settings-link {
+  color: var(--sfoc-color-info);
+}
+
+@media (max-width: 640px) {
+  html[data-sfoc-document='settings'] .settings-shell {
+    padding: 20px 12px 32px;
+  }
+
+  html[data-sfoc-document='settings'] .settings-card,
+  html[data-sfoc-document='settings'] .settings-advanced-inner {
+    padding: 20px 16px;
+  }
+
+  html[data-sfoc-document='settings'] .settings-advanced-summary {
+    padding-inline: 16px;
+  }
+
+  html[data-sfoc-document='settings'] .settings-logi-models-add {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Chrome compartido de viewers. */
+html[data-sfoc-document='apex-log-viewer'] {
+  --alb-bg: var(--sfoc-color-canvas);
+  --alb-border: var(--sfoc-color-border);
+  --alb-text: var(--sfoc-color-text);
+  --alb-accent: var(--sfoc-color-info);
+  --alb-muted: var(--sfoc-color-text-secondary);
+  --alb-chip-bg: var(--sfoc-color-surface-subtle);
+  --alb-warning: var(--sfoc-color-warning);
+  --alb-gantt-grid: color-mix(in srgb, var(--sfoc-color-border) 70%, transparent);
+  --alb-page-pad-x: 16px;
+}
+
+html[data-sfoc-document='apex-source-viewer'] {
+  --asv-bg: var(--sfoc-color-canvas);
+  --asv-border: var(--sfoc-color-border);
+  --asv-text: var(--sfoc-color-text);
+  --asv-accent: var(--sfoc-color-info);
+}
+
+html[data-sfoc-document='apex-coverage-viewer'] {
+  --acv-bg: var(--sfoc-color-canvas);
+  --acv-border: var(--sfoc-color-border);
+  --acv-text: var(--sfoc-color-text);
+}
+
+html[data-sfoc-document='apex-log-viewer'] body,
+html[data-sfoc-document='apex-source-viewer'] body,
+html[data-sfoc-document='apex-coverage-viewer'] body {
+  background: var(--sfoc-color-canvas);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-viewer-toolbar,
+html[data-sfoc-document='apex-source-viewer'] .apex-src-viewer-toolbar,
+html[data-sfoc-document='apex-coverage-viewer'] .apex-cov-viewer-toolbar {
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+html[data-sfoc-document] .sfoc-viewer-brand-logo {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+
+html[data-sfoc-document='apex-source-viewer'] .apex-src-viewer-toolbar,
+html[data-sfoc-document='apex-coverage-viewer'] .apex-cov-viewer-toolbar {
+  min-height: 52px;
+  gap: 10px;
+  padding: 7px 12px;
+}
+
+html[data-sfoc-document] select:not([multiple]) {
+  appearance: none;
+  padding-inline-end: 32px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--sfoc-color-text-secondary) 50%),
+    linear-gradient(135deg, var(--sfoc-color-text-secondary) 50%, transparent 50%);
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50%;
+  background-repeat: no-repeat;
+  background-size: 5px 5px;
+}
+
+html[data-sfoc-document='apex-log-viewer'] :where(.apex-log-viewer-back, .apex-log-viewer-download, .apex-log-tabs-help, .apex-log-panel-help, .apex-log-gantt-action, .apex-log-copy-btn, .apex-log-show-more),
+html[data-sfoc-document='apex-source-viewer'] :where(.apex-src-viewer-back, .apex-src-viewer-download),
+html[data-sfoc-document='apex-coverage-viewer'] :where(.apex-cov-viewer-back, .apex-cov-viewer-help, .apex-cov-split-swap-btn) {
+  min-height: var(--sfoc-control-height);
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] :where(.apex-log-tabs-help, .apex-log-panel-help),
+html[data-sfoc-document='apex-coverage-viewer'] .apex-cov-viewer-help {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+}
+
+html[data-sfoc-document='apex-log-viewer'] :where(.apex-log-viewer-back, .apex-log-tabs-help, .apex-log-panel-help, .apex-log-gantt-action, .apex-log-copy-btn, .apex-log-show-more):hover:not(:disabled),
+html[data-sfoc-document='apex-source-viewer'] :where(.apex-src-viewer-back, .apex-src-viewer-download):hover:not(:disabled),
+html[data-sfoc-document='apex-coverage-viewer'] :where(.apex-cov-viewer-back, .apex-cov-viewer-help, .apex-cov-split-swap-btn):hover:not(:disabled) {
+  border-color: var(--sfoc-color-focus);
+  background: var(--sfoc-color-hover);
+  color: var(--sfoc-color-info);
+  transform: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-viewer-download,
+html[data-sfoc-document='apex-source-viewer'] .apex-src-viewer-download {
+  border-color: var(--sfoc-color-primary);
+  background: var(--sfoc-color-primary);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-viewer-download:hover:not(:disabled),
+html[data-sfoc-document='apex-source-viewer'] .apex-src-viewer-download:hover:not(:disabled) {
+  border-color: var(--sfoc-color-primary-hover);
+  background: var(--sfoc-color-primary-hover);
+  color: #ffffff;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-viewer-toolbar-row {
+  gap: 8px;
+  padding-inline: 12px;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-viewer-toolbar-row--primary {
+  border-color: var(--sfoc-color-border);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-tabs {
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-surface);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-tab {
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sfoc-color-text-secondary);
+  box-shadow: none;
+  transform: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-tab:hover:not(.is-active) {
+  border-color: transparent;
+  border-bottom-color: var(--sfoc-color-border-strong);
+  background: var(--sfoc-color-hover);
+  color: var(--sfoc-color-text);
+  transform: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-tab.is-active {
+  border-color: transparent;
+  border-bottom-color: var(--sfoc-color-primary);
+  background: var(--sfoc-color-primary-soft);
+  color: var(--sfoc-color-text);
+  box-shadow: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] :where(.apex-log-filter, .apex-log-filter-select, .apex-log-find-input, .apex-log-execution-select) {
+  min-height: var(--sfoc-control-height);
+  border-color: var(--sfoc-color-border-strong);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-chip {
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-surface-subtle);
+  color: var(--sfoc-color-text-secondary);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-chip--error {
+  border-color: color-mix(in srgb, var(--sfoc-color-danger) 55%, var(--sfoc-color-border));
+  background: color-mix(in srgb, var(--sfoc-color-danger) 10%, transparent);
+  color: var(--sfoc-color-danger);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-chip--warning {
+  border-color: color-mix(in srgb, var(--sfoc-color-warning) 55%, var(--sfoc-color-border));
+  background: color-mix(in srgb, var(--sfoc-color-warning) 10%, transparent);
+  color: var(--sfoc-color-warning);
+}
+
+html[data-sfoc-document='apex-log-viewer'][data-ui-theme='light'] :where(.apex-log-summary-hero-cta, .apex-log-summary-status-heading) {
+  color: var(--sfoc-color-danger);
+}
+
+html[data-sfoc-document='apex-log-viewer'][data-ui-theme='light'] .apex-log-summary-hero-cta {
+  border-color: color-mix(in srgb, var(--sfoc-color-danger) 55%, var(--sfoc-color-border));
+  background: color-mix(in srgb, var(--sfoc-color-danger) 8%, var(--sfoc-color-surface));
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-panel-heading,
+html[data-sfoc-document='apex-log-viewer'] .apex-log-panel-toolbar,
+html[data-sfoc-document='apex-log-viewer'] .apex-log-execution-mount {
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-surface-subtle);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: transparent;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-data-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--sfoc-color-border-strong);
+  background: var(--sfoc-color-surface-subtle);
+  color: var(--sfoc-color-text-secondary);
+  font-weight: 700;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-data-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--sfoc-color-border);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-data-table tbody tr[data-line]:hover td,
+html[data-sfoc-document='apex-log-viewer'] .apex-log-gantt-row:hover {
+  background: var(--sfoc-color-hover);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-row-highlight {
+  background: var(--sfoc-color-selection);
+  outline-color: var(--sfoc-color-focus);
+}
+
+html[data-sfoc-document='apex-log-viewer'] :where(.apex-log-summary-lead, .apex-log-summary-context, .apex-log-summary-panel) {
+  border-color: var(--sfoc-color-border);
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] :where(.apex-log-summary-card, .apex-log-summary-gauge-card) {
+  border-color: var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface-subtle);
+  box-shadow: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] :where(.apex-log-summary-highlight, .apex-log-flow-item, .apex-log-debug-item, .apex-log-soql-dupe-item) {
+  border-color: var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-find-results,
+html[data-sfoc-document='apex-log-viewer'] .apex-log-summary-record-menu {
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-md);
+}
+
+html[data-sfoc-document='apex-log-viewer'] .apex-log-find-hit:hover,
+html[data-sfoc-document='apex-log-viewer'] .apex-log-summary-record-item:hover {
+  background: var(--sfoc-color-hover);
+}
+
+/* Modal de ayuda común de los viewers. */
+html[data-sfoc-document] .apex-log-help-backdrop {
+  background: rgb(3 12 24 / 0.66);
+  backdrop-filter: blur(2px);
+}
+
+html[data-sfoc-document] .apex-log-help-dialog {
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-lg);
+  background: var(--sfoc-color-surface);
+  color: var(--sfoc-color-text);
+  box-shadow: var(--sfoc-shadow-modal);
+}
+
+html[data-sfoc-document] .apex-log-help-header {
+  border-color: var(--sfoc-color-border);
+}
+
+html[data-sfoc-document] .apex-log-help-close {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: transparent;
+  color: var(--sfoc-color-text-secondary);
+}
+
+html[data-sfoc-document] .apex-log-help-close:hover {
+  border-color: var(--sfoc-color-focus);
+  background: var(--sfoc-color-hover);
+  color: var(--sfoc-color-text);
+}
+
+/* Estado común para payload ausente o error de carga. */
+html[data-sfoc-document] .sfoc-standalone-state {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  min-height: 100%;
+  padding: 32px;
+  color: var(--sfoc-color-text-secondary);
+  text-align: center;
+}
+
+html[data-sfoc-document] .sfoc-standalone-state-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: 50%;
+  background: var(--sfoc-color-surface-subtle);
+  color: var(--sfoc-color-info);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+html[data-sfoc-document] .sfoc-standalone-state--error .sfoc-standalone-state-icon {
+  color: var(--sfoc-color-danger);
+}
+
+html[data-sfoc-document] .sfoc-standalone-state h2,
+html[data-sfoc-document] .sfoc-standalone-state p {
+  margin: 0;
+}
+
+html[data-sfoc-document] .sfoc-standalone-state h2 {
+  color: var(--sfoc-color-text);
+  font-size: 16px;
+}
+
+html[data-sfoc-document] .sfoc-standalone-state p {
+  max-width: 440px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* El editor es la superficie dominante. */
+html[data-sfoc-document='apex-source-viewer'] .apex-src-viewer-editor,
+html[data-sfoc-document='apex-coverage-viewer'] :where(.apex-cov-viewer-editor, .apex-cov-split-editor),
+html[data-sfoc-document='apex-log-viewer'] .apex-log-viewer-editor {
+  border: 0;
+  background: var(--sfoc-color-canvas);
+}
+
+html[data-sfoc-document='apex-source-viewer'] .apex-src-viewer-title,
+html[data-sfoc-document='apex-coverage-viewer'] .apex-cov-viewer-title {
+  color: var(--sfoc-color-text);
+  font-weight: 650;
+}
+
+/* Monaco genera estas clases a partir del tema base. Sus verdes por defecto
+   quedan por debajo de AA sobre el fondo claro de los viewers Apex. */
+html[data-sfoc-document][data-ui-theme='light'] .monaco-editor .mtk7 {
+  color: #1b5e36;
+}
+
+html[data-sfoc-document][data-ui-theme='light'] .monaco-editor .mtk23 {
+  color: #005a43;
+}
+
+/* Monaco asigna mtk8 a identificadores en el tema oscuro. El color base
+   resulta demasiado tenue sobre #1e1e1e y se refuerza sin cambiar semántica. */
+html[data-sfoc-document][data-ui-theme='dark'] .monaco-editor .mtk8 {
+  color: #8bd5ff;
+}
+
+html[data-sfoc-document='apex-coverage-viewer'] :where(.apex-cov-viewer-legend, .apex-cov-split-mini-legend, .apex-cov-split-pane-head) {
+  border-color: var(--sfoc-color-border);
+  background: var(--sfoc-color-surface-subtle);
+  color: var(--sfoc-color-text-secondary);
+}
+
+html[data-sfoc-document='apex-coverage-viewer'] .apex-cov-split-pane {
+  border-color: var(--sfoc-color-border);
+}
+
+/* UI v2: solo alias y requisitos transversales; Classic queda fuera. */
+body[data-ui-mode='v2'] .workbench-context-actions :where(.workbench-icon-button, .workbench-header-action),
+body[data-ui-mode='v2'] :where(.sidebar-action-btn, .compare-list-icon-btn, .sfoc-icon-button) {
+  min-width: 40px;
+  min-height: 40px;
+}
+
+body[data-ui-mode='v2'] :where(.sfoc-tool-panel input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']), .sfoc-tool-panel select) {
+  min-height: var(--sfoc-control-height);
+}
+
+/* Preferencias de accesibilidad. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-sfoc-document] *,
+  html[data-sfoc-document] *::before,
+  html[data-sfoc-document] *::after,
+  body[data-ui-mode='v2'] *,
+  body[data-ui-mode='v2'] *::before,
+  body[data-ui-mode='v2'] *::after {
+    scroll-behavior: auto;
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+  }
+}
+
+@media (forced-colors: active) {
+  html[data-sfoc-document] :where(button, input, select, textarea, [role='tab'], [role='dialog']),
+  body[data-ui-mode='v2'] :where(button, input, select, textarea, [role='tab'], [role='dialog']) {
+    border: 1px solid CanvasText;
+    forced-color-adjust: auto;
+  }
+
+  html[data-sfoc-document] :where([aria-selected='true'], [aria-current='page']),
+  body[data-ui-mode='v2'] :where([aria-selected='true'], [aria-current='page']) {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}

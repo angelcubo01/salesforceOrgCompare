@@ -4,6 +4,7 @@ import { loadLang, t } from '../shared/i18n.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
 import { bg } from './core/bridge.js';
 import { apexViewerIdbTake } from './lib/apexViewerIdb.js';
+import { renderStandaloneViewerState } from '../shared/standaloneViewerState.js';
 
 function sanitizeDownloadFilename(raw) {
   const base = String(raw || 'apex-source')
@@ -112,6 +113,11 @@ async function main() {
   if (!payload) {
     if (titleEl) titleEl.textContent = t('apexLogViewer.missingPayload');
     if (downloadBtn) downloadBtn.disabled = true;
+    renderStandaloneViewerState(mount, {
+      kind: 'error',
+      title: t('apexLogViewer.missingPayload'),
+      description: t('state.error.description')
+    });
     return;
   }
 
@@ -167,6 +173,11 @@ async function main() {
   } catch {
     if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
     if (downloadBtn) downloadBtn.disabled = true;
+    renderStandaloneViewerState(mount, {
+      kind: 'error',
+      title: t('apexLogViewer.monacoError'),
+      description: t('state.error.description')
+    });
     return;
   }
 

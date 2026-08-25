@@ -14,7 +14,7 @@ export const helpOnboardingEs = {
   'help.tool.home.body2':
     'En la barra superior elige un área: Comparador, Desarrollo, Análisis, Monitorización o Manifiestos. Cada área agrupa herramientas en un submenú.',
   'help.tool.home.body3':
-    'La primera vez que abras una herramienta verás un resumen breve. Usa Ctrl+Shift+P (⌘⇧P en Mac) para saltar a metadatos, herramientas o scripts guardados.',
+    'La primera vez que abras una herramienta verás un resumen breve. Usa Ctrl+K (⌘K en Mac) para saltar a metadatos, herramientas o scripts guardados. Ctrl+Shift+P también seguirá funcionando temporalmente.',
   'help.tool.home.body4':
     'Atajos útiles: Ctrl+Enter (⌘↵) ejecutar consultas o Apex anónimo; Ctrl+S (⌘S) guardar en editores; F2 renombrar scripts; Escape cerrar modales; ? o Ayuda para esta ventana.',
 
@@ -289,6 +289,18 @@ export const helpOnboardingEs = {
     'Útil para entender por qué la cobertura de una clase bajó o qué líneas faltan por testear.',
 
   'onboarding.gotIt': 'Entendido',
+  'onboarding.common.previous': 'Anterior',
+  'onboarding.common.next': 'Siguiente',
+  'onboarding.common.finish': 'Finalizar',
+  'onboarding.common.skip': 'Saltar tour',
+  'onboarding.common.progress': 'Paso {{current}} de {{total}}',
+  'onboarding.common.startTour': 'Iniciar tour',
+  'onboarding.common.repeatTour': 'Repetir tour',
+  'onboarding.common.contextTitle': 'Empieza aquí',
+  'onboarding.common.prepareTitle': 'Configura la herramienta',
+  'onboarding.common.actionTitle': 'Completa el flujo',
+  'onboarding.common.resultTitle': 'Resultado y siguientes pasos',
+  'onboarding.common.viewsTitle': 'Vistas de la herramienta',
 
   'onboarding.tool.Comparator.title': 'Comparador de metadatos',
   'onboarding.tool.Comparator.lead':
@@ -305,7 +317,7 @@ export const helpOnboardingEs = {
     'Ejecuta tests automatizados y revisa resultados sin salir de la aplicación.',
   'onboarding.tool.ApexTests.step1': 'Selecciona el entorno arriba a la izquierda.',
   'onboarding.tool.ApexTests.step2':
-    'Elige clases, métodos o suites y lanza la ejecución; el progreso aparece en pantalla.',
+    'Pulsa Ejecutar tests para abrir el runner, elegir clases, métodos o suites y lanzar la ejecución.',
   'onboarding.tool.ApexTests.step3':
     'Abre resultados, cobertura por línea o exporta el informe cuando termine.',
 
@@ -341,7 +353,7 @@ export const helpOnboardingEs = {
   'onboarding.tool.QueryExplorer.step2':
     'Guarda consultas con nombre para reutilizarlas. Exporta resultados a CSV o JSON si lo necesitas.',
   'onboarding.tool.QueryExplorer.step3':
-    'Activa Modo comparación para ejecutar la misma consulta en los dos entornos y ver diferencias.',
+    'Pulsa Ejecutar para lanzar la consulta. Activa Modo comparación si quieres contrastarla en los dos entornos.',
 
   'onboarding.tool.DebugLogBrowser.title': 'Debug Log Browser',
   'onboarding.tool.DebugLogBrowser.lead':
@@ -531,7 +543,7 @@ export const helpOnboardingEn = {
   'help.tool.home.body2':
     'In the top bar pick an area: Comparator, Development, Analysis, Monitoring, or Manifests. Each area groups tools in a submenu.',
   'help.tool.home.body3':
-    'The first time you open a tool you will see a short summary. Use Ctrl+Shift+P (⌘⇧P on Mac) to jump to metadata, tools, or saved scripts.',
+    'The first time you open a tool you will see a short summary. Use Ctrl+K (⌘K on Mac) to jump to metadata, tools, or saved scripts. Ctrl+Shift+P will also keep working temporarily.',
   'help.tool.home.body4':
     'Useful shortcuts: Ctrl+Enter (⌘↵) run queries or anonymous Apex; Ctrl+S (⌘S) save in editors; F2 rename scripts; Escape close modals; ? or Help for this panel.',
 
@@ -806,6 +818,18 @@ export const helpOnboardingEn = {
     'Useful to understand why a class’s coverage dropped or which lines still need tests.',
 
   'onboarding.gotIt': 'Got it',
+  'onboarding.common.previous': 'Previous',
+  'onboarding.common.next': 'Next',
+  'onboarding.common.finish': 'Finish',
+  'onboarding.common.skip': 'Skip tour',
+  'onboarding.common.progress': 'Step {{current}} of {{total}}',
+  'onboarding.common.startTour': 'Start tour',
+  'onboarding.common.repeatTour': 'Repeat tour',
+  'onboarding.common.contextTitle': 'Start here',
+  'onboarding.common.prepareTitle': 'Configure the tool',
+  'onboarding.common.actionTitle': 'Complete the flow',
+  'onboarding.common.resultTitle': 'Result and next steps',
+  'onboarding.common.viewsTitle': 'Tool views',
 
   'onboarding.tool.Comparator.title': 'Metadata comparator',
   'onboarding.tool.Comparator.lead':
@@ -822,7 +846,7 @@ export const helpOnboardingEn = {
     'Run automated tests and review results without leaving the app.',
   'onboarding.tool.ApexTests.step1': 'Select the org in the top-left dropdown.',
   'onboarding.tool.ApexTests.step2':
-    'Pick classes, methods, or suites and start a run; progress appears on screen.',
+    'Press Run tests to open the runner, choose classes, methods, or suites, and start the execution.',
   'onboarding.tool.ApexTests.step3':
     'Open results, line coverage, or export the report when finished.',
 
@@ -858,7 +882,7 @@ export const helpOnboardingEn = {
   'onboarding.tool.QueryExplorer.step2':
     'Save named queries for reuse. Export results to CSV or JSON if needed.',
   'onboarding.tool.QueryExplorer.step3':
-    'Enable comparison mode to run the same query in both orgs and see differences.',
+    'Press Run to execute the query. Enable comparison mode when you want to contrast it across both orgs.',
 
   'onboarding.tool.DebugLogBrowser.title': 'Debug log browser',
   'onboarding.tool.DebugLogBrowser.lead':

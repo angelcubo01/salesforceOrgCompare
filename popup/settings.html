@@ -1,16 +1,22 @@
 <!doctype html>
-<html lang="es">
+<html lang="es" data-sfoc-document="settings">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ajustes · Salesforce Org Compare</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../icons/icon-16.png" />
     <link rel="stylesheet" href="./settings.css" />
+    <link rel="stylesheet" href="../shared/sfoc-design-system.css" />
   </head>
   <body>
     <div class="settings-shell">
       <header class="settings-header">
-        <h1 class="settings-title" data-i18n="settings.title">Ajustes</h1>
-        <p class="settings-lead" data-i18n="settings.subtitle"></p>
+        <img class="settings-brand-logo" src="../icons/logo-horizontal.png" width="88" height="58" alt="" aria-hidden="true" />
+        <div class="settings-heading-copy">
+          <h1 class="settings-title" data-i18n="settings.title">Ajustes</h1>
+          <p class="settings-lead" data-i18n="settings.subtitle"></p>
+        </div>
       </header>
 
       <main class="settings-main">
@@ -116,7 +122,7 @@
             <button
               type="button"
               id="settingsGeneralTraceSave"
-              class="settings-secondary"
+              class="settings-secondary settings-primary-action"
               data-i18n="settings.advancedSaveAll"
             >
               Guardar
@@ -175,7 +181,7 @@
             </div>
           </div>
           <div class="settings-btn-row">
-            <button type="button" id="settingsLogiSave" class="settings-secondary" data-i18n="settings.advancedSaveAll"></button>
+            <button type="button" id="settingsLogiSave" class="settings-secondary settings-primary-action" data-i18n="settings.advancedSaveAll"></button>
           </div>
           <p id="settingsLogiStatus" class="settings-status" role="status"></p>
         </section>
@@ -189,11 +195,18 @@
             <button type="button" id="settingsExportOrgs" class="settings-secondary" data-i18n="settings.backupExport">
               Exportar copia
             </button>
-            <button type="button" id="settingsImportReplace" class="settings-secondary" data-i18n="settings.backupImportReplace">
+            <button type="button" id="settingsImportReplace" class="settings-secondary settings-danger-action" data-i18n="settings.backupImportReplace">
               Importar (sustituir todo)
             </button>
           </div>
-          <input type="file" id="settingsOrgsFile" class="visually-hidden" accept=".json,application/json" />
+          <input
+            type="file"
+            id="settingsOrgsFile"
+            class="visually-hidden"
+            accept=".json,application/json"
+            aria-label="Importar copia de seguridad"
+            data-i18n-aria-label="settings.backupImportReplace"
+          />
           <p id="settingsOrgsStatus" class="settings-status" role="status"></p>
         </section>
 
@@ -205,7 +218,7 @@
             <p class="settings-hint settings-hint--nomargin" data-i18n="settings.advancedLead"></p>
             <div id="settingsAdvancedFields" class="settings-advanced-fields"></div>
             <div class="settings-btn-row">
-              <button type="button" id="settingsAdvancedSave" class="settings-secondary" data-i18n="settings.advancedSaveAll">
+              <button type="button" id="settingsAdvancedSave" class="settings-secondary settings-primary-action" data-i18n="settings.advancedSaveAll">
                 Guardar
               </button>
               <button type="button" id="settingsAdvancedReset" class="settings-secondary" data-i18n="settings.advancedResetAll">

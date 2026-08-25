@@ -13,6 +13,11 @@
     "128": "icons/icon-128.png"
   },
   "action": {
+    "default_icon": {
+      "16": "icons/icon-action-16.png",
+      "24": "icons/icon-action-24.png",
+      "32": "icons/icon-action-32.png"
+    },
     "default_title": "Salesforce Org Compare",
     "default_popup": "popup/popup.html"
   },

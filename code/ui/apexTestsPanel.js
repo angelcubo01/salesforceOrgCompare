@@ -3,6 +3,12 @@ import { bg } from '../core/bridge.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
+import {
+  confirmSfocOrgAction,
+  confirmSfocToolAction,
+  mountSfocOverlay,
+  unmountSfocOverlay
+} from './sfocModal.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
 import { logApexTestFailureUsage, logApexTestRunUsage } from './apexTestUsageLog.js';
@@ -548,7 +554,10 @@ async function renderProfilesModalList() {
     btnDel.textContent = t('apexTests.profilesDelete');
     btnDel.addEventListener('click', async () => {
       const label = p.name || p.id;
-      if (!window.confirm(t('apexTests.profilesDeleteConfirm', { name: label }))) return;
+      if (!await confirmSfocToolAction(
+        t('apexTests.profilesDeleteConfirm', { name: label }),
+        t('modal.action.deleteProfile')
+      )) return;
       const all = await loadApexTestRunProfiles();
       const next = all.filter((x) => (x.id || x.name) !== (p.id || p.name));
       await saveApexTestRunProfiles(next);
@@ -567,15 +576,16 @@ async function renderProfilesModalList() {
 function closeApexTestsProfilesModal() {
   const modal = document.getElementById('apexTestsProfilesModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
 }
 
 function openApexTestsProfilesModal() {
   const modal = document.getElementById('apexTestsProfilesModal');
   if (!modal) return;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: document.getElementById('apexTestsProfileName'),
+    onEscape: closeApexTestsProfilesModal
+  });
   void renderProfilesModalList();
 }
 
@@ -597,8 +607,7 @@ let runnerSettingsPatternsSnapshot = null;
 function closeApexTestsRunnerSettingsModal() {
   const modal = document.getElementById('apexTestsRunnerSettingsModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
 }
 
 async function openApexTestsRunnerSettingsModal() {
@@ -612,8 +621,10 @@ async function openApexTestsRunnerSettingsModal() {
   runnerSettingsPatternsSnapshot = String(cfg.apexTestsClassNameLikePatterns ?? '');
   if (patternsInp) patternsInp.value = runnerSettingsPatternsSnapshot;
   if (skipCb) skipCb.checked = cfg.apexTestsSkipCodeCoverage === true;
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: patternsInp,
+    onEscape: closeApexTestsRunnerSettingsModal
+  });
 }
 
 async function saveApexTestsRunnerSettings() {
@@ -1183,6 +1194,15 @@ async function rememberQueuedApexRun(orgId, jobId, runBody, traceFlagId) {
 async function runApexTestsWithBody(body) {
   if (guardToolAction('apex_test_run')) return;
   if (!state.leftOrgId) return;
+  if (!await confirmSfocOrgAction({
+    orgId: state.leftOrgId,
+    description: body.testLevel === 'RunLocalTests'
+      ? t('apexTests.confirmRunAllLocal')
+      : t('modal.confirmApexTests'),
+    confirmLabel: t('modal.action.runTests'),
+    risk: 'write',
+    variant: 'standard'
+  })) return;
   const { runBtn, runStatus } = getEls();
   if (runBtn) runBtn.disabled = true;
   if (runStatus) runStatus.textContent = t('apexTests.running');
@@ -1223,9 +1243,6 @@ async function runApexTestsWithBody(body) {
 async function runApexTests() {
   if (!state.leftOrgId) return;
   const body = buildRunBody();
-  if (body.testLevel === 'RunLocalTests') {
-    if (!window.confirm(t('apexTests.confirmRunAllLocal'))) return;
-  }
   await runApexTestsWithBody(body);
 }
 

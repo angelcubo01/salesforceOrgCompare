@@ -10,10 +10,19 @@ import {
 import {
   HELP_HOME_ID,
   HELP_TOOL_IDS,
+  ALL_ONBOARDING_TOOLS,
   helpToolTitleKey,
   helpToolBodyKeys
 } from '../../shared/helpToolIds.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
+import {
+  dismissDriverOnboardingForNavigation,
+  getActiveDriverOnboardingTool,
+  startDriverToolOnboarding,
+  stopDriverToolOnboarding
+} from './driverOnboarding.js';
+import { waitForPosthogSurveyPopupToClose } from './posthogSurveyGate.js';
+import { mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 
 const APP_NAV_MODE_HOME = 'home';
 
@@ -25,6 +34,29 @@ let modalKind = null;
 
 /** @type {string | null} */
 let onboardingToolId = null;
+
+let posthogSurveyOrderingReady = false;
+
+function ensurePosthogSurveyTourOrdering() {
+  if (posthogSurveyOrderingReady || typeof window === 'undefined') return;
+  posthogSurveyOrderingReady = true;
+  window.addEventListener('PHSurveyShown', () => {
+    const interruptedTool = getActiveDriverOnboardingTool();
+    if (!interruptedTool) return;
+    void (async () => {
+      // No se marca como visto: el recorrido debe poder comenzar de nuevo al cerrar PostHog.
+      await stopDriverToolOnboarding('cancelled');
+      await waitForPosthogSurveyPopupToClose();
+      if (getSelectedArtifactType() === interruptedTool) {
+        await maybeShowToolOnboarding(interruptedTool);
+      }
+    })();
+  });
+}
+
+function isV2() {
+  return document.body?.dataset.uiMode === 'v2';
+}
 
 async function loadPrefs() {
   try {
@@ -81,14 +113,26 @@ function syncModalChrome() {
   const footer = document.getElementById('appHelpModalFooter');
   const closeBtn = document.getElementById('appHelpModalCloseBtn');
   const primaryBtn = document.getElementById('appHelpModalPrimaryBtn');
+  const tourBtn = document.getElementById('appHelpModalTourBtn');
   const isOnboarding = modalKind === 'onboarding';
+  const helpToolId = modalKind === 'help' ? resolveHelpToolId() : null;
+  const canStartTour = isV2() && !!helpToolId && ALL_ONBOARDING_TOOLS.includes(helpToolId);
 
-  footer?.classList.toggle('hidden', !isOnboarding);
+  footer?.classList.toggle('hidden', !isOnboarding && !canStartTour);
   if (closeBtn) {
     closeBtn.classList.toggle('hidden', isOnboarding);
   }
   if (primaryBtn) {
+    primaryBtn.classList.toggle('hidden', !isOnboarding);
     primaryBtn.textContent = t('onboarding.gotIt');
+  }
+  if (tourBtn) {
+    tourBtn.classList.toggle('hidden', !canStartTour);
+    if (canStartTour) {
+      tourBtn.textContent = t(hasSeenTool(prefsCache, helpToolId)
+        ? 'onboarding.common.repeatTour'
+        : 'onboarding.common.startTour');
+    }
   }
 }
 
@@ -124,6 +168,7 @@ export function refreshHelpModalContent(toolId) {
     paragraphs.push(text);
   }
   fillModalBody(bodyEl, paragraphs);
+  if (modalKind === 'help') syncModalChrome();
 }
 
 /**
@@ -144,12 +189,14 @@ function showModal() {
   const modal = document.getElementById('appHelpModal');
   if (!modal) return;
   syncModalChrome();
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
-  (modalKind === 'onboarding'
+  const initialFocus = (modalKind === 'onboarding'
     ? document.getElementById('appHelpModalPrimaryBtn')
     : document.getElementById('appHelpModalCloseBtn')
-  )?.focus();
+  );
+  mountSfocOverlay(modal, {
+    initialFocus,
+    onEscape: () => void closeHelpModal()
+  });
 }
 
 export function openHelpModal() {
@@ -161,6 +208,7 @@ export function openHelpModal() {
     if (!prefsLoaded) await loadPrefs();
     const prefs = markHelpOpenedInPrefs(prefsCache);
     await savePrefs(prefs);
+    if (modalKind === 'help') syncModalChrome();
   })();
 }
 
@@ -177,8 +225,7 @@ export function openToolOnboardingModal(tool) {
 function hideModal() {
   const modal = document.getElementById('appHelpModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
   modalKind = null;
   onboardingToolId = null;
 }
@@ -196,7 +243,7 @@ export async function closeHelpModal(markOnboardingSeen = true) {
   }
 
   hideModal();
-  document.getElementById('appHelpBtn')?.focus();
+  (document.getElementById('workbenchHelpBtn') || document.getElementById('appHelpBtn'))?.focus();
 }
 
 /** Actualiza el modal de ayuda por herramienta si está abierto (no interrumpe onboarding). */
@@ -206,10 +253,48 @@ export function refreshHelpModalIfOpen() {
   refreshHelpModalContent();
 }
 
+async function markToolSeen(tool) {
+  const prefs = markToolSeenInPrefs(prefsCache, tool);
+  await savePrefs(prefs);
+}
+
+/**
+ * Inicia el onboarding de una herramienta respetando el modo de UI actual.
+ * @param {string} tool
+ * @param {{ force?: boolean, manual?: boolean, focusOrigin?: HTMLElement | null }} [options]
+ */
+export async function startToolOnboarding(tool, options = {}) {
+  if (!tool || !ALL_ONBOARDING_TOOLS.includes(tool)) return false;
+  if (isV2()) ensurePosthogSurveyTourOrdering();
+  if (!prefsLoaded) await loadPrefs();
+  if (!options.force && hasSeenTool(prefsCache, tool)) return false;
+
+  if (!isV2()) {
+    openToolOnboardingModal(tool);
+    return true;
+  }
+
+  await waitForPosthogSurveyPopupToClose();
+  if (!options.manual && getSelectedArtifactType() !== tool) return false;
+
+  return startDriverToolOnboarding(tool, {
+    manual: options.manual === true,
+    focusOrigin: options.focusOrigin || null,
+    onSeen: markToolSeen
+  });
+}
+
 /**
  * @param {string} tool
  */
 export async function maybeShowToolOnboarding(tool) {
+  if (isV2()) {
+    await dismissDriverOnboardingForNavigation(tool || '');
+    if (!tool) return;
+    await startToolOnboarding(tool);
+    return;
+  }
+
   if (!tool) return;
   if (!prefsLoaded) await loadPrefs();
 
@@ -230,6 +315,7 @@ export function setupAppHelp() {
   const modal = document.getElementById('appHelpModal');
   const closeBtn = document.getElementById('appHelpModalCloseBtn');
   const primaryBtn = document.getElementById('appHelpModalPrimaryBtn');
+  const tourBtn = document.getElementById('appHelpModalTourBtn');
   const backdrop = modal?.querySelector('[data-app-help-backdrop]');
 
   helpBtn?.addEventListener('click', (ev) => {
@@ -243,6 +329,13 @@ export function setupAppHelp() {
   primaryBtn?.addEventListener('click', () => {
     void closeHelpModal();
   });
+  tourBtn?.addEventListener('click', () => {
+    const tool = resolveHelpToolId();
+    if (!ALL_ONBOARDING_TOOLS.includes(tool)) return;
+    const focusOrigin = document.getElementById('workbenchHelpBtn') || document.getElementById('appHelpBtn');
+    hideModal();
+    void startToolOnboarding(tool, { force: true, manual: true, focusOrigin });
+  });
   backdrop?.addEventListener('click', () => {
     void closeHelpModal();
   });
@@ -255,5 +348,7 @@ export function setupAppHelp() {
     }
   });
 
-  void loadPrefs();
+  void loadPrefs().then(() => {
+    if (modalKind === 'help') syncModalChrome();
+  });
 }

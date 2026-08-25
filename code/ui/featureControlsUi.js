@@ -19,6 +19,7 @@ import {
   syncFeatureControlsModeTabs
 } from './appModeNav.js';
 import { showToast } from './toast.js';
+import { mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 
 const DISMISS_PREFIX = 'sfoc_fc_dismiss_';
 
@@ -152,8 +153,7 @@ function applyGlobalBanner() {
 function hideToolModal() {
   const modal = document.getElementById('featureControlsToolModal');
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
   modal.classList.remove('feature-controls-tool-modal--blocking');
   activeToolDismissKey = null;
 }
@@ -176,8 +176,6 @@ function showToolModal(notice, dismissKey) {
   const blocking = notice.blocking === true;
   activeToolDismissKey = dismissKey;
 
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
   modal.classList.toggle('feature-controls-tool-modal--blocking', blocking);
   modal.classList.remove(
     'feature-controls-tool-modal--info',
@@ -221,6 +219,11 @@ function showToolModal(notice, dismissKey) {
   if (backdrop) {
     backdrop.dataset.dismissible = blocking ? 'false' : 'true';
   }
+  mountSfocOverlay(modal, {
+    initialFocus: blocking ? link : (closeBtn || dismissBtn),
+    escapeSafe: !blocking,
+    onEscape: blocking ? null : dismissActiveToolModal
+  });
 }
 
 function dismissActiveToolModal() {

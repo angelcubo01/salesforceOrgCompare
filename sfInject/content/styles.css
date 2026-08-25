@@ -1,8 +1,31 @@
+/*
+ * Capa de tokens compatible para UI inyectada.
+ * No se importa la hoja global: estas reglas viven dentro del DOM de Salesforce
+ * (Lightning o Classic) y deben permanecer completamente namespaced.
+ */
+:where(.sfoc-inject-toast, .sfoc-utf-filter, .sfoc-utf-badge) {
+  --sfoc-inject-surface: #ffffff;
+  --sfoc-inject-text: #181818;
+  --sfoc-inject-muted: #444f5e;
+  --sfoc-inject-border: #c5ceda;
+  --sfoc-inject-info: #0b5cab;
+  --sfoc-inject-warning: #a96404;
+  --sfoc-inject-danger: #ba0517;
+  --sfoc-inject-focus: #0176d3;
+  --sfoc-inject-shadow: 0 4px 16px rgba(24, 24, 24, 0.2);
+}
+
 /* Enlaces SFOC: heredan link-button / slds-text-link nativos de Debug Logs */
 
 a.sfoc-inject-link.link-button,
 a.sfoc-inject-link.actionLink {
   white-space: nowrap;
+}
+
+a.sfoc-inject-link:focus-visible,
+.sfoc-utf-filter-input:focus-visible {
+  outline: 2px solid var(--sfoc-inject-focus);
+  outline-offset: 2px;
 }
 
 .sfoc-inject-toast {
@@ -13,15 +36,19 @@ a.sfoc-inject-link.actionLink {
   max-width: 22rem;
   padding: 0.65rem 0.85rem;
   border-radius: 0.25rem;
+  border-left: 4px solid #5eb4ff;
   background: #16325c;
   color: #fff;
   font-size: 0.8125rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  line-height: 1.4;
+  box-shadow: var(--sfoc-inject-shadow);
   pointer-events: none;
 }
 
 .sfoc-inject-toast--error {
-  background: #8b0000;
+  border-left-color: #fe5c5c;
+  background: #5f1420;
 }
 
 /* User Trace Flags: filtro + badge estilo SLDS */
@@ -33,13 +60,13 @@ a.sfoc-inject-link.actionLink {
   margin: 8px 0 10px 12px;
   padding: 0;
   font: 11px Arial, Helvetica, sans-serif;
-  color: #333;
+  color: inherit;
   line-height: 1.25;
   text-align: left;
 }
 
 .sfoc-utf-empty-hint {
-  color: #706e6b;
+  color: var(--sfoc-inject-muted);
   font-style: italic;
   padding-left: 0;
 }
@@ -80,8 +107,27 @@ span.sfoc-utf-badge {
   text-transform: uppercase;
   white-space: nowrap;
   border-radius: 15rem;
-  background-color: #fe9339;
-  color: #080707;
+  border: 1px solid color-mix(in srgb, var(--sfoc-inject-warning) 45%, transparent);
+  background-color: #fef1d8;
+  color: #663c00;
   vertical-align: middle;
   margin-left: 0.35rem;
+}
+
+@media (forced-colors: active) {
+  .sfoc-inject-toast,
+  .sfoc-utf-badge.slds-badge,
+  span.sfoc-utf-badge {
+    border: 1px solid CanvasText;
+    forced-color-adjust: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sfoc-inject-toast,
+  .sfoc-utf-filter,
+  .sfoc-utf-badge {
+    animation: none;
+    transition: none;
+  }
 }

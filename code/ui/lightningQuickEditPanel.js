@@ -10,6 +10,7 @@ import { MonacoWorkbench, compositeDocumentId } from '../editor/monacoWorkbench.
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
+import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { guardToolAction } from './featureControlsUi.js';
 import { getCodeEditorPersistenceEnabled } from '../../shared/extensionSettings.js';
@@ -348,15 +349,17 @@ function getDeployTargetOrgId() {
   return state.leftOrgId || null;
 }
 
-function confirmDeployOrgMismatch() {
+async function confirmDeployOrgMismatch() {
   const tabOrgId = getBundleSourceOrgId();
   const selectorOrgId = getDeployTargetOrgId();
   if (!selectorOrgId) return true;
   if (!tabOrgId || String(tabOrgId) === String(selectorOrgId)) return true;
   const tabOrg = getOrgDisplayLabel(tabOrgId);
   const selectorOrg = getOrgDisplayLabel(selectorOrgId);
-  return window.confirm(
-    t('quickEdit.deployOrgMismatchConfirm', { tabOrg, selectorOrg })
+  return confirmSfocToolAction(
+    t('quickEdit.deployOrgMismatchConfirm', { tabOrg, selectorOrg }),
+    t('modal.action.deploySelectedOrg'),
+    { variant: 'production' }
   );
 }
 
@@ -828,7 +831,7 @@ async function revertActiveBundleLocally() {
     showToast(t('quickEdit.nothingToRevert'), 'info');
     return;
   }
-  if (!window.confirm(t('quickEdit.revertLocalConfirm'))) return;
+  if (!await confirmSfocToolAction(t('quickEdit.revertLocalConfirm'), t('modal.action.discardChanges'))) return;
 
   for (const fileName of bundleState.files.keys()) {
     const file = bundleState.files.get(fileName);
@@ -870,7 +873,10 @@ async function retrieveActiveBundleFromOrg() {
     showTabAuthExpiredStatus(tab);
     return;
   }
-  if (isBundleTabModified(tab) && !window.confirm(t('quickEdit.retrieveFromOrgConfirm'))) {
+  if (isBundleTabModified(tab) && !await confirmSfocToolAction(
+    t('quickEdit.retrieveFromOrgConfirm'),
+    t('modal.action.retrieveDiscard')
+  )) {
     return;
   }
 
@@ -1108,7 +1114,7 @@ async function closeBundleTab(tabId, _event, meta = {}) {
   }
 
   const dirty = isBundleTabDirtyForClose(tab);
-  if (dirty && !window.confirm(t('codeEditor.unsavedTab'))) return;
+  if (dirty && !await confirmSfocToolAction(t('codeEditor.unsavedTab'), t('modal.action.discardChanges'))) return;
 
   const wasActive = isClosingActive;
   const nextIndex = wasActive
@@ -1280,7 +1286,7 @@ async function deployBundle(checkOnly = false) {
     return;
   }
 
-  if (!confirmDeployOrgMismatch()) return;
+  if (!await confirmDeployOrgMismatch()) return;
 
   if (!checkOnly && !isOrgSandbox(deployOrgId)) {
     showToast(t('quickEdit.productionBlocked'), 'error');
@@ -1291,6 +1297,14 @@ async function deployBundle(checkOnly = false) {
   if (files.some((f) => !f.content.trim())) {
     showToast(t('lightningQuickEdit.emptyFileWarning'), 'warn');
   }
+
+  if (!checkOnly && !await confirmSfocOrgAction({
+    orgId: deployOrgId,
+    description: t('modal.confirmMetadataDeploy', { component: bundleState.bundleName }),
+    confirmLabel: t('modal.action.deploy'),
+    risk: 'write',
+    variant: 'standard'
+  })) return;
 
   persistActiveEditorContent();
   syncActiveTabFromBundleState();
@@ -1360,7 +1374,7 @@ function clearAllTabs() {
 }
 
 async function clearAllEditorTabs() {
-  if (!window.confirm(t('codeEditor.clearAllConfirm'))) return;
+  if (!await confirmSfocToolAction(t('codeEditor.clearAllConfirm'), t('modal.action.closeTabs'))) return;
   clearAllTabs();
   await clearCodeEditorSession('LightningQuickEdit');
 }

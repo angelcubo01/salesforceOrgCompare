@@ -1,4 +1,5 @@
 import { t } from '../shared/i18n.js';
+import { activateDialogFocus, deactivateDialogFocus } from '../shared/dialogFocus.js';
 import {
   ONBOARDING_PREFS_KEY,
   normalizeOnboardingPrefs,
@@ -74,7 +75,7 @@ export function openPopupWelcomeModal() {
   document.body.classList.add('popup-welcome-active');
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
-  document.getElementById('popupWelcomePrimaryBtn')?.focus();
+  activateDialogFocus(modal, { initialFocus: document.getElementById('popupWelcomePrimaryBtn') });
 }
 
 /**
@@ -92,6 +93,7 @@ export async function closePopupWelcomeModal(markSeen = true) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('popup-welcome-active');
+  deactivateDialogFocus(modal);
 }
 
 /**
@@ -119,4 +121,9 @@ export function setupPopupWelcome() {
 
   primaryBtn?.addEventListener('click', dismissWelcome);
   closeBtn?.addEventListener('click', dismissWelcome);
+  modal?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || modal.classList.contains('hidden')) return;
+    event.preventDefault();
+    dismissWelcome();
+  });
 }

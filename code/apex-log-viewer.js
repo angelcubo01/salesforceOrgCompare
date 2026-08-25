@@ -15,6 +15,7 @@ import { mountTextFilterBar, getTextFilterApi } from './lib/apexLogViewer/textFi
 import { ensurePanelSectionHeading } from './lib/apexLogViewer/panelSectionHeading.js';
 import { highlightPanelRow } from './lib/apexLogViewer/analysisTableUtils.js';
 import { escapeHtml } from '../shared/htmlEscape.js';
+import { renderStandaloneViewerState } from '../shared/standaloneViewerState.js';
 import { renderDatabaseView } from './lib/apexLogViewer/databaseView.js';
 import { renderAnalysisView, layoutAnalysisTreeEditor } from './lib/apexLogViewer/analysisView.js';
 import { renderNetworkView } from './lib/apexLogViewer/networkView.js';
@@ -256,6 +257,11 @@ async function main() {
   if (!payload) {
     setLoading(false);
     if (titleEl) titleEl.textContent = t('apexLogViewer.missingPayload');
+    renderStandaloneViewerState(document.getElementById('apexLogSummaryMount'), {
+      kind: 'error',
+      title: t('apexLogViewer.missingPayload'),
+      description: t('state.error.description')
+    });
     return;
   }
 

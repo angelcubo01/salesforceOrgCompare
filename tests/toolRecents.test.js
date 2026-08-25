@@ -31,4 +31,17 @@ describe('toolRecents', () => {
     await mod.toggleToolPin('QuickEdit');
     expect(mod.isToolPinned('QuickEdit')).toBe(false);
   });
+
+  it('conserva hasta ocho recientes y ocho favoritas', async () => {
+    const mod = await import('../code/core/toolRecents.js');
+    for (let index = 0; index < 10; index++) {
+      await mod.recordToolVisit(`Tool${index}`);
+      await mod.toggleToolPin(`Tool${index}`);
+    }
+    const snapshot = mod.getToolRecentsSnapshot();
+    expect(snapshot.recents).toHaveLength(8);
+    expect(snapshot.pins).toHaveLength(8);
+    expect(snapshot.recents[0]).toBe('Tool9');
+    expect(snapshot.pins[0]).toBe('Tool9');
+  });
 });

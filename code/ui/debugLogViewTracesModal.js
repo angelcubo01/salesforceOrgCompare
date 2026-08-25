@@ -4,6 +4,7 @@ import { t, getCurrentLang } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
+import { confirmSfocOrgAction, mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 import {
   isUserDebugTraceActive,
   isUserDebugTraceRecentlyInactive,
@@ -108,10 +109,7 @@ function isEditOpen() {
 function closeEditModal() {
   const { editModal, editSave } = els();
   editingTrace = null;
-  if (editModal) {
-    editModal.classList.add('hidden');
-    editModal.setAttribute('aria-hidden', 'true');
-  }
+  if (editModal) unmountSfocOverlay(editModal);
   if (editSave) editSave.disabled = false;
 }
 
@@ -156,8 +154,10 @@ async function openEditModal(row) {
   populateLevelSelect(String(row.debugLevelId || ''));
   if (editStart && row.startIso) editStart.value = toInputValue(new Date(row.startIso));
   if (editEnd && row.expirationIso) editEnd.value = toInputValue(new Date(row.expirationIso));
-  editModal?.classList.remove('hidden');
-  editModal?.setAttribute('aria-hidden', 'false');
+  if (editModal) mountSfocOverlay(editModal, {
+    initialFocus: document.getElementById('debugLogEditTraceLevelSelect'),
+    onEscape: closeEditModal
+  });
 }
 
 function renderTable() {
@@ -308,7 +308,12 @@ async function extendTrace(row) {
 
 async function deleteTrace(row) {
   if (!row?.id || !state.leftOrgId || busyRowId) return;
-  if (!window.confirm(t('debugLogs.viewTracesDeleteConfirm'))) return;
+  if (!await confirmSfocOrgAction({
+    orgId: state.leftOrgId,
+    description: t('debugLogs.viewTracesDeleteConfirm'),
+    confirmLabel: t('modal.action.deleteTrace'),
+    risk: 'destructive'
+  })) return;
   busyRowId = String(row.id);
   renderTable();
   showToastWithSpinner(t('debugLogs.viewTracesDeleting'));
@@ -403,8 +408,7 @@ function closeModal() {
   if (isDebugLogTraceModalOpen()) closeDebugLogTraceModal();
   closeEditModal();
   if (!modal) return;
-  modal.classList.add('hidden');
-  modal.setAttribute('aria-hidden', 'true');
+  unmountSfocOverlay(modal);
   loadGeneration++;
   allTraces = [];
   cachedDebugLevels = [];
@@ -420,8 +424,10 @@ export function openDebugLogViewTracesModal() {
   if (!modal) return;
   if (showInactive) showInactive.checked = false;
   cachedDebugLevels = [];
-  modal.classList.remove('hidden');
-  modal.setAttribute('aria-hidden', 'false');
+  mountSfocOverlay(modal, {
+    initialFocus: document.getElementById('debugLogViewTracesCloseBtn'),
+    onEscape: closeModal
+  });
   void loadTraces();
 }
 

@@ -1,17 +1,23 @@
 <!doctype html>
-<html>
+<html data-sfoc-document="popup">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Salesforce Org Compare · Centro de mando</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../icons/icon-16.png" />
     <link rel="stylesheet" href="./popup.css" />
     <link rel="stylesheet" href="./popup-theme-light.css" />
+    <link rel="stylesheet" href="../shared/sfoc-design-system.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="title">
-        <div class="title-main">Salesforce Org Compare</div>
-        <div class="title-subtitle" data-i18n="popup.subtitle">Tu centro de mando para comparar, probar y hacer deploy entre entornos</div>
+        <img class="popup-brand-logo" src="../icons/icon-32.png" width="32" height="32" alt="" aria-hidden="true" />
+        <div class="popup-brand-copy">
+          <div class="title-main">Salesforce Org Compare</div>
+          <div class="title-subtitle" data-i18n="popup.subtitle">Tu centro de mando para comparar, probar y hacer deploy entre entornos</div>
+        </div>
       </div>
       <div class="topbar-right">
         <button
@@ -84,6 +90,11 @@
       <h3 data-i18n="popup.detectedOrg">Entorno en esta pestaña</h3>
       <div id="detectedRow" class="row muted" data-i18n="popup.noDetected">No se ha detectado ningún entorno Salesforce</div>
     </section>
+
+    <footer class="popup-footer">
+      <span>Salesforce Org Compare</span>
+      <span id="popupVersion" aria-label="Versión"></span>
+    </footer>
 
     <div id="popupWelcomeModal" class="popup-welcome-modal hidden" aria-hidden="true">
       <div class="popup-welcome-backdrop" data-popup-welcome-backdrop="1"></div>

@@ -2,8 +2,8 @@
  * Texto del banner de descubrimiento en la pantalla de inicio (Quick Open).
  */
 
-export const LANDING_DISCOVER_SHORTCUT_WIN = 'Ctrl+Shift+P';
-export const LANDING_DISCOVER_SHORTCUT_MAC = '⌘⇧P';
+export const LANDING_DISCOVER_SHORTCUT_WIN = 'Ctrl+K';
+export const LANDING_DISCOVER_SHORTCUT_MAC = '⌘K';
 
 /**
  * @param {(key: string, params?: Record<string, string>) => string} t
