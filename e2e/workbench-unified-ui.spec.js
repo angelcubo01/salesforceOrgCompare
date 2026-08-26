@@ -102,7 +102,14 @@ test('audita cabecera, acciones y superficie de todos los workspaces V2', async 
 
       if (workspace.id === 'comparator') {
         await expect(page.locator('#workbenchContextHeader [data-action-id]')).toHaveCount(0);
-        await expect(page.locator('.diff-toolbar')).toBeVisible();
+        // Los controles del comparador viven en la cabecera contextual; las
+        // barras originales quedan en el DOM solo como fuente de estado.
+        await expect(page.locator('.diff-toolbar')).toBeHidden();
+        await expect(page.locator('.compare-context-title')).toBeHidden();
+        const compareToolbar = page.locator('#workbenchContextHeader .workbench-compare-toolbar');
+        await expect(compareToolbar).toBeVisible();
+        await expect(compareToolbar.locator('.workbench-compare-control')).toHaveCount(8);
+        await expect(compareToolbar.locator('.workbench-compare-control[hidden]:visible')).toHaveCount(0);
         continue;
       }
 
@@ -267,6 +274,66 @@ test('ninguna cabecera se solapa o sale del viewport a 1024, 1280 y 1440 px', as
       expect(metrics.documentOverflow, `${workspace.id}@${width}: documento sin scroll horizontal`).toBeLessThanOrEqual(1);
     }
   }
+});
+
+test('la cabecera del comparador aloja estado y controles sin desbordar', async ({
+  extensionContext: context,
+  extensionId
+}) => {
+  test.setTimeout(120_000);
+  const page = await openWorkbench(context, extensionId);
+  await navigateWorkspace(page, 'comparator', 'main');
+  // Estado representativo: contexto, diff largo y retrieve disponible.
+  await page.evaluate(() => {
+    const status = document.getElementById('diffStatus');
+    status.dataset.compact = '1/21 · 108 líneas';
+    status.dataset.compactFor = 'Diferencia 1 de 21 • 108 línea(s) cambiadas';
+    status.textContent = 'Diferencia 1 de 21 • 108 línea(s) cambiadas';
+    const context = document.getElementById('compareContextTitle');
+    context.textContent = 'APEX CLASS';
+    context.classList.remove('hidden');
+    const retrieve = document.getElementById('retrieveAllBtn');
+    retrieve.classList.remove('hidden');
+    retrieve.disabled = false;
+  });
+
+  const pill = page.locator('.workbench-compare-status');
+  await expect(pill).toHaveText('1/21 · 108 líneas');
+  await expect(pill).toHaveAttribute('title', 'Diferencia 1 de 21 • 108 línea(s) cambiadas');
+
+  for (const width of [1440, 1280, 1024]) {
+    await page.setViewportSize({ width, height: width === 1024 ? 768 : 900 });
+    await expect(page.locator('#workbenchHelpBtn'), `comparator@${width}: ayuda`).toBeVisible();
+    await expect(page.locator('#workbenchThemeBtn'), `comparator@${width}: tema`).toBeVisible();
+    const metrics = await page.evaluate(() => {
+      const identity = document.querySelector('.workbench-context-identity').getBoundingClientRect();
+      const actionsNode = document.querySelector('.workbench-context-actions');
+      const actions = actionsNode.getBoundingClientRect();
+      const rects = [...actionsNode.querySelectorAll('*')]
+        .filter((node) => node.getClientRects().length > 0)
+        .map((node) => node.getBoundingClientRect());
+      return {
+        headerHeight: document.getElementById('workbenchContextHeader').getBoundingClientRect().height,
+        childRight: Math.max(...rects.map(({ right }) => right)),
+        overlap: identity.right - actions.left,
+        actionsOverflow: actionsNode.scrollWidth - actionsNode.clientWidth,
+        documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+      };
+    });
+    expect(metrics.childRight, `comparator@${width}: controles dentro del viewport`).toBeLessThanOrEqual(width - 8);
+    expect(metrics.overlap, `comparator@${width}: título y acciones no se solapan`).toBeLessThanOrEqual(1);
+    expect(metrics.actionsOverflow, `comparator@${width}: acciones sin overflow interno`).toBeLessThanOrEqual(1);
+    expect(metrics.documentOverflow, `comparator@${width}: documento sin scroll horizontal`).toBeLessThanOrEqual(1);
+    // La cabecera no crece por absorber las barras del comparador.
+    expect(metrics.headerHeight, `comparator@${width}: altura de cabecera estable`).toBeLessThanOrEqual(80);
+  }
+
+  // Los clones conservan el comportamiento del control original.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(page.locator('.workbench-compare-control[data-source-id="retrieveAllBtn"]')).toBeVisible();
+  await page.locator('.workbench-compare-control[data-source-id="toggleSidebarBtn"]').click();
+  await expect(page.locator('body')).toHaveClass(/sidebar-collapsed/);
+  await expect(page.locator('.workbench-compare-control[data-source-id="toggleSidebarBtn"]')).toHaveClass(/is-active/);
 });
 
 test('Apex Quality alterna una sola acciÃ³n principal entre hub y runner', async ({

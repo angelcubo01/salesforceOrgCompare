@@ -8,7 +8,7 @@ import {
   updateOrgSelectorsLockedState,
   shouldShowRetrieveButtonForItem
 } from '../ui/viewerChrome.js';
-import { getTotalDiffLines, buildAlignedDiff, applyDiffDecorations } from './diffUtils.js';
+import { getTotalDiffLines, buildAlignedDiff, applyDiffDecorations, renderDiffStatus } from './diffUtils.js';
 import {
   prepareDiffForViewer,
   sliceViewerChunk,
@@ -543,13 +543,7 @@ export async function renderEditor(opts = {}) {
           } else {
             state.currentDiffIndex = 0;
             const totalLines = getTotalDiffLines(lineChanges);
-            if (diffStatus) {
-              diffStatus.textContent = t('diff.status', {
-                current: 1,
-                total: lineChanges.length,
-                lines: totalLines
-              });
-            }
+            renderDiffStatus(diffStatus, { current: 1, total: lineChanges.length, lines: totalLines });
             focusDiffAtIndex(0);
           }
           if (typeof state.updateDiffNavButtons === 'function') state.updateDiffNavButtons();
@@ -595,9 +589,7 @@ export async function renderEditor(opts = {}) {
         } else {
           state.currentDiffIndex = 0;
           const totalLines = getTotalDiffLines(lineChanges);
-          if (diffStatus) {
-            diffStatus.textContent = t('diff.status', { current: 1, total: lineChanges.length, lines: totalLines });
-          }
+          renderDiffStatus(diffStatus, { current: 1, total: lineChanges.length, lines: totalLines });
           focusDiffAtIndex(0);
         }
         if (typeof state.updateDiffNavButtons === 'function') state.updateDiffNavButtons();

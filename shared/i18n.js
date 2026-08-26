@@ -1242,6 +1242,7 @@ const translations = {
     'diff.tooLargeForDiff': 'Archivos demasiado grandes para diff detallado',
     'diff.truncatedNoNav': 'Diff truncado por tamaño (sin navegación de bloques)',
     'diff.status': 'Diferencia {current} de {total} • {lines} línea(s) cambiadas',
+    'diff.statusCompact': '{current}/{total} · {lines} líneas',
 
     // ── Session expired ──
     'session.expired': 'Sesión expirada',
@@ -4057,6 +4058,7 @@ const translations = {
     'diff.tooLargeForDiff': 'Files too large for detailed diff',
     'diff.truncatedNoNav': 'Diff truncated by size (no block navigation)',
     'diff.status': 'Difference {current} of {total} • {lines} line(s) changed',
+    'diff.statusCompact': '{current}/{total} · {lines} lines',
 
     // ── Session expired ──
     'session.expired': 'Session expired',

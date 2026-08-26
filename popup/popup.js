@@ -38,6 +38,7 @@ function el(tag, cls, text) {
 let __authStatuses = {};
 let __orgAliases = {};
 let __orgGroups = {};
+let __savedRefreshGeneration = 0;
 /** @type {HTMLElement | null} */
 let __dragRowEl = null;
 
@@ -207,8 +208,10 @@ function buildOrgRow(o) {
 
   const displayName = getOrgDisplayName(o);
   const orgNameEl = el('span', 'org-name', displayName);
-  const status = __authStatuses[o.id] || 'expired';
-  orgNameEl.setAttribute('data-auth-status', status);
+  const status = __authStatuses[o.id];
+  // La comprobación de sesión se completa en segundo plano. No mostramos un
+  // falso "caducado" mientras se resuelve, para poder pintar la lista al abrir.
+  if (status) orgNameEl.setAttribute('data-auth-status', status);
   orgNameEl.classList.add('org-name--in-row');
   nameRow.appendChild(orgNameEl);
 
@@ -385,16 +388,26 @@ function renderSaved(orgs) {
 }
 
 async function refreshSaved() {
-  const [res, auth] = await Promise.all([
+  const generation = ++__savedRefreshGeneration;
+  const [res] = await Promise.all([
     bg({ type: 'listSavedOrgs' }),
-    bg({ type: 'auth:getStatuses' }),
     loadOrgExtras()
   ]);
-  __authStatuses = auth.ok ? (auth.statuses || {}) : {};
   const orgs = res.ok ? (res.orgs || []) : [];
   renderSaved(orgs);
   window.__savedOrgIds = new Set(orgs.map((o) => o.id));
   window.__savedOrgs = orgs;
+
+  // Verificar cada sesión puede implicar una petición a Salesforce por org.
+  // La lista ya está disponible en storage, así que no bloqueamos el popup:
+  // actualizamos únicamente los indicadores cuando lleguen los resultados.
+  void bg({ type: 'auth:getStatuses' }).then((auth) => {
+    if (generation !== __savedRefreshGeneration) return;
+    __authStatuses = auth?.ok ? (auth.statuses || {}) : {};
+    renderSaved(orgs);
+  }).catch(() => {
+    // La lista sigue siendo utilizable aunque la verificación de sesión falle.
+  });
   return orgs;
 }
 
@@ -436,6 +449,7 @@ async function refresh() {
   showOrgsLoading();
   const savedOrgs = await refreshSaved();
   await refreshDetected(savedOrgs);
+  return savedOrgs;
 }
 
 async function loadOnboardingPrefs() {
@@ -596,13 +610,20 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   setupPopupHelp();
   setupPopupWelcome();
   await ensurePopupUiModeV2();
-  await initPosthogClient();
-  const ph = getPosthogClient();
-  const refreshed = await refreshFeatureFlagsIfStale(ph);
-  await loadFeatureControlsFromPosthog(refreshed ? ph : null);
-  await setupPopupControls(refreshed ? ph : null);
-  await refresh();
-  await maybeShowPopupWelcome((window.__savedOrgs || []).length);
+  // Mostrar los entornos no depende de telemetría ni de feature flags. Ambas
+  // operaciones pueden requerir red, por lo que se ejecutan sin retrasar la UI.
+  const savedOrgs = await refresh();
+  await maybeShowPopupWelcome(savedOrgs.length);
+
+  void (async () => {
+    await initPosthogClient();
+    const ph = getPosthogClient();
+    const refreshed = await refreshFeatureFlagsIfStale(ph);
+    await loadFeatureControlsFromPosthog(refreshed ? ph : null);
+    await setupPopupControls(refreshed ? ph : null);
+  })().catch(() => {
+    // Los controles remotos son opcionales; el popup debe seguir disponible.
+  });
 })();
 
 function deriveLabelFromHost(host) {

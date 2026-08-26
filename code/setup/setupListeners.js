@@ -12,7 +12,7 @@ import {
 } from '../ui/orgs.js';
 import { removeAllItems } from '../ui/listUi.js';
 import { downloadAllFiles, copyAllFileNames } from '../flows/fileActions.js';
-import { getTotalDiffLines, advanceDiffIndex } from '../editor/diffUtils.js';
+import { getTotalDiffLines, advanceDiffIndex, renderDiffStatus } from '../editor/diffUtils.js';
 import { downloadDiffHtml } from '../editor/exportDiffHtml.js';
 import { copyUnifiedDiffToClipboard } from '../editor/exportUnifiedDiff.js';
 import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
@@ -320,18 +320,15 @@ export function setupDiffNavigation() {
     if (exportDiffHtmlBtn) {
       exportDiffHtmlBtn.disabled = !state.diffEditor || !hasDiffs;
     }
-    if (diffStatus) {
-      if (!hasDiffs) {
-        diffStatus.textContent = t('diff.noDifferences');
-      } else {
-        const idx = state.currentDiffIndex >= 0 ? state.currentDiffIndex : 0;
-        const totalLines = getTotalDiffLines(state.diffChanges);
-        diffStatus.textContent = t('diff.status', {
-          current: idx + 1,
-          total: state.diffChanges.length,
-          lines: totalLines
-        });
-      }
+    if (!hasDiffs) {
+      renderDiffStatus(diffStatus, null);
+    } else {
+      const idx = state.currentDiffIndex >= 0 ? state.currentDiffIndex : 0;
+      renderDiffStatus(diffStatus, {
+        current: idx + 1,
+        total: state.diffChanges.length,
+        lines: getTotalDiffLines(state.diffChanges)
+      });
     }
   }
 
@@ -427,6 +424,9 @@ export function setupSidebarToggle() {
   const toggleBtn = document.getElementById('toggleSidebarBtn');
   if (!toggleBtn) return;
   toggleBtn.addEventListener('click', () => {
-    document.body.classList.toggle('sidebar-collapsed');
+    const collapsed = document.body.classList.toggle('sidebar-collapsed');
+    // El propio botón refleja el estado: la cabecera v2 clona esa clase para
+    // pintar el control como activo cuando la lista está plegada.
+    toggleBtn.classList.toggle('active', collapsed);
   });
 }

@@ -542,6 +542,107 @@ function createHeaderAction(action, { menuItem = false } = {}) {
   return button;
 }
 
+/**
+ * Crea una copia visual de un control del comparador conservando el control
+ * original como fuente de estado y de eventos. Así la cabecera puede
+ * reconstruirse sin perder los listeners que ya tiene el visor de Monaco.
+ */
+function createCompareControl(sourceId) {
+  const source = document.getElementById(sourceId);
+  if (!source) return null;
+
+  const button = el('button', 'workbench-compare-control');
+  button.type = 'button';
+  button.dataset.sourceId = sourceId;
+
+  const sync = () => {
+    button.disabled = !!source.disabled;
+    button.hidden = !!source.hidden || source.classList.contains('hidden');
+    button.classList.toggle('is-active', source.classList.contains('active'));
+    button.classList.toggle('is-retrieve', source.classList.contains('retrieve-button'));
+    button.title = source.title || source.getAttribute('aria-label') || '';
+    button.setAttribute('aria-label', source.getAttribute('aria-label') || button.title);
+    button.innerHTML = source.innerHTML;
+  };
+  sync();
+
+  const observer = new MutationObserver(sync);
+  observer.observe(source, {
+    attributes: true,
+    attributeFilter: ['class', 'disabled', 'hidden', 'title', 'aria-label'],
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+  headerActionObservers.push(observer);
+
+  button.addEventListener('click', () => {
+    if (!source.disabled && !button.hidden) source.click();
+  });
+  return button;
+}
+
+function createCompareInfoPill(sourceId, className, { live = false } = {}) {
+  const source = document.getElementById(sourceId);
+  if (!source) return null;
+
+  const pill = el('span', `workbench-compare-pill ${className}`);
+  if (live) pill.setAttribute('aria-live', 'polite');
+  const sync = () => {
+    const text = source.textContent?.trim() || '';
+    // `compact` solo vale mientras describa el texto actual del origen.
+    const compact = source.dataset.compactFor === text ? source.dataset.compact : '';
+    pill.textContent = compact || text;
+    pill.hidden = !text;
+    pill.title = text;
+  };
+  sync();
+
+  const observer = new MutationObserver(sync);
+  observer.observe(source, {
+    attributes: true,
+    attributeFilter: ['data-compact', 'data-compact-for'],
+    childList: true,
+    subtree: true,
+    characterData: true
+  });
+  headerActionObservers.push(observer);
+  return pill;
+}
+
+function createCompareToolbar() {
+  if (activeWorkspaceId !== 'comparator') return null;
+
+  const toolbar = el('div', 'workbench-compare-toolbar');
+  toolbar.setAttribute('role', 'group');
+  toolbar.setAttribute('aria-label', t('workbench.workspace.comparator'));
+  const status = createCompareInfoPill('diffStatus', 'workbench-compare-status', { live: true });
+  const controls = el('div', 'workbench-compare-controls');
+  for (const sourceId of [
+    'retrieveAllBtn',
+    'toggleWhitespaceBtn',
+    'toggleWordWrapBtn',
+    'copyUnifiedDiffBtn',
+    'exportDiffHtmlBtn',
+    'toggleSidebarBtn',
+    'prevDiffBtn',
+    'nextDiffBtn'
+  ]) {
+    const control = createCompareControl(sourceId);
+    if (control) controls.appendChild(control);
+  }
+  const context = createCompareInfoPill('compareContextTitle', 'workbench-compare-context');
+  // Contexto y estado juntos (qué se compara / cuánto difiere) y después los
+  // controles, para que la lectura de la cabecera siga siendo izquierda→derecha.
+  if (context) toolbar.appendChild(context);
+  if (status) toolbar.appendChild(status);
+  toolbar.appendChild(controls);
+  const divider = el('span', 'workbench-compare-divider');
+  divider.setAttribute('aria-hidden', 'true');
+  toolbar.appendChild(divider);
+  return toolbar;
+}
+
 function shouldUseMoreMenu(actions) {
   if (!actions.some((action) => action.allowOverflow)) return false;
   return window.matchMedia('(max-width: 1120px)').matches;
@@ -654,6 +755,8 @@ function createContextHeader() {
   const overflowActions = useMore ? configuredActions.filter((action) => action.allowOverflow) : [];
   for (const action of directActions) actions.appendChild(createHeaderAction(action));
   if (overflowActions.length) actions.appendChild(createMoreActions(overflowActions));
+  const compareToolbar = createCompareToolbar();
+  if (compareToolbar) actions.appendChild(compareToolbar);
   const help = makeIconButton('workbenchHelpBtn', ACTION_ICONS.help, t('workbench.action.help'));
   help.addEventListener('click', () => document.getElementById('appHelpBtn')?.click());
   actions.appendChild(help);

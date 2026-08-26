@@ -620,6 +620,150 @@ body[data-ui-mode="v2"] .workbench-more-action .workbench-action-spinner { left:
 
 body[data-ui-mode="v2"] .workbench-context-actions .workbench-icon-button { width: 38px; min-width: 38px; }
 
+/* Comparador: los controles viven en la cabecera contextual para reservar
+   altura útil al editor Monaco. Las fuentes originales permanecen en el DOM
+   como origen de eventos y estado. */
+body[data-ui-mode="v2"] .compare-context-title,
+body[data-ui-mode="v2"] .diff-toolbar {
+  display: none !important;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-toolbar {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-pill {
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 9px;
+  overflow: hidden;
+  border: 1px solid var(--workbench-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--workbench-surface);
+  color: var(--workbench-text);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 28px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-status {
+  max-width: min(28vw, 310px);
+  color: var(--sfoc-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-context {
+  max-width: 138px;
+  color: var(--sfoc-accent);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-controls {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--workbench-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--workbench-surface);
+}
+
+body[data-ui-mode="v2"] .workbench-compare-control {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 28px;
+  min-width: 28px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--workbench-text);
+  cursor: pointer;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-control:hover:not(:disabled),
+body[data-ui-mode="v2"] .workbench-compare-control.is-active {
+  border-color: color-mix(in srgb, var(--sfoc-accent) 42%, var(--workbench-border));
+  background: color-mix(in srgb, var(--sfoc-accent) 16%, var(--workbench-surface));
+  color: var(--sfoc-text);
+}
+
+body[data-ui-mode="v2"] .workbench-compare-control[hidden],
+body[data-ui-mode="v2"] .workbench-compare-pill[hidden] {
+  display: none !important;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-control:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-control:focus-visible {
+  outline: 3px solid var(--workbench-focus);
+  outline-offset: 1px;
+}
+
+body[data-ui-mode="v2"] .workbench-compare-divider {
+  width: 1px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 1px;
+  background: var(--workbench-border);
+}
+
+body[data-ui-mode="v2"] .workbench-compare-control.is-retrieve {
+  width: auto;
+  min-width: 28px;
+  padding: 0 7px;
+  border-color: color-mix(in srgb, var(--sfoc-accent) 55%, var(--workbench-border));
+  background: color-mix(in srgb, var(--sfoc-accent) 18%, var(--workbench-surface));
+  color: var(--sfoc-text);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+body[data-ui-mode="v2"] .compare-viewer-chrome > .file-meta-row {
+  border-top: 0;
+}
+
+/* El comparador es el único workspace cuya cabecera lleva grupo de controles:
+   su columna de acciones debe poder encoger y medirse contra el ancho real de
+   la cabecera (el panel lateral se pliega y despliega). */
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .workbench-context-main {
+  container: sfoc-header / inline-size;
+  grid-template-columns: minmax(150px, 1fr) minmax(0, auto);
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .workbench-context-actions {
+  min-width: 0;
+}
+
+@container sfoc-header (max-width: 900px) {
+  body[data-ui-mode="v2"] .workbench-compare-context { display: none; }
+}
+
+@container sfoc-header (max-width: 760px) {
+  body[data-ui-mode="v2"] .workbench-compare-status { display: none; }
+}
+
+@container sfoc-header (max-width: 640px) {
+  body[data-ui-mode="v2"] .workbench-compare-control.is-retrieve .retrieve-button-label { display: none; }
+  body[data-ui-mode="v2"] .workbench-compare-control.is-retrieve { width: 28px; padding: 0; }
+}
+
 body[data-ui-mode="v2"] .workbench-tabs {
   min-height: 40px;
   border-top-color: color-mix(in srgb, var(--workbench-border) 65%, transparent);

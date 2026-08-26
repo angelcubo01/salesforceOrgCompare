@@ -831,3 +831,170 @@ html[data-ui-theme='light'] .settings-logi-model-btn {
   background: var(--sfoc-light-bg-elevated);
   border-color: var(--sfoc-light-border);
 }
+
+/* Modal compartido: Settings también utiliza confirmSfocAction. Estas reglas
+   viven aquí porque code.css no se carga en esta página independiente. */
+.sfoc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(2, 6, 23, 0.66);
+  backdrop-filter: blur(5px);
+}
+
+.sfoc-modal-panel {
+  position: relative;
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  border: 1px solid var(--sfoc-border);
+  border-radius: 18px;
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+}
+
+.sfoc-modal-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--sfoc-accent);
+}
+
+.sfoc-modal-panel--destructive::before,
+.sfoc-modal-panel--error::before {
+  background: var(--sfoc-danger);
+}
+
+.sfoc-modal-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px 24px 18px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sfoc-border) 72%, transparent);
+  background: radial-gradient(circle at 10% 0%, color-mix(in srgb, var(--sfoc-accent) 12%, transparent), transparent 48%), color-mix(in srgb, var(--sfoc-bg-elevated) 48%, transparent);
+}
+
+.sfoc-modal-semantic-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  border: 1px solid color-mix(in srgb, var(--sfoc-accent) 36%, transparent);
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--sfoc-accent) 12%, transparent);
+  color: var(--sfoc-accent);
+}
+
+.sfoc-modal-panel--destructive .sfoc-modal-semantic-icon,
+.sfoc-modal-panel--error .sfoc-modal-semantic-icon {
+  border-color: color-mix(in srgb, var(--sfoc-danger) 38%, transparent);
+  background: color-mix(in srgb, var(--sfoc-danger) 11%, transparent);
+  color: var(--sfoc-danger);
+}
+
+.sfoc-modal-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 720;
+  letter-spacing: -0.015em;
+}
+
+.sfoc-modal-body {
+  padding: 20px 24px 4px;
+  color: var(--sfoc-text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.sfoc-modal-error.hidden {
+  display: none;
+}
+
+.sfoc-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--sfoc-border);
+  background: color-mix(in srgb, var(--sfoc-bg-elevated) 42%, transparent);
+}
+
+.sfoc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 6px 18px;
+  border: 1px solid var(--sfoc-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  font: 600 13px/1.35 inherit;
+  cursor: pointer;
+}
+
+.sfoc-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sfoc-btn--primary {
+  border-color: var(--sfoc-accent);
+  background: var(--sfoc-accent);
+  color: #fff;
+}
+
+.sfoc-btn--danger {
+  border-color: color-mix(in srgb, var(--sfoc-danger) 75%, #fff);
+  background: var(--sfoc-danger);
+  color: #fff;
+}
+
+.sfoc-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+html[data-ui-theme='light'] .sfoc-modal-backdrop {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+html[data-ui-theme='light'] .sfoc-modal-panel {
+  background: #fff;
+  border-color: var(--sfoc-light-border);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.15);
+}
+
+html[data-ui-theme='light'] .sfoc-modal-title {
+  color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme='light'] .sfoc-modal-body {
+  color: var(--sfoc-light-text-muted);
+}
+
+@media (max-width: 560px) {
+  .sfoc-modal-heading {
+    padding: 20px 18px 16px;
+  }
+
+  .sfoc-modal-body {
+    padding: 18px 18px 2px;
+  }
+
+  .sfoc-modal-actions {
+    flex-direction: column-reverse;
+    padding: 14px 18px 18px;
+  }
+
+  .sfoc-btn {
+    width: 100%;
+  }
+}

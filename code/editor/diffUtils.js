@@ -1,4 +1,5 @@
 import { state } from '../core/state.js';
+import { t } from '../../shared/i18n.js';
 import {
   buildAlignedDiff as buildAlignedDiffSync,
   getTotalDiffLines,
@@ -6,6 +7,27 @@ import {
 } from '../../shared/alignedDiffCore.js';
 
 export { getTotalDiffLines, advanceDiffIndex };
+
+/**
+ * Publica el estado del diff en su nodo original. La cabecera contextual V2
+ * clona ese nodo, así que además del texto completo deja una versión corta en
+ * dataset para que la píldora quepa sin recortar a mitad de palabra.
+ * @param {HTMLElement | null} node
+ * @param {{ current: number, total: number, lines: number } | null} diff
+ */
+export function renderDiffStatus(node, diff) {
+  if (!node) return;
+  if (!diff) {
+    node.textContent = t('diff.noDifferences');
+    return;
+  }
+  const full = t('diff.status', diff);
+  node.dataset.compact = t('diff.statusCompact', diff);
+  // Sella la versión corta contra el texto que la origina: cualquier otro punto
+  // que reescriba el nodo (error, diff truncado…) la invalida sin más cambios.
+  node.dataset.compactFor = full;
+  node.textContent = full;
+}
 
 let jsDiffWorker = null;
 let jsDiffReqSeq = 0;
