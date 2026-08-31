@@ -19,7 +19,7 @@ describe('workbench icon sprite', () => {
 
   it('cubre herramientas, categorías, estados y acciones', () => {
     expect(Object.keys(TOOL_ICONS)).toContain('Comparator');
-    expect(Object.keys(CATEGORY_ICONS)).toHaveLength(10);
+    expect(Object.keys(CATEGORY_ICONS)).toHaveLength(11);
     expect(STATE_ICONS.production).toBeTruthy();
     expect(STATE_ICONS.sandbox).toBeTruthy();
     expect(STATE_ICONS.readOnly).toBeTruthy();

@@ -140,6 +140,10 @@ function getUserForOrg(orgId) {
   return userCache.get(id) || null;
 }
 
+export function shouldShowOrgUserBadge(user, disabled) {
+  return !disabled && hasConnectedUser(user);
+}
+
 function selectedOptionLabel(select) {
   const opt = select.options[select.selectedIndex];
   return opt ? opt.textContent || '' : '';
@@ -429,7 +433,7 @@ export function refreshOrgUserDropdowns() {
 
     const orgId = select.value;
     const user = getUserForOrg(orgId);
-    if (hasConnectedUser(user)) {
+    if (shouldShowOrgUserBadge(user, disabled)) {
       badge.hidden = false;
       trigger.classList.add('has-user');
     } else {
@@ -440,6 +444,9 @@ export function refreshOrgUserDropdowns() {
     // Lanzar carga del usuario del entorno seleccionado si aún no la tenemos.
     if (orgId) ensureUserFetched(orgId);
   }
+  // La sincronización puede descubrir una org mientras el menú está abierto.
+  // Reconstruimos esas filas para que se pueda seleccionar en el mismo gesto.
+  updateOpenPopupRows();
 }
 
 function buildSideUi(side, selectId, wrapperSel) {

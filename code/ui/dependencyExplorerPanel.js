@@ -153,7 +153,13 @@ async function openMetadataSourceInViewer(orgId, ref) {
       showToast(t('depExplorer.openSourceError'), 'error');
       return;
     }
-    const ok = await openApexSourceViewerWithPayload(title, body, { downloadFileName: fileName });
+    const org = (state.orgsList || []).find((item) => String(item.id) === String(orgId));
+    const ok = await openApexSourceViewerWithPayload(title, body, {
+      downloadFileName: fileName,
+      orgId,
+      orgLabel: org?.label || '',
+      instanceUrl: org?.instanceUrl || ''
+    });
     if (!ok) showToast(t('depExplorer.openSourceError'), 'warn');
   } finally {
     dismissSpinnerToast();

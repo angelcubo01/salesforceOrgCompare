@@ -10,6 +10,10 @@ export const WORKBENCH_CATEGORIES = Object.freeze([
     direct: true, workspaceIds: Object.freeze([])
   },
   {
+    id: 'favorites', labelKey: 'workbench.category.favorites', icon: CATEGORY_ICONS.favorites,
+    direct: false, favorites: true, workspaceIds: Object.freeze([])
+  },
+  {
     id: 'comparator', labelKey: 'workbench.category.comparator', icon: CATEGORY_ICONS.comparator,
     directWorkspaceId: 'comparator', workspaceIds: Object.freeze(['comparator'])
   },
@@ -69,6 +73,18 @@ export const WORKBENCH_HEADER_ACTIONS = Object.freeze({
   apexProfiles: action({ id: 'apex-profiles', labelKey: 'apexTests.profilesBtn', icon: 'file-code', targetId: 'apexTestsProfilesBtn', priority: 70, visibleWhen: 'source-context' }),
   apexRunnerSettings: action({ id: 'apex-runner-settings', labelKey: 'apexTests.runnerSettingsBtn', icon: ACTION_ICONS.settings, targetId: 'apexTestsRunnerSettingsBtn', priority: 80, visibleWhen: 'source-context' }),
   coverageRefresh: action({ id: 'coverage-refresh', labelKey: 'coverageCompare.refresh', icon: ACTION_ICONS.refresh, targetId: 'apexCoverageCompareRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
+  quickEditSave: action({ id: 'quick-edit-save', labelKey: 'quickEdit.saveLocal', icon: ACTION_ICONS.save, targetId: 'quickEditSaveBtn', priority: 20 }),
+  quickEditRevert: action({ id: 'quick-edit-revert', labelKey: 'quickEdit.revertLocal', icon: ACTION_ICONS.refresh, targetId: 'quickEditRevertBtn', priority: 30 }),
+  quickEditRetrieve: action({ id: 'quick-edit-retrieve', labelKey: 'quickEdit.retrieveFromOrg', icon: ACTION_ICONS.download, targetId: 'quickEditRetrieveBtn', priority: 40 }),
+  quickEditValidate: action({ id: 'quick-edit-validate', labelKey: 'quickEdit.validate', icon: 'circle-check', targetId: 'quickEditValidateBtn', priority: 50 }),
+  quickEditDeploy: action({ id: 'quick-edit-deploy', labelKey: 'quickEdit.deploy', icon: ACTION_ICONS.export, targetId: 'quickEditDeployBtn', variant: 'primary', risk: 'write', priority: 1, allowOverflow: false }),
+  quickEditClear: action({ id: 'quick-edit-clear', labelKey: 'codeEditor.clearAll', icon: ACTION_ICONS.delete, targetId: 'quickEditClearBtn', variant: 'destructive', risk: 'destructive', priority: 90 }),
+  lightningQuickEditSave: action({ id: 'lightning-quick-edit-save', labelKey: 'quickEdit.saveLocal', icon: ACTION_ICONS.save, targetId: 'lightningQuickEditSaveBtn', priority: 20 }),
+  lightningQuickEditRevert: action({ id: 'lightning-quick-edit-revert', labelKey: 'quickEdit.revertLocal', icon: ACTION_ICONS.refresh, targetId: 'lightningQuickEditRevertBtn', priority: 30 }),
+  lightningQuickEditRetrieve: action({ id: 'lightning-quick-edit-retrieve', labelKey: 'quickEdit.retrieveFromOrg', icon: ACTION_ICONS.download, targetId: 'lightningQuickEditRetrieveBtn', priority: 40 }),
+  lightningQuickEditValidate: action({ id: 'lightning-quick-edit-validate', labelKey: 'quickEdit.validate', icon: 'circle-check', targetId: 'lightningQuickEditValidateBtn', priority: 50 }),
+  lightningQuickEditDeploy: action({ id: 'lightning-quick-edit-deploy', labelKey: 'quickEdit.deploy', icon: ACTION_ICONS.export, targetId: 'lightningQuickEditDeployBtn', variant: 'primary', risk: 'write', priority: 1, allowOverflow: false }),
+  lightningQuickEditClear: action({ id: 'lightning-quick-edit-clear', labelKey: 'codeEditor.clearAll', icon: ACTION_ICONS.delete, targetId: 'lightningQuickEditClearBtn', variant: 'destructive', risk: 'destructive', priority: 90 }),
   anonymousRun: action({ id: 'anonymous-run', labelKey: 'anonymousApex.run', icon: ACTION_ICONS.run, targetId: 'anonymousApexRunBtn', variant: 'primary', risk: 'destructive', priority: 1, allowOverflow: false }),
   anonymousScripts: action({ id: 'anonymous-scripts', labelKey: 'anonymousApex.savedScripts', icon: 'file-code', targetId: 'anonymousApexOpenScriptsModalBtn', priority: 40 }),
   anonymousSave: action({ id: 'anonymous-save', labelKey: 'anonymousApex.saveCurrentScript', icon: ACTION_ICONS.save, targetId: 'anonymousApexQuickSaveBtn', priority: 50 }),
@@ -148,8 +164,22 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     descriptionKey: 'workbench.workspace.codeStudioDescription', icon: 'code', defaultTabId: 'apex-vf',
     aliases: ['quick edit', 'editor'], keywords: ['apex', 'visualforce', 'lwc', 'aura'],
     tabs: [
-      tab('apex-vf', 'workbench.tab.apexVf', 'QuickEdit', 'development', 'quickEditPanel', 'single', 'write'),
-      tab('lwc-aura', 'workbench.tab.lwcAura', 'LightningQuickEdit', 'development', 'lightningQuickEditPanel', 'single', 'write')
+      tab('apex-vf', 'workbench.tab.apexVf', 'QuickEdit', 'development', 'quickEditPanel', 'single', 'write', [
+        WORKBENCH_HEADER_ACTIONS.quickEditDeploy,
+        WORKBENCH_HEADER_ACTIONS.quickEditSave,
+        WORKBENCH_HEADER_ACTIONS.quickEditRevert,
+        WORKBENCH_HEADER_ACTIONS.quickEditRetrieve,
+        WORKBENCH_HEADER_ACTIONS.quickEditValidate,
+        WORKBENCH_HEADER_ACTIONS.quickEditClear
+      ]),
+      tab('lwc-aura', 'workbench.tab.lwcAura', 'LightningQuickEdit', 'development', 'lightningQuickEditPanel', 'single', 'write', [
+        WORKBENCH_HEADER_ACTIONS.lightningQuickEditDeploy,
+        WORKBENCH_HEADER_ACTIONS.lightningQuickEditSave,
+        WORKBENCH_HEADER_ACTIONS.lightningQuickEditRevert,
+        WORKBENCH_HEADER_ACTIONS.lightningQuickEditRetrieve,
+        WORKBENCH_HEADER_ACTIONS.lightningQuickEditValidate,
+        WORKBENCH_HEADER_ACTIONS.lightningQuickEditClear
+      ])
     ]
   }),
   workspace({
@@ -223,9 +253,17 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
   }),
   workspace({
     id: 'data-workbench', categoryId: 'analysis', labelKey: 'workbench.workspace.dataWorkbench',
-    descriptionKey: 'workbench.workspace.dataWorkbenchDescription', icon: 'database-cog',
+    descriptionKey: 'workbench.workspace.dataWorkbenchDescription', icon: 'database-cog', defaultTabId: 'record-editor',
     aliases: ['record editor', 'import'], keywords: ['data', 'csv', 'dml'],
-    tabs: [tab('main', 'workbench.tab.data', 'DataWorkbench', 'analysis', 'dataWorkbenchPanel', 'single', 'write', [WORKBENCH_HEADER_ACTIONS.dataLoadRecord, WORKBENCH_HEADER_ACTIONS.dataImportRun, WORKBENCH_HEADER_ACTIONS.dataCreateRecord])]
+    tabs: [
+      tab('record-editor', 'dataWorkbench.tabRecordEditor', 'DataWorkbench', 'analysis', 'dataWorkbenchPanel', 'single', 'write', [
+        WORKBENCH_HEADER_ACTIONS.dataLoadRecord,
+        WORKBENCH_HEADER_ACTIONS.dataCreateRecord
+      ]),
+      tab('bulk-import', 'dataWorkbench.tabImport', 'DataWorkbench', 'analysis', 'dataWorkbenchPanel', 'single', 'write', [
+        WORKBENCH_HEADER_ACTIONS.dataImportRun
+      ])
+    ]
   }),
   workspace({
     id: 'org-environments', categoryId: 'monitoring', labelKey: 'workbench.workspace.orgEnvironments',
@@ -287,7 +325,7 @@ export const LEGACY_TOOL_ROUTES = Object.freeze({
   QueryExplorer: { workspaceId: 'query-explorer', tabId: 'main' },
   RestExplorer: { workspaceId: 'rest-explorer', tabId: 'main' },
   ObjectDescribe: { workspaceId: 'object-describe', tabId: 'main' },
-  DataWorkbench: { workspaceId: 'data-workbench', tabId: 'main' },
+  DataWorkbench: { workspaceId: 'data-workbench', tabId: 'record-editor' },
   DebugLogBrowser: { workspaceId: 'diagnostics', tabId: 'main' },
   EventMonitor: { workspaceId: 'event-monitor', tabId: 'main' },
   FieldDependency: { workspaceId: 'field-dependency', tabId: 'main' },

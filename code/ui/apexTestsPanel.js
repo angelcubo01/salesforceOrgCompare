@@ -22,7 +22,8 @@ import {
   initApexTestsViewLogModal,
   initApexTestsClearRunsButton,
   closeHubExpandedDetail,
-  tickApexTestsHubRuns
+  tickApexTestsHubRuns,
+  openApexTestClassInMonaco
 } from './apexTestsHubRuns.js';
 import { loadApexTestRunProfiles, saveApexTestRunProfiles } from './apexTestRunProfilesStorage.js';
 import { mergeApexTestRunProfiles } from '../../shared/apexTestRunProfilesCore.js';
@@ -380,6 +381,22 @@ function getEls() {
     profilesModalBody: document.getElementById('apexTestsProfilesModalBody'),
     clearSelectionBtn: document.getElementById('apexTestsClearSelectionBtn')
   };
+}
+
+function openApexSourceFromCtrlClick(event) {
+  const sourceTarget = event.target.closest('.apex-tests-source-target');
+  if (!sourceTarget || !(event.ctrlKey || event.metaKey)) return false;
+  const className = sourceTarget.dataset.apexSourceClass;
+  const methodName = sourceTarget.dataset.apexSourceMethod;
+  if (!className || !state.leftOrgId) return false;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  void openApexTestClassInMonaco(
+    state.leftOrgId,
+    { className, label: className },
+    methodName ? { methodName } : {}
+  );
+  return true;
 }
 
 function getActiveClassName() {
@@ -846,8 +863,10 @@ function refreshSelectionTree() {
     li.className = 'apex-tests-tree-item';
     li.setAttribute('role', 'treeitem');
     const head = document.createElement('div');
-    head.className = 'apex-tests-tree-class';
+    head.className = 'apex-tests-tree-class apex-tests-source-target';
     head.textContent = cn;
+    head.dataset.apexSourceClass = cn;
+    head.title = t('apexTests.classOpenCtrlClickHint');
     li.appendChild(head);
     const set = methodSelectionsByClass.get(cn);
     const methods = set && set.size > 0 ? [...set].sort((a, b) => a.localeCompare(b)) : [];
@@ -856,9 +875,12 @@ function refreshSelectionTree() {
       sub.className = 'apex-tests-tree-methods';
       for (const m of methods) {
         const liM = document.createElement('li');
-        liM.className = 'apex-tests-tree-method';
+        liM.className = 'apex-tests-tree-method apex-tests-source-target';
         liM.setAttribute('role', 'treeitem');
         liM.textContent = m;
+        liM.dataset.apexSourceClass = cn;
+        liM.dataset.apexSourceMethod = m;
+        liM.title = t('apexTests.methodOpenCtrlClickHint');
         sub.appendChild(liM);
       }
       li.appendChild(sub);
@@ -949,8 +971,10 @@ function applyClassFilter() {
     syncClassCheckboxVisual(cb, c.name);
     tdCb.appendChild(cb);
     const tdName = document.createElement('td');
-    tdName.className = 'apex-tests-td-name';
+    tdName.className = 'apex-tests-td-name apex-tests-source-target';
     tdName.textContent = c.name;
+    tdName.dataset.apexSourceClass = c.name;
+    tdName.title = t('apexTests.classOpenCtrlClickHint');
     tr.appendChild(tdCb);
     tr.appendChild(tdName);
     classTbody.appendChild(tr);
@@ -1047,9 +1071,11 @@ async function reloadMethodsForSelection() {
       cb.disabled = cbDisabled;
       tdCb.appendChild(cb);
       const tdName = document.createElement('td');
-      tdName.className = 'apex-tests-td-name';
+      tdName.className = 'apex-tests-td-name apex-tests-source-target';
       tdName.textContent = m;
-      tdName.title = `${entry.name}.${m}`;
+      tdName.dataset.apexSourceClass = entry.name;
+      tdName.dataset.apexSourceMethod = m;
+      tdName.title = t('apexTests.methodOpenCtrlClickHint');
       tr.appendChild(tdCb);
       tr.appendChild(tdName);
       methodTbody.appendChild(tr);
@@ -1290,6 +1316,7 @@ export function setupApexTestsPanel() {
   classTbody?.addEventListener(
     'click',
     (e) => {
+      if (openApexSourceFromCtrlClick(e)) return;
       const cb = e.target.closest('input.apex-tests-class-cb');
       if (cb?.indeterminate) {
         e.preventDefault();
@@ -1315,6 +1342,7 @@ export function setupApexTestsPanel() {
   });
   const { methodTbody } = getEls();
   methodTbody?.addEventListener('click', (e) => {
+    if (openApexSourceFromCtrlClick(e)) return;
     if (e.target.closest('input.apex-tests-method-cb')) return;
     const tr = e.target.closest('tr');
     if (!tr || !methodTbody.contains(tr)) return;
@@ -1322,6 +1350,9 @@ export function setupApexTestsPanel() {
     if (!cb || cb.disabled) return;
     cb.checked = !cb.checked;
     cb.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  getEls().selectionTree?.addEventListener('click', (e) => {
+    void openApexSourceFromCtrlClick(e);
   });
   tablesWrap?.addEventListener('change', (ev) => {
     const el = ev.target;

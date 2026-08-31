@@ -1655,6 +1655,29 @@
     return isDeployStatusDetailSetupPage(value) || isDeployStatusDetailClassicFrame(value);
   }
 
+  // shared/htmlEntities.js
+  function decodeHtmlEntities(value) {
+    const named = { amp: "&", apos: "'", quot: '"', lt: "<", gt: ">", nbsp: "\xA0" };
+    let text = String(value ?? "");
+    for (let pass = 0; pass < 3; pass += 1) {
+      const decoded = text.replace(/&(#x[\da-f]+|#\d+|amp|apos|quot|lt|gt|nbsp);/gi, (entity, token) => {
+        const lower = token.toLowerCase();
+        if (lower in named) return named[lower];
+        const radix = lower.startsWith("#x") ? 16 : 10;
+        const codePoint = Number.parseInt(lower.slice(radix === 16 ? 2 : 1), radix);
+        if (!Number.isSafeInteger(codePoint) || codePoint < 0 || codePoint > 1114111) return entity;
+        try {
+          return String.fromCodePoint(codePoint);
+        } catch {
+          return entity;
+        }
+      });
+      if (decoded === text) break;
+      text = decoded;
+    }
+    return text;
+  }
+
   // sfInject/content/injectors/deployStatusInlineDetailsDom.js
   var INTEGRATION_ID4 = "deployStatusInlineDetails";
   var FAILED_TABLE_SELECTOR = 'table[id$=":FailedDeploymentsList"]';
@@ -1707,32 +1730,47 @@
     const initialLine = Number(match[2]);
     return { className: match[1], initialLine: Number.isSafeInteger(initialLine) && initialLine > 0 ? initialLine : void 0 };
   }
+  function decodeDeployHtmlEntities(value) {
+    return decodeHtmlEntities(value);
+  }
+  function parseApexStackTraceFrames(value) {
+    const text = String(value || "");
+    const frames = [];
+    const re = /Class\.([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z_][A-Za-z0-9_]*:\s*line\s+(\d+)(?:,\s*column\s+\d+)?/gi;
+    let match;
+    while (match = re.exec(text)) {
+      const initialLine = Number(match[2]);
+      if (!Number.isSafeInteger(initialLine) || initialLine <= 0) continue;
+      frames.push({ className: match[1], initialLine, start: match.index, end: match.index + match[0].length });
+    }
+    return frames;
+  }
   function asRows(value) {
     return Array.isArray(value) ? value : [];
   }
   function buildDeployDetailModel(detail) {
     const soap = detail?.soap || detail || {};
     const componentFailures = asRows(soap.componentFailures).map((item) => ({
-      fullName: String(item?.fullName || ""),
-      componentType: String(item?.componentType || ""),
+      fullName: decodeDeployHtmlEntities(item?.fullName),
+      componentType: decodeDeployHtmlEntities(item?.componentType),
       lineNumber: Number.isFinite(Number(item?.lineNumber)) ? Number(item.lineNumber) : null,
       columnNumber: Number.isFinite(Number(item?.columnNumber)) ? Number(item.columnNumber) : null,
-      problem: String(item?.problem || ""),
-      problemType: String(item?.problemType || ""),
-      fileName: String(item?.fileName || "")
+      problem: decodeDeployHtmlEntities(item?.problem),
+      problemType: decodeDeployHtmlEntities(item?.problemType),
+      fileName: decodeDeployHtmlEntities(item?.fileName)
     }));
     const testFailures = asRows(soap.runTestResult?.failures).map((item) => ({
-      className: String(item?.className || ""),
-      methodName: String(item?.methodName || ""),
-      message: String(item?.message || ""),
-      stackTrace: String(item?.stackTrace || ""),
-      time: String(item?.time || "")
+      className: decodeDeployHtmlEntities(item?.className),
+      methodName: decodeDeployHtmlEntities(item?.methodName),
+      message: decodeDeployHtmlEntities(item?.message),
+      stackTrace: decodeDeployHtmlEntities(item?.stackTrace),
+      time: decodeDeployHtmlEntities(item?.time)
     }));
     return {
       componentFailures,
       testFailures,
-      errorMessage: String(soap.errorMessage || detail?.row?.errorMessage || ""),
-      coverageWarnings: asRows(soap.runTestResult?.codeCoverageWarnings).map((item) => String(item?.message || item || "")).filter(Boolean)
+      errorMessage: decodeDeployHtmlEntities(soap.errorMessage || detail?.row?.errorMessage),
+      coverageWarnings: asRows(soap.runTestResult?.codeCoverageWarnings).map((item) => decodeDeployHtmlEntities(item?.message || item)).filter(Boolean)
     };
   }
 
@@ -1747,7 +1785,7 @@
     return el(doc, "h3", "sfoc-deploy-inline-title", text);
   }
   function appendCell(row, value, className = "") {
-    row.appendChild(el(row.ownerDocument, "td", className, value || "\u2014"));
+    row.appendChild(el(row.ownerDocument, "td", className, value == null || value === "" ? "\u2014" : value));
   }
   function appendTable(doc, headers, rows) {
     const table = el(doc, "table", "sfoc-deploy-inline-table");
@@ -1765,14 +1803,20 @@
     if (res?.reason === "ORG_NOT_SAVED") return sfInjectT(lang, "sfInject.deployStatus.errorOrgNotSaved");
     return res?.error || sfInjectT(lang, "sfInject.deployStatus.errorLoad");
   }
+  function sourceError(res, lang) {
+    if (res?.reason === "NO_SID") return sfInjectT(lang, "sfInject.deployDetailSource.noSession");
+    if (res?.reason === "ORG_NOT_SAVED") return sfInjectT(lang, "sfInject.deployDetailSource.orgNotSaved");
+    if (res?.reason === "NOT_FOUND") return sfInjectT(lang, "sfInject.deployDetailSource.classNotFound");
+    return res?.error || sfInjectT(lang, "sfInject.deployDetailSource.openError");
+  }
   function validLine(value) {
     const n = Number(value);
     return Number.isSafeInteger(n) && n > 0 ? n : void 0;
   }
-  function createRenderer(doc, ctx) {
-    const apexHint = sfInjectT(ctx.lang, "sfInject.deployStatus.openApex");
-    const apexLink = (className, initialLine) => {
-      const link = el(doc, "a", "sfoc-deploy-inline-apex", className);
+  function createRenderer(doc, ctx, sourceState) {
+    const apexHint = sfInjectT(ctx.lang, "sfInject.deployDetailSource.openHint");
+    const apexLink = (className, initialLine, label = className) => {
+      const link = el(doc, "a", "sfoc-deploy-inline-apex", label);
       link.href = "#";
       link.title = apexHint;
       link.setAttribute("aria-label", `${className}. ${apexHint}`);
@@ -1780,14 +1824,59 @@
         event.preventDefault();
         event.stopPropagation();
         if (!event.ctrlKey && !event.metaKey) return;
-        void openDeployStatusApexSource({ orgId: ctx.orgId, className, initialLine }).then((res) => {
-          if (!res?.ok) ctx.onError?.(errorText(res, ctx.lang).replace(sfInjectT(ctx.lang, "sfInject.deployStatus.errorLoad"), sfInjectT(ctx.lang, "sfInject.deployStatus.errorOpenApex")));
+        if (!sourceState.selectedOrgId) {
+          ctx.onError?.(sfInjectT(ctx.lang, "sfInject.deployDetailSource.selectOrg"));
+          return;
+        }
+        void openDeployStatusApexSource({ orgId: sourceState.selectedOrgId, className, initialLine }).then((res) => {
+          if (!res?.ok) ctx.onError?.(sourceError(res, ctx.lang));
         });
       });
       return link;
     };
+    const createOrgSelect = () => {
+      const select = el(doc, "select", "sfoc-deploy-inline-org-select");
+      select.setAttribute("aria-label", sfInjectT(ctx.lang, "sfInject.deployDetailSource.orgLabel"));
+      select.title = sfInjectT(ctx.lang, "sfInject.deployDetailSource.orgLabel");
+      if (!sourceState.orgs.length) {
+        select.appendChild(new Option(sfInjectT(ctx.lang, "sfInject.deployDetailSource.noOrgs"), ""));
+        select.disabled = true;
+        return select;
+      }
+      if (!sourceState.selectedOrgId) select.appendChild(new Option(sfInjectT(ctx.lang, "sfInject.deployDetailSource.chooseOrg"), ""));
+      for (const org of sourceState.orgs) select.appendChild(new Option(org.label, org.id));
+      select.value = sourceState.selectedOrgId;
+      select.addEventListener("change", () => {
+        sourceState.selectedOrgId = select.value || "";
+        sourceState.syncSelects();
+      });
+      return select;
+    };
+    const appendStackTraceCell = (row, value, fallbackClassName) => {
+      const cell2 = el(doc, "td", "sfoc-deploy-inline-stack");
+      const trace = String(value || "");
+      const frames = parseApexStackTraceFrames(trace);
+      if (!frames.length) {
+        if (fallbackClassName && trace) cell2.appendChild(apexLink(fallbackClassName, void 0, trace));
+        else cell2.textContent = trace || "\u2014";
+        row.appendChild(cell2);
+        return;
+      }
+      let cursor = 0;
+      for (const frame of frames) {
+        cell2.append(trace.slice(cursor, frame.start));
+        cell2.appendChild(apexLink(frame.className, frame.initialLine, trace.slice(frame.start, frame.end)));
+        cursor = frame.end;
+      }
+      cell2.append(trace.slice(cursor));
+      row.appendChild(cell2);
+    };
     return (panel, model) => {
       panel.replaceChildren();
+      const sourcePicker = el(doc, "div", "sfoc-deploy-inline-org-picker");
+      sourcePicker.appendChild(el(doc, "span", "sfoc-deploy-inline-org-label", sfInjectT(ctx.lang, "sfInject.deployDetailSource.orgLabel")));
+      sourcePicker.appendChild(createOrgSelect());
+      panel.appendChild(sourcePicker);
       const hasComponents = model.componentFailures.length > 0;
       const hasTests = model.testFailures.length > 0;
       if (hasComponents) {
@@ -1802,9 +1891,8 @@
           appendCell(row, failure.componentType);
           appendCell(row, failure.lineNumber);
           appendCell(row, failure.columnNumber);
-          const message = failure.problem;
           const secondary = [failure.problemType, failure.fileName].filter(Boolean).join(" \xB7 ");
-          const messageCell = el(doc, "td", "", message || "\u2014");
+          const messageCell = el(doc, "td", "", failure.problem || "\u2014");
           if (secondary) messageCell.appendChild(el(doc, "div", "sfoc-deploy-inline-secondary", secondary));
           row.appendChild(messageCell);
           return row;
@@ -1823,14 +1911,20 @@
           const row = doc.createElement("tr");
           const pos = extractApexClassAndLineFromStackTrace(failure.stackTrace);
           const className = failure.className || pos.className;
+          const classFrame = parseApexStackTraceFrames(failure.stackTrace).find((frame) => frame.className === className);
+          const initialLine = classFrame?.initialLine || pos.initialLine;
           if (className) {
             const cell2 = doc.createElement("td");
-            cell2.appendChild(apexLink(className, pos.initialLine));
+            cell2.appendChild(apexLink(className, initialLine));
             row.appendChild(cell2);
           } else appendCell(row, "");
-          appendCell(row, failure.methodName);
+          if (className && failure.methodName) {
+            const cell2 = doc.createElement("td");
+            cell2.appendChild(apexLink(className, initialLine, failure.methodName));
+            row.appendChild(cell2);
+          } else appendCell(row, failure.methodName);
           appendCell(row, failure.message);
-          appendCell(row, failure.stackTrace, "sfoc-deploy-inline-stack");
+          appendStackTraceCell(row, failure.stackTrace, className);
           appendCell(row, failure.time);
           return row;
         });
@@ -1850,10 +1944,21 @@
   function mountDeployStatusInlineDetails(doc, ctx) {
     const openIds = /* @__PURE__ */ new Set();
     const detailCache = /* @__PURE__ */ new Map();
-    const renderDetail = createRenderer(doc, ctx);
+    const renderedDetails = /* @__PURE__ */ new Map();
+    const sourceState = {
+      selectedOrgId: ctx.orgId || "",
+      orgs: [],
+      syncSelects() {
+        for (const select of doc.querySelectorAll("select.sfoc-deploy-inline-org-select")) select.value = sourceState.selectedOrgId;
+      }
+    };
+    const renderDetail = createRenderer(doc, ctx, sourceState);
     let mounted = true;
     const detailIdFor = (asyncId) => `sfoc-deploy-inline-detail-${asyncId}`;
-    const removeDetail = (asyncId) => doc.getElementById(detailIdFor(asyncId))?.remove();
+    const removeDetail = (asyncId) => {
+      renderedDetails.delete(asyncId);
+      doc.getElementById(detailIdFor(asyncId))?.remove();
+    };
     const showDetail = async (row, asyncId) => {
       removeDetail(asyncId);
       const detailRow = doc.createElement("tr");
@@ -1890,14 +1995,30 @@
       }
       detailCache.set(asyncId, res);
       if (!mounted || !openIds.has(asyncId) || !detailRow.isConnected) return;
-      renderDetail(panel, buildDeployDetailModel(res.detail));
+      const model = buildDeployDetailModel(res.detail);
+      renderedDetails.set(asyncId, { panel, model });
+      renderDetail(panel, model);
     };
+    const loadSourceOrgs = async () => {
+      const response = await fetchActiveSavedOrgsForDeployDetail();
+      sourceState.orgs = response?.ok && Array.isArray(response.orgs) ? response.orgs : [];
+      if (!sourceState.orgs.some((org) => org.id === sourceState.selectedOrgId)) sourceState.selectedOrgId = "";
+      if (!mounted) return;
+      for (const { panel, model } of renderedDetails.values()) {
+        if (panel.isConnected) renderDetail(panel, model);
+      }
+    };
+    const onStorageChanged = (changes, area) => {
+      if (area === "sync" && (changes.savedOrgs || changes.savedOrgOrder || changes.orgAliases || changes.orgGroups)) void loadSourceOrgs();
+    };
+    chrome.storage.onChanged.addListener(onStorageChanged);
+    void loadSourceOrgs();
     const inject = () => {
       for (const row of findFailedDeploymentRows(doc)) {
         const asyncId = extractDeployAsyncIdFromRow(row);
         const cell2 = findDeployActionCell(row);
         if (!asyncId || !cell2 || cell2.querySelector(`[data-sfoc-inject="${INTEGRATION_ID4}"]`)) continue;
-        const button = el(doc, "button", "sfoc-deploy-inline-toggle", "\u203A");
+        const button = el(doc, "button", "sfoc-deploy-inline-toggle");
         button.type = "button";
         button.setAttribute("data-sfoc-inject", INTEGRATION_ID4);
         button.setAttribute("data-sfoc-async-id", asyncId);
@@ -1909,14 +2030,14 @@
           if (openIds.has(asyncId)) {
             openIds.delete(asyncId);
             removeDetail(asyncId);
-            button.textContent = "\u203A";
             button.setAttribute("aria-expanded", "false");
             button.setAttribute("aria-label", sfInjectT(ctx.lang, "sfInject.deployStatus.toggleOpen"));
+            button.title = button.getAttribute("aria-label") || "";
           } else {
             openIds.add(asyncId);
-            button.textContent = "\u2304";
             button.setAttribute("aria-expanded", "true");
             button.setAttribute("aria-label", sfInjectT(ctx.lang, "sfInject.deployStatus.toggleClose"));
+            button.title = button.getAttribute("aria-label") || "";
             void showDetail(row, asyncId);
           }
         });
@@ -1928,6 +2049,8 @@
     return () => {
       mounted = false;
       stopObserver();
+      chrome.storage.onChanged.removeListener(onStorageChanged);
+      renderedDetails.clear();
       doc.querySelectorAll(`[data-sfoc-inject="${INTEGRATION_ID4}"]`).forEach((node) => node.remove());
     };
   }
@@ -2002,7 +2125,7 @@
     const classCell = cell(row, "className") || cell(row, "class") || cell(row, "name") || row?.querySelector('td[id$=":testClass"]') || cellByHeader(row, ["class name", "test class", "clase"]);
     const stackCell = cell(row, "stackTrace") || row?.querySelector('td[id$=":stacktrace"]') || cell(row, "errorMessage") || cellByHeader(row, ["stack trace", "error message", "mensaje de error"]);
     const className = classCell?.textContent?.trim() || "";
-    const frames = parseApexStackTraceFrames(stackCell?.textContent || "");
+    const frames = parseApexStackTraceFrames2(stackCell?.textContent || "");
     return {
       className: /^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(className) ? className : "",
       classCell,
@@ -2010,7 +2133,7 @@
       initialLine: frames.find((frame) => frame.className === className)?.initialLine
     };
   }
-  function parseApexStackTraceFrames(value) {
+  function parseApexStackTraceFrames2(value) {
     const text = String(value || "");
     const frames = [];
     const re = /Class\.([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z_][A-Za-z0-9_]*:\s*line\s+(\d+)(?:,\s*column\s+\d+)?/gi;
@@ -2022,7 +2145,7 @@
     }
     return frames;
   }
-  function splitTestErrorMessage(value, frames = parseApexStackTraceFrames(value)) {
+  function splitTestErrorMessage(value, frames = parseApexStackTraceFrames2(value)) {
     const text = String(value || "");
     const stackLabel = /stack\s*trace\s*:/i.exec(text);
     const traceStart = stackLabel ? stackLabel.index : frames[0]?.start ?? text.length;
@@ -2038,7 +2161,7 @@
   }
 
   // sfInject/content/injectors/deployStatusDetailSourceLinks.js
-  function sourceError(res, lang) {
+  function sourceError2(res, lang) {
     if (res?.reason === "NO_SID") return sfInjectT(lang, "sfInject.deployDetailSource.noSession");
     if (res?.reason === "ORG_NOT_SAVED") return sfInjectT(lang, "sfInject.deployDetailSource.orgNotSaved");
     if (res?.reason === "NOT_FOUND") return sfInjectT(lang, "sfInject.deployDetailSource.classNotFound");
@@ -2055,7 +2178,7 @@
         return;
       }
       void openDeployStatusApexSource({ orgId: selectedOrgId, className, initialLine }).then((res) => {
-        if (!res?.ok) ctx.onError?.(sourceError(res, ctx.lang));
+        if (!res?.ok) ctx.onError?.(sourceError2(res, ctx.lang));
       });
     };
     const createLink = (className, initialLine, label = className) => {
@@ -2102,7 +2225,7 @@
         }
         if (!item.stackCell || item.stackCell.hasAttribute("data-sfoc-detail-original")) continue;
         const original = item.stackCell.textContent || "";
-        const frames = parseApexStackTraceFrames(original);
+        const frames = parseApexStackTraceFrames2(original);
         if (!frames.length) continue;
         item.stackCell.setAttribute("data-sfoc-detail-original", original);
         item.stackCell.classList.add("sfoc-deploy-detail-stack");

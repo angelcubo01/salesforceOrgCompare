@@ -6,6 +6,7 @@ import { updateDocumentTitle } from './documentMeta.js';
 import { t } from '../../shared/i18n.js';
 import { hideSidebarSearchResults } from './searchSetup.js';
 import { syncCompareListToolbarVisibility } from './listUi.js';
+import { syncAppComparisonToggle } from './appComparisonToggle.js';
 
 export function getSelectedArtifactType() {
   const el = document.getElementById('typeSelect');
@@ -211,6 +212,7 @@ function syncComparatorActionButtons() {
 export function applyArtifactTypeUi() {
   const op = getSelectedArtifactType();
   state.selectedArtifactType = op;
+  syncAppComparisonToggle(op);
   const isNone = !op;
   const isGen = op === 'GeneratePackageXml';
   const isMetadataTypeCompare = op === 'MetadataTypeCompare';
@@ -370,6 +372,10 @@ export function applyArtifactTypeUi() {
     updateOrgSelectorsLockedState();
     updateDocumentTitle();
     syncHomeLayoutChrome();
+    // La navegación publica su cambio antes de aplicar la visibilidad de las
+    // fuentes legacy. Avisamos una segunda vez cuando Inicio ya está montado
+    // para que Workbench reconstruya sus acciones reales.
+    document.dispatchEvent(new CustomEvent('sfoc:artifact-ui-applied'));
     return;
   }
 
@@ -1096,4 +1102,5 @@ export function applyArtifactTypeUi() {
   updateDocumentTitle();
   syncHomeLayoutChrome();
   syncCompareListToolbarVisibility();
+  document.dispatchEvent(new CustomEvent('sfoc:artifact-ui-applied'));
 }

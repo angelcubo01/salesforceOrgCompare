@@ -16,10 +16,11 @@ import { TOOL_ICONS, USED_ICON_NAMES } from '../code/workbench/iconRegistry.js';
 describe('workspaceRegistry', () => {
   it('declara Inicio y las cinco categorías superiores en orden estable', () => {
     expect(WORKBENCH_CATEGORIES.map(({ id }) => id)).toEqual([
-      'home', 'comparator', 'development', 'analysis', 'monitoring', 'manifests'
+      'home', 'favorites', 'comparator', 'development', 'analysis', 'monitoring', 'manifests'
     ]);
     expect(WORKBENCH_CATEGORIES[0]).toMatchObject({ id: 'home', direct: true, workspaceIds: [] });
-    expect(WORKBENCH_CATEGORIES[1]).toMatchObject({
+    expect(WORKBENCH_CATEGORIES[1]).toMatchObject({ id: 'favorites', favorites: true, workspaceIds: [] });
+    expect(WORKBENCH_CATEGORIES[2]).toMatchObject({
       id: 'comparator', directWorkspaceId: 'comparator', workspaceIds: ['comparator']
     });
   });
@@ -30,7 +31,7 @@ describe('workspaceRegistry', () => {
     expect(new Set(configured).size).toBe(configured.length);
     expect(new Set(configured)).toEqual(new Set(WORKBENCH_WORKSPACES.map(({ id }) => id)));
     expect(WORKBENCH_WORKSPACES.filter(({ tabs }) => tabs.length > 1).map(({ id }) => id)).toEqual([
-      'code-studio', 'data-compare'
+      'code-studio', 'data-compare', 'data-workbench'
     ]);
     expect(WORKBENCH_WORKSPACES.some(({ toolAliases }) => toolAliases?.length)).toBe(false);
     expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'development')?.workspaceIds).toEqual([
@@ -50,6 +51,19 @@ describe('workspaceRegistry', () => {
     }
     expect(getWorkspaceRouteForTool('ApexCoverageCompare')).toEqual({
       workspaceId: 'apex-coverage', tabId: 'main'
+    });
+  });
+
+  it('separa el editor de registros y la importaciÃ³n masiva en vistas de Workbench', () => {
+    const dataWorkbench = getWorkspaceById('data-workbench');
+    expect(dataWorkbench?.defaultTabId).toBe('record-editor');
+    expect(dataWorkbench?.tabs.map(({ id }) => id)).toEqual(['record-editor', 'bulk-import']);
+    expect(dataWorkbench?.tabs[0].actions.map(({ id }) => id)).toEqual([
+      'data-load-record', 'data-create-record'
+    ]);
+    expect(dataWorkbench?.tabs[1].actions.map(({ id }) => id)).toEqual(['data-import-run']);
+    expect(LEGACY_TOOL_ROUTES.DataWorkbench).toEqual({
+      workspaceId: 'data-workbench', tabId: 'record-editor'
     });
   });
 

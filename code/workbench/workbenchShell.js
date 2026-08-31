@@ -1,5 +1,5 @@
 import { state } from '../core/state.js';
-import { loadToolRecents } from '../core/toolRecents.js';
+import { loadToolRecents, getToolRecentsSnapshot, isToolPinned, toggleToolPin } from '../core/toolRecents.js';
 import {
   APP_NAV_MODE_HOME,
   TOOL_I18N,
@@ -15,6 +15,7 @@ import {
 import { getCachedFeatureControlsConfig } from '../../shared/posthogFeatureControlsFlag.js';
 import { getCurrentLang, t } from '../../shared/i18n.js';
 import { ACTION_ICONS, CATEGORY_ICONS, STATE_ICONS, createIcon } from './iconRegistry.js';
+import { comparisonToggleIdForTool } from '../ui/appComparisonToggle.js';
 import {
   MARKETING_CAPABILITIES,
   MARKETING_STEPS,
@@ -216,7 +217,11 @@ async function selectDirectWorkspace(category, keyboardInitiated = false) {
 }
 
 function openCategory(categoryId, { focusFirstTool = false } = {}) {
-  if (!visibleWorkspaces(categoryId).length) return;
+  const category = getCategoryById(categoryId);
+  const hasItems = category?.favorites
+    ? favoriteWorkspaceEntries().length > 0
+    : visibleWorkspaces(categoryId).length > 0;
+  if (!hasItems) return;
   if (openCategoryId === categoryId) {
     closeToolSubbar({ restoreFocus: true });
     return;
@@ -237,6 +242,7 @@ function createCategoryButton(category) {
   button.id = `workbenchCategory-${category.id}`;
   button.dataset.categoryId = category.id;
   button.dataset.onboardingAnchor = `category-${category.id}`;
+  if (category.favorites) button.classList.add('workbench-category-button--favorites');
   button.appendChild(createIcon(category.icon, { size: 20 }));
   button.appendChild(el('span', 'workbench-category-label', label));
   button.title = label;
@@ -291,24 +297,28 @@ async function activateWorkspaceFromSubbar(item, targetTab, keyboardInitiated) {
   }
 }
 
-function createWorkspaceNavButton(item) {
-  const targetTab = preferredTabForWorkspace(item);
+function createWorkspaceNavButton(item, targetTab = preferredTabForWorkspace(item), exactTabCurrent = false) {
   const message = targetTab ? '' : blockedWorkspaceMessage(item);
   const description = message || translatedDescription(item) || t(item.labelKey);
   const button = el('button', 'workbench-tool-button');
   button.type = 'button';
   button.dataset.workspaceId = item.id;
+  button.dataset.tabId = targetTab?.id || '';
+  button.dataset.exactTabCurrent = String(exactTabCurrent);
   button.dataset.onboardingAnchor = `workspace-${item.id}`;
   button.title = description;
   button.disabled = !targetTab;
   button.setAttribute('aria-disabled', targetTab ? 'false' : 'true');
-  button.setAttribute('aria-current', item.id === activeWorkspaceId ? 'page' : 'false');
+  const current = exactTabCurrent
+    ? item.id === activeWorkspaceId && targetTab?.id === activeTabId
+    : item.id === activeWorkspaceId;
+  button.setAttribute('aria-current', current ? 'page' : 'false');
   button.appendChild(createIcon(item.icon, { size: 20 }));
   const copy = el('span', 'workbench-tool-copy');
   copy.appendChild(el('span', 'workbench-tool-label', t(item.labelKey)));
   if (visibleTabs(item).length > 1) {
-    const views = el('span', 'workbench-tool-views', t('workbench.subbar.views', { count: visibleTabs(item).length }));
-    copy.appendChild(views);
+    const tools = el('span', 'workbench-tool-subtools', t('workbench.subbar.tools', { count: visibleTabs(item).length }));
+    copy.appendChild(tools);
   }
   button.appendChild(copy);
   if (!targetTab) {
@@ -323,6 +333,21 @@ function createWorkspaceNavButton(item) {
   return button;
 }
 
+function favoriteWorkspaceEntries() {
+  const { pins } = getToolRecentsSnapshot();
+  const result = [];
+  for (const toolId of pins) {
+    const route = getWorkspaceRouteForTool(toolId);
+    if (!route) continue;
+    const item = getWorkspaceById(route.workspaceId);
+    const tabInfo = item && getTabById(item.id, route.tabId);
+    if (!item || !tabInfo || !tabVisibility(tabInfo).visible) continue;
+    result.push({ item, tabInfo });
+    if (result.length >= 6) break;
+  }
+  return result;
+}
+
 function renderToolSubbar() {
   const host = document.getElementById('workbenchToolSubbar');
   if (!host) return;
@@ -330,31 +355,45 @@ function renderToolSubbar() {
   host.replaceChildren();
   if (openCategoryId) {
     host.setAttribute('aria-label', t('workbench.subbar.categoryLabel', { category: categoryLabel(openCategoryId) }));
-    for (const item of visibleWorkspaces(openCategoryId)) host.appendChild(createWorkspaceNavButton(item));
+    if (openCategoryId === 'favorites') {
+      for (const { item, tabInfo } of favoriteWorkspaceEntries()) {
+        host.appendChild(createWorkspaceNavButton(item, tabInfo, true));
+      }
+    } else {
+      for (const item of visibleWorkspaces(openCategoryId)) host.appendChild(createWorkspaceNavButton(item));
+    }
   }
   requestAnimationFrame(() => host.classList.remove('is-switching'));
 }
 
 function getNavigationSignature() {
-  return JSON.stringify(WORKBENCH_CATEGORIES.map((category) => [
-    category.id,
-    categoryLabel(category.id),
-    visibleWorkspaces(category.id).map((item) => [
-      item.id,
-      t(item.labelKey),
-      visibleTabs(item).map((tabInfo) => {
-        const availability = tabVisibility(tabInfo);
-        return [tabInfo.id, availability.disabled, availability.message];
-      })
-    ])
-  ]));
+  return JSON.stringify([
+    ...WORKBENCH_CATEGORIES.map((category) => [
+      category.id,
+      categoryLabel(category.id),
+      visibleWorkspaces(category.id).map((item) => [
+        item.id,
+        t(item.labelKey),
+        visibleTabs(item).map((tabInfo) => {
+          const availability = tabVisibility(tabInfo);
+          return [tabInfo.id, availability.disabled, availability.message];
+        })
+      ])
+    ]),
+    ['favorites-pins', favoriteWorkspaceEntries().map(({ item, tabInfo }) => [item.id, tabInfo.id])]
+  ]);
 }
 
 function syncCategoryButtons() {
   for (const category of WORKBENCH_CATEGORIES) {
     const button = document.getElementById(`workbenchCategory-${category.id}`);
     if (!button) continue;
-    const visible = category.direct || visibleWorkspaces(category.id).length > 0;
+    let visible;
+    if (category.favorites) {
+      visible = favoriteWorkspaceEntries().length > 0;
+    } else {
+      visible = category.direct || visibleWorkspaces(category.id).length > 0;
+    }
     button.hidden = !visible;
     const current = category.id === activeCategoryId;
     const open = category.id === openCategoryId;
@@ -383,7 +422,10 @@ function renderWorkbenchNavigation() {
     renderToolSubbar();
   } else if (openCategoryId) {
     document.querySelectorAll('.workbench-tool-button').forEach((button) => {
-      button.setAttribute('aria-current', button.dataset.workspaceId === activeWorkspaceId ? 'page' : 'false');
+      const current = button.dataset.exactTabCurrent === 'true'
+        ? button.dataset.workspaceId === activeWorkspaceId && button.dataset.tabId === activeTabId
+        : button.dataset.workspaceId === activeWorkspaceId;
+      button.setAttribute('aria-current', current ? 'page' : 'false');
     });
   }
   renderMarketingCapabilities();
@@ -469,11 +511,12 @@ function observeHeaderActionState(action, sync) {
   if (!source) return;
   const observer = new MutationObserver(sync);
   let current = source;
-  while (current && !current.classList?.contains('sfoc-tool-panel')) {
+  while (current) {
     observer.observe(current, {
       attributes: true,
       attributeFilter: ['disabled', 'hidden', 'class', 'aria-disabled', 'aria-busy', 'aria-hidden', 'data-loading', 'data-busy']
     });
+    if (current.classList?.contains('sfoc-tool-panel')) break;
     current = current.parentElement;
   }
   headerActionObservers.push(observer);
@@ -643,6 +686,182 @@ function createCompareToolbar() {
   return toolbar;
 }
 
+/**
+ * El Workbench reconstruye su cabecera en cada navegación. Esta copia visual
+ * delega el cambio en el checkbox original, que mantiene los listeners de la
+ * herramienta, y queda inmediatamente antes de Ayuda.
+ */
+function createToolComparisonToggle() {
+  const sourceId = comparisonToggleIdForTool(state.selectedArtifactType);
+  const source = sourceId ? document.getElementById(sourceId) : null;
+  if (!source) return null;
+
+  const sourceLabel = source.closest('label');
+  const label = sourceLabel?.querySelector('[data-i18n]')?.textContent?.trim() || sourceLabel?.textContent?.trim();
+  if (!label) return null;
+
+  const button = el('button', 'workbench-tool-comparison-toggle');
+  button.type = 'button';
+  button.dataset.sourceId = sourceId;
+  button.appendChild(createIcon(CATEGORY_ICONS.comparator, { size: 16 }));
+  button.appendChild(el('span', 'workbench-tool-comparison-label', label));
+  const switchEl = el('span', 'workbench-tool-comparison-switch');
+  switchEl.setAttribute('aria-hidden', 'true');
+  button.appendChild(switchEl);
+
+  const sync = () => {
+    const enabled = !!source.checked;
+    button.disabled = !!source.disabled;
+    button.classList.toggle('is-active', enabled);
+    button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    button.setAttribute('aria-label', label);
+    button.title = sourceLabel?.title || label;
+  };
+  sync();
+  source.addEventListener('change', sync);
+  const observer = new MutationObserver(sync);
+  observer.observe(source, { attributes: true, attributeFilter: ['disabled'] });
+  headerActionObservers.push(observer);
+  button.addEventListener('click', () => {
+    if (!source.disabled) source.click();
+  });
+  return button;
+}
+
+function codeStudioSourceIds() {
+  if (state.selectedArtifactType === 'QuickEdit') {
+    return { search: 'quickEditSearchInput', apiVersion: 'quickEditDeployApiVersion' };
+  }
+  if (state.selectedArtifactType === 'LightningQuickEdit') {
+    return { search: 'lightningQuickEditSearchInput', apiVersion: '' };
+  }
+  return null;
+}
+
+/** Búsqueda del editor en la cabecera, conectada al índice y resultados legacy. */
+function createCodeStudioSearch() {
+  const ids = codeStudioSourceIds();
+  const source = ids?.search ? document.getElementById(ids.search) : null;
+  if (!source) return null;
+
+  const wrap = el('div', 'workbench-code-studio-search');
+  wrap.setAttribute('role', 'search');
+  wrap.appendChild(createIcon(ACTION_ICONS.search, { size: 16 }));
+  const input = document.createElement('input');
+  input.id = 'workbenchCodeStudioSearchInput';
+  input.type = 'search';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.placeholder = source.placeholder;
+  input.setAttribute('aria-label', source.getAttribute('aria-label') || source.placeholder || 'Search code');
+  input.value = source.value;
+  const shortcut = el('kbd', 'workbench-code-studio-search-shortcut', '↵');
+  shortcut.title = 'Enter';
+  wrap.append(input, shortcut);
+
+  const sync = () => { if (input.value !== source.value) input.value = source.value; };
+  source.addEventListener('input', sync);
+  input.addEventListener('input', () => {
+    source.value = input.value;
+    source.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  input.addEventListener('focus', () => source.dispatchEvent(new Event('focus')));
+  input.addEventListener('keydown', (event) => {
+    if (!['ArrowDown', 'ArrowUp', 'Enter', 'Escape'].includes(event.key)) return;
+    const forwarded = new KeyboardEvent('keydown', {
+      key: event.key,
+      bubbles: true,
+      cancelable: true
+    });
+    source.dispatchEvent(forwarded);
+    if (forwarded.defaultPrevented) event.preventDefault();
+    queueMicrotask(sync);
+  });
+  return wrap;
+}
+
+function createCodeStudioApiVersion() {
+  const ids = codeStudioSourceIds();
+  const source = ids?.apiVersion ? document.getElementById(ids.apiVersion) : null;
+  if (!source) return null;
+  const field = el('label', 'workbench-code-studio-api');
+  field.appendChild(el('span', '', 'API'));
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.inputMode = 'decimal';
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.value = source.value;
+  input.disabled = source.disabled;
+  input.title = source.title;
+  if (source.getAttribute('list')) input.setAttribute('list', source.getAttribute('list'));
+  field.appendChild(input);
+  const sync = () => {
+    input.value = source.value;
+    input.disabled = source.disabled;
+    input.title = source.title;
+  };
+  const observer = new MutationObserver(sync);
+  observer.observe(source, { attributes: true, attributeFilter: ['disabled', 'title'] });
+  headerActionObservers.push(observer);
+  input.addEventListener('change', () => {
+    source.value = input.value;
+    source.dispatchEvent(new Event('change', { bubbles: true }));
+    queueMicrotask(sync);
+  });
+  input.addEventListener('blur', () => {
+    source.value = input.value;
+    source.dispatchEvent(new Event('blur', { bubbles: true }));
+    queueMicrotask(sync);
+  });
+  return field;
+}
+
+/** Consulta un despliegue por Async Id desde la cabecera de Deployments. */
+function createDeployStatusLookup() {
+  if (state.selectedArtifactType !== 'DeployStatus') return null;
+  const sourceInput = document.getElementById('deployStatusLookupInput');
+  const sourceButton = document.getElementById('deployStatusLookupBtn');
+  if (!sourceInput || !sourceButton) return null;
+
+  const wrap = el('div', 'workbench-deploy-lookup');
+  wrap.setAttribute('role', 'search');
+  wrap.appendChild(createIcon(ACTION_ICONS.search, { size: 16 }));
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = sourceInput.placeholder;
+  input.autocomplete = 'off';
+  input.spellcheck = false;
+  input.value = sourceInput.value;
+  input.setAttribute('aria-label', sourceInput.getAttribute('aria-label') || 'External Async Id');
+  const button = el('button', 'workbench-deploy-lookup-btn', sourceButton.textContent?.trim() || 'Lookup');
+  button.type = 'button';
+  wrap.append(input, button);
+
+  const sync = () => {
+    input.value = sourceInput.value;
+    input.disabled = sourceInput.disabled;
+    button.disabled = sourceButton.disabled;
+  };
+  sourceInput.addEventListener('input', sync);
+  const observer = new MutationObserver(sync);
+  observer.observe(sourceInput, { attributes: true, attributeFilter: ['disabled'] });
+  observer.observe(sourceButton, { attributes: true, attributeFilter: ['disabled'] });
+  headerActionObservers.push(observer);
+  const runLookup = () => {
+    sourceInput.value = input.value;
+    sourceInput.dispatchEvent(new Event('input', { bubbles: true }));
+    sourceButton.click();
+  };
+  button.addEventListener('click', runLookup);
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    runLookup();
+  });
+  return wrap;
+}
+
 function shouldUseMoreMenu(actions) {
   if (!actions.some((action) => action.allowOverflow)) return false;
   return window.matchMedia('(max-width: 1120px)').matches;
@@ -709,6 +928,27 @@ function markMovedActionSources(actions) {
   }
 }
 
+function createToolFavoriteButton(tabInfo) {
+  if (!tabInfo?.toolId) return null;
+  const tool = t(tabInfo.labelKey);
+  const pinned = isToolPinned(tabInfo.toolId);
+  const label = pinned
+    ? t('workbench.favorites.remove', { tool })
+    : t('workbench.favorites.add', { tool });
+  const button = el('button', 'workbench-tool-favorite-button');
+  button.type = 'button';
+  button.id = 'workbenchToolFavoriteBtn';
+  button.dataset.toolId = tabInfo.toolId;
+  button.setAttribute('aria-pressed', String(pinned));
+  button.setAttribute('aria-label', label);
+  button.title = label;
+  button.appendChild(createIcon(ACTION_ICONS.favorite, { size: 18 }));
+  button.addEventListener('click', () => {
+    void toggleToolPin(tabInfo.toolId);
+  });
+  return button;
+}
+
 function createContextHeader() {
   const header = el('header', 'workbench-context-header');
   header.id = 'workbenchContextHeader';
@@ -724,21 +964,31 @@ function createContextHeader() {
     breadcrumb.appendChild(el('span', '', workspaceLabel(activeWorkspaceId)));
   }
   identity.appendChild(breadcrumb);
+  const currentTab = activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null;
   const titleRow = el('div', 'workbench-context-title-row');
   titleRow.appendChild(createIcon(item?.icon || CATEGORY_ICONS.home, { size: 24 }));
   const titleCopy = el('div', 'workbench-context-title-copy');
+  const titleLine = el('div', 'workbench-context-title-line');
   const title = el('h1', 'workbench-context-title', item ? t(item.labelKey) : t('workbench.home.title'));
   title.id = 'workbenchContextTitle';
   title.tabIndex = -1;
-  titleCopy.appendChild(title);
+  titleLine.appendChild(title);
+  const favoriteButton = createToolFavoriteButton(currentTab);
+  if (favoriteButton) titleLine.appendChild(favoriteButton);
+  titleCopy.appendChild(titleLine);
   const description = item ? translatedDescription(item) : '';
   if (description) titleCopy.appendChild(el('p', 'workbench-context-description', description));
   titleRow.appendChild(titleCopy);
-  const currentTab = activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null;
   if (currentTab?.risk === 'write' || currentTab?.risk === 'destructive') {
-    const risk = el('span', `workbench-risk-badge workbench-risk-badge--${currentTab.risk}`);
-    risk.appendChild(createIcon(STATE_ICONS.warning, { size: 16 }));
-    risk.appendChild(el('span', '', t(currentTab.risk === 'destructive' ? 'workbench.risk.destructive' : 'workbench.risk.write')));
+    const isDestructive = currentTab.risk === 'destructive';
+    const riskLabel = t(isDestructive ? 'workbench.risk.destructive' : 'workbench.risk.write');
+    const riskHint = t(isDestructive ? 'workbench.risk.destructiveHint' : 'workbench.risk.writeHint');
+    const risk = el('span', `workbench-risk-marker workbench-risk-marker--${currentTab.risk}`);
+    risk.setAttribute('role', 'img');
+    risk.tabIndex = 0;
+    risk.setAttribute('aria-label', `${riskLabel}. ${riskHint}`);
+    risk.dataset.tooltip = `${riskLabel}. ${riskHint}`;
+    risk.appendChild(createIcon(isDestructive ? STATE_ICONS.error : STATE_ICONS.warning, { size: 20 }));
     titleRow.appendChild(risk);
   }
   identity.appendChild(titleRow);
@@ -750,6 +1000,12 @@ function createContextHeader() {
     tabId: activeTabId
   }) || currentTab?.actions || [])].sort((left, right) => left.priority - right.priority);
   markMovedActionSources(configuredActions);
+  const codeStudioSearch = createCodeStudioSearch();
+  if (codeStudioSearch) actions.appendChild(codeStudioSearch);
+  const codeStudioApiVersion = createCodeStudioApiVersion();
+  if (codeStudioApiVersion) actions.appendChild(codeStudioApiVersion);
+  const deployStatusLookup = createDeployStatusLookup();
+  if (deployStatusLookup) actions.appendChild(deployStatusLookup);
   const useMore = shouldUseMoreMenu(configuredActions);
   const directActions = useMore ? configuredActions.filter((action) => !action.allowOverflow) : configuredActions;
   const overflowActions = useMore ? configuredActions.filter((action) => action.allowOverflow) : [];
@@ -757,6 +1013,8 @@ function createContextHeader() {
   if (overflowActions.length) actions.appendChild(createMoreActions(overflowActions));
   const compareToolbar = createCompareToolbar();
   if (compareToolbar) actions.appendChild(compareToolbar);
+  const toolComparisonToggle = createToolComparisonToggle();
+  if (toolComparisonToggle) actions.appendChild(toolComparisonToggle);
   const help = makeIconButton('workbenchHelpBtn', ACTION_ICONS.help, t('workbench.action.help'));
   help.addEventListener('click', () => document.getElementById('appHelpBtn')?.click());
   actions.appendChild(help);
@@ -861,6 +1119,14 @@ function validHistorySelection(value, toolId) {
 }
 
 function syncFromLegacyNavigation(event = null) {
+  if (event?.type === 'sfoc:artifact-ui-applied') {
+    // Las acciones de cabecera reflejan controles legacy que se actualizan al
+    // final de `applyArtifactTypeUi`. Sin esta segunda pasada, Inicio podía
+    // conservar una cabecera sin sus acciones tras venir de otra herramienta.
+    headerRenderSignature = '';
+    renderWorkbenchShell();
+    return;
+  }
   if (event?.detail?.source === 'tool-handlers-ready') {
     if (activeWorkspaceId && activeTabId) void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
     headerRenderSignature = '';
@@ -952,6 +1218,11 @@ export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
       .then((saved) => {
         if (navigationGeneration === requestId) prefs = saved;
       });
+    // La primera cabecera se pinta antes de que la navegación legacy haya
+    // terminado de mostrar/ocultar sus fuentes. Forzamos una segunda pasada
+    // con el contexto ya estable para no conservar acciones de la herramienta
+    // anterior.
+    headerRenderSignature = '';
     renderWorkbenchShell();
     return true;
   } finally {
@@ -1335,6 +1606,12 @@ export async function setupWorkbenchShell() {
   syncFromLegacyNavigation();
 
   document.addEventListener('sfoc:navigationchange', syncFromLegacyNavigation);
+  document.addEventListener('sfoc:artifact-ui-applied', syncFromLegacyNavigation);
+  document.addEventListener('sfoc:tool-recents-change', () => {
+    navigationRenderSignature = '';
+    headerRenderSignature = '';
+    renderWorkbenchShell();
+  });
   document.addEventListener('pointerdown', () => { lastInputWasKeyboard = false; }, true);
   document.addEventListener('keydown', (event) => {
     lastInputWasKeyboard = true;

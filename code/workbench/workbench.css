@@ -441,7 +441,10 @@ body[data-ui-mode='v2'] .app-landing-tools-wrap {
 
 body[data-ui-mode="v2"] .workbench-context-header {
   position: relative;
-  z-index: var(--sfoc-z-app-chrome);
+  /* El tooltip de riesgo se abre hacia la zona de controles inferior. Debe
+     permanecer sobre la barra de modos, que comparte este contenedor. */
+  z-index: calc(var(--sfoc-z-app-submenu) + 1);
+  overflow: visible;
   box-sizing: border-box;
   display: flex;
   flex: 0 0 auto;
@@ -501,25 +504,93 @@ body[data-ui-mode="v2"] .workbench-context-header {
   white-space: nowrap;
 }
 
-.workbench-risk-badge,
+.workbench-risk-marker,
 .workbench-read-only-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 6px;
+  position: relative;
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
   border: 1px solid rgba(251, 191, 36, 0.48);
-  border-radius: 999px;
+  border-radius: 9px;
   background: rgba(180, 83, 9, 0.17);
   color: #fde68a;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
+  cursor: help;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
-.workbench-risk-badge--destructive {
+.workbench-risk-marker .sfoc-icon,
+.workbench-read-only-badge .sfoc-icon {
+  flex: 0 0 auto;
+}
+
+.workbench-risk-marker:hover,
+.workbench-risk-marker:focus-visible,
+.workbench-read-only-badge:hover,
+.workbench-read-only-badge:focus-visible {
+  z-index: 10;
+  border-color: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 16%, transparent);
+  outline: 0;
+  transform: translateY(-1px);
+}
+
+.workbench-risk-marker::after,
+.workbench-read-only-badge::after {
+  position: absolute;
+  z-index: var(--sfoc-z-app-submenu, 500);
+  top: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: 8px 10px;
+  border: 1px solid var(--workbench-border);
+  border-radius: 8px;
+  background: var(--sfoc-bg-elevated);
+  color: var(--workbench-text);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.34);
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  transform: translate(-50%, -4px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  visibility: hidden;
+  white-space: normal;
+}
+
+.workbench-risk-marker:hover::after,
+.workbench-risk-marker:focus-visible::after,
+.workbench-read-only-badge:hover::after,
+.workbench-read-only-badge:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.workbench-risk-marker--write {
+  animation: workbench-risk-marker-enter 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.workbench-risk-marker--destructive {
   border-color: rgba(248, 113, 113, 0.56);
   background: rgba(185, 28, 28, 0.2);
   color: #fecaca;
+  animation: workbench-risk-marker-alert 2.6s ease-in-out infinite;
+}
+
+@keyframes workbench-risk-marker-enter {
+  from { opacity: 0; transform: scale(0.82) rotate(-8deg); }
+  to { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+@keyframes workbench-risk-marker-alert {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
+  50% { box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.16); }
 }
 
 .workbench-org-context {
@@ -576,6 +647,16 @@ body[data-ui-mode="v2"] .workbench-context-header {
   border-color: rgba(96, 165, 250, 0.5);
   background: rgba(37, 99, 235, 0.16);
   color: #bfdbfe;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench-risk-marker,
+  .workbench-read-only-badge,
+  .workbench-risk-marker::after,
+  .workbench-read-only-badge::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .workbench-org-empty {
@@ -714,7 +795,6 @@ body[data-ui-mode="v2"][data-workbench-compact="true"] .workbench-panel {
   }
 
   .workbench-header-action span,
-  .workbench-risk-badge span,
   .workbench-org-environment {
     display: none;
   }
@@ -923,9 +1003,9 @@ html[data-ui-theme="light"] body[data-ui-mode="v2"] .quick-open-blocked-reason {
 }
 
 .sfoc-modal-panel--production .sfoc-modal-semantic-icon {
-  border-color: color-mix(in srgb, var(--sfoc-warn, #f59e0b) 42%, transparent);
-  background: color-mix(in srgb, var(--sfoc-warn, #f59e0b) 12%, transparent);
-  color: var(--sfoc-warn, #f59e0b);
+  border-color: color-mix(in srgb, var(--sfoc-danger, #f87171) 42%, transparent);
+  background: color-mix(in srgb, var(--sfoc-danger, #f87171) 12%, transparent);
+  color: var(--sfoc-danger, #f87171);
 }
 
 .sfoc-modal-risk-content {
@@ -942,7 +1022,7 @@ html[data-ui-theme="light"] body[data-ui-mode="v2"] .quick-open-blocked-reason {
 }
 
 .sfoc-modal-panel--production .sfoc-modal-risk-kicker {
-  color: var(--sfoc-warn, #f59e0b);
+  color: var(--sfoc-danger, #f87171);
 }
 
 .sfoc-modal-panel--destructive .sfoc-modal-risk-kicker {
@@ -1028,9 +1108,9 @@ html[data-ui-theme="light"] body[data-ui-mode="v2"] .quick-open-blocked-reason {
 }
 
 .sfoc-modal-panel--production .sfoc-modal-org-context {
-  border-color: color-mix(in srgb, var(--sfoc-warn, #f59e0b) 34%, var(--sfoc-border, #475569));
+  border-color: color-mix(in srgb, var(--sfoc-danger, #f87171) 42%, var(--sfoc-border, #475569));
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--sfoc-warn, #f59e0b) 11%, transparent), transparent 62%),
+    linear-gradient(135deg, color-mix(in srgb, var(--sfoc-danger, #f87171) 12%, transparent), transparent 62%),
     color-mix(in srgb, var(--sfoc-bg-elevated, #1e293b) 62%, transparent);
 }
 
@@ -1047,8 +1127,8 @@ html[data-ui-theme="light"] body[data-ui-mode="v2"] .quick-open-blocked-reason {
 }
 
 .sfoc-modal-panel--production .sfoc-modal-org-icon {
-  background: color-mix(in srgb, var(--sfoc-warn, #f59e0b) 14%, transparent);
-  color: var(--sfoc-warn, #f59e0b);
+  background: color-mix(in srgb, var(--sfoc-danger, #f87171) 14%, transparent);
+  color: var(--sfoc-danger, #f87171);
 }
 
 .sfoc-modal-org-copy {
@@ -1103,11 +1183,32 @@ html[data-ui-theme="light"] body[data-ui-mode="v2"] .quick-open-blocked-reason {
   background: color-mix(in srgb, var(--sfoc-danger, #f87171) 8%, transparent);
 }
 
+.sfoc-modal-panel--production .sfoc-modal-risk-note {
+  border-left-color: var(--sfoc-danger, #f87171);
+  background: color-mix(in srgb, var(--sfoc-danger, #f87171) 8%, transparent);
+}
+
+.sfoc-modal-panel--production .sfoc-modal-confirm-field {
+  border-color: color-mix(in srgb, var(--sfoc-danger, #f87171) 38%, var(--sfoc-border, #475569));
+  background: color-mix(in srgb, var(--sfoc-danger, #f87171) 7%, var(--sfoc-bg-panel, #0f172a));
+}
+
+.sfoc-modal-panel--production .sfoc-modal-confirm-token {
+  border-color: color-mix(in srgb, var(--sfoc-danger, #f87171) 44%, transparent);
+  background: color-mix(in srgb, var(--sfoc-danger, #f87171) 12%, transparent);
+  color: color-mix(in srgb, var(--sfoc-danger, #f87171) 76%, #fff);
+}
+
+.sfoc-modal-panel--production .sfoc-modal-confirm-field input:focus {
+  border-color: var(--sfoc-danger, #f87171);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sfoc-danger, #f87171) 20%, transparent);
+}
+
 .sfoc-modal-panel--production .sfoc-modal-actions .sfoc-btn--danger {
-  border-color: color-mix(in srgb, var(--sfoc-warn, #f59e0b) 75%, #fff);
-  background: var(--sfoc-warn, #f59e0b);
+  border-color: color-mix(in srgb, var(--sfoc-danger, #f87171) 75%, #fff);
+  background: var(--sfoc-danger, #f87171);
   color: #ffffff;
-  box-shadow: 0 6px 18px color-mix(in srgb, var(--sfoc-warn, #f59e0b) 22%, transparent);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--sfoc-danger, #f87171) 22%, transparent);
 }
 
 .sfoc-modal-panel--destructive .sfoc-modal-actions .sfoc-btn--danger,

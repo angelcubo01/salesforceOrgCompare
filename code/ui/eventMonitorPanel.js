@@ -150,7 +150,8 @@ function updateListeningUi() {
   if (subBtn) subBtn.disabled = listening;
   if (unsubBtn) unsubBtn.disabled = !listening;
   if (badge) {
-    badge.textContent = listening ? t('eventMonitor.listening') : t('eventMonitor.idle');
+    badge.hidden = !listening;
+    badge.textContent = listening ? t('eventMonitor.listening') : '';
     badge.classList.toggle('event-monitor-badge--active', listening);
   }
 }

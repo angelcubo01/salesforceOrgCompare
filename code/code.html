@@ -353,6 +353,16 @@
                 />
               </svg>
             </button>
+            <div
+              id="appComparisonToggle"
+              class="app-comparison-toggle hidden"
+              aria-live="polite"
+            >
+              <svg class="app-comparison-toggle__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                <path d="M7 7h10M7 17h10M5 7l2-2 2 2M19 17l-2 2-2-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <div id="appComparisonToggleMount"></div>
+            </div>
             <button
               type="button"
               id="appHelpBtn"
@@ -364,6 +374,7 @@
               <span class="app-toolbar-help-icon" aria-hidden="true">?</span>
             </button>
           </div>
+          <div id="appComparisonToggleParking" hidden aria-hidden="true"></div>
         </div>
         <div id="featureControlsGlobalBanner" class="feature-controls-banner hidden" role="alert" hidden></div>
         <div id="editorBodyWrap" class="editor-body-wrap">
@@ -892,16 +903,6 @@
               <div class="apex-tests-runner-toolbar-start">
                 <button
                   type="button"
-                  id="apexTestsBackToHubBtn"
-                  class="apex-tests-back-btn"
-                  data-i18n-title="apexTests.backToHub"
-                  data-i18n-aria-label="apexTests.backToHub"
-                  title="Volver"
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
                   id="apexTestsProfilesBtn"
                   class="apex-tests-toolbar-btn"
                   data-i18n="apexTests.profilesBtn"
@@ -941,6 +942,20 @@
                   <p id="apexTestsOrgStatus" class="apex-tests-org-status apex-tests-org-status-warn hidden" role="status"></p>
 
                   <div id="apexTestsControls" class="apex-tests-controls">
+                    <div class="apex-tests-runner-content-head">
+                      <button
+                        type="button"
+                        id="apexTestsBackToHubBtn"
+                        class="apex-tests-back-btn"
+                        data-i18n-title="apexTests.backToHub"
+                        data-i18n-aria-label="apexTests.backToHub"
+                        title="Volver"
+                      >
+                        <span aria-hidden="true">←</span>
+                        <span data-i18n="apexTests.backToHub">Volver</span>
+                      </button>
+                      <span class="apex-tests-runner-content-hint" data-i18n="apexTests.sourceOpenCtrlClickHint">Ctrl/Cmd + clic en una clase o método para abrir su código</span>
+                    </div>
                     <label class="apex-tests-label" for="apexTestsClassFilter" data-i18n="apexTests.filterClasses"></label>
                     <input
                       id="apexTestsClassFilter"
@@ -956,6 +971,10 @@
                     <div id="apexTestsTablesWrap" class="apex-tests-tables-wrap">
                       <div class="apex-tests-table-col">
                         <div class="apex-tests-table-panel">
+                          <div class="apex-tests-table-heading">
+                            <span data-i18n="apexTests.selectClasses">Clases</span>
+                            <span data-i18n="apexTests.classOpenCtrlClickHint">Ctrl/Cmd + clic para abrir la clase</span>
+                          </div>
                           <div id="apexTestsClassLoading" class="apex-tests-loading-overlay hidden" aria-hidden="true">
                             <span class="apex-tests-spinner" aria-hidden="true"></span>
                           </div>
@@ -975,6 +994,10 @@
                       </div>
                       <div class="apex-tests-table-col">
                         <div class="apex-tests-table-panel">
+                          <div class="apex-tests-table-heading">
+                            <span data-i18n="apexTests.selectMethods">Métodos</span>
+                            <span data-i18n="apexTests.methodOpenCtrlClickHint">Ctrl/Cmd + clic para abrir la clase en el método</span>
+                          </div>
                           <div
                             id="apexTestsMethodTabs"
                             class="apex-tests-method-tabs hidden"
@@ -1687,7 +1710,7 @@
                 <h2 class="org-limits-title" data-i18n="eventMonitor.title">Event Monitor</h2>
                 <p class="sfoc-panel-subtitle" data-i18n="eventMonitor.subtitle">Suscríbete a Platform Events, Change Events y canales en tiempo real</p>
               </div>
-              <span id="eventMonitorListeningBadge" class="event-monitor-badge" data-i18n="eventMonitor.idle">Inactivo</span>
+              <span id="eventMonitorListeningBadge" class="event-monitor-badge" hidden></span>
             </div>
             <p id="eventMonitorStatus" class="org-limits-status" role="status"></p>
             <div class="event-monitor-controls sfoc-tool-controls">
@@ -2481,6 +2504,13 @@
 
               <div id="deployStatusGlobalError" class="deploy-status-global-error hidden" role="alert"></div>
 
+              <div id="deployStatusSourceOrgPickerHost" class="deploy-status-source-picker-host hidden">
+                <label class="deploy-status-source-picker" for="deployStatusSourceOrgSelect">
+                  <span data-i18n="deployStatus.sourceOrgLabel">Entorno para abrir código</span>
+                  <select id="deployStatusSourceOrgSelect" class="deploy-status-source-org-select"></select>
+                </label>
+              </div>
+
               <div id="deployStatusFailuresSection" class="deploy-status-detail-errors-block hidden">
                 <h4 class="deploy-status-detail-section-title" data-i18n="deployStatus.sectionFailures">Errores de componentes</h4>
                 <div class="deploy-status-table-wrap">
@@ -2990,6 +3020,10 @@
               </div>
               <div class="quick-edit-search-zone">
                 <div class="quick-edit-search-bar">
+                  <svg class="quick-edit-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                    <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"></circle>
+                    <path d="m16 16 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                  </svg>
                   <input
                     id="quickEditSearchInput"
                     type="search"
@@ -2999,6 +3033,7 @@
                     autocomplete="off"
                     spellcheck="false"
                   />
+                  <kbd class="quick-edit-search-shortcut" aria-hidden="true">↵</kbd>
                   <div id="quickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
                 </div>
               </div>
@@ -3070,6 +3105,10 @@
               </div>
               <div class="quick-edit-search-zone">
                 <div class="quick-edit-search-bar">
+                  <svg class="quick-edit-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+                    <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"></circle>
+                    <path d="m16 16 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
+                  </svg>
                   <input
                     id="lightningQuickEditSearchInput"
                     type="search"
@@ -3079,6 +3118,7 @@
                     autocomplete="off"
                     spellcheck="false"
                   />
+                  <kbd class="quick-edit-search-shortcut" aria-hidden="true">↵</kbd>
                   <div id="lightningQuickEditResultsList" class="quick-edit-results-dropdown code-editor-search-results sfoc-autocomplete-panel" hidden></div>
                 </div>
               </div>

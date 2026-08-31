@@ -100,6 +100,7 @@ export function renderCodeEditorSearchResults(resultsEl, metadata, onSelect, act
  * @param {HTMLInputElement} options.inputEl
  * @param {HTMLElement} options.resultsEl
  * @param {HTMLElement} [options.anchorEl]
+ * @param {() => HTMLElement | null} [options.getAnchorEl]
  * @param {string[]} options.artTypes
  * @param {(entry: import('../lib/metadataSearch.js').MetadataSearchEntry) => void} options.onSelect
  * @param {number} [options.minChars]
@@ -111,6 +112,7 @@ export function setupCodeEditorSearch(options) {
     inputEl,
     resultsEl,
     anchorEl = inputEl.closest('.quick-edit-search-bar') || inputEl,
+    getAnchorEl = () => anchorEl,
     artTypes,
     onSelect,
     minChars = MIN_METADATA_CHARS,
@@ -157,19 +159,19 @@ export function setupCodeEditorSearch(options) {
     const orgId = getOrgId();
     if (!orgId) {
       renderStatusMessage(resultsEl, 'status', t('quickOpen.noAuth'));
-      positionResultsDropdown(anchorEl, resultsEl);
+      positionResultsDropdown(getAnchorEl() || anchorEl, resultsEl);
       return;
     }
 
     if (queryLocal.length < minChars) {
       renderStatusMessage(resultsEl, 'empty', t('quickEdit.minChars'));
-      positionResultsDropdown(anchorEl, resultsEl);
+      positionResultsDropdown(getAnchorEl() || anchorEl, resultsEl);
       return;
     }
 
     kickSilentIndexBuild(orgId);
     renderLoading(resultsEl, getMetadataSearchLoadingMessage(orgId));
-    positionResultsDropdown(anchorEl, resultsEl);
+    positionResultsDropdown(getAnchorEl() || anchorEl, resultsEl);
 
     try {
       const metadata = await resolveCodeEditorMatches(orgId, queryLocal, apiPrefix, artTypes);
@@ -180,12 +182,13 @@ export function setupCodeEditorSearch(options) {
         onSelect(entry);
         hideResults();
         inputEl.value = '';
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
       });
-      positionResultsDropdown(anchorEl, resultsEl);
+      positionResultsDropdown(getAnchorEl() || anchorEl, resultsEl);
     } catch {
       if (gen !== searchGeneration) return;
       renderStatusMessage(resultsEl, 'empty', t('quickEdit.searchError'));
-      positionResultsDropdown(anchorEl, resultsEl);
+      positionResultsDropdown(getAnchorEl() || anchorEl, resultsEl);
     }
   }
 
@@ -234,16 +237,22 @@ export function setupCodeEditorSearch(options) {
 
   document.addEventListener('click', (e) => {
     const zone = inputEl.closest('.quick-edit-search-zone');
-    if (zone && !zone.contains(/** @type {Node} */ (e.target)) && !resultsEl.contains(/** @type {Node} */ (e.target))) {
+    const activeAnchor = getAnchorEl() || anchorEl;
+    if (
+      zone &&
+      !zone.contains(/** @type {Node} */ (e.target)) &&
+      !activeAnchor.contains(/** @type {Node} */ (e.target)) &&
+      !resultsEl.contains(/** @type {Node} */ (e.target))
+    ) {
       hideResults();
     }
   });
 
   window.addEventListener('resize', () => {
-    if (!resultsEl.hidden) positionResultsDropdown(anchorEl, resultsEl);
+    if (!resultsEl.hidden) positionResultsDropdown(getAnchorEl() || anchorEl, resultsEl);
   });
   window.addEventListener('scroll', () => {
-    if (!resultsEl.hidden) positionResultsDropdown(anchorEl, resultsEl);
+    if (!resultsEl.hidden) positionResultsDropdown(getAnchorEl() || anchorEl, resultsEl);
   }, true);
 
   return { runSearch, hideResults };

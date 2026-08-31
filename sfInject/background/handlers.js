@@ -239,9 +239,10 @@ export async function handleSfInjectMessage(message, sender) {
       }
     }
     case 'sfInject:listActiveSavedOrgsForDeployDetail': {
-      if (!isDeployStatusDetailPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      if (!isDeployStatusPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
       await loadSfInjectSettings();
-      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'deployStatusDetailSourceLinks')) {
+      const integrationId = isDeployStatusDetailPageSender(sender) ? 'deployStatusDetailSourceLinks' : 'deployStatusInlineDetails';
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), integrationId)) {
         return { ok: false, reason: 'DISABLED' };
       }
       const [ordered, extras] = await Promise.all([
@@ -280,12 +281,8 @@ export async function handleSfInjectMessage(message, sender) {
       const saved = await loadSavedOrgs();
       const org = saved[orgId];
       if (!org) return { ok: false, reason: 'ORG_NOT_SAVED' };
-      // En el detalle se puede comparar la fuente contra cualquier org guardada elegida.
-      // El listado inline conserva la restricción de org origen para no relajar su lectura de deploy.
-      if (!isDetailSender) {
-        const senderOrg = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
-        if (!senderOrg.ok || senderOrg.orgId !== orgId) return { ok: false, reason: 'FORBIDDEN' };
-      }
+      // El detalle se consulta en el entorno de origen; la fuente puede abrirse
+      // en cualquier entorno guardado y activo seleccionado por el usuario.
       const sid = await resolveSidForOrg(org);
       if (!sid) return { ok: false, reason: 'NO_SID' };
       try {

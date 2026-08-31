@@ -74,7 +74,7 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   await expect(classic.locator('.app-landing-tools-section--recents')).toBeVisible();
   await expect(v2.locator('.app-landing-tools-section--recents')).toHaveCount(0);
   await expect(v2.locator('#appLandingPinnedList')).toHaveCount(0);
-  await expect(v2.locator('.workbench-category-button')).toHaveCount(6);
+  await expect(v2.locator('.workbench-category-button')).toHaveCount(7);
   await expect(v2.locator('#workbenchPanel, #workbenchRail, #workbenchPanelBackdrop')).toHaveCount(0);
   await expect(v2.locator('#workbenchLandingCategories')).toHaveCount(0);
   await expect(v2.locator('#workbenchMarketingHero')).toBeVisible();
@@ -94,6 +94,34 @@ test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente
   const sharedPrefs = await v2.evaluate(async () => chrome.storage.local.get(['sfocToolRecents', 'sfocWorkbenchPrefs']));
   expect(sharedPrefs.sfocToolRecents).toEqual({ recents: ['QueryExplorer'], pins: ['QueryExplorer'] });
   expect(sharedPrefs.sfocWorkbenchPrefs.panelExpanded).toBe(true);
+});
+
+test('las favoritas se abren y se gestionan desde el título de la herramienta activa', async ({ extensionContext: context, extensionId, extensionWorker }) => {
+  await setLocalStorage(extensionWorker, {
+    sfocToolRecents: { recents: [], pins: ['QueryExplorer'] }
+  });
+  const page = await openExtensionPage(context, extensionId, 'code/code.html');
+  await waitForCodeBoot(page);
+
+  const favorites = page.locator('#workbenchCategory-favorites');
+  await expect(favorites).toBeVisible();
+  await favorites.click();
+  await expect(page.locator('#workbenchSubbarRegion')).toHaveAttribute('aria-hidden', 'false');
+  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveCount(1);
+  await expect(page.locator('.workbench-tool-favorite-star')).toHaveCount(0);
+
+  await page.locator('#workbenchToolSubbar .workbench-tool-button').click();
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'query-explorer');
+  const favoriteButton = page.locator('#workbenchToolFavoriteBtn');
+  await expect(favoriteButton).toBeVisible();
+  await expect(favoriteButton).toHaveAttribute('aria-pressed', 'true');
+
+  await favoriteButton.click();
+  await expect.poll(async () => {
+    const saved = await page.evaluate(async () => chrome.storage.local.get('sfocToolRecents'));
+    return saved.sfocToolRecents.pins;
+  }).toEqual([]);
+  await expect(page.locator('#workbenchCategory-favorites')).toBeHidden();
 });
 
 test('la Home adapta sus capacidades a sfoc_feature_controls', async ({ extensionContext: context, extensionId, extensionWorker }) => {

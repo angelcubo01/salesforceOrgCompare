@@ -54,10 +54,13 @@ test.skip(process.env.SFOC_UPDATE_VISUALS !== '1', 'Capturas actualizadas solo b
 
 test('genera comparación visual Classic y Workbench V2', async ({ extensionContext, extensionId, extensionWorker }) => {
   const phase = process.env.SFOC_VISUAL_PHASE;
-  const output = path.resolve(
-    import.meta.dirname,
-    phase ? `../docs/visuals/application/${phase}` : '../docs/visuals'
-  );
+  const visualLanguage = process.env.SFOC_VISUAL_LANGUAGE === 'en' ? 'en' : 'es';
+  const output = process.env.SFOC_VISUAL_OUTPUT
+    ? path.resolve(process.env.SFOC_VISUAL_OUTPUT)
+    : path.resolve(
+      import.meta.dirname,
+      phase ? `../docs/visuals/application/${phase}` : '../docs/visuals'
+    );
   await mkdir(output, { recursive: true });
   const onboarding = {
     tools: Object.fromEntries([
@@ -68,7 +71,7 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
     firstInstallWelcomeDismissed: true
   };
   await setLocalStorage(extensionWorker, {
-    soc_language: 'es',
+    soc_language: visualLanguage,
     sfocFeatureControlsCache: {
       version: 1,
       rootVersionTarget: null,
@@ -135,11 +138,12 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
 
   await navigate(v2, 'comparator', 'Comparator', 'standardComparePanel');
   await v2.waitForFunction(() => Boolean(window.monaco?.editor?.createDiffEditor));
-  await v2.evaluate(() => {
+  await v2.evaluate((language) => {
+    const english = language === 'en';
     const leftLabel = document.querySelector('.org-dropdown-left .org-cd-label');
     const rightLabel = document.querySelector('.org-dropdown-right .org-cd-label');
-    if (leftLabel) leftLabel.textContent = 'Sandbox QA · sesión activa';
-    if (rightLabel) rightLabel.textContent = 'Producción · sesión activa';
+    if (leftLabel) leftLabel.textContent = english ? 'QA Sandbox · active session' : 'Sandbox QA · sesión activa';
+    if (rightLabel) rightLabel.textContent = english ? 'Production · active session' : 'Producción · sesión activa';
     document.querySelector('.org-dropdown-left .org-cd-trigger')?.classList.add('auth-active');
     document.querySelector('.org-dropdown-right .org-cd-trigger')?.classList.add('auth-active');
 
@@ -169,11 +173,11 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
       }
     }
     const status = document.querySelector('#diffStatus');
-    if (status) status.textContent = '3 diferencias · AccountService.cls';
+    if (status) status.textContent = english ? '3 differences · AccountService.cls' : '3 diferencias · AccountService.cls';
     const leftMeta = document.querySelector('#leftFileMeta');
     const rightMeta = document.querySelector('#rightFileMeta');
-    if (leftMeta) leftMeta.textContent = 'Sandbox QA · API 63.0';
-    if (rightMeta) rightMeta.textContent = 'Producción · API 63.0';
+    if (leftMeta) leftMeta.textContent = english ? 'QA Sandbox · API 63.0' : 'Sandbox QA · API 63.0';
+    if (rightMeta) rightMeta.textContent = english ? 'Production · API 63.0' : 'Producción · API 63.0';
 
     const mount = document.querySelector('#monacoContainer');
     if (!mount) return;
@@ -208,7 +212,7 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
     const modified = monaco.editor.createModel(modifiedText, 'apex');
     editor.setModel({ original, modified });
     window.__sfocVisualDiff = { editor, original, modified };
-  });
+  }, visualLanguage);
   await v2.waitForTimeout(250);
   await v2.screenshot({ path: path.join(output, 'v2-comparator-light-1440.png') });
 
@@ -220,15 +224,23 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
   await navigate(v2, 'analysis', 'ObjectDescribe', 'objectDescribePanel');
   const tourClose = v2.locator('.driver-popover-close-btn');
   if (await tourClose.isVisible()) await tourClose.click();
-  await v2.evaluate(() => {
+  await v2.evaluate((language) => {
+    const english = language === 'en';
     const body = document.querySelector('#objectDescribeFieldsTbody');
     if (!body) return;
-    const rows = [
-      ['Id', 'Identificador de registro', 'Id', 'Sí', 'No', '—'],
-      ['Name', 'Nombre de cuenta', 'String', 'No', 'No', '—'],
-      ['Industry', 'Sector', 'Picklist', 'No', 'No', '—'],
-      ['LastModifiedDate', 'Última modificación', 'Datetime', 'Sí', 'No', '—']
-    ];
+    const rows = english
+      ? [
+        ['Id', 'Record identifier', 'Id', 'Yes', 'No', '—'],
+        ['Name', 'Account name', 'String', 'No', 'No', '—'],
+        ['Industry', 'Industry', 'Picklist', 'No', 'No', '—'],
+        ['LastModifiedDate', 'Last modified', 'Datetime', 'Yes', 'No', '—']
+      ]
+      : [
+        ['Id', 'Identificador de registro', 'Id', 'Sí', 'No', '—'],
+        ['Name', 'Nombre de cuenta', 'String', 'No', 'No', '—'],
+        ['Industry', 'Sector', 'Picklist', 'No', 'No', '—'],
+        ['LastModifiedDate', 'Última modificación', 'Datetime', 'Sí', 'No', '—']
+      ];
     body.replaceChildren(...rows.map((cells) => {
       const row = document.createElement('tr');
       row.append(...cells.map((value) => {
@@ -239,8 +251,8 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
       return row;
     }));
     const summary = document.querySelector('#objectDescribeFieldsSummary');
-    if (summary) summary.textContent = '4 campos visibles';
-  });
+    if (summary) summary.textContent = english ? '4 visible fields' : '4 campos visibles';
+  }, visualLanguage);
   await v2.screenshot({ path: path.join(output, 'v2-table-object-describe-light-1440.png') });
 
   await navigate(v2, 'development', 'QuickEdit', 'quickEditPanel');
@@ -265,7 +277,8 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
   }
 
   await navigate(v2, 'home', '', 'appLandingPanel');
-  await v2.evaluate(async () => {
+  await v2.evaluate(async (language) => {
+    const english = language === 'en';
     const { renderSfocState } = await import('./ui/sfocStates.js');
     const host = document.querySelector('#appLandingPanel .app-landing-inner');
     if (!host) return;
@@ -273,15 +286,21 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
     const header = document.createElement('header');
     header.className = 'workbench-marketing-section-header';
     const title = document.createElement('h2');
-    title.textContent = 'Estados del sistema';
+    title.textContent = english ? 'System states' : 'Estados del sistema';
     header.append(title);
     const grid = document.createElement('div');
     grid.className = 'workbench-capability-grid';
-    const states = [
-      ['loading', 'Cargando metadatos', 'Consultando componentes de la org.'],
-      ['empty', 'Sin resultados', 'Prueba otro filtro o selecciona otra categoría.'],
-      ['error', 'No se pudo completar', 'Revisa la sesión y vuelve a intentarlo.']
-    ];
+    const states = english
+      ? [
+        ['loading', 'Loading metadata', 'Fetching components from the org.'],
+        ['empty', 'No results', 'Try another filter or select a different category.'],
+        ['error', 'Unable to complete', 'Check the session and try again.']
+      ]
+      : [
+        ['loading', 'Cargando metadatos', 'Consultando componentes de la org.'],
+        ['empty', 'Sin resultados', 'Prueba otro filtro o selecciona otra categoría.'],
+        ['error', 'No se pudo completar', 'Revisa la sesión y vuelve a intentarlo.']
+      ];
     for (const [kind, stateTitle, description] of states) {
       const card = document.createElement('section');
       card.className = 'workbench-capability-card is-third';
@@ -289,7 +308,7 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
       renderSfocState(card, { kind, title: stateTitle, description });
     }
     host.append(header, grid);
-  });
+  }, visualLanguage);
   await v2.screenshot({ path: path.join(output, 'v2-states-loading-empty-error-light-1440.png') });
   await v2.close();
 });

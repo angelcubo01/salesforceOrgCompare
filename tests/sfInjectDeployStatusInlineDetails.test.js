@@ -8,12 +8,14 @@ import {
 } from '../sfInject/content/matchers/deployStatusPages.js';
 import {
   buildDeployDetailModel,
+  decodeDeployHtmlEntities,
   extractApexClassAndLineFromStackTrace,
   extractDeployAsyncIdFromRow,
   findFailedDeploymentRows,
   isApexClassComponent,
   normalizeComponentType,
-  normalizeDeployAsyncId
+  normalizeDeployAsyncId,
+  parseApexStackTraceFrames
 } from '../sfInject/content/injectors/deployStatusInlineDetailsDom.js';
 import {
   handleSfInjectMessage,
@@ -84,6 +86,24 @@ describe('modelo de detalle de deploy', () => {
     expect(normalizeComponentType('Apex_Class')).toBe('apexclass');
     expect(isApexClassComponent('apex class')).toBe(true);
     expect(extractApexClassAndLineFromStackTrace('Class.My_Test.run: line 44, column 2')).toEqual({ className: 'My_Test', initialLine: 44 });
+  });
+});
+
+describe('entidades y trazas de deploy', () => {
+  it('decodifica entidades HTML/XML literales antes de mostrar los fallos', () => {
+    const message = 'An object &apos;Task.AV_OrigenApp__c&apos; &amp; &quot;other&quot; was not found';
+    expect(decodeDeployHtmlEntities(message)).toBe('An object \'Task.AV_OrigenApp__c\' & "other" was not found');
+    expect(decodeDeployHtmlEntities('&amp;apos;')).toBe("'");
+    expect(buildDeployDetailModel({ soap: { componentFailures: [{ problem: message }] } }).componentFailures[0].problem)
+      .toBe('An object \'Task.AV_OrigenApp__c\' & "other" was not found');
+  });
+
+  it('identifica todos los frames Apex navegables del stack trace inline', () => {
+    const trace = 'Class.My_Test.methodOne: line 44, column 2\nClass.Helper.run: line 9';
+    expect(parseApexStackTraceFrames(trace)).toMatchObject([
+      { className: 'My_Test', initialLine: 44 },
+      { className: 'Helper', initialLine: 9 }
+    ]);
   });
 });
 

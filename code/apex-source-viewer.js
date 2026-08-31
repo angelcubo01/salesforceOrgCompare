@@ -133,7 +133,7 @@ async function main() {
   }
   const resolveAt = async (position) => {
     if (!position) return; const sourceTab = workspace.activeTab; const source = sourceTab?.model?.getValue();
-    if (!sourceTab?.orgId || !source) return;
+    if (!sourceTab || !source) return;
     const symbol = findApexSymbolAt(source, position.lineNumber, position.column); if (!symbol) return;
     const owner = inferApexCallOwner(source, sourceTab.className, symbol, position.lineNumber, position.column);
     if (!owner) return;
@@ -143,6 +143,7 @@ async function main() {
       if (response?.ok && response.definition) reveal(sourceTab, { ...response.definition, addToHistory: true });
       return;
     }
+    if (!sourceTab.orgId) return;
     openDefinition(owner, symbol, sourceTab);
   };
   const clearHint = () => { navDecorations = editor.deltaDecorations(navDecorations, []); editor.updateOptions({ mouseStyle: 'text' }); editor.getDomNode()?.removeAttribute('title'); hover = null; };

@@ -18,7 +18,10 @@ const VIEWER_PAGE = 'code/apex-source-viewer.html';
  * @param {string} content
  * @param {{
  *   downloadFileName?: string,
- *   initialLine?: number
+ *   initialLine?: number,
+ *   orgId?: string,
+ *   orgLabel?: string,
+ *   instanceUrl?: string
  * }} [viewerOpts]
  */
 export async function openApexSourceViewerWithPayload(title, content, viewerOpts = {}) {
@@ -30,11 +33,17 @@ export async function openApexSourceViewerWithPayload(title, content, viewerOpts
     viewerOpts.initialLine != null && Number.isFinite(Number(viewerOpts.initialLine))
       ? Math.max(1, Math.floor(Number(viewerOpts.initialLine)))
       : undefined;
+  const orgId = String(viewerOpts.orgId || '').trim();
+  const orgLabel = String(viewerOpts.orgLabel || '').trim();
+  const instanceUrl = String(viewerOpts.instanceUrl || '').trim();
   const stagePayload = {
     title,
     content,
     ...(downloadFileName ? { downloadFileName } : {}),
-    ...(initialLine != null ? { initialLine } : {})
+    ...(initialLine != null ? { initialLine } : {}),
+    ...(orgId ? { orgId } : {}),
+    ...(orgLabel ? { orgLabel } : {}),
+    ...(instanceUrl ? { instanceUrl } : {})
   };
   const lineQs = initialLine != null ? `&line=${encodeURIComponent(String(initialLine))}` : '';
 

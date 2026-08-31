@@ -3,6 +3,7 @@ export const WORKBENCH_ICON_SPRITE_PATH = './assets/tabler-icons.svg';
 
 export const CATEGORY_ICONS = Object.freeze({
   home: 'home',
+  favorites: 'star',
   comparator: 'arrows-diff',
   development: 'code',
   dataApi: 'database',

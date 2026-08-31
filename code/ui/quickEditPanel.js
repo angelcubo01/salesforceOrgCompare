@@ -1279,6 +1279,7 @@ export function setupQuickEditPanel() {
     setupCodeEditorSearch({
       inputEl: searchInput,
       resultsEl: resultsList,
+      getAnchorEl: () => document.getElementById('workbenchCodeStudioSearchInput') || searchInput,
       artTypes: ['ApexClass'],
       onSelect: (entry) => void openTabFromEntry(entry)
     });

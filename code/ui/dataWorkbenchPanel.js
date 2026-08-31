@@ -70,6 +70,10 @@ function setActiveTab(tab) {
   document.getElementById('dataWorkbenchTabImport')?.classList.toggle('hidden', tab !== 'import');
 }
 
+export function setDataWorkbenchView(view) {
+  setActiveTab(view === 'bulk-import' ? 'import' : 'recordEditor');
+}
+
 function populateObjectSelect(selectId, sobjects) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
@@ -814,7 +818,7 @@ export function setupDataWorkbenchPanel() {
 
 export async function refreshDataWorkbenchPanel() {
   if (getSelectedArtifactType() !== 'DataWorkbench') return;
-  setActiveTab('recordEditor');
+  setDataWorkbenchView(document.body.dataset.workbenchTab);
   globalSobjects = [];
   lastDescribe = null;
   lastLayout = null;

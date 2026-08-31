@@ -1,5 +1,7 @@
 /** Utilidades puras/DOM de Deployment Status. No usa etiquetas traducibles. */
 
+import { decodeHtmlEntities } from '../../../shared/htmlEntities.js';
+
 export const INTEGRATION_ID = 'deployStatusInlineDetails';
 export const FAILED_TABLE_SELECTOR = 'table[id$=":FailedDeploymentsList"]';
 export const SUCCEEDED_TABLE_SELECTOR = 'table[id$=":SucceededDeploymentsList"]';
@@ -74,6 +76,30 @@ export function extractApexClassAndLineFromStackTrace(stackTrace) {
   return { className: match[1], initialLine: Number.isSafeInteger(initialLine) && initialLine > 0 ? initialLine : undefined };
 }
 
+/**
+ * Decodifica las entidades HTML/XML que Salesforce puede devolver literalmente
+ * dentro de los mensajes SOAP. El resultado se inserta siempre con textContent.
+ *
+ * @param {unknown} value
+ */
+export function decodeDeployHtmlEntities(value) {
+  return decodeHtmlEntities(value);
+}
+
+/** Todos los frames Apex navegables de un stack trace. */
+export function parseApexStackTraceFrames(value) {
+  const text = String(value || '');
+  const frames = [];
+  const re = /Class\.([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z_][A-Za-z0-9_]*:\s*line\s+(\d+)(?:,\s*column\s+\d+)?/gi;
+  let match;
+  while ((match = re.exec(text))) {
+    const initialLine = Number(match[2]);
+    if (!Number.isSafeInteger(initialLine) || initialLine <= 0) continue;
+    frames.push({ className: match[1], initialLine, start: match.index, end: match.index + match[0].length });
+  }
+  return frames;
+}
+
 /** @param {unknown} value */
 function asRows(value) {
   return Array.isArray(value) ? value : [];
@@ -83,25 +109,25 @@ function asRows(value) {
 export function buildDeployDetailModel(detail) {
   const soap = detail?.soap || detail || {};
   const componentFailures = asRows(soap.componentFailures).map((item) => ({
-    fullName: String(item?.fullName || ''),
-    componentType: String(item?.componentType || ''),
+    fullName: decodeDeployHtmlEntities(item?.fullName),
+    componentType: decodeDeployHtmlEntities(item?.componentType),
     lineNumber: Number.isFinite(Number(item?.lineNumber)) ? Number(item.lineNumber) : null,
     columnNumber: Number.isFinite(Number(item?.columnNumber)) ? Number(item.columnNumber) : null,
-    problem: String(item?.problem || ''),
-    problemType: String(item?.problemType || ''),
-    fileName: String(item?.fileName || '')
+    problem: decodeDeployHtmlEntities(item?.problem),
+    problemType: decodeDeployHtmlEntities(item?.problemType),
+    fileName: decodeDeployHtmlEntities(item?.fileName)
   }));
   const testFailures = asRows(soap.runTestResult?.failures).map((item) => ({
-    className: String(item?.className || ''),
-    methodName: String(item?.methodName || ''),
-    message: String(item?.message || ''),
-    stackTrace: String(item?.stackTrace || ''),
-    time: String(item?.time || '')
+    className: decodeDeployHtmlEntities(item?.className),
+    methodName: decodeDeployHtmlEntities(item?.methodName),
+    message: decodeDeployHtmlEntities(item?.message),
+    stackTrace: decodeDeployHtmlEntities(item?.stackTrace),
+    time: decodeDeployHtmlEntities(item?.time)
   }));
   return {
     componentFailures,
     testFailures,
-    errorMessage: String(soap.errorMessage || detail?.row?.errorMessage || ''),
-    coverageWarnings: asRows(soap.runTestResult?.codeCoverageWarnings).map((item) => String(item?.message || item || '')).filter(Boolean)
+    errorMessage: decodeDeployHtmlEntities(soap.errorMessage || detail?.row?.errorMessage),
+    coverageWarnings: asRows(soap.runTestResult?.codeCoverageWarnings).map((item) => decodeDeployHtmlEntities(item?.message || item)).filter(Boolean)
   };
 }

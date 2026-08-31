@@ -259,6 +259,16 @@ export function resolveDefinitionInApexClass(row, symbolName, kind, argumentCoun
     const item = fallback[0];
     return { ok: true, definition: { kind, classId: String(row?.Id || row?.id || ''), className, methodName: symbolName, body, lineNumber: item.lineNumber, column: item.column } };
   }
+  // La expresión de la llamada puede ser más compleja que una firma Apex
+  // (por ejemplo, argumentos con genéricos o lambdas). Si la clase contiene
+  // una única declaración con ese nombre, es preferible navegar a ella antes
+  // que dejar la fuente ya descargada en un estado de error.
+  const sameName = findApexMethodDeclarations(body, className)
+    .filter((item) => item.kind === kind && item.name === symbolName);
+  if (sameName.length === 1) {
+    const item = sameName[0];
+    return { ok: true, definition: { kind, classId: String(row?.Id || row?.id || ''), className, methodName: symbolName, body, lineNumber: item.lineNumber, column: item.column } };
+  }
   const candidates = fallback.map((item) => ({ kind, classId: String(row?.Id || row?.id || ''), className, methodName: symbolName, body, lineNumber: item.lineNumber, column: item.column, signature: item.signature }));
   return candidates.length ? { ok: false, reason: 'AMBIGUOUS', candidates } : { ok: false, reason: 'NOT_FOUND' };
 }

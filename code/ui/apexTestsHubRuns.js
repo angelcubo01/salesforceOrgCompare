@@ -19,6 +19,7 @@ import {
   getApexTestsSkipCodeCoverage
 } from '../../shared/extensionSettings.js';
 import { parseApexStackFrameLine } from '../../shared/apexStackTraceParse.js';
+import { findApexMethodDeclarations } from '../../shared/apexSourceDefinitions.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { sanitizeUiError } from '../../shared/sanitizeUiError.js';
 import { randomStagingId } from '../../shared/randomId.js';
@@ -471,7 +472,7 @@ function sanitizeApexViewerDownloadFileName(name) {
   return s || 'file';
 }
 
-async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
+export async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
   const res = await bg({
     type: 'apexTests:getTestClassSource',
     orgId,
@@ -489,17 +490,25 @@ async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
     return;
   }
   const name = res.name || pick.label || 'ApexClass';
-  const initialLine =
+  let initialLine =
     opts.initialLine != null && Number.isFinite(Number(opts.initialLine))
       ? Math.max(1, Math.floor(Number(opts.initialLine)))
       : undefined;
+  if (initialLine == null && opts.methodName) {
+    initialLine = findApexMethodDeclarations(String(res.body || ''), name)
+      .find((method) => method.name === String(opts.methodName))?.lineNumber;
+  }
   const downloadFileName = `${sanitizeApexViewerDownloadFileName(name.replace(/\.cls$/i, ''))}.cls`;
+  const org = (state.orgsList || []).find((item) => String(item.id) === String(orgId));
   const ok = await openApexSourceViewerWithPayload(
     `${name}.cls · ${t('docTitle.apexTestClass')}`,
     res.body != null ? String(res.body) : '',
     {
       ...(initialLine != null ? { initialLine } : {}),
-      downloadFileName
+      downloadFileName,
+      orgId,
+      orgLabel: org?.label || '',
+      instanceUrl: org?.instanceUrl || ''
     }
   );
   if (!ok) showToast(t('apexTests.viewTestStorageError'), 'warn');

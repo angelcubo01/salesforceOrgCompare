@@ -82,4 +82,16 @@ Object value = servicio.propiedad;`;
     expect(resolveDefinitionInApexClass(row, 'ambigua', 'method', 1)).toMatchObject({ ok: false, reason: 'AMBIGUOUS' });
     expect(findApexMethodDeclarations(row.Body, 'MiServicio')).toHaveLength(4);
   });
+
+  it('abre el único método con ese nombre cuando no puede contar los argumentos de la llamada', () => {
+    const row = {
+      Id: '01p000000000001', Name: 'MiServicio',
+      Body: 'public class MiServicio { void procesarCaso(String value) {} }'
+    };
+    const result = resolveDefinitionInApexClass(row, 'procesarCaso', 'method', 3);
+    expect(result).toMatchObject({
+      ok: true,
+      definition: { className: 'MiServicio', methodName: 'procesarCaso', lineNumber: 1 }
+    });
+  });
 });

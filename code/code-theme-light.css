@@ -1143,6 +1143,27 @@ html[data-ui-theme="light"] .app-toolbar-help-btn:focus-visible {
   box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.28);
 }
 
+html[data-ui-theme="light"] .app-comparison-toggle {
+  border-color: #bae6fd;
+  background: linear-gradient(135deg, #f0f9ff, #f8fafc);
+  color: #0f3a56;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 3px 10px rgba(14, 116, 144, 0.08);
+}
+html[data-ui-theme="light"] .app-comparison-toggle:has(input:checked) {
+  border-color: #38bdf8;
+  background: linear-gradient(135deg, #dff7ff, #e0f2fe);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 0 0 1px rgba(14, 165, 233, 0.1), 0 4px 12px rgba(14, 165, 233, 0.14);
+}
+html[data-ui-theme="light"] .app-comparison-toggle .app-comparison-control :is(
+  .generate-pkg-compare-switch,
+  .dep-explorer-compare-switch,
+  .anonymous-apex-compare-switch,
+  .org-limits-compare-switch
+) {
+  border-color: #7dd3fc;
+  background: #e2e8f0;
+}
+
 html[data-ui-theme="light"] .app-help-modal-foot {
   border-top-color: #e2e8f0;
 }
@@ -1880,6 +1901,23 @@ html[data-ui-theme="light"] .quick-edit-clear-btn:hover:not(:disabled) {
   color: #991b1b;
 }
 
+html[data-ui-theme="light"] .quick-edit-search-bar .quick-edit-search-input.sfoc-query-input {
+  border-color: #bae6fd;
+  background: linear-gradient(135deg, #ffffff, #f0f9ff);
+  color: #0f172a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 8px rgba(14, 116, 144, 0.06);
+}
+html[data-ui-theme="light"] .quick-edit-search-bar .quick-edit-search-input.sfoc-query-input:focus {
+  border-color: #38bdf8;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.16);
+}
+html[data-ui-theme="light"] .quick-edit-search-shortcut {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #64748b;
+}
+
 html[data-ui-theme="light"] .apex-coverage-compare-panel-inner {
   color: #334155;
 }
@@ -2412,6 +2450,53 @@ html[data-ui-theme="light"] .deploy-status-stack-pre {
   background: #f8fafc;
   border-color: #e2e8f0;
   color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-source-picker {
+  color: #475569;
+}
+
+html[data-ui-theme="light"] .deploy-status-source-org-select {
+  background: #ffffff;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .deploy-status-source-link {
+  color: #2563eb;
+}
+
+html[data-ui-theme="light"] .deploy-status-source-link:hover {
+  color: #1d4ed8;
+}
+
+html[data-ui-theme="light"] .deploy-status-inline-toggle {
+  color: #2563eb;
+  border-color: #94a3b8;
+  background: #ffffff;
+}
+
+html[data-ui-theme="light"] .deploy-status-inline-detail-row > td {
+  background: #f8fafc;
+}
+
+html[data-ui-theme="light"] .deploy-status-inline-detail {
+  background: #ffffff;
+  border-color: #93c5fd;
+  border-left-color: #2563eb;
+}
+
+html[data-ui-theme="light"] .deploy-status-inline-detail h4,
+html[data-ui-theme="light"] .deploy-status-inline-source-picker,
+html[data-ui-theme="light"] .deploy-status-inline-loading,
+html[data-ui-theme="light"] .deploy-status-inline-empty {
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .deploy-status-inline-source-picker select {
+  color: #0f172a;
+  border-color: #94a3b8;
+  background: #ffffff;
 }
 
 html[data-ui-theme="light"] .deploy-status-loading {

@@ -1558,6 +1558,7 @@ export function setupLightningQuickEditPanel() {
     setupCodeEditorSearch({
       inputEl: searchInput,
       resultsEl: resultsList,
+      getAnchorEl: () => document.getElementById('workbenchCodeStudioSearchInput') || searchInput,
       artTypes: ['LWC', 'Aura'],
       onSelect: (entry) => void openTabFromEntry(entry)
     });

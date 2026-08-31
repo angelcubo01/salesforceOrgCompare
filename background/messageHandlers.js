@@ -2475,6 +2475,35 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'deployStatus:getApexSource': {
+            const { orgId, className } = message;
+            if (!/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(String(className || ''))) {
+              reply({ ok: false, error: 'Invalid Apex class name' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const source = await fetchApexClassSource(org, sid, { className: String(className) });
+              if (!source) {
+                reply({ ok: false, reason: 'NOT_FOUND' });
+                break;
+              }
+              reply({ ok: true, name: source.name, body: source.body });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
           case 'customSettingsCompare:listTypes': {
             const { orgId } = message;
             const saved = await loadSavedOrgs();
@@ -4595,7 +4624,7 @@ export function installMessageHandlers() {
             const source = String(message.source || '');
             const lineNumber = Number(message.lineNumber);
             const column = Number(message.column);
-            if (!orgId || !isApexIdentifier(currentClassName) || source.length > 2_000_000 || !Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(column) || column < 1) {
+            if (!isApexIdentifier(currentClassName) || source.length > 2_000_000 || !Number.isSafeInteger(lineNumber) || lineNumber < 1 || !Number.isSafeInteger(column) || column < 1) {
               reply({ ok: false, reason: 'INVALID_REQUEST' });
               break;
             }
@@ -4609,16 +4638,20 @@ export function installMessageHandlers() {
               reply({ ok: false, reason: 'UNRESOLVED_OWNER' });
               break;
             }
-            const saved = await loadSavedOrgs();
-            const org = saved[orgId];
-            if (!org) {
-              reply({ ok: false, reason: 'ORG_NOT_SAVED' });
-              break;
-            }
             const localRow = { Id: '', Name: currentClassName, Body: source };
             if (owner === currentClassName && symbol.kind !== 'class') {
               const local = resolveDefinitionInApexClass(localRow, symbol.name, symbol.kind, symbol.argumentCount);
               reply(local);
+              break;
+            }
+            if (!orgId) {
+              reply({ ok: false, reason: 'INVALID_REQUEST' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, reason: 'ORG_NOT_SAVED' });
               break;
             }
             const sid = await resolveSidForOrg(org);
@@ -4642,7 +4675,21 @@ export function installMessageHandlers() {
                 reply({ ok: true, definition: { kind: 'class', classId: String(row.Id || ''), className: String(row.Name || owner), methodName: '', lineNumber: 1, column: 1, body: String(row.Body) } });
                 break;
               }
-              reply(resolveDefinitionInApexClass(row, symbol.name, symbol.kind, symbol.argumentCount));
+              const resolved = resolveDefinitionInApexClass(row, symbol.name, symbol.kind, symbol.argumentCount);
+              if (!resolved.ok && resolved.reason === 'NOT_FOUND') {
+                // La consulta ya ha recuperado la clase. Si el símbolo no se
+                // puede ubicar con seguridad, mostramos esa fuente en vez de
+                // dejar una pestaña roja sin contenido.
+                reply({
+                  ok: true,
+                  definition: {
+                    kind: 'class', classId: String(row.Id || ''), className: String(row.Name || owner),
+                    methodName: '', lineNumber: 1, column: 1, body: String(row.Body)
+                  }
+                });
+                break;
+              }
+              reply(resolved);
             } catch (e) {
               replyHandlerError(reply, e);
             }

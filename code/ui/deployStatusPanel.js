@@ -1,6 +1,7 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { t, getCurrentLang } from '../../shared/i18n.js';
+import { decodeHtmlEntities } from '../../shared/htmlEntities.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { renderDonutChart } from '../lib/orgLimitsCharts.js';
 import { buildSetupDeployDetailsUrl, isDeployInProgress, isDeployActivelyRunning, isSoapActivelyRunning, collectSlowTests, DEPLOY_SLOW_TEST_THRESHOLD_MS, hasCoverageFailureInRow, hasCoverageFailureInSoap, resolveDeployProgressDetail } from '../../shared/deployStatusApi.js';
@@ -14,6 +15,7 @@ import { showToast } from './toast.js';
 import { handleToolError } from '../../shared/reportToolError.js';
 import { getReturnContext, returnToQuickEditEditor } from '../lib/quickEditDeployContext.js';
 import { confirmSfocOrgAction, mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
+import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
 
 const POLL_ACTIVE_MS = 3000;
 const POLL_IDLE_MS = 15000;
@@ -44,6 +46,9 @@ let componentSearchQuery = '';
 let cancelInFlight = false;
 let summaryBootstrapped = false;
 let lastDeployPanelOrgId = '';
+let selectedDeploySourceOrgId = '';
+/** @type {Map<string, { state: 'loading'|'ready'|'error', detail?: Record<string, unknown>, error?: string }>} */
+const inlineFailedDeployDetails = new Map();
 /** @type {Map<string, { coverageWarningCount: number }>} */
 const deployRowHintById = new Map();
 /** @type {Record<string, unknown> | null} */
@@ -149,6 +154,52 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function decodeDeployText(value) {
+  return decodeHtmlEntities(value);
+}
+
+function isApexClassName(value) {
+  return /^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(String(value || ''));
+}
+
+function isApexClassComponent(value) {
+  return String(value || '').replace(/[\s_-]/g, '').toLowerCase() === 'apexclass';
+}
+
+function parseApexStackTraceFrames(value) {
+  const text = String(value || '');
+  const frames = [];
+  const re = /Class\.([A-Za-z_][A-Za-z0-9_]*)\.[A-Za-z_][A-Za-z0-9_]*:\s*line\s+(\d+)(?:,\s*column\s+\d+)?/gi;
+  let match;
+  while ((match = re.exec(text))) {
+    const initialLine = Number(match[2]);
+    if (!Number.isSafeInteger(initialLine) || initialLine <= 0) continue;
+    frames.push({ className: match[1], initialLine, start: match.index, end: match.index + match[0].length });
+  }
+  return frames;
+}
+
+function sourceLinkHtml(className, initialLine, label = className) {
+  if (!isApexClassName(className)) return escapeHtml(label);
+  const line = Number(initialLine);
+  const lineAttr = Number.isSafeInteger(line) && line > 0 ? ` data-deploy-source-line="${line}"` : '';
+  return `<a href="#" class="deploy-status-source-link" data-deploy-source-class="${escapeHtml(className)}"${lineAttr} title="${escapeHtml(t('deployStatus.openSourceHint'))}">${escapeHtml(label)}</a>`;
+}
+
+function renderStackTraceSourceLinks(stackTrace, fallbackClassName = '') {
+  const trace = decodeDeployText(stackTrace);
+  const frames = parseApexStackTraceFrames(trace);
+  if (!frames.length) return fallbackClassName && trace ? sourceLinkHtml(fallbackClassName, undefined, trace) : escapeHtml(trace || '—');
+  let cursor = 0;
+  let html = '';
+  for (const frame of frames) {
+    html += escapeHtml(trace.slice(cursor, frame.start));
+    html += sourceLinkHtml(frame.className, frame.initialLine, trace.slice(frame.start, frame.end));
+    cursor = frame.end;
+  }
+  return html + escapeHtml(trace.slice(cursor));
 }
 
 function formatDateTime(value) {
@@ -482,6 +533,7 @@ function resetDeployStatusPanelToHome() {
   succeededPage = 0;
   componentSearchQuery = '';
   lastPollData = null;
+  inlineFailedDeployDetails.clear();
   summaryBootstrapped = false;
   clearDeployRowHintCache();
   applyViewMode();
@@ -706,12 +758,163 @@ const DETAIL_DEPLOY_CHART_IDS = {
   runningTest: 'deployStatusRunningTest'
 };
 
-function renderStackTraceCell(stackTrace) {
+function renderStackTraceCell(stackTrace, fallbackClassName = '') {
   if (!stackTrace) return '—';
   return `<details class="deploy-status-stack-details">
     <summary>${escapeHtml(t('deployStatus.viewStackTrace'))}</summary>
-    <pre class="deploy-status-stack-pre">${escapeHtml(stackTrace)}</pre>
+    <pre class="deploy-status-stack-pre">${renderStackTraceSourceLinks(stackTrace, fallbackClassName)}</pre>
   </details>`;
+}
+
+function activeDeploySourceOrgs() {
+  return (state.orgsList || []).filter((org) => state.authStatuses?.[org.id] === 'active');
+}
+
+function ensureDeploySourceOrgSelection(orgs = activeDeploySourceOrgs()) {
+  const preferred = selectedDeploySourceOrgId || state.leftOrgId || '';
+  selectedDeploySourceOrgId = orgs.some((org) => org.id === preferred) ? preferred : '';
+  return selectedDeploySourceOrgId;
+}
+
+function sourceOrgLabel(org) {
+  return String(org?.label || org?.displayName || org?.instanceUrl || org?.id || '');
+}
+
+function refreshDeploySourceOrgPicker() {
+  const select = document.getElementById('deployStatusSourceOrgSelect');
+  if (!select) return;
+  const orgs = activeDeploySourceOrgs();
+  ensureDeploySourceOrgSelection(orgs);
+  select.innerHTML = '';
+  if (!orgs.length) {
+    select.appendChild(new Option(t('deployStatus.sourceOrgEmpty'), ''));
+    select.disabled = true;
+    return;
+  }
+  select.disabled = false;
+  if (!selectedDeploySourceOrgId) select.appendChild(new Option(t('deployStatus.sourceOrgChoose'), ''));
+  for (const org of orgs) select.appendChild(new Option(sourceOrgLabel(org), org.id));
+  select.value = selectedDeploySourceOrgId;
+}
+
+async function openDeployStatusApexSource(className, initialLine) {
+  const orgId = selectedDeploySourceOrgId;
+  if (!orgId) {
+    showToast(t('deployStatus.sourceOrgRequired'), 'warn');
+    return;
+  }
+  const res = await bg({ type: 'deployStatus:getApexSource', orgId, className, initialLine });
+  if (!res?.ok) {
+    const message =
+      res?.reason === 'NO_SID'
+        ? t('deployStatus.noSession')
+        : res?.reason === 'NOT_FOUND'
+          ? t('deployStatus.sourceNotFound')
+          : res?.error || t('deployStatus.sourceOpenError');
+    showToast(message, 'warn');
+    return;
+  }
+  const name = String(res.name || className);
+  const org = (state.orgsList || []).find((item) => String(item.id) === String(orgId));
+  const opened = await openApexSourceViewerWithPayload(
+    `${name}.cls · ${t('docTitle.apexSource')}`,
+    String(res.body || ''),
+    {
+      downloadFileName: `${name}.cls`, initialLine, orgId,
+      orgLabel: org?.label || '', instanceUrl: org?.instanceUrl || ''
+    }
+  );
+  if (!opened) showToast(t('deployStatus.sourceOpenError'), 'warn');
+}
+
+function renderInlineSourceOrgPicker() {
+  const orgs = activeDeploySourceOrgs();
+  ensureDeploySourceOrgSelection(orgs);
+  const options = !orgs.length
+    ? `<option value="">${escapeHtml(t('deployStatus.sourceOrgEmpty'))}</option>`
+    : `${selectedDeploySourceOrgId ? '' : `<option value="">${escapeHtml(t('deployStatus.sourceOrgChoose'))}</option>`}${orgs.map((org) => `<option value="${escapeHtml(org.id)}"${org.id === selectedDeploySourceOrgId ? ' selected' : ''}>${escapeHtml(sourceOrgLabel(org))}</option>`).join('')}`;
+  return `<label class="deploy-status-inline-source-picker"><span>${escapeHtml(t('deployStatus.sourceOrgLabel'))}</span><select data-deploy-inline-source-org ${orgs.length ? '' : 'disabled'}>${options}</select></label>`;
+}
+
+function renderInlineComponentFailures(failures) {
+  if (!failures.length) return '';
+  const rows = failures.map((failure) => {
+    const componentType = decodeDeployText(failure?.componentType);
+    const fullName = decodeDeployText(failure?.fullName);
+    const problem = decodeDeployText(failure?.problem);
+    const fileName = decodeDeployText(failure?.fileName);
+    const line = failure?.lineNumber || failure?.columnNumber
+      ? ` (${t('deployStatus.line')} ${failure.lineNumber || '?'}${failure.columnNumber ? `, ${t('deployStatus.col')}: ${failure.columnNumber}` : ''})`
+      : '';
+    return `<tr><td>${isApexClassComponent(componentType) ? sourceLinkHtml(fullName, failure?.lineNumber) : escapeHtml(fullName)}</td><td>${escapeHtml(componentType)}</td><td>${escapeHtml(problem)}${escapeHtml(line)}${fileName ? `<div class="deploy-status-error-file">${escapeHtml(fileName)}</div>` : ''}</td></tr>`;
+  }).join('');
+  return `<section><h4>${escapeHtml(t('deployStatus.sectionFailures'))}</h4><div class="deploy-status-table-wrap"><table class="deploy-status-table"><thead><tr><th>${escapeHtml(t('deployStatus.colName'))}</th><th>${escapeHtml(t('deployStatus.colType'))}</th><th>${escapeHtml(t('deployStatus.colProblem'))}</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+
+function renderInlineTestFailures(failures) {
+  if (!failures.length) return '';
+  const rows = failures.map((failure) => {
+    const className = decodeDeployText(failure?.className);
+    const methodName = decodeDeployText(failure?.methodName);
+    const message = decodeDeployText(failure?.message);
+    const stackTrace = decodeDeployText(failure?.stackTrace);
+    const classFrame = parseApexStackTraceFrames(stackTrace).find((frame) => frame.className === className);
+    const initialLine = classFrame?.initialLine;
+    return `<tr><td>${sourceLinkHtml(className, initialLine)}</td><td>${className && methodName ? sourceLinkHtml(className, initialLine, methodName) : escapeHtml(methodName)}</td><td>${escapeHtml(message)}</td><td>${renderStackTraceCell(stackTrace, className)}</td></tr>`;
+  }).join('');
+  return `<section><h4>${escapeHtml(t('deployStatus.sectionTestFailures'))}</h4><div class="deploy-status-table-wrap"><table class="deploy-status-table"><thead><tr><th>${escapeHtml(t('deployStatus.colClass'))}</th><th>${escapeHtml(t('deployStatus.colMethod'))}</th><th>${escapeHtml(t('deployStatus.colMessage'))}</th><th>${escapeHtml(t('deployStatus.colStackTrace'))}</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+
+function renderInlineCoverageWarnings(warnings) {
+  if (!warnings.length) return '';
+  const rows = warnings.map((warning) => `<tr><td>${escapeHtml([decodeDeployText(warning?.namespace), decodeDeployText(warning?.name)].filter(Boolean).join('.') || decodeDeployText(warning?.id) || t('deployStatus.coverageFailure'))}</td><td>${escapeHtml(decodeDeployText(warning?.message))}</td></tr>`).join('');
+  return `<section><h4>${escapeHtml(t('deployStatus.sectionCoverageWarnings'))}</h4><div class="deploy-status-table-wrap"><table class="deploy-status-table"><thead><tr><th>${escapeHtml(t('deployStatus.colClass'))}</th><th>${escapeHtml(t('deployStatus.colMessage'))}</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+
+function renderInlineFailedDeployDetail(detail) {
+  const soap = detail?.soap || detail || {};
+  const globalError = decodeDeployText(soap.errorMessage || detail?.row?.errorMessage).trim();
+  const components = Array.isArray(soap.componentFailures) ? soap.componentFailures : [];
+  const tests = Array.isArray(soap.runTestResult?.failures) ? soap.runTestResult.failures : [];
+  const warnings = Array.isArray(soap.runTestResult?.codeCoverageWarnings) ? soap.runTestResult.codeCoverageWarnings : [];
+  const componentFailures = renderInlineComponentFailures(components);
+  const testFailures = renderInlineTestFailures(tests);
+  const content = [
+    globalError ? `<div class="deploy-status-global-error">${escapeHtml(globalError)}</div>` : '',
+    componentFailures || testFailures ? renderInlineSourceOrgPicker() : '',
+    componentFailures,
+    testFailures,
+    renderInlineCoverageWarnings(warnings)
+  ].filter(Boolean).join('') || `<p class="deploy-status-inline-empty">${escapeHtml(t('deployStatus.historyEmpty'))}</p>`;
+  return `<div class="deploy-status-inline-detail">${content}</div>`;
+}
+
+function rerenderInlineFailedDeployments() {
+  if (viewMode === 'summary' && lastPollData?.failedHistory) renderHistoryTable(lastPollData.failedHistory, 'failed');
+}
+
+async function toggleInlineFailedDeployDetails(asyncId) {
+  const id = String(asyncId || '');
+  if (!id || !state.leftOrgId) return;
+  if (inlineFailedDeployDetails.has(id)) {
+    inlineFailedDeployDetails.delete(id);
+    rerenderInlineFailedDeployments();
+    return;
+  }
+  inlineFailedDeployDetails.set(id, { state: 'loading' });
+  rerenderInlineFailedDeployments();
+  const res = await bg({ type: 'deployStatus:detail', orgId: state.leftOrgId, asyncId: id });
+  const current = inlineFailedDeployDetails.get(id);
+  if (!current || current.state !== 'loading') return;
+  if (res?.ok && res.detail) {
+    inlineFailedDeployDetails.set(id, { state: 'ready', detail: res.detail });
+  } else {
+    inlineFailedDeployDetails.set(id, {
+      state: 'error',
+      error: res?.reason === 'NO_SID' ? t('deployStatus.noSession') : res?.error || t('deployStatus.fetchError')
+    });
+  }
+  rerenderInlineFailedDeployments();
 }
 
 /**
@@ -738,13 +941,31 @@ function renderHistoryTable(history, bucket) {
       tr.dataset.asyncId = String(row.asyncId || '');
       const dateVal = row.completedDate || row.startDate;
       if (bucket === 'failed') {
+        const asyncId = String(row.asyncId || '');
+        const inlineDetail = inlineFailedDeployDetails.get(asyncId);
         tr.innerHTML = `
-          <td><button type="button" class="deploy-status-link-btn" data-view-deploy="${escapeHtml(row.asyncId)}">${escapeHtml(t('deployStatus.viewDetails'))}</button></td>
+          <td><button type="button" class="deploy-status-inline-toggle" data-toggle-deploy-inline="${escapeHtml(asyncId)}" aria-expanded="${inlineDetail ? 'true' : 'false'}" aria-label="${escapeHtml(t('deployStatus.viewDetails'))}" title="${escapeHtml(t('deployStatus.viewDetails'))}"></button><button type="button" class="deploy-status-link-btn" data-view-deploy="${escapeHtml(row.asyncId)}">${escapeHtml(t('deployStatus.viewDetails'))}</button></td>
           <td class="deploy-status-mono">${escapeHtml(row.asyncId)}</td>
           <td>${buildStatusBadgeHtml(row)}</td>
           <td>${escapeHtml(buildErrorsSummary(row))}</td>
           <td>${escapeHtml(formatDateTime(dateVal))}</td>
         `;
+        tbody.appendChild(tr);
+        if (inlineDetail) {
+          const detailRow = document.createElement('tr');
+          detailRow.className = 'deploy-status-inline-detail-row';
+          const detailCell = document.createElement('td');
+          detailCell.colSpan = 5;
+          if (inlineDetail.state === 'loading') {
+            detailCell.innerHTML = `<div class="deploy-status-inline-detail deploy-status-inline-loading">${escapeHtml(t('deployStatus.loading'))}</div>`;
+          } else if (inlineDetail.state === 'error') {
+            detailCell.innerHTML = `<div class="deploy-status-inline-detail deploy-status-inline-error">${escapeHtml(decodeDeployText(inlineDetail.error || t('deployStatus.fetchError')))}</div>`;
+          } else {
+            detailCell.innerHTML = renderInlineFailedDeployDetail(inlineDetail.detail);
+          }
+          detailRow.appendChild(detailCell);
+          tbody.appendChild(detailRow);
+        }
       } else {
         tr.innerHTML = `
           <td><button type="button" class="deploy-status-link-btn" data-view-deploy="${escapeHtml(row.asyncId)}">${escapeHtml(t('deployStatus.viewDetails'))}</button></td>
@@ -753,7 +974,7 @@ function renderHistoryTable(history, bucket) {
           <td>${escapeHtml(formatDateTime(dateVal))}</td>
         `;
       }
-      tbody.appendChild(tr);
+      if (bucket !== 'failed') tbody.appendChild(tr);
     }
   }
 
@@ -888,7 +1109,7 @@ function matchesComponentSearch(component, query) {
 function renderGlobalError(row, soap) {
   const el = document.getElementById('deployStatusGlobalError');
   if (!el) return;
-  const msg = String(soap?.errorMessage || row?.errorMessage || '').trim();
+  const msg = decodeDeployText(soap?.errorMessage || row?.errorMessage).trim();
   if (!msg) {
     el.classList.add('hidden');
     el.textContent = '';
@@ -954,19 +1175,24 @@ function renderFailuresSection(soap) {
   section.classList.toggle('hidden', !failures.length);
   tbody.innerHTML = '';
   for (const f of failures) {
+    const componentType = decodeDeployText(f.componentType);
+    const fullName = decodeDeployText(f.fullName);
+    const problem = decodeDeployText(f.problem);
+    const fileName = decodeDeployText(f.fileName);
+    const problemType = decodeDeployText(f.problemType);
     const line =
       f.lineNumber || f.columnNumber
         ? ` (${t('deployStatus.line')} ${f.lineNumber || '?'}${f.columnNumber ? `, ${t('deployStatus.col')}: ${f.columnNumber}` : ''})`
         : '';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(f.componentType)}</td>
-      <td class="deploy-status-mono">${escapeHtml(f.fullName)}</td>
+      <td>${escapeHtml(componentType)}</td>
+      <td class="deploy-status-mono">${isApexClassComponent(componentType) ? sourceLinkHtml(fullName, f.lineNumber) : escapeHtml(fullName)}</td>
       <td>
-        <div>${escapeHtml(f.problem || '')}${escapeHtml(line)}</div>
-        ${f.fileName ? `<div class="deploy-status-error-file">${escapeHtml(f.fileName)}</div>` : ''}
+        <div>${escapeHtml(problem)}${escapeHtml(line)}</div>
+        ${fileName ? `<div class="deploy-status-error-file">${escapeHtml(fileName)}</div>` : ''}
       </td>
-      <td>${escapeHtml(f.problemType || '')}</td>
+      <td>${escapeHtml(problemType)}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -981,12 +1207,18 @@ function renderTestFailuresSection(soap) {
   section.classList.toggle('hidden', !failures.length);
   tbody.innerHTML = '';
   for (const f of failures) {
+    const className = decodeDeployText(f.className);
+    const methodName = decodeDeployText(f.methodName);
+    const message = decodeDeployText(f.message);
+    const stackTrace = decodeDeployText(f.stackTrace);
+    const classFrame = parseApexStackTraceFrames(stackTrace).find((frame) => frame.className === className);
+    const initialLine = classFrame?.initialLine;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td class="deploy-status-mono">${escapeHtml(f.className)}</td>
-      <td>${escapeHtml(f.methodName)}</td>
-      <td>${escapeHtml(f.message)}</td>
-      <td>${renderStackTraceCell(f.stackTrace)}</td>
+      <td class="deploy-status-mono">${sourceLinkHtml(className, initialLine)}</td>
+      <td>${className && methodName ? sourceLinkHtml(className, initialLine, methodName) : escapeHtml(methodName)}</td>
+      <td>${escapeHtml(message)}</td>
+      <td>${renderStackTraceCell(stackTrace, className)}</td>
       <td>${escapeHtml(f.time ? `${f.time} ms` : '—')}</td>
     `;
     tbody.appendChild(tr);
@@ -1003,11 +1235,12 @@ function renderCoverageWarningsSection(soap) {
   tbody.innerHTML = '';
   for (const w of warnings) {
     const classLabel =
-      [w.namespace, w.name].filter(Boolean).join('.') || w.id || t('deployStatus.coverageFailure');
+      [decodeDeployText(w.namespace), decodeDeployText(w.name)].filter(Boolean).join('.') || decodeDeployText(w.id) || t('deployStatus.coverageFailure');
+    const message = decodeDeployText(w.message);
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td class="deploy-status-mono">${escapeHtml(classLabel)}</td>
-      <td>${escapeHtml(w.message)}</td>
+      <td>${escapeHtml(message)}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -1244,6 +1477,8 @@ function renderDetailView(data) {
   const instanceUrl = org?.instanceUrl || '';
   const setupUrl = instanceUrl ? buildSetupDeployDetailsUrl(instanceUrl, row.asyncId) : '#';
 
+  const sourcePickerHost = document.getElementById('deployStatusSourceOrgPickerHost');
+
   const titleEl = document.getElementById('deployStatusDetailViewTitle');
   if (titleEl) titleEl.innerHTML = buildStatusBadgeHtml(row, viewSoap, { useLongTitle: true });
 
@@ -1261,6 +1496,10 @@ function renderDetailView(data) {
   renderDonutsForRow(row, rawSoap, DETAIL_DEPLOY_CHART_IDS);
 
   if (soapReady) {
+    const sourceAvailable = (rawSoap.componentFailures || []).some((failure) => isApexClassComponent(failure?.componentType) && isApexClassName(failure?.fullName)) ||
+      (rawSoap.runTestResult?.failures || []).some((failure) => isApexClassName(decodeDeployText(failure?.className)) || parseApexStackTraceFrames(decodeDeployText(failure?.stackTrace)).length > 0);
+    sourcePickerHost?.classList.toggle('hidden', !sourceAvailable);
+    if (sourceAvailable) refreshDeploySourceOrgPicker();
     cacheDeployRowHintsFromSoap(row.asyncId, rawSoap);
     renderGlobalError(row, rawSoap);
     renderFailuresSection(rawSoap);
@@ -1269,6 +1508,7 @@ function renderDetailView(data) {
     renderSlowTestsSection(rawSoap);
     renderComponentsSection(rawSoap);
   } else {
+    sourcePickerHost?.classList.add('hidden');
     renderGlobalError(row, {});
     [
       'deployStatusFailuresSection',
@@ -1466,6 +1706,11 @@ export function onDeployStatusOrgChange() {
 
 export function setupDeployStatusPanel() {
   applyViewMode();
+  refreshDeploySourceOrgPicker();
+
+  document.getElementById('deployStatusSourceOrgSelect')?.addEventListener('change', (ev) => {
+    selectedDeploySourceOrgId = /** @type {HTMLSelectElement} */ (ev.target).value || '';
+  });
 
   document.getElementById('deployStatusRefreshBtn')?.addEventListener('click', () => {
     void refreshDeployStatusPanel();
@@ -1521,6 +1766,27 @@ export function setupDeployStatusPanel() {
   document.getElementById('deployStatusPanel')?.addEventListener('click', (ev) => {
     const target = /** @type {HTMLElement} */ (ev.target);
 
+    const sourceLink = target.closest('[data-deploy-source-class]');
+    if (sourceLink) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (ev.ctrlKey || ev.metaKey) {
+        const className = sourceLink.getAttribute('data-deploy-source-class') || '';
+        const initialLine = Number(sourceLink.getAttribute('data-deploy-source-line'));
+        void openDeployStatusApexSource(
+          className,
+          Number.isSafeInteger(initialLine) && initialLine > 0 ? initialLine : undefined
+        );
+      }
+      return;
+    }
+
+    const inlineToggle = target.closest('[data-toggle-deploy-inline]');
+    if (inlineToggle) {
+      void toggleInlineFailedDeployDetails(inlineToggle.getAttribute('data-toggle-deploy-inline') || '');
+      return;
+    }
+
     const cancelBtn = target.closest('[data-cancel-deploy]');
     if (cancelBtn) {
       const asyncId = cancelBtn.getAttribute('data-cancel-deploy') || '';
@@ -1545,6 +1811,14 @@ export function setupDeployStatusPanel() {
       }
       void refreshDeployStatusPanel();
     }
+  });
+
+  document.getElementById('deployStatusPanel')?.addEventListener('change', (ev) => {
+    const target = /** @type {HTMLElement} */ (ev.target);
+    if (!target.matches('[data-deploy-inline-source-org]')) return;
+    selectedDeploySourceOrgId = /** @type {HTMLSelectElement} */ (target).value || '';
+    refreshDeploySourceOrgPicker();
+    rerenderInlineFailedDeployments();
   });
 
   document.addEventListener('keydown', (ev) => {
