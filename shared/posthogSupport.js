@@ -1,4 +1,4 @@
-import { POSTHOG_API_KEY, POSTHOG_DEBUG, POSTHOG_HOST } from './telemetryConfig.js';
+import { POSTHOG_DEBUG } from './telemetryConfig.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
 import { isPosthogApiConfigured } from './posthogConfigured.js';
 
@@ -67,22 +67,11 @@ export async function enablePosthogConversationsWidget(ph) {
  * @returns {Promise<string[] | null>}
  */
 export async function fetchRemoteConversationsDomains(ph) {
-  if (!ph || !POSTHOG_API_KEY) return null;
-  try {
-    const res = await fetch(`${POSTHOG_HOST}/flags?v=2&config=true`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        api_key: POSTHOG_API_KEY,
-        distinct_id: typeof ph.get_distinct_id === 'function' ? ph.get_distinct_id() : 'sfoc-support'
-      })
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return Array.isArray(json?.conversations?.domains) ? json.conversations.domains : [];
-  } catch {
-    return null;
-  }
+  // No se permite una segunda llamada a /flags al pulsar Support. La evaluación
+  // de `sfoc_support` se obtiene junto con el resto al abrir el popup; la
+  // configuración de dominios debe ser aplicada por Conversations al cargarlo.
+  void ph;
+  return null;
 }
 
 function markSupportReady() {

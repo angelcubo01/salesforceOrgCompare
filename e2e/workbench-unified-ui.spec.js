@@ -65,6 +65,74 @@ test.beforeEach(async ({ extensionWorker }) => {
   await prepareStorage(extensionWorker);
 });
 
+test('los iconos del Workbench permanecen internos y visibles durante navegación rápida', async ({
+  extensionContext: context,
+  extensionId
+}) => {
+  test.setTimeout(60_000);
+  const spriteRequests = [];
+  context.on('request', (request) => { if (request.url().includes('tabler-icons.svg')) spriteRequests.push(request.url()); });
+  const page = await openWorkbench(context, extensionId);
+  const consoleErrors = [];
+  page.on('console', (message) => { if (message.type() === 'error') consoleErrors.push(message.text()); });
+  expect(spriteRequests, 'el boot carga un único sprite').toHaveLength(1);
+  await page.evaluate(() => {
+    window.__sfocHeaderRemovals = 0;
+    new MutationObserver((records) => {
+      for (const record of records) for (const node of record.removedNodes) {
+        if (node.id === 'workbenchContextHeader') window.__sfocHeaderRemovals += 1;
+      }
+    }).observe(document.getElementById('editorContainer'), { childList: true });
+  });
+  const sample = async () => page.evaluate(() => new Promise((resolve) => {
+    const failures = [];
+    let frames = 0;
+    const check = () => {
+      const header = document.getElementById('workbenchContextHeader');
+      if (!header) failures.push('header missing');
+      for (const svg of header?.querySelectorAll('svg.sfoc-icon') || []) {
+        const use = svg.querySelector('use'); const href = use?.getAttribute('href') || '';
+        const symbol = href.startsWith('#') ? document.querySelector(href) : null;
+        const style = getComputedStyle(svg); const rect = svg.getBoundingClientRect();
+        if (style.display === 'none') continue; // Los spinners inactivos no son iconos visibles.
+        if (!symbol || rect.width <= 0 || rect.height <= 0 || style.visibility === 'hidden' || style.opacity === '0') failures.push(href || 'invalid icon');
+      }
+      frames += 1;
+      if (frames < 35) requestAnimationFrame(check); else resolve(failures);
+    };
+    requestAnimationFrame(check);
+  }));
+
+  for (const route of [
+    ['code-studio', 'apex-vf'], ['code-studio', 'lwc-aura'],
+    ['data-compare', 'custom-settings'], ['data-compare', 'custom-metadata'], ['data-compare', 'records'],
+    ['data-workbench', 'record-editor'], ['data-workbench', 'bulk-import'], ['query-explorer', 'main']
+  ]) {
+    await navigateWorkspace(page, route[0], route[1]);
+    expect(await sample(), `${route.join('/')}: iconos visibles`).toEqual([]);
+  }
+  await page.locator('#workbenchThemeBtn').click();
+  expect(await sample(), 'tema: iconos visibles').toEqual([]);
+  await page.locator('#workbenchToolFavoriteBtn').click();
+  expect(await sample(), 'favorito: iconos visibles').toEqual([]);
+  await page.evaluate(() => document.getElementById('queryExplorerRunBtn')?.setAttribute('aria-busy', 'true'));
+  expect(await sample(), 'loading: iconos visibles').toEqual([]);
+  await page.evaluate(() => document.getElementById('queryExplorerRunBtn')?.setAttribute('aria-busy', 'false'));
+  await page.evaluate(async () => {
+    const { navigateToWorkspaceTab } = await import('./workbench/workbenchShell.js');
+    await Promise.all([
+      navigateToWorkspaceTab('code-studio', 'apex-vf'),
+      navigateToWorkspaceTab('data-compare', 'records'),
+      navigateToWorkspaceTab('query-explorer', 'main')
+    ]);
+  });
+  await expect(page.locator('body')).toHaveAttribute('data-workbench-workspace', 'query-explorer');
+  expect(await sample(), 'estrés: iconos visibles').toEqual([]);
+  expect(spriteRequests, 'no hay solicitudes adicionales del sprite tras el boot').toHaveLength(1);
+  expect(await page.evaluate(() => window.__sfocHeaderRemovals), 'máximo un reemplazo por navegación').toBeLessThanOrEqual(9);
+  expect(consoleErrors).toEqual([]);
+});
+
 test.afterEach(async ({ extensionContext }) => {
   await Promise.all(extensionContext.pages()
     .filter((page) => page.url() !== 'about:blank')

@@ -32,6 +32,14 @@ describe('toolRecents', () => {
     expect(mod.isToolPinned('QuickEdit')).toBe(false);
   });
 
+  it('gestiona como un único favorito un grupo de herramientas relacionadas', async () => {
+    const mod = await import('../code/core/toolRecents.js');
+    await mod.toggleToolPinGroup(['QuickEdit', 'LightningQuickEdit'], 'QuickEdit');
+    expect(mod.getToolRecentsSnapshot().pins).toEqual(['QuickEdit']);
+    await mod.toggleToolPinGroup(['QuickEdit', 'LightningQuickEdit'], 'LightningQuickEdit');
+    expect(mod.getToolRecentsSnapshot().pins).toEqual([]);
+  });
+
   it('conserva hasta ocho recientes y ocho favoritas', async () => {
     const mod = await import('../code/core/toolRecents.js');
     for (let index = 0; index < 10; index++) {

@@ -221,6 +221,8 @@ body[data-ui-mode="v2"] .workbench-panel {
 .sfoc-icon {
   display: block;
   flex: 0 0 auto;
+  width: var(--sfoc-icon-size, auto);
+  height: var(--sfoc-icon-size, auto);
   color: currentColor;
 }
 

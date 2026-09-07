@@ -240,8 +240,8 @@ export function buildFieldHistorySoql(opts) {
     throw new Error('Missing history query parameters');
   }
   const sinceDt = toSoqlDateTimeLiteral(opts.sinceIso);
-  const untilDt = toSoqlDateTimeLiteral(opts.untilIso);
-  if (!sinceDt || !untilDt) {
+  const untilDt = opts.untilIso ? toSoqlDateTimeLiteral(opts.untilIso) : '';
+  if (!sinceDt || (opts.untilIso && !untilDt)) {
     throw new Error('Invalid date range');
   }
   const parsedLimit = Math.max(
@@ -249,7 +249,7 @@ export function buildFieldHistorySoql(opts) {
     Math.min(50000, Number(opts.limit) || getFieldHistoryQueryDefaultLimit())
   );
   const rid = escapeSoqlLiteral(recordId);
-  let where = `${parentField} = '${rid}' AND CreatedDate >= ${sinceDt} AND CreatedDate <= ${untilDt}`;
+  let where = `${parentField} = '${rid}' AND CreatedDate >= ${sinceDt}${untilDt ? ' AND CreatedDate <= ' + untilDt : ''}`;
   const fieldNames = (opts.fieldNames || [])
     .map((n) => String(n || '').trim())
     .filter(Boolean);

@@ -5,8 +5,9 @@
   "description": "Chrome extension to compare Salesforce org metadata",
   "type": "module",
   "scripts": {
-    "prepare": "npm run vendor:driver && node sfInject/bundle.mjs",
+    "prepare": "npm run vendor:driver && npm run vendor:calendar && node sfInject/bundle.mjs",
     "vendor:driver": "node sync-driver-vendor.mjs",
+    "vendor:calendar": "node scripts/sync-vanilla-calendar-vendor.mjs",
     "test": "vitest run",
     "build:sf-inject": "node sfInject/bundle.mjs",
     "pretest": "node tests/ensureTelemetryConfig.mjs",
@@ -57,6 +58,7 @@
     "wrangler": "^4.110.0"
   },
   "dependencies": {
-    "driver.js": "1.8.0"
+    "driver.js": "1.8.0",
+    "vanilla-calendar-pro": "^3.3.2"
   }
 }

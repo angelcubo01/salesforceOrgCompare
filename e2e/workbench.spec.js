@@ -124,6 +124,36 @@ test('las favoritas se abren y se gestionan desde el título de la herramienta a
   await expect(page.locator('#workbenchCategory-favorites')).toBeHidden();
 });
 
+test('las favoritas agrupan las herramientas de un mismo espacio de trabajo', async ({ extensionContext: context, extensionId, extensionWorker }) => {
+  await setLocalStorage(extensionWorker, {
+    sfocToolRecents: { recents: [], pins: ['QuickEdit', 'LightningQuickEdit'] }
+  });
+  const page = await openExtensionPage(context, extensionId, 'code/code.html');
+  await waitForCodeBoot(page);
+
+  await page.locator('#workbenchCategory-favorites').click();
+  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveCount(1);
+  await expect(page.locator('#workbenchToolSubbar .workbench-tool-button')).toHaveAttribute('data-workspace-id', 'code-studio');
+  await page.locator('#workbenchToolSubbar .workbench-tool-button').click();
+  await expect(page.locator('#workbenchToolFavoriteBtn')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#workbenchTab-code-studio-lwc-aura').click();
+  await expect(page.locator('#workbenchToolFavoriteBtn')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('el favorito de una sección se refleja en todas sus pestañas', async ({ extensionContext: context, extensionId, extensionWorker }) => {
+  await setLocalStorage(extensionWorker, {
+    sfocToolRecents: { recents: [], pins: ['QuickEdit'] }
+  });
+  const page = await openExtensionPage(context, extensionId, 'code/code.html');
+  await waitForCodeBoot(page);
+
+  await page.locator('#workbenchCategory-favorites').click();
+  await page.locator('#workbenchToolSubbar .workbench-tool-button').click();
+  await expect(page.locator('#workbenchToolFavoriteBtn')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#workbenchTab-code-studio-lwc-aura').click();
+  await expect(page.locator('#workbenchToolFavoriteBtn')).toHaveAttribute('aria-pressed', 'true');
+});
+
 test('la Home adapta sus capacidades a sfoc_feature_controls', async ({ extensionContext: context, extensionId, extensionWorker }) => {
   const hiddenOperations = [
     'DebugLogBrowser', 'EventMonitor', 'EnvironmentStatus', 'OrgLimits', 'DeployStatus',

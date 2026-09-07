@@ -3,12 +3,24 @@ import { POSTHOG_DEBUG } from './telemetryConfig.js';
 /** La evaluación remota se renueva solo desde el popup. */
 export const FEATURE_FLAG_RELOAD_TTL_MS = 6 * 60 * 60 * 1000;
 export const FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY = 'lastSuccessfulFeatureFlagsFetchAt';
+export const FEATURE_FLAGS_SNAPSHOT_STORAGE_KEY = 'sfocPosthogFeatureFlagsSnapshot';
+
+/** Todas se resuelven en la misma respuesta de `reloadFeatureFlags()`. */
+export const MANAGED_POSTHOG_FEATURE_FLAGS = Object.freeze([
+  'sfoc_feature_controls',
+  'sfoc_popup_controls',
+  'sfoc_apex_log_ai_advisor',
+  'sfoc_session_replay',
+  'sfoc_support'
+]);
 
 let lastReloadAt = 0;
 let flagsReady = false;
 let waitPromise = null;
 let refreshPromise = null;
 let storageLoaded = false;
+let featureFlagsSnapshot = null;
+let snapshotLoaded = false;
 
 function setSdkReloadingPaused(ph, paused) {
   try {
@@ -41,6 +53,65 @@ async function markSuccessfulFetch() {
   }
 }
 
+/**
+ * Persiste la evaluación y el payload de todas las flags gestionadas en una única
+ * lectura del SDK. Los consumidores fuera del popup reutilizan este snapshot y
+ * no abren una ventana de red propia.
+ * @param {import('./posthogClient.js').posthog} ph
+ */
+export async function cacheManagedFeatureFlagsSnapshot(ph) {
+  if (!ph) return null;
+
+  const flags = {};
+  for (const key of MANAGED_POSTHOG_FEATURE_FLAGS) {
+    let enabled = false;
+    let payload = null;
+    try {
+      enabled = ph.isFeatureEnabled?.(key) === true;
+      payload = ph.getFeatureFlagPayload?.(key) ?? null;
+    } catch {
+      // Una flag problemática no debe impedir guardar el resto del snapshot.
+    }
+    flags[key] = { enabled, payload };
+  }
+
+  featureFlagsSnapshot = { fetchedAt: Date.now(), flags };
+  snapshotLoaded = true;
+  try {
+    await chrome.storage.local.set({ [FEATURE_FLAGS_SNAPSHOT_STORAGE_KEY]: featureFlagsSnapshot });
+  } catch {
+    /* Sin storage se conserva la caché de memoria. */
+  }
+  return featureFlagsSnapshot;
+}
+
+/**
+ * @param {string} key
+ * @returns {Promise<{ enabled: boolean, payload: unknown, fetchedAt: number } | null>}
+ */
+export async function getCachedManagedFeatureFlag(key) {
+  if (!snapshotLoaded) {
+    snapshotLoaded = true;
+    try {
+      const result = await chrome.storage.local.get(FEATURE_FLAGS_SNAPSHOT_STORAGE_KEY);
+      const raw = result?.[FEATURE_FLAGS_SNAPSHOT_STORAGE_KEY];
+      if (raw && typeof raw === 'object' && raw.flags && typeof raw.flags === 'object') {
+        featureFlagsSnapshot = raw;
+      }
+    } catch {
+      /* Sin storage se conserva la caché de memoria. */
+    }
+  }
+
+  const entry = featureFlagsSnapshot?.flags?.[key];
+  if (!entry || typeof entry !== 'object') return null;
+  return {
+    enabled: entry.enabled === true,
+    payload: entry.payload ?? null,
+    fetchedAt: Number(featureFlagsSnapshot.fetchedAt) || 0
+  };
+}
+
 export async function areFeatureFlagsStale() {
   const lastFetchAt = await readLastSuccessfulFetchAt();
   return !lastFetchAt || Date.now() - lastFetchAt >= FEATURE_FLAG_RELOAD_TTL_MS;
@@ -53,6 +124,8 @@ export function resetFeatureFlagLoaderForTests() {
   waitPromise = null;
   refreshPromise = null;
   storageLoaded = false;
+  featureFlagsSnapshot = null;
+  snapshotLoaded = false;
 }
 
 /** Impide recargas implícitas de posthog-js fuera de la ventana del popup. */
@@ -107,7 +180,9 @@ export async function refreshFeatureFlagsIfStale(ph, opts = {}) {
       try {
         ph.reloadFeatureFlags();
         const loaded = await waitForFeatureFlags(ph, opts.timeoutMs ?? 8000);
-        if (loaded) await markSuccessfulFetch();
+        if (loaded) {
+          await Promise.all([markSuccessfulFetch(), cacheManagedFeatureFlagsSnapshot(ph)]);
+        }
         if (POSTHOG_DEBUG) console.log('[posthog] feature flags popup refresh', { loaded, force });
         return loaded;
       } catch {
@@ -144,8 +219,13 @@ export async function invalidateFeatureFlagsCache() {
   lastReloadAt = 0;
   storageLoaded = true;
   try {
-    await chrome.storage.local.remove(FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY);
+    await chrome.storage.local.remove([
+      FEATURE_FLAG_LAST_SUCCESSFUL_FETCH_KEY,
+      FEATURE_FLAGS_SNAPSHOT_STORAGE_KEY
+    ]);
   } catch {
     /* ignore */
   }
+  featureFlagsSnapshot = null;
+  snapshotLoaded = true;
 }

@@ -22,13 +22,13 @@ describe('logiAdvisorCache', () => {
     expect(canSkipLogiAdvisorRemoteFetch(empty)).toBe(false);
   });
 
-  it('does not skip when cached config is disabled (avoids locking Logi out)', () => {
+  it('reutiliza una respuesta remota desactivada para no repetir la consulta de cohorte', () => {
     const entry = unwrapCacheRaw({
       config: { ...DEFAULT_LOGI_ADVISOR_CONFIG, enabled: false },
       cachedAt: Date.now(),
       fromRemote: true
     });
-    expect(canSkipLogiAdvisorRemoteFetch(entry)).toBe(false);
+    expect(canSkipLogiAdvisorRemoteFetch(entry)).toBe(true);
   });
 
   it('promotes legacy operational flat cache so Logi keeps working', () => {
@@ -75,7 +75,7 @@ describe('logiAdvisorCache', () => {
     expect(canSkipLogiAdvisorRemoteFetch(entry, { force: true })).toBe(true);
   });
 
-  it('force skips only while within 2h remote lease', () => {
+  it('force skips only while within 6h remote lease', () => {
     const freshAt = Date.now() - 1000;
     const staleAt = Date.now() - LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS - 1000;
     const base = {
@@ -91,6 +91,15 @@ describe('logiAdvisorCache', () => {
     expect(canSkipLogiAdvisorRemoteFetch({ ...base, cachedAt: freshAt }, { force: true })).toBe(true);
     expect(canSkipLogiAdvisorRemoteFetch({ ...base, cachedAt: staleAt }, { force: true })).toBe(false);
     expect(canSkipLogiAdvisorRemoteFetch({ ...base, cachedAt: staleAt })).toBe(true);
+  });
+
+  it('también amortigua durante 6h una respuesta remota que desactiva Logi', () => {
+    const entry = unwrapCacheRaw({
+      config: { ...DEFAULT_LOGI_ADVISOR_CONFIG, enabled: false },
+      cachedAt: Date.now() - 1000,
+      fromRemote: true
+    });
+    expect(canSkipLogiAdvisorRemoteFetch(entry, { force: true })).toBe(true);
   });
 
   it('without force still skips when short TTL expired if cache is operational', () => {

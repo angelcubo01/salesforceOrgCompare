@@ -61,6 +61,7 @@
     <link rel="stylesheet" href="./workbench/workbench.css" />
     <link rel="stylesheet" href="./workbench/workbench-refresh.css" />
     <link rel="stylesheet" href="../vendor/driver.js/driver.css" />
+    <link rel="stylesheet" href="../vendor/vanilla-calendar-pro/styles/index.css" />
     <link rel="stylesheet" href="../shared/sfoc-design-system.css" />
   </head>
   <body class="app-nav-booting">
@@ -2332,6 +2333,7 @@
                 </button>
               </div>
             </div>
+            <section id="environmentStatusSummary" class="env-status-summary" data-i18n-aria-label="envStatus.operationalSummary"></section>
             <p id="environmentStatusUpdated" class="env-status-updated" role="status"></p>
             <p id="environmentStatusStatus" class="env-status-status" role="status"></p>
             <div class="env-status-table-wrap">
@@ -2340,14 +2342,12 @@
                   <tr>
                     <th scope="col" data-i18n="envStatus.colEnv">Entorno</th>
                     <th scope="col" data-i18n="envStatus.colType">Tipo</th>
-                    <th scope="col" data-i18n="envStatus.colOrgId">Org Id</th>
-                    <th scope="col" data-i18n="envStatus.colInstance">Instancia</th>
-                    <th scope="col" data-i18n="envStatus.colRelease">Versión release</th>
-                    <th scope="col" data-i18n="envStatus.colApi">API version</th>
-                    <th scope="col" data-i18n="envStatus.colTrust">Estado Trust</th>
+                    <th scope="col" data-i18n="envStatus.colInstanceRelease">Instancia y release</th>
+                    <th scope="col" data-i18n="envStatus.colHealth">Salud actual</th>
+                    <th scope="col" data-i18n="envStatus.colIncidents">Incidencias activas</th>
                     <th scope="col" data-i18n="envStatus.colMaintenance">Próximo mantenimiento</th>
                     <th scope="col" data-i18n="envStatus.colSession">Sesión</th>
-                    <th scope="col" data-i18n="envStatus.colActions">Acciones</th>
+                    <th scope="col" data-i18n="envStatus.colDetail">Detalle</th>
                   </tr>
                 </thead>
                 <tbody id="environmentStatusTbody"></tbody>
@@ -2722,6 +2722,18 @@
                 </select>
               </div>
               <div class="debug-log-browser-field">
+                <label for="debugLogBrowserStatusFilter" class="debug-log-browser-field-label" data-i18n="debugLogs.filterStatus">Estado</label>
+                <select id="debugLogBrowserStatusFilter" class="debug-log-browser-input debug-log-browser-select">
+                  <option value="" data-i18n="debugLogs.statusAll">Todos los estados</option>
+                  <option value="success" data-i18n="debugLogs.statusSuccess">Correcto</option>
+                  <option value="error" data-i18n="debugLogs.statusError">Error</option>
+                </select>
+              </div>
+              <div class="debug-log-browser-field">
+                <label for="debugLogBrowserTextFilter" class="debug-log-browser-field-label" data-i18n="debugLogs.filterText">Texto</label>
+                <input id="debugLogBrowserTextFilter" type="text" class="debug-log-browser-input" data-i18n-placeholder="debugLogs.textFilterPh" />
+              </div>
+              <div class="debug-log-browser-field">
                 <label for="debugLogBrowserSince" class="debug-log-browser-field-label" data-i18n="debugLogs.filterSince">Desde</label>
                 <input id="debugLogBrowserSince" type="datetime-local" class="debug-log-browser-input" />
               </div>
@@ -2729,22 +2741,29 @@
                 <label for="debugLogBrowserUntil" class="debug-log-browser-field-label" data-i18n="debugLogs.filterUntil">Hasta</label>
                 <input id="debugLogBrowserUntil" type="datetime-local" class="debug-log-browser-input" />
               </div>
+              <div class="debug-log-browser-filter-actions">
+                <button type="button" id="debugLogBrowserApplyFiltersBtn" class="debug-log-browser-open-btn" data-i18n="filters.apply">Aplicar filtros</button>
+                <button type="button" id="debugLogBrowserResetFiltersBtn" class="debug-log-browser-open-btn" data-i18n="filters.reset">Restablecer</button>
+              </div>
             </div>
             <div class="debug-log-browser-pagination debug-log-browser-pagination-top">
-              <button type="button" id="debugLogBrowserPrevPage" class="debug-log-browser-open-btn">←</button>
-              <span id="debugLogBrowserPageLabel" class="debug-log-browser-page-label">1/1</span>
-              <button type="button" id="debugLogBrowserNextPage" class="debug-log-browser-open-btn">→</button>
+              <button type="button" id="debugLogBrowserFirstPage" class="debug-log-browser-open-btn sfoc-page-icon-btn" aria-label="First page">«</button>
+              <button type="button" id="debugLogBrowserPrevPage" class="debug-log-browser-open-btn sfoc-page-icon-btn" aria-label="Previous page">‹</button>
+              <span id="debugLogBrowserPageLabel" class="debug-log-browser-page-label">Showing 0–0 of 0</span>
+              <label class="sfoc-page-goto">Page <input id="debugLogBrowserPageInput" type="number" min="1" value="1" inputmode="numeric" /></label>
+              <button type="button" id="debugLogBrowserNextPage" class="debug-log-browser-open-btn sfoc-page-icon-btn" aria-label="Next page">›</button>
+              <button type="button" id="debugLogBrowserLastPage" class="debug-log-browser-open-btn sfoc-page-icon-btn" aria-label="Last page">»</button>
             </div>
             <div class="debug-log-browser-table-wrap" id="debugLogBrowserTableWrap">
               <table class="debug-log-browser-table">
                 <thead>
                   <tr>
-                    <th scope="col" data-i18n="debugLogs.colStatus">Estado</th>
-                    <th scope="col" data-i18n="debugLogs.colStart">Inicio</th>
-                    <th scope="col" data-i18n="debugLogs.colUser">Usuario</th>
-                    <th scope="col" data-i18n="debugLogs.colOperation">Operación</th>
-                    <th scope="col" data-i18n="debugLogs.colDuration">Duración (ms)</th>
-                    <th scope="col" data-i18n="debugLogs.colLength">Tamaño</th>
+                    <th scope="col" data-sort="Status" data-i18n="debugLogs.colStatus">Estado</th>
+                    <th scope="col" data-sort="StartTime" aria-sort="descending" data-i18n="debugLogs.colStart">Inicio</th>
+                    <th scope="col" data-sort="LogUserId" data-i18n="debugLogs.colUser">Usuario</th>
+                    <th scope="col" data-sort="Operation" data-i18n="debugLogs.colOperation">Operación</th>
+                    <th scope="col" data-sort="DurationMilliseconds" data-i18n="debugLogs.colDuration">Duración (ms)</th>
+                    <th scope="col" data-sort="LogLength" data-i18n="debugLogs.colLength">Tamaño</th>
                     <th scope="col" data-i18n="debugLogs.colType">Type</th>
                     <th scope="col" data-i18n="debugLogs.colName">Name</th>
                     <th scope="col" data-i18n="debugLogs.colMethod">Method</th>
@@ -2763,6 +2782,7 @@
               <div class="debug-log-browser-field debug-log-browser-page-size-wrap">
                 <label for="debugLogBrowserPageSize" class="debug-log-browser-field-label" data-i18n="debugLogs.filterPageSize">Filas por página</label>
                 <select id="debugLogBrowserPageSize" class="debug-log-browser-input debug-log-browser-select debug-log-browser-page-size">
+                  <option value="10">10</option>
                   <option value="25" selected>25</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
@@ -3267,6 +3287,7 @@
                 <button type="button" id="fieldHistoryLoadBtn" class="field-history-open-btn field-history-primary-btn" data-i18n="fieldHistory.loadHistory" disabled>
                   Cargar historial
                 </button>
+                <button type="button" id="fieldHistoryResetFiltersBtn" class="field-history-open-btn" data-i18n="filters.reset">Restablecer</button>
               </div>
             </div>
             <p class="field-history-hint" data-i18n="fieldHistory.retentionHint">
@@ -3274,9 +3295,12 @@
             </p>
             <div class="field-history-results">
             <div class="field-history-pagination field-history-pagination-top">
-              <button type="button" id="fieldHistoryPrevPage" class="field-history-open-btn">←</button>
-              <span id="fieldHistoryPageLabel" class="field-history-page-label">1/1</span>
-              <button type="button" id="fieldHistoryNextPage" class="field-history-open-btn">→</button>
+              <button type="button" id="fieldHistoryFirstPage" class="field-history-open-btn sfoc-page-icon-btn" aria-label="First page">«</button>
+              <button type="button" id="fieldHistoryPrevPage" class="field-history-open-btn sfoc-page-icon-btn" aria-label="Previous page">‹</button>
+              <span id="fieldHistoryPageLabel" class="field-history-page-label">Showing 0–0 of 0</span>
+              <label class="sfoc-page-goto">Page <input id="fieldHistoryPageInput" type="number" min="1" value="1" inputmode="numeric" /></label>
+              <button type="button" id="fieldHistoryNextPage" class="field-history-open-btn sfoc-page-icon-btn" aria-label="Next page">›</button>
+              <button type="button" id="fieldHistoryLastPage" class="field-history-open-btn sfoc-page-icon-btn" aria-label="Last page">»</button>
             </div>
             <div class="field-history-table-wrap">
               <table class="field-history-table">
@@ -3299,6 +3323,7 @@
               <div class="field-history-field field-history-page-size-wrap">
                 <label for="fieldHistoryPageSize" class="field-history-field-label" data-i18n="fieldHistory.filterPageSize">Filas por página</label>
                 <select id="fieldHistoryPageSize" class="field-history-input field-history-select field-history-page-size">
+                  <option value="10">10</option>
                   <option value="25" selected>25</option>
                   <option value="50">50</option>
                   <option value="100">100</option>
@@ -3354,11 +3379,18 @@
                 <label for="setupAuditUntil" class="setup-audit-field-label" data-i18n="setupAudit.filterUntil">Hasta</label>
                 <input id="setupAuditUntil" type="datetime-local" class="setup-audit-input" />
               </div>
+              <div class="setup-audit-filter-actions">
+                <button type="button" id="setupAuditApplyFiltersBtn" class="setup-audit-open-btn" data-i18n="filters.apply">Aplicar filtros</button>
+                <button type="button" id="setupAuditResetFiltersBtn" class="setup-audit-open-btn" data-i18n="filters.reset">Restablecer</button>
+              </div>
             </div>
             <div class="setup-audit-pagination setup-audit-pagination-top">
-              <button type="button" id="setupAuditPrevPage" class="setup-audit-open-btn">←</button>
-              <span id="setupAuditPageLabel" class="setup-audit-page-label">1/1</span>
-              <button type="button" id="setupAuditNextPage" class="setup-audit-open-btn">→</button>
+              <button type="button" id="setupAuditFirstPage" class="setup-audit-open-btn sfoc-page-icon-btn" aria-label="First page">«</button>
+              <button type="button" id="setupAuditPrevPage" class="setup-audit-open-btn sfoc-page-icon-btn" aria-label="Previous page">‹</button>
+              <span id="setupAuditPageLabel" class="setup-audit-page-label">Showing 0–0 of 0</span>
+              <label class="sfoc-page-goto">Page <input id="setupAuditPageInput" type="number" min="1" value="1" inputmode="numeric" /></label>
+              <button type="button" id="setupAuditNextPage" class="setup-audit-open-btn sfoc-page-icon-btn" aria-label="Next page">›</button>
+              <button type="button" id="setupAuditLastPage" class="setup-audit-open-btn sfoc-page-icon-btn" aria-label="Last page">»</button>
             </div>
             <div class="setup-audit-table-wrap">
               <table class="setup-audit-table">
@@ -3381,6 +3413,7 @@
               <div class="setup-audit-field setup-audit-page-size-wrap">
                 <label for="setupAuditPageSize" class="setup-audit-field-label" data-i18n="setupAudit.filterPageSize">Filas por página</label>
                 <select id="setupAuditPageSize" class="setup-audit-input setup-audit-select setup-audit-page-size">
+                  <option value="10">10</option>
                   <option value="25" selected>25</option>
                   <option value="50">50</option>
                   <option value="100">100</option>

@@ -1,5 +1,8 @@
 import { POSTHOG_DEBUG } from './telemetryConfig.js';
-import { ensureFeatureFlagsLoaded } from './posthogFeatureFlagLoader.js';
+import {
+  ensureFeatureFlagsLoaded,
+  getCachedManagedFeatureFlag
+} from './posthogFeatureFlagLoader.js';
 import { DEFAULT_POPUP_CONTROLS, parsePopupControlsPayload } from './popupControls.js';
 
 /** Feature flag remoto (PostHog). Rollout 100 %; restricciones vía payload JSON. */
@@ -65,6 +68,15 @@ function dispatchPopupControlsReady(config) {
 export async function loadPopupControlsFromPosthog(ph, opts = {}) {
   if (!ph) {
     cachedConfig = await readPopupControlsCache();
+    return cachedConfig;
+  }
+
+  const cachedFlag = await getCachedManagedFeatureFlag(POPUP_CONTROLS_FLAG);
+  if (cachedFlag) {
+    cachedConfig = cachedFlag.enabled
+      ? parsePopupControlsPayload(cachedFlag.payload, { flagActive: true })
+      : { ...DEFAULT_POPUP_CONTROLS };
+    await writePopupControlsCache(cachedConfig);
     return cachedConfig;
   }
 

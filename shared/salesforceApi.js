@@ -8,6 +8,7 @@ import {
   salesforceRestErrorMessagesOnly,
   salesforceRestErrorStructuredFromText
 } from './salesforceRestErrors.js';
+import { normalizeSalesforceIdKey } from './salesforceIds.js';
 
 function createWindowLimiter(maxPerWindow, windowMs) {
   const stamps = [];
@@ -47,6 +48,28 @@ async function restFetchWithSid(instanceUrl, sid, path, init = {}) {
   headers.set('Authorization', `Bearer ${sid}`);
   headers.set('Accept', 'application/json');
   return fetch(url, { ...init, headers });
+}
+
+/**
+ * Obtiene la hora del servidor Salesforce desde la cabecera HTTP Date.
+ * La consulta a Limits es ligera, autenticada y no modifica datos.
+ */
+export async function getSalesforceServerTime(instanceUrl, sid, apiVersion) {
+  const res = await restFetchWithSid(
+    instanceUrl,
+    sid,
+    '/services/data/v' + apiVersion + '/limits',
+    { method: 'GET' }
+  );
+  const rawDate = String(res.headers.get('date') || '').trim();
+  const serverNowMs = Date.parse(rawDate);
+  if (!res.ok) {
+    await throwWithSalesforceRestError('Salesforce server time', res);
+  }
+  if (!Number.isFinite(serverNowMs)) {
+    throw new Error('Salesforce response did not include a valid Date header');
+  }
+  return { serverNowMs, serverNowIso: new Date(serverNowMs).toISOString() };
 }
 
 /**
@@ -1388,8 +1411,8 @@ export function resolveApexLogsInWindowLimit(opts = {}) {
 
 export async function queryApexLogsInWindow(instanceUrl, sid, apiVersion, sinceIso, untilIso, opts = {}) {
   const a = toSoqlUtcDateTimeLiteral(sinceIso);
-  const b = toSoqlUtcDateTimeLiteral(untilIso);
-  if (!a || !b) return [];
+  const b = untilIso ? toSoqlUtcDateTimeLiteral(untilIso) : '';
+  if (!a || (untilIso && !b)) return [];
   const limit = resolveApexLogsInWindowLimit(opts);
   const uid = String(opts.logUserId || '').replace(/[^a-zA-Z0-9]/g, '');
   const userClause = uid ? ` AND LogUserId = '${escapeSoqlLiteral(uid)}'` : '';
@@ -1406,7 +1429,7 @@ export async function queryApexLogsInWindow(instanceUrl, sid, apiVersion, sinceI
   }
   const baseFields =
     'Id, StartTime, Operation, LogLength, LogUserId, LogUser.Name, DurationMilliseconds, Location, Status';
-  const whereCore = `StartTime >= ${a} AND StartTime <= ${b}${userClause}${opClause}`;
+  const whereCore = `StartTime >= ${a}${b ? ' AND StartTime <= ' + b : ''}${userClause}${opClause}`;
   const orderLimit = ` ORDER BY StartTime ASC LIMIT ${limit}`;
   const soqlLocNoLike = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${orderLimit}`;
   const soqlWithLoc = `SELECT ${baseFields} FROM ApexLog WHERE ${whereCore}${likeClause}${orderLimit}`;
@@ -2207,12 +2230,14 @@ export async function queryUserDebugTraceFlags(instanceUrl, sid, apiVersion) {
       const expMs = parseSalesforceDateTimeMs(r?.ExpirationDate);
       const startIso = Number.isFinite(startMs) ? new Date(startMs).toISOString() : '';
       const expirationIso = Number.isFinite(expMs) ? new Date(expMs).toISOString() : '';
-      const tracedEntityName =
-        String(r?.TracedEntity?.Name || r?.['TracedEntity.Name'] || '').trim() || tracedEntityId;
+      // No sustituir el nombre por el Id. El consumidor necesita distinguir
+      // entre un usuario resuelto y una referencia que Salesforce no expandió.
+      const tracedEntityName = String(r?.TracedEntity?.Name || r?.['TracedEntity.Name'] || '').trim();
       return {
-        id: id.length > 15 ? id.slice(0, 15) : id,
-        tracedEntityId: tracedEntityId.length > 15 ? tracedEntityId.slice(0, 15) : tracedEntityId,
+        id,
+        tracedEntityId,
         tracedEntityName,
+        tracedEntityKey: normalizeSalesforceIdKey(tracedEntityId),
         debugLevelId,
         debugLevelLabel: lvl?.label || debugLevelId || '',
         debugLevelDeveloperName: lvl?.developerName || '',
@@ -2547,4 +2572,3 @@ export async function executeAnonymous(
   }
   return executeAnonymousViaRest(instanceUrl, sid, apiVersion, body);
 }
-

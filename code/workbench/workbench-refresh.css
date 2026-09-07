@@ -421,10 +421,9 @@ body[data-ui-mode="v2"] .workbench-tool-subbar {
   gap: 5px;
   padding: 6px 10px;
   opacity: 1;
-  transition: opacity 100ms ease;
 }
 
-body[data-ui-mode="v2"] .workbench-tool-subbar.is-switching { opacity: 0.45; }
+body[data-ui-mode="v2"] .workbench-tool-subbar.is-switching { opacity: 1; }
 
 body[data-ui-mode="v2"] .workbench-tool-button {
   min-width: max-content;
@@ -628,7 +627,6 @@ body[data-ui-mode="v2"] :where(.workbench-header-action--destructive, .workbench
 }
 
 body[data-ui-mode="v2"] .workbench-action-spinner { display: none; }
-body[data-ui-mode="v2"] :where(.workbench-header-action, .workbench-more-action).is-loading .workbench-action-icon { visibility: hidden; }
 body[data-ui-mode="v2"] :where(.workbench-header-action, .workbench-more-action).is-loading .workbench-action-spinner {
   position: absolute;
   left: 12px;

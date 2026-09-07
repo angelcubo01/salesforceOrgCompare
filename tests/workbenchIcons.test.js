@@ -28,4 +28,18 @@ describe('workbench icon sprite', () => {
     }
     expect(WORKBENCH_ICON_VERSION).toBe('3.46.0');
   });
+  it('uses an internal sprite and a controlled fallback for invalid icon names', async () => {
+    const registry = await readFile(new URL('../code/workbench/iconRegistry.js', import.meta.url), 'utf8');
+    expect(registry).toContain("WORKBENCH_ICON_SPRITE_ID = 'sfocWorkbenchIconSprite'");
+    expect(registry).toContain("chrome.runtime.getURL('code/assets/tabler-icons.svg')");
+    expect(registry).toContain("use.setAttribute('href', `#${iconSymbolId(iconName)}`)");
+    expect(registry).toContain('USED_ICON_NAMES.includes(iconName)');
+    expect(registry).not.toContain('opts.spritePath || WORKBENCH_ICON_SPRITE_PATH}#icon-');
+  });
+
+  it('prepares the sprite before revealing the interface', async () => {
+    const code = await readFile(new URL('../code/code.js', import.meta.url), 'utf8');
+    expect(code).toContain('const iconSpritePromise = ensureWorkbenchIconSprite();');
+    expect(code).toContain('await iconSpritePromise;');
+  });
 });

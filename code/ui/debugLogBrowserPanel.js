@@ -8,6 +8,14 @@ import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { getDebugLogsDefaultRangeHours } from '../../shared/extensionSettings.js';
 import { confirmSfocOrgAction } from './sfocModal.js';
+import { createDateTimeRangePicker } from './dateTimeRangePicker.js';
+import { createTablePagination } from './tablePagination.js';
+import { getSalesforceNow } from './salesforceServerClock.js';
+import {
+  isValidUtcRange,
+  toLocalDateTimeValue,
+  toUtcIsoFromLocalDateTime
+} from '../../shared/salesforceTime.js';
 
 const CONTEXT_PLACEHOLDER = '—';
 
@@ -21,6 +29,12 @@ const bodyEnrichedIds = new Set();
 /** Ids en vuelo en la petición de enriquecimiento actual. */
 const enrichingIds = new Set();
 let isLoading = false;
+let dateRangePicker = null;
+let appliedFilters = { user: '', operation: '', status: '', text: '' };
+let appliedDraftSignature = '';
+const pagination = createTablePagination({ initialPageSize: 25 });
+let sortState = { key: 'StartTime', direction: 'desc' };
+let tableState = 'initial';
 
 function rowExecutionFields(row) {
   if (!row?.contextFromBody) {
@@ -96,16 +110,24 @@ function getFilterElements() {
   return {
     panelInner: document.querySelector('.debug-log-browser-panel-inner'),
     status: document.getElementById('debugLogBrowserStatus'),
+    clockNotice: document.getElementById('debugLogBrowserClockNotice'),
     loading: document.getElementById('debugLogBrowserLoading'),
     refreshBtn: document.getElementById('debugLogBrowserRefreshBtn'),
     deleteAllBtn: document.getElementById('debugLogBrowserDeleteAllBtn'),
     user: document.getElementById('debugLogBrowserUserFilter'),
     operation: document.getElementById('debugLogBrowserOperationFilter'),
+    rowStatus: document.getElementById('debugLogBrowserStatusFilter'),
+    text: document.getElementById('debugLogBrowserTextFilter'),
+    applyFilters: document.getElementById('debugLogBrowserApplyFiltersBtn'),
+    resetFilters: document.getElementById('debugLogBrowserResetFiltersBtn'),
     since: document.getElementById('debugLogBrowserSince'),
     until: document.getElementById('debugLogBrowserUntil'),
     pageSize: document.getElementById('debugLogBrowserPageSize'),
+    firstPage: document.getElementById('debugLogBrowserFirstPage'),
     prevPage: document.getElementById('debugLogBrowserPrevPage'),
     nextPage: document.getElementById('debugLogBrowserNextPage'),
+    lastPage: document.getElementById('debugLogBrowserLastPage'),
+    pageInput: document.getElementById('debugLogBrowserPageInput'),
     pageLabel: document.getElementById('debugLogBrowserPageLabel'),
     tbody: document.getElementById('debugLogBrowserTbody'),
     empty: document.getElementById('debugLogBrowserEmpty'),
@@ -178,16 +200,81 @@ function formatDateTime(value) {
 }
 
 function applyClientFilters(rows) {
-  const { user, operation } = getFilterElements();
-  const selectedUserId = normalizeSfId(user?.value || '');
-  const opNeedle = String(operation?.value || '').trim().toLowerCase();
+  const selectedUserId = normalizeSfId(appliedFilters.user);
+  const opNeedle = String(appliedFilters.operation || '').trim().toLowerCase();
+  const statusNeedle = String(appliedFilters.status || '').trim().toLowerCase();
+  const textNeedle = String(appliedFilters.text || '').trim().toLowerCase();
   return (rows || []).filter((r) => {
     const userId = normalizeSfId(r?.LogUserId);
     const op = String(r?.Operation || '').toLowerCase();
     if (selectedUserId && userId !== selectedUserId) return false;
     if (opNeedle && !op.includes(opNeedle)) return false;
+    if (statusNeedle && String(r?.Status || '').toLowerCase() !== statusNeedle) return false;
+    if (textNeedle) {
+      const haystack = [r?.Type, r?.Name, r?.Method].map((value) => String(value || '').toLowerCase()).join(' ');
+      if (!haystack.includes(textNeedle)) return false;
+    }
     return true;
+  }).sort((left, right) => {
+    const a = left?.[sortState.key] ?? '';
+    const b = right?.[sortState.key] ?? '';
+    const av = Number.isFinite(Date.parse(a)) ? Date.parse(a) : (Number.isFinite(Number(a)) ? Number(a) : String(a).toLowerCase());
+    const bv = Number.isFinite(Date.parse(b)) ? Date.parse(b) : (Number.isFinite(Number(b)) ? Number(b) : String(b).toLowerCase());
+    const result = av < bv ? -1 : av > bv ? 1 : 0;
+    return sortState.direction === 'asc' ? result : -result;
   });
+}
+
+function captureDraftFilters() {
+  const { user, operation, rowStatus, text } = getFilterElements();
+  return {
+    user: String(user?.value || ''),
+    operation: String(operation?.value || ''),
+    status: String(rowStatus?.value || ''),
+    text: String(text?.value || '')
+  };
+}
+
+function captureDraftSignature() {
+  const { since, until } = getFilterElements();
+  return JSON.stringify({
+    ...captureDraftFilters(),
+    since: String(since?.value || ''),
+    until: dateRangePicker?.until?.isNowMode ? 'salesforce-now' : String(until?.value || '')
+  });
+}
+
+function updateFilterActionState() {
+  const { applyFilters, since, until } = getFilterElements();
+  if (!applyFilters) return;
+  const sinceIso = toUtcIsoFromLocalDateTime(since?.value);
+  const untilIso = toUtcIsoFromLocalDateTime(until?.value);
+  const valid = Boolean(sinceIso)
+    && (dateRangePicker?.until?.isNowMode || isValidUtcRange(sinceIso, untilIso));
+  applyFilters.disabled = !valid || captureDraftSignature() === appliedDraftSignature;
+}
+
+async function applyDraftFilters() {
+  appliedFilters = captureDraftFilters();
+  appliedDraftSignature = captureDraftSignature();
+  currentPage = 1;
+  cancelPageEnrichment();
+  lastLoadSignature = '';
+  await refreshDebugLogBrowserPanel();
+}
+
+function resetDraftFilters() {
+  const { user, operation, rowStatus, text } = getFilterElements();
+  if (user) user.value = '';
+  if (operation) operation.value = '';
+  if (rowStatus) rowStatus.value = '';
+  if (text) text.value = '';
+  appliedFilters = captureDraftFilters();
+  appliedDraftSignature = captureDraftSignature();
+  currentPage = 1;
+  cancelPageEnrichment();
+  renderRowsAndEnrich();
+  updateFilterActionState();
 }
 
 function formatBytes(value) {
@@ -231,8 +318,9 @@ function populateUserOptions(rows) {
         .map((r) => {
           const id = String(r?.LogUserId || '').trim();
           if (!id) return null;
-          const name = String(r?.UserName || r?.LogUser?.Name || '').trim() || id;
-          return [id, { id, name }];
+          const name = String(r?.UserName || r?.LogUser?.Name || '').trim();
+          const username = String(r?.LogUser?.Username || '').trim();
+          return [id, { id, name: name || username || id, username }];
         })
         .filter(Boolean)
     ).values()
@@ -245,42 +333,46 @@ function populateUserOptions(rows) {
   for (const u of users) {
     const opt = document.createElement('option');
     opt.value = u.id;
-    opt.textContent = u.name;
+    opt.textContent = u.username && u.name !== u.username ? `${u.name} — ${u.username}` : u.name;
+    opt.title = u.id;
     user.appendChild(opt);
   }
   if ([...user.options].some((o) => o.value === current)) user.value = current;
 }
 
 function updatePaginationUi(totalFilteredRows) {
-  const { pageSize, prevPage, nextPage, pageLabel } = getFilterElements();
-  const perPage = Math.max(1, Number(pageSize?.value || 25));
-  const totalPages = Math.max(1, Math.ceil(totalFilteredRows / perPage));
-  if (currentPage > totalPages) currentPage = totalPages;
-  if (currentPage < 1) currentPage = 1;
+  const { pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, pageLabel } = getFilterElements();
+  pagination.setPage(currentPage, totalFilteredRows);
+  currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
   if (prevPage) prevPage.disabled = currentPage <= 1;
   if (nextPage) nextPage.disabled = currentPage >= totalPages;
+  if (firstPage) firstPage.disabled = currentPage <= 1;
+  if (lastPage) lastPage.disabled = currentPage >= totalPages;
+  if (pageInput) {
+    pageInput.disabled = totalFilteredRows === 0;
+    pageInput.max = String(totalPages);
+    pageInput.value = String(currentPage);
+  }
   if (pageLabel) {
-    pageLabel.textContent = t('debugLogs.pageLabel', {
-      page: String(currentPage),
-      pages: String(totalPages),
-      total: String(totalFilteredRows)
-    });
+    const from = totalFilteredRows ? (currentPage - 1) * pagination.pageSize + 1 : 0;
+    const to = Math.min(currentPage * pagination.pageSize, totalFilteredRows);
+    pageLabel.textContent = t('pagination.showing', { from: String(from), to: String(to), total: String(totalFilteredRows) });
   }
 }
 
 function getRowsPerPage() {
-  const { pageSize } = getFilterElements();
-  return Math.max(1, Math.min(100, Number(pageSize?.value || 25)));
+  return pagination.pageSize;
 }
 
 function getVisiblePageRows() {
   const rows = applyClientFilters(lastRows);
-  const perPage = getRowsPerPage();
-  const start = (currentPage - 1) * perPage;
+  const slice = pagination.getSlice(rows);
+  currentPage = pagination.page;
   return {
     rows,
-    pageRows: rows.slice(start, start + perPage),
-    perPage
+    pageRows: slice.rows,
+    perPage: pagination.pageSize
   };
 }
 
@@ -375,7 +467,25 @@ function renderRows() {
   updatePaginationUi(rows.length);
   tbody.innerHTML = '';
   if (!pageRows.length) {
-    empty.classList.remove('hidden');
+    empty.classList.add('hidden');
+    const tr = document.createElement('tr');
+    tr.className = 'sfoc-table-empty-row';
+    const td = document.createElement('td');
+    td.colSpan = 10;
+    td.textContent = tableState === 'no-session' ? t('toast.noSession') : t('debugLogs.empty');
+    if (tableState === 'no-session') {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'debug-log-browser-open-btn sfoc-table-empty-retry';
+      retry.textContent = t('filters.retry');
+      retry.addEventListener('click', () => {
+        lastLoadSignature = '';
+        void refreshDebugLogBrowserPanel();
+      });
+      td.appendChild(retry);
+    }
+    tr.appendChild(td);
+    tbody.appendChild(tr);
     return;
   }
   empty.classList.add('hidden');
@@ -453,18 +563,13 @@ function renderRowsAndEnrich() {
 }
 
 async function loadLogs() {
-  const { status, since, until } = getFilterElements();
+  const { status } = getFilterElements();
   if (!state.leftOrgId) {
     if (status) status.textContent = t('debugLogs.selectOrg');
     return;
   }
-  const sinceIso = since?.value ? new Date(since.value).toISOString() : '';
-  const untilIso = until?.value ? new Date(until.value).toISOString() : '';
-  if (!sinceIso || !untilIso) {
-    if (status) status.textContent = t('debugLogs.invalidRange');
-    return;
-  }
-  if (new Date(sinceIso).getTime() > new Date(untilIso).getTime()) {
+  const range = await resolveQueryRange();
+  if (!range.ok) {
     if (status) status.textContent = t('debugLogs.invalidRange');
     return;
   }
@@ -474,19 +579,21 @@ async function loadLogs() {
     const res = await bg({
       type: 'debugLogs:list',
       orgId: state.leftOrgId,
-      sinceIso,
-      untilIso
+      sinceIso: range.sinceIso,
+      untilIso: range.untilIso
     });
     if (!res?.ok) {
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('debugLogs.loadError');
       void handleToolResponseFailure(res, { artifact_type: 'DebugLogs', phase: 'list' });
-      if (status) status.textContent = msg;
-      showToast(msg, 'error');
+      tableState = res?.reason === 'NO_SID' ? 'no-session' : 'error';
+      if (status) status.textContent = res?.reason === 'NO_SID' ? '' : msg;
+      if (res?.reason !== 'NO_SID') showToast(msg, 'error');
       lastRows = [];
       currentPage = 1;
       return;
     }
     const rawRows = Array.isArray(res.logs) ? res.logs : [];
+    tableState = rawRows.length ? 'loaded' : 'empty';
     lastRows = (await resolveUserNamesForLogs(rawRows)).map(normalizeLogRow);
     currentPage = 1;
     cancelPageEnrichment();
@@ -495,6 +602,7 @@ async function loadLogs() {
     populateOperationOptions(lastRows);
     if (status) status.textContent = '';
   } catch {
+    tableState = 'error';
     lastRows = [];
     currentPage = 1;
     if (status) status.textContent = t('debugLogs.loadError');
@@ -506,45 +614,72 @@ async function loadLogs() {
   }
 }
 
-function toDateTimeLocalInputValue(d) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+function setClockNotice(clock) {
+  const { clockNotice } = getFilterElements();
+  if (clockNotice) clockNotice.classList.add('hidden');
 }
 
-function ensureDefaultDateRange() {
+async function ensureDefaultDateRange(opts = {}) {
   const { since, until } = getFilterElements();
   if (!since || !until) return;
   if (!since.value || !until.value) {
-    const now = new Date();
+    const clock = state.leftOrgId
+      ? await getSalesforceNow(state.leftOrgId, { refresh: opts.refresh === true }).catch(() => null)
+      : null;
+    setClockNotice(clock);
+    const now = new Date(clock?.nowMs || Date.now());
     const hours = getDebugLogsDefaultRangeHours();
     const prev = new Date(now.getTime() - hours * 60 * 60 * 1000);
-    if (!since.value) since.value = toDateTimeLocalInputValue(prev);
-    if (!until.value) until.value = toDateTimeLocalInputValue(now);
+    if (!since.value) {
+      const value = toLocalDateTimeValue(prev);
+      if (dateRangePicker?.since) dateRangePicker.since.setValue(value);
+      else since.value = value;
+    }
+    if (!until.value) {
+      if (dateRangePicker?.until) dateRangePicker.until.setNowMode(true);
+      else until.value = toLocalDateTimeValue(now);
+    }
   }
 }
 
+async function resolveQueryRange() {
+  const { since, until } = getFilterElements();
+  const sinceIso = toUtcIsoFromLocalDateTime(since?.value);
+  const nowMode = dateRangePicker?.until?.isNowMode || until?.dataset.salesforceNow === 'true';
+  if (!sinceIso) return { ok: false };
+  if (nowMode) {
+    const clock = await getSalesforceNow(state.leftOrgId, { refresh: true }).catch(() => null);
+    setClockNotice(clock);
+    return {
+      ok: true,
+      sinceIso,
+      untilIso: clock?.serverAvailable ? new Date(clock.nowMs).toISOString() : ''
+    };
+  }
+  const untilIso = toUtcIsoFromLocalDateTime(until?.value);
+  return { ok: isValidUtcRange(sinceIso, untilIso), sinceIso, untilIso };
+}
+
 async function refreshLogsNow() {
-  const { until } = getFilterElements();
   if (!state.leftOrgId) {
     showToast(t('debugLogs.selectOrg'), 'error');
     return;
   }
-  ensureDefaultDateRange();
-  if (until) until.value = toDateTimeLocalInputValue(new Date(Date.now() + 60 * 1000));
+  await ensureDefaultDateRange({ refresh: true });
   lastLoadSignature = '';
   await refreshDebugLogBrowserPanel();
 }
 
 export async function refreshDebugLogBrowserPanel() {
   const { status, since, until } = getFilterElements();
-  ensureDefaultDateRange();
+  await ensureDefaultDateRange();
   if (!state.leftOrgId) {
     setLoadingState(false);
     if (status) status.textContent = t('debugLogs.selectOrg');
     return;
   }
   if (getSelectedArtifactType() !== 'DebugLogBrowser') return;
-  const sig = `${state.leftOrgId}|${since?.value || ''}|${until?.value || ''}`;
+  const sig = `${state.leftOrgId}|${since?.value || ''}|${dateRangePicker?.until?.isNowMode ? 'salesforce-now' : until?.value || ''}`;
   if (sig !== lastLoadSignature) {
     lastLoadSignature = sig;
     await loadLogs();
@@ -554,46 +689,68 @@ export async function refreshDebugLogBrowserPanel() {
 }
 
 export function setupDebugLogBrowserPanel() {
-  const { user, operation, since, until, pageSize, prevPage, nextPage } =
+  const { user, operation, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, rowStatus, text, applyFilters, resetFilters } =
     getFilterElements();
-  if (user)
-    user.addEventListener('change', () => {
-      currentPage = 1;
-      cancelPageEnrichment();
-      renderRowsAndEnrich();
-    });
-  if (operation)
-    operation.addEventListener('change', () => {
-      currentPage = 1;
-      cancelPageEnrichment();
-      renderRowsAndEnrich();
-    });
-  const refreshBtn = document.getElementById('debugLogBrowserRefreshBtn');
-  if (refreshBtn) refreshBtn.addEventListener('click', () => void refreshLogsNow());
-  const triggerReload = () => {
-    lastLoadSignature = '';
-    void refreshDebugLogBrowserPanel();
+  const applyOnEnter = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void applyDraftFilters();
+    }
   };
-  if (since) since.addEventListener('change', triggerReload);
-  if (until) until.addEventListener('change', triggerReload);
+  for (const field of [user, operation, rowStatus, text, since, until]) {
+    field?.addEventListener('keydown', applyOnEnter);
+  }
+  const refreshBtn = document.getElementById('debugLogBrowserRefreshBtn');
+  if (refreshBtn) refreshBtn.addEventListener('click', () => void applyDraftFilters());
+  applyFilters?.addEventListener('click', () => void applyDraftFilters());
+  resetFilters?.addEventListener('click', () => resetDraftFilters());
+  dateRangePicker = createDateTimeRangePicker({
+    sinceInput: since,
+    untilInput: until,
+    sinceLabel: t('debugLogs.filterSince'),
+    untilLabel: t('debugLogs.filterUntil'),
+    onDraftChange: updateFilterActionState
+  });
+  for (const field of [user, operation, rowStatus, text]) {
+    field?.addEventListener('input', updateFilterActionState);
+    field?.addEventListener('change', updateFilterActionState);
+  }
   if (pageSize)
     pageSize.addEventListener('change', () => {
-      currentPage = 1;
+      pagination.setPageSize(pageSize.value, applyClientFilters(lastRows).length);
+      currentPage = pagination.page;
       cancelPageEnrichment();
       renderRowsAndEnrich();
     });
   if (prevPage)
     prevPage.addEventListener('click', () => {
-      currentPage = Math.max(1, currentPage - 1);
+      currentPage = pagination.previous(applyClientFilters(lastRows).length);
       cancelPageEnrichment();
       renderRowsAndEnrich();
     });
   if (nextPage)
     nextPage.addEventListener('click', () => {
-      currentPage += 1;
+      currentPage = pagination.next(applyClientFilters(lastRows).length);
       cancelPageEnrichment();
       renderRowsAndEnrich();
     });
+  firstPage?.addEventListener('click', () => {
+    currentPage = pagination.first(applyClientFilters(lastRows).length);
+    cancelPageEnrichment();
+    renderRowsAndEnrich();
+  });
+  lastPage?.addEventListener('click', () => {
+    currentPage = pagination.last(applyClientFilters(lastRows).length);
+    cancelPageEnrichment();
+    renderRowsAndEnrich();
+  });
+  pageInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    currentPage = pagination.setPage(pageInput.value, applyClientFilters(lastRows).length);
+    cancelPageEnrichment();
+    renderRowsAndEnrich();
+  });
   const deleteAllBtn = document.getElementById('debugLogBrowserDeleteAllBtn');
   if (deleteAllBtn) {
     deleteAllBtn.addEventListener('click', async () => {
@@ -645,5 +802,18 @@ export function setupDebugLogBrowserPanel() {
       }
     });
   }
-  ensureDefaultDateRange();
+  void ensureDefaultDateRange().then(() => {
+    if (!appliedDraftSignature) appliedDraftSignature = captureDraftSignature();
+    updateFilterActionState();
+  });
+  document.querySelectorAll('#debugLogBrowserTableWrap th[data-sort]').forEach((header) => {
+    header.addEventListener('click', () => {
+      const key = header.dataset.sort;
+      sortState = { key, direction: sortState.key === key && sortState.direction === 'asc' ? 'desc' : 'asc' };
+      document.querySelectorAll('#debugLogBrowserTableWrap th[data-sort]').forEach((cell) => cell.removeAttribute('aria-sort'));
+      header.setAttribute('aria-sort', sortState.direction === 'asc' ? 'ascending' : 'descending');
+      currentPage = 1;
+      renderRowsAndEnrich();
+    });
+  });
 }

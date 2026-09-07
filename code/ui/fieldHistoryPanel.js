@@ -13,6 +13,14 @@ import {
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { getFieldHistoryDefaultRangeDays } from '../../shared/extensionSettings.js';
+import { createDateTimeRangePicker } from './dateTimeRangePicker.js';
+import { createTablePagination } from './tablePagination.js';
+import { getSalesforceNow } from './salesforceServerClock.js';
+import {
+  isValidUtcRange,
+  toLocalDateTimeValue,
+  toUtcIsoFromLocalDateTime
+} from '../../shared/salesforceTime.js';
 
 const MIN_SUGGEST_LEN = 2;
 
@@ -21,6 +29,9 @@ let lastRows = [];
 let currentPage = 1;
 let historyLoading = false;
 let filterEventsPaused = false;
+let dateRangePicker = null;
+let appliedFilters = { user: '', text: '', fields: [] };
+const pagination = createTablePagination({ initialPageSize: 25 });
 
 /** @type {{ objectApiName: string, historyObject: string, parentField: string, trackedFields: Array<{ apiName: string, label: string, type: string }>, historyEnabled: boolean, historyQueryable: boolean } | null} */
 let historyContext = null;
@@ -41,9 +52,14 @@ function getFilterElements() {
     since: document.getElementById('fieldHistorySince'),
     until: document.getElementById('fieldHistoryUntil'),
     loadBtn: document.getElementById('fieldHistoryLoadBtn'),
+    resetFilters: document.getElementById('fieldHistoryResetFiltersBtn'),
+    clockNotice: document.getElementById('fieldHistoryClockNotice'),
     pageSize: document.getElementById('fieldHistoryPageSize'),
+    firstPage: document.getElementById('fieldHistoryFirstPage'),
     prevPage: document.getElementById('fieldHistoryPrevPage'),
     nextPage: document.getElementById('fieldHistoryNextPage'),
+    lastPage: document.getElementById('fieldHistoryLastPage'),
+    pageInput: document.getElementById('fieldHistoryPageInput'),
     pageLabel: document.getElementById('fieldHistoryPageLabel'),
     tbody: document.getElementById('fieldHistoryTbody'),
     empty: document.getElementById('fieldHistoryEmpty')
@@ -220,10 +236,28 @@ function getSelectedFieldNames() {
   return [...fieldFilter.selectedOptions].map((o) => o.value).filter(Boolean);
 }
 
-function applyClientFilters(rows) {
+function captureDraftFilters() {
   const { user, text } = getFilterElements();
-  const userValue = String(user?.value || '').trim();
-  const textNeedle = normalizeLower(text?.value);
+  return {
+    user: String(user?.value || ''),
+    text: String(text?.value || ''),
+    fields: getSelectedFieldNames()
+  };
+}
+
+function updateFilterActionState() {
+  const { loadBtn, since, until, recordId } = getFilterElements();
+  if (!loadBtn || !historyContext?.historyEnabled) return;
+  const sinceIso = toUtcIsoFromLocalDateTime(since?.value);
+  const untilIso = toUtcIsoFromLocalDateTime(until?.value);
+  loadBtn.disabled = !isValidSalesforceRecordId(recordId?.value)
+    || !sinceIso
+    || (!dateRangePicker?.until?.isNowMode && !isValidUtcRange(sinceIso, untilIso));
+}
+
+function applyClientFilters(rows) {
+  const userValue = String(appliedFilters.user || '').trim();
+  const textNeedle = normalizeLower(appliedFilters.text);
   return (rows || []).filter((r) => {
     const userId = String(r?.CreatedById || '').trim();
     const userKey = userId || String(r?.CreatedBy?.Username || '').trim() || String(r?.CreatedBy?.Name || '').trim();
@@ -259,7 +293,7 @@ function populateUserOptions(rows) {
     const key = id || username || name;
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    users.push({ key, label: name || username || key });
+    users.push({ key, label: name || username || key, username });
   }
   users.sort((a, b) => a.label.localeCompare(b.label));
   user.innerHTML = '';
@@ -270,7 +304,8 @@ function populateUserOptions(rows) {
   for (const entry of users) {
     const opt = document.createElement('option');
     opt.value = entry.key;
-    opt.textContent = entry.label;
+    opt.textContent = entry.username && entry.label !== entry.username ? `${entry.label} — ${entry.username}` : entry.label;
+    opt.title = entry.key;
     user.appendChild(opt);
   }
   if ([...user.options].some((o) => o.value === current)) user.value = current;
@@ -278,33 +313,41 @@ function populateUserOptions(rows) {
 }
 
 function updatePaginationUi(totalFilteredRows) {
-  const { pageSize, prevPage, nextPage, pageLabel } = getFilterElements();
-  const perPage = Math.max(1, Number(pageSize?.value || 25));
-  const totalPages = Math.max(1, Math.ceil(totalFilteredRows / perPage));
-  if (currentPage > totalPages) currentPage = totalPages;
-  if (currentPage < 1) currentPage = 1;
+  const { firstPage, prevPage, nextPage, lastPage, pageInput, pageLabel } = getFilterElements();
+  pagination.setPage(currentPage, totalFilteredRows);
+  currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
   if (prevPage) prevPage.disabled = currentPage <= 1;
   if (nextPage) nextPage.disabled = currentPage >= totalPages;
+  if (firstPage) firstPage.disabled = currentPage <= 1;
+  if (lastPage) lastPage.disabled = currentPage >= totalPages;
+  if (pageInput) {
+    pageInput.disabled = totalFilteredRows === 0;
+    pageInput.max = String(totalPages);
+    pageInput.value = String(currentPage);
+  }
   if (pageLabel) {
-    pageLabel.textContent = t('fieldHistory.pageLabel', {
-      page: String(currentPage),
-      pages: String(totalPages),
-      total: String(totalFilteredRows)
-    });
+    pageLabel.classList.toggle('hidden', totalFilteredRows === 0);
+    const from = totalFilteredRows ? (currentPage - 1) * pagination.pageSize + 1 : 0;
+    const to = Math.min(currentPage * pagination.pageSize, totalFilteredRows);
+    pageLabel.textContent = t('pagination.showing', { from: String(from), to: String(to), total: String(totalFilteredRows) });
   }
 }
 
 function renderRows(opts = {}) {
-  const { tbody, empty, pageSize } = getFilterElements();
+  const { tbody, empty } = getFilterElements();
   if (!tbody || !empty) return;
   if (!opts.force && historyLoading) return;
   const rows = applyClientFilters(lastRows);
-  const perPage = Math.max(1, Number(pageSize?.value || 25));
-  const start = (currentPage - 1) * perPage;
-  const pageRows = rows.slice(start, start + perPage);
+  const pageRows = pagination.getSlice(rows).rows;
+  currentPage = pagination.page;
   tbody.replaceChildren();
   if (!pageRows.length) {
     empty.classList.remove('hidden');
+    const tr = document.createElement('tr');
+    tr.className = 'sfoc-table-empty-row';
+    tr.innerHTML = `<td colspan="5">${escapeHtml(t('fieldHistory.empty'))}</td>`;
+    tbody.appendChild(tr);
     updatePaginationUi(rows.length);
     return;
   }
@@ -322,19 +365,31 @@ function renderRows(opts = {}) {
   updatePaginationUi(rows.length);
 }
 
-function ensureDefaultDateRange() {
+function setClockNotice(clock) {
+  const { clockNotice } = getFilterElements();
+  if (clockNotice) clockNotice.classList.add('hidden');
+}
+
+async function ensureDefaultDateRange(opts = {}) {
   const { since, until } = getFilterElements();
   if (!since || !until) return;
   if (!since.value || !until.value) {
-    const now = new Date();
+    const clock = state.leftOrgId
+      ? await getSalesforceNow(state.leftOrgId, { refresh: opts.refresh === true }).catch(() => null)
+      : null;
+    setClockNotice(clock);
+    const now = new Date(clock?.nowMs || Date.now());
     const days = getFieldHistoryDefaultRangeDays();
     const prev = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    const toInputValue = (d) => {
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    if (!since.value) since.value = toInputValue(prev);
-    if (!until.value) until.value = toInputValue(now);
+    if (!since.value) {
+      const value = toLocalDateTimeValue(prev);
+      if (dateRangePicker?.since) dateRangePicker.since.setValue(value);
+      else since.value = value;
+    }
+    if (!until.value) {
+      if (dateRangePicker?.until) dateRangePicker.until.setNowMode(true);
+      else until.value = toLocalDateTimeValue(now);
+    }
   }
 }
 
@@ -405,6 +460,7 @@ async function loadObjectContext() {
     currentPage = 1;
     renderRows();
     renderTrackedFields();
+    updateFilterActionState();
     if (!res.historyEnabled) {
       if (status) status.textContent = t('fieldHistory.objectHistoryDisabled');
       showToast(t('fieldHistory.objectHistoryDisabled'), 'warn');
@@ -422,8 +478,25 @@ async function loadObjectContext() {
   }
 }
 
+async function resolveQueryRange() {
+  const { since, until } = getFilterElements();
+  const sinceIso = toUtcIsoFromLocalDateTime(since?.value);
+  if (!sinceIso) return { ok: false };
+  if (dateRangePicker?.until?.isNowMode || until?.dataset.salesforceNow === 'true') {
+    const clock = await getSalesforceNow(state.leftOrgId, { refresh: true }).catch(() => null);
+    setClockNotice(clock);
+    return {
+      ok: true,
+      sinceIso,
+      untilIso: clock?.serverAvailable ? new Date(clock.nowMs).toISOString() : ''
+    };
+  }
+  const untilIso = toUtcIsoFromLocalDateTime(until?.value);
+  return { ok: isValidUtcRange(sinceIso, untilIso), sinceIso, untilIso };
+}
+
 async function loadFieldHistory() {
-  const { status, recordId, since, until, loadBtn } = getFilterElements();
+  const { status, recordId, loadBtn } = getFilterElements();
   if (!state.leftOrgId) {
     if (status) status.textContent = t('fieldHistory.selectOrg');
     return;
@@ -437,9 +510,8 @@ async function loadFieldHistory() {
     if (status) status.textContent = t('fieldHistory.invalidRecordId');
     return;
   }
-  const sinceIso = since?.value ? new Date(since.value).toISOString() : '';
-  const untilIso = until?.value ? new Date(until.value).toISOString() : '';
-  if (!sinceIso || !untilIso || new Date(sinceIso).getTime() > new Date(untilIso).getTime()) {
+  const range = await resolveQueryRange();
+  if (!range.ok) {
     if (status) status.textContent = t('fieldHistory.invalidRange');
     return;
   }
@@ -447,7 +519,8 @@ async function loadFieldHistory() {
   if (loadBtn) loadBtn.disabled = true;
   historyLoading = true;
   showToastWithSpinner(t('fieldHistory.loading'));
-  const fieldNames = getSelectedFieldNames();
+  appliedFilters = captureDraftFilters();
+  const fieldNames = appliedFilters.fields;
   const expandedFieldNames = fieldNames.length
     ? expandTrackedFieldsForHistorySoql(fieldNames, historyContext.trackedFields)
     : undefined;
@@ -459,8 +532,8 @@ async function loadFieldHistory() {
       historyObject: historyContext.historyObject,
       parentField: historyContext.parentField,
       recordId: rid,
-      sinceIso,
-      untilIso,
+      sinceIso: range.sinceIso,
+      untilIso: range.untilIso,
       fieldNames: expandedFieldNames?.length ? expandedFieldNames : undefined
     });
     if (!res?.ok) {
@@ -497,7 +570,7 @@ async function loadFieldHistory() {
 
 export async function refreshFieldHistoryPanel() {
   const { status } = getFilterElements();
-  ensureDefaultDateRange();
+  await ensureDefaultDateRange();
   if (!state.leftOrgId) {
     if (status) status.textContent = t('fieldHistory.selectOrg');
     return;
@@ -516,7 +589,14 @@ export function setupFieldHistoryPanel() {
     fieldFilter,
     pageSize,
     prevPage,
-    nextPage
+    nextPage,
+    firstPage,
+    lastPage,
+    pageInput,
+    since,
+    until,
+    recordId,
+    resetFilters
   } = getFilterElements();
 
   let suggestTimer = null;
@@ -542,35 +622,73 @@ export function setupFieldHistoryPanel() {
   if (user)
     user.addEventListener('change', () => {
       if (filterEventsPaused) return;
-      currentPage = 1;
-      renderRows();
+      updateFilterActionState();
     });
   if (text)
     text.addEventListener('input', () => {
       if (filterEventsPaused) return;
-      currentPage = 1;
-      renderRows();
+      updateFilterActionState();
     });
   if (fieldFilter)
     fieldFilter.addEventListener('change', () => {
-      /* server filter on next load only */
+      updateFilterActionState();
     });
+  recordId?.addEventListener('input', updateFilterActionState);
+  dateRangePicker = createDateTimeRangePicker({
+    sinceInput: since,
+    untilInput: until,
+    sinceLabel: t('fieldHistory.filterSince'),
+    untilLabel: t('fieldHistory.filterUntil'),
+    onDraftChange: updateFilterActionState
+  });
+  for (const field of [recordId, user, text, fieldFilter, since, until]) {
+    field?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (!loadBtn?.disabled) void loadFieldHistory();
+      }
+    });
+  }
+  resetFilters?.addEventListener('click', () => {
+    if (user) user.value = '';
+    if (text) text.value = '';
+    if (fieldFilter) [...fieldFilter.options].forEach((option) => { option.selected = false; });
+    appliedFilters = captureDraftFilters();
+    currentPage = 1;
+    renderRows();
+    updateFilterActionState();
+  });
   if (pageSize)
     pageSize.addEventListener('change', () => {
-      currentPage = 1;
+      pagination.setPageSize(pageSize.value, applyClientFilters(lastRows).length);
+      currentPage = pagination.page;
       renderRows();
     });
   if (prevPage)
     prevPage.addEventListener('click', () => {
-      currentPage = Math.max(1, currentPage - 1);
+      currentPage = pagination.previous(applyClientFilters(lastRows).length);
       renderRows();
     });
   if (nextPage)
     nextPage.addEventListener('click', () => {
-      currentPage += 1;
+      currentPage = pagination.next(applyClientFilters(lastRows).length);
       renderRows();
     });
+  firstPage?.addEventListener('click', () => {
+    currentPage = pagination.first(applyClientFilters(lastRows).length);
+    renderRows();
+  });
+  lastPage?.addEventListener('click', () => {
+    currentPage = pagination.last(applyClientFilters(lastRows).length);
+    renderRows();
+  });
+  pageInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    currentPage = pagination.setPage(pageInput.value, applyClientFilters(lastRows).length);
+    renderRows();
+  });
 
-  ensureDefaultDateRange();
+  void ensureDefaultDateRange().then(updateFilterActionState);
   renderTrackedFields();
 }

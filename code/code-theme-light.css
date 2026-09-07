@@ -3065,6 +3065,41 @@ html[data-ui-theme="light"] .env-status-action-btn:hover {
   background: var(--sfoc-light-bg-hover);
 }
 
+html[data-ui-theme="light"] .env-status-summary-card,
+html[data-ui-theme="light"] .env-status-event-card,
+html[data-ui-theme="light"] .env-status-message,
+html[data-ui-theme="light"] .env-status-detail-section {
+  background: var(--sfoc-light-bg-elevated);
+  border-color: var(--sfoc-light-border);
+}
+html[data-ui-theme="light"] .env-status-summary-card strong,
+html[data-ui-theme="light"] .env-status-tabpanel h4,
+html[data-ui-theme="light"] .env-status-detail-section-title { color: var(--sfoc-light-text); }
+html[data-ui-theme="light"] .env-status-tab,
+html[data-ui-theme="light"] .env-status-inline-btn { color: var(--sfoc-light-text-muted); border-color: var(--sfoc-light-border); }
+html[data-ui-theme="light"] .env-status-tab.is-active,
+html[data-ui-theme="light"] .env-status-tab:hover,
+html[data-ui-theme="light"] .env-status-inline-btn:hover { color: #1d4ed8; border-color: #2563eb; background: rgba(37, 99, 235, .08); }
+html[data-ui-theme="light"] .env-status-tabpanel select { color-scheme: light; background: var(--sfoc-light-bg-input); color: var(--sfoc-light-text); border-color: var(--sfoc-light-border); }
+html[data-ui-theme="light"] .env-status-event-card p,
+html[data-ui-theme="light"] .env-status-message p,
+html[data-ui-theme="light"] .env-status-tabpanel label { color: var(--sfoc-light-text); }
+html[data-ui-theme="light"] .env-status-detail-section-primary { border-left-color: #2563eb; background: rgba(37, 99, 235, .05); }
+html[data-ui-theme="light"] .env-status-trust-btn { color: #1d4ed8; border-color: #60a5fa; background: rgba(37, 99, 235, .08); }
+html[data-ui-theme="light"] .env-status-timeline-track { background: rgba(100, 116, 139, .15); }
+html[data-ui-theme="light"] .env-status-timeline-now { border-color: #334155; }
+html[data-ui-theme="light"] .env-status-metrics { color: #2563eb; }
+html[data-ui-theme="light"] .env-status-timeline-popover,
+html[data-ui-theme="light"] .env-status-trust-dialog-panel { background: var(--sfoc-light-bg-elevated); border-color: var(--sfoc-light-border); color: var(--sfoc-light-text); }
+html[data-ui-theme="light"] .env-status-timeline-popover strong,
+html[data-ui-theme="light"] .env-status-trust-dialog-panel h2 { color: var(--sfoc-light-text); }
+html[data-ui-theme="light"] .env-status-timeline-popover p,
+html[data-ui-theme="light"] .env-status-dialog-section p,
+html[data-ui-theme="light"] .env-status-event-timeline li { color: var(--sfoc-light-text-muted); }
+html[data-ui-theme="light"] .env-status-dialog-section h3,
+html[data-ui-theme="light"] .env-status-event-timeline time { color: #1d4ed8; }
+html[data-ui-theme="light"] .env-status-dialog-close { color: var(--sfoc-light-text); border-color: var(--sfoc-light-border); }
+
 /* ── Permission Diff ── */
 html[data-ui-theme="light"] .permission-diff-title {
   color: var(--sfoc-light-text);

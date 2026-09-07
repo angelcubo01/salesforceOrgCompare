@@ -5,23 +5,41 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { getSetupAuditDefaultRangeHours } from '../../shared/extensionSettings.js';
+import { createDateTimeRangePicker } from './dateTimeRangePicker.js';
+import { createTablePagination } from './tablePagination.js';
+import { getSalesforceNow } from './salesforceServerClock.js';
+import {
+  isValidUtcRange,
+  toLocalDateTimeValue,
+  toUtcIsoFromLocalDateTime
+} from '../../shared/salesforceTime.js';
 
 let lastRows = [];
 let currentPage = 1;
 let lastLoadSignature = '';
+let dateRangePicker = null;
+let appliedFilters = { user: '', section: '', action: '', text: '' };
+let appliedDraftSignature = '';
+const pagination = createTablePagination({ initialPageSize: 25 });
 
 function getFilterElements() {
   return {
     status: document.getElementById('setupAuditStatus'),
+    clockNotice: document.getElementById('setupAuditClockNotice'),
     user: document.getElementById('setupAuditUserFilter'),
     section: document.getElementById('setupAuditSectionFilter'),
     action: document.getElementById('setupAuditActionFilter'),
     text: document.getElementById('setupAuditTextFilter'),
+    applyFilters: document.getElementById('setupAuditApplyFiltersBtn'),
+    resetFilters: document.getElementById('setupAuditResetFiltersBtn'),
     since: document.getElementById('setupAuditSince'),
     until: document.getElementById('setupAuditUntil'),
     pageSize: document.getElementById('setupAuditPageSize'),
+    firstPage: document.getElementById('setupAuditFirstPage'),
     prevPage: document.getElementById('setupAuditPrevPage'),
     nextPage: document.getElementById('setupAuditNextPage'),
+    lastPage: document.getElementById('setupAuditLastPage'),
+    pageInput: document.getElementById('setupAuditPageInput'),
     pageLabel: document.getElementById('setupAuditPageLabel'),
     tbody: document.getElementById('setupAuditTbody'),
     empty: document.getElementById('setupAuditEmpty')
@@ -57,11 +75,10 @@ function normalizeLower(value) {
 }
 
 function applyClientFilters(rows) {
-  const { user, section, action, text } = getFilterElements();
-  const userValue = String(user?.value || '').trim();
-  const sectionNeedle = normalizeLower(section?.value);
-  const actionNeedle = normalizeLower(action?.value);
-  const textNeedle = normalizeLower(text?.value);
+  const userValue = String(appliedFilters.user || '').trim();
+  const sectionNeedle = normalizeLower(appliedFilters.section);
+  const actionNeedle = normalizeLower(appliedFilters.action);
+  const textNeedle = normalizeLower(appliedFilters.text);
   return (rows || []).filter((r) => {
     const userId = String(r?.CreatedById || '').trim();
     const userKey = userId || String(r?.CreatedBy?.Username || '').trim() || String(r?.CreatedBy?.Name || '').trim();
@@ -74,6 +91,59 @@ function applyClientFilters(rows) {
     if (textNeedle && !rowAction.includes(textNeedle) && !rowDisplay.includes(textNeedle)) return false;
     return true;
   });
+}
+
+function captureDraftFilters() {
+  const { user, section, action, text } = getFilterElements();
+  return {
+    user: String(user?.value || ''),
+    section: String(section?.value || ''),
+    action: String(action?.value || ''),
+    text: String(text?.value || '')
+  };
+}
+
+function captureDraftSignature() {
+  const { since, until } = getFilterElements();
+  return JSON.stringify({
+    ...captureDraftFilters(),
+    since: String(since?.value || ''),
+    until: dateRangePicker?.until?.isNowMode ? 'salesforce-now' : String(until?.value || '')
+  });
+}
+
+function updateFilterActionState() {
+  const { applyFilters, since, until } = getFilterElements();
+  if (!applyFilters) return;
+  const datesValid = Boolean(toUtcIsoFromLocalDateTime(since?.value))
+    && (dateRangePicker?.until?.isNowMode || isValidUtcRange(
+      toUtcIsoFromLocalDateTime(since?.value),
+      toUtcIsoFromLocalDateTime(until?.value)
+    ));
+  applyFilters.disabled = !datesValid || captureDraftSignature() === appliedDraftSignature;
+}
+
+async function applyDraftFilters() {
+  appliedFilters = captureDraftFilters();
+  appliedDraftSignature = captureDraftSignature();
+  currentPage = 1;
+  lastLoadSignature = '';
+  updateFilterActionState();
+  await refreshSetupAuditTrailPanel();
+}
+
+function resetDraftFilters() {
+  const { user, section, action, text } = getFilterElements();
+  if (user) user.value = '';
+  if (section) section.value = '';
+  if (action) action.value = '';
+  if (text) text.value = '';
+  populateActionOptions(lastRows);
+  appliedFilters = captureDraftFilters();
+  appliedDraftSignature = captureDraftSignature();
+  currentPage = 1;
+  updateFilterActionState();
+  renderRows();
 }
 
 function populateUserOptions(rows) {
@@ -90,7 +160,7 @@ function populateUserOptions(rows) {
     if (!key || seen.has(key)) continue;
     seen.add(key);
     const label = name || username || key;
-    users.push({ key, label });
+    users.push({ key, label, username });
   }
   users.sort((a, b) => a.label.localeCompare(b.label));
   user.innerHTML = '';
@@ -101,7 +171,8 @@ function populateUserOptions(rows) {
   for (const entry of users) {
     const opt = document.createElement('option');
     opt.value = entry.key;
-    opt.textContent = entry.label;
+    opt.textContent = entry.username && entry.label !== entry.username ? `${entry.label} — ${entry.username}` : entry.label;
+    opt.title = entry.key;
     user.appendChild(opt);
   }
   if ([...user.options].some((o) => o.value === current)) user.value = current;
@@ -165,33 +236,41 @@ function populateActionOptions(rows) {
 }
 
 function updatePaginationUi(totalFilteredRows) {
-  const { pageSize, prevPage, nextPage, pageLabel } = getFilterElements();
-  const perPage = Math.max(1, Number(pageSize?.value || 25));
-  const totalPages = Math.max(1, Math.ceil(totalFilteredRows / perPage));
-  if (currentPage > totalPages) currentPage = totalPages;
-  if (currentPage < 1) currentPage = 1;
+  const { firstPage, prevPage, nextPage, lastPage, pageInput, pageLabel } = getFilterElements();
+  pagination.setPage(currentPage, totalFilteredRows);
+  currentPage = pagination.page;
+  const totalPages = pagination.totalPages;
   if (prevPage) prevPage.disabled = currentPage <= 1;
   if (nextPage) nextPage.disabled = currentPage >= totalPages;
+  if (firstPage) firstPage.disabled = currentPage <= 1;
+  if (lastPage) lastPage.disabled = currentPage >= totalPages;
+  if (pageInput) {
+    pageInput.disabled = totalFilteredRows === 0;
+    pageInput.max = String(totalPages);
+    pageInput.value = String(currentPage);
+  }
   if (pageLabel) {
-    pageLabel.textContent = t('setupAudit.pageLabel', {
-      page: String(currentPage),
-      pages: String(totalPages),
-      total: String(totalFilteredRows)
-    });
+    pageLabel.classList.toggle('hidden', totalFilteredRows === 0);
+    const from = totalFilteredRows ? (currentPage - 1) * pagination.pageSize + 1 : 0;
+    const to = Math.min(currentPage * pagination.pageSize, totalFilteredRows);
+    pageLabel.textContent = t('pagination.showing', { from: String(from), to: String(to), total: String(totalFilteredRows) });
   }
 }
 
 function renderRows() {
-  const { tbody, empty, pageSize } = getFilterElements();
+  const { tbody, empty } = getFilterElements();
   if (!tbody || !empty) return;
   const rows = applyClientFilters(lastRows);
-  const perPage = Math.max(1, Number(pageSize?.value || 25));
   updatePaginationUi(rows.length);
-  const start = (currentPage - 1) * perPage;
-  const pageRows = rows.slice(start, start + perPage);
+  const pageRows = pagination.getSlice(rows).rows;
+  currentPage = pagination.page;
   tbody.innerHTML = '';
   if (!pageRows.length) {
     empty.classList.remove('hidden');
+    const tr = document.createElement('tr');
+    tr.className = 'sfoc-table-empty-row';
+    tr.innerHTML = `<td colspan="5">${escapeHtml(t('setupAudit.empty'))}</td>`;
+    tbody.appendChild(tr);
     return;
   }
   empty.classList.add('hidden');
@@ -215,31 +294,55 @@ function renderRows() {
   }
 }
 
-function ensureDefaultDateRange() {
+function setClockNotice(clock) {
+  const { clockNotice } = getFilterElements();
+  if (clockNotice) clockNotice.classList.add('hidden');
+}
+
+async function ensureDefaultDateRange(opts = {}) {
   const { since, until } = getFilterElements();
   if (!since || !until) return;
   if (!since.value || !until.value) {
-    const now = new Date();
+    const clock = state.leftOrgId
+      ? await getSalesforceNow(state.leftOrgId, { refresh: opts.refresh === true }).catch(() => null)
+      : null;
+    setClockNotice(clock);
+    const now = new Date(clock?.nowMs || Date.now());
     const hours = getSetupAuditDefaultRangeHours();
     const prev = new Date(now.getTime() - hours * 60 * 60 * 1000);
-    const toInputValue = (d) => {
-      const pad = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    if (!since.value) since.value = toInputValue(prev);
-    if (!until.value) until.value = toInputValue(now);
+    if (!since.value) {
+      const value = toLocalDateTimeValue(prev);
+      if (dateRangePicker?.since) dateRangePicker.since.setValue(value);
+      else since.value = value;
+    }
+    if (!until.value) {
+      if (dateRangePicker?.until) dateRangePicker.until.setNowMode(true);
+      else until.value = toLocalDateTimeValue(now);
+    }
   }
 }
 
+async function resolveQueryRange() {
+  const { since, until } = getFilterElements();
+  const sinceIso = toUtcIsoFromLocalDateTime(since?.value);
+  if (!sinceIso) return { ok: false };
+  if (dateRangePicker?.until?.isNowMode) {
+    const clock = await getSalesforceNow(state.leftOrgId, { refresh: true }).catch(() => null);
+    setClockNotice(clock);
+    return { ok: true, sinceIso, untilIso: clock?.serverAvailable ? new Date(clock.nowMs).toISOString() : '' };
+  }
+  const untilIso = toUtcIsoFromLocalDateTime(until?.value);
+  return { ok: isValidUtcRange(sinceIso, untilIso), sinceIso, untilIso };
+}
+
 async function loadAuditTrail() {
-  const { status, since, until } = getFilterElements();
+  const { status } = getFilterElements();
   if (!state.leftOrgId) {
     if (status) status.textContent = t('setupAudit.selectOrg');
     return;
   }
-  const sinceIso = since?.value ? new Date(since.value).toISOString() : '';
-  const untilIso = until?.value ? new Date(until.value).toISOString() : '';
-  if (!sinceIso || !untilIso || new Date(sinceIso).getTime() > new Date(untilIso).getTime()) {
+  const range = await resolveQueryRange();
+  if (!range.ok) {
     if (status) status.textContent = t('setupAudit.invalidRange');
     return;
   }
@@ -249,8 +352,8 @@ async function loadAuditTrail() {
     const res = await bg({
       type: 'setupAuditTrail:list',
       orgId: state.leftOrgId,
-      sinceIso,
-      untilIso
+      sinceIso: range.sinceIso,
+      untilIso: range.untilIso
     });
     if (!res?.ok) {
       const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('setupAudit.loadError');
@@ -273,7 +376,7 @@ async function loadAuditTrail() {
 
 export async function refreshSetupAuditTrailPanel() {
   const { status, since, until } = getFilterElements();
-  ensureDefaultDateRange();
+  await ensureDefaultDateRange();
   if (!state.leftOrgId) {
     if (status) status.textContent = t('setupAudit.selectOrg');
     return;
@@ -290,49 +393,69 @@ export async function refreshSetupAuditTrailPanel() {
 }
 
 export function setupSetupAuditTrailPanel() {
-  const { user, section, action, text, since, until, pageSize, prevPage, nextPage } = getFilterElements();
+  const { user, section, action, text, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, applyFilters, resetFilters } = getFilterElements();
+  const onDraftChange = () => updateFilterActionState();
   if (user)
-    user.addEventListener('change', () => {
-      currentPage = 1;
-      renderRows();
-    });
+    user.addEventListener('change', onDraftChange);
   if (section)
     section.addEventListener('change', () => {
       if (action) action.value = '';
       populateActionOptions(lastRows);
-      currentPage = 1;
-      renderRows();
+      onDraftChange();
     });
   if (action)
-    action.addEventListener('change', () => {
-      currentPage = 1;
-      renderRows();
-    });
+    action.addEventListener('change', onDraftChange);
   if (text)
-    text.addEventListener('input', () => {
-      currentPage = 1;
-      renderRows();
+    text.addEventListener('input', onDraftChange);
+  dateRangePicker = createDateTimeRangePicker({
+    sinceInput: since,
+    untilInput: until,
+    sinceLabel: t('setupAudit.filterSince'),
+    untilLabel: t('setupAudit.filterUntil'),
+    onDraftChange
+  });
+  for (const field of [user, section, action, text, since, until]) {
+    field?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (!applyFilters?.disabled) void applyDraftFilters();
+      }
     });
-  const triggerReload = () => {
-    lastLoadSignature = '';
-    void refreshSetupAuditTrailPanel();
-  };
-  if (since) since.addEventListener('change', triggerReload);
-  if (until) until.addEventListener('change', triggerReload);
+  }
+  applyFilters?.addEventListener('click', () => void applyDraftFilters());
+  resetFilters?.addEventListener('click', resetDraftFilters);
   if (pageSize)
     pageSize.addEventListener('change', () => {
-      currentPage = 1;
+      pagination.setPageSize(pageSize.value, applyClientFilters(lastRows).length);
+      currentPage = pagination.page;
       renderRows();
     });
   if (prevPage)
     prevPage.addEventListener('click', () => {
-      currentPage = Math.max(1, currentPage - 1);
+      currentPage = pagination.previous(applyClientFilters(lastRows).length);
       renderRows();
     });
   if (nextPage)
     nextPage.addEventListener('click', () => {
-      currentPage += 1;
+      currentPage = pagination.next(applyClientFilters(lastRows).length);
       renderRows();
     });
-  ensureDefaultDateRange();
+  firstPage?.addEventListener('click', () => {
+    currentPage = pagination.first(applyClientFilters(lastRows).length);
+    renderRows();
+  });
+  lastPage?.addEventListener('click', () => {
+    currentPage = pagination.last(applyClientFilters(lastRows).length);
+    renderRows();
+  });
+  pageInput?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    currentPage = pagination.setPage(pageInput.value, applyClientFilters(lastRows).length);
+    renderRows();
+  });
+  void ensureDefaultDateRange().then(() => {
+    if (!appliedDraftSignature) appliedDraftSignature = captureDraftSignature();
+    updateFilterActionState();
+  });
 }

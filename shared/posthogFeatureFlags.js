@@ -1,26 +1,14 @@
-import { getPosthogClient, initPosthogClient } from './posthogClient.js';
-import { getTelemetryEnabled } from './extensionSettings.js';
+import { getCachedManagedFeatureFlag } from './posthogFeatureFlagLoader.js';
 
 /**
- * Evalúa un feature flag de PostHog. Devuelve false si telemetría desactivada o PostHog no inicializado.
+ * Evalúa una feature flag desde el snapshot común que refresca el popup.
+ * Nunca inicializa el SDK ni abre una petición de red.
  * @param {string} key
  * @param {boolean} [defaultValue=false]
  */
 export async function isFeatureEnabled(key, defaultValue = false) {
-  const telemetryEnabled = await getTelemetryEnabled();
-  if (!telemetryEnabled) return defaultValue;
-
-  let ph = getPosthogClient();
-  if (!ph) {
-    ph = await initPosthogClient();
-  }
-  if (!ph) return defaultValue;
-
-  try {
-    return ph.isFeatureEnabled(key) ?? defaultValue;
-  } catch {
-    return defaultValue;
-  }
+  const cached = await getCachedManagedFeatureFlag(key);
+  return cached ? cached.enabled : defaultValue;
 }
 
 /**
@@ -28,18 +16,6 @@ export async function isFeatureEnabled(key, defaultValue = false) {
  * @param {string} key
  */
 export async function getFeatureFlagPayload(key) {
-  const telemetryEnabled = await getTelemetryEnabled();
-  if (!telemetryEnabled) return undefined;
-
-  let ph = getPosthogClient();
-  if (!ph) {
-    ph = await initPosthogClient();
-  }
-  if (!ph) return undefined;
-
-  try {
-    return ph.getFeatureFlagPayload(key);
-  } catch {
-    return undefined;
-  }
+  const cached = await getCachedManagedFeatureFlag(key);
+  return cached?.payload;
 }

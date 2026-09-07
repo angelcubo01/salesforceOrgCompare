@@ -339,7 +339,8 @@ async function refreshLogiUsageBars() {
 
 export async function refreshLogiSettingsPanel() {
   try {
-    // Force advisor-config on every settings entry; cache serves chat/usage until next entry.
+    // Comprueba advisor-config al entrar, pero la caché compartida limita el
+    // acceso al proxy a una vez cada 6 h; chat/uso solo leen ese resultado.
     await send('aiAdvisor:bootstrap', { force: true });
     const res = await send('aiAdvisor:getConfig');
     if (res?.ok && res.config) applyLogiConfig(res.config);

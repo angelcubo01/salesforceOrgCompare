@@ -18,6 +18,8 @@ import {
   closeDebugLogTraceModal,
   setDebugLogTraceModalOnCreated
 } from './debugLogTraceModal.js';
+import { createDateTimePicker } from './dateTimeRangePicker.js';
+import { toLocalDateTimeValue, toUtcIsoFromLocalDateTime } from '../../shared/salesforceTime.js';
 
 /** @type {Array<Record<string, unknown>>} */
 let allTraces = [];
@@ -27,6 +29,8 @@ let cachedDebugLevels = [];
 let editingTrace = null;
 let loadGeneration = 0;
 let busyRowId = '';
+let editStartPicker = null;
+let editEndPicker = null;
 
 function els() {
   return {
@@ -47,11 +51,6 @@ function els() {
     editSave: document.getElementById('debugLogEditTraceSaveBtn'),
     editCancel: document.getElementById('debugLogEditTraceCancelBtn')
   };
-}
-
-function toInputValue(d) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function formatDateTime(value) {
@@ -152,8 +151,16 @@ async function openEditModal(row) {
     editUser.textContent = String(row.userLabel || row.tracedEntityId || '');
   }
   populateLevelSelect(String(row.debugLevelId || ''));
-  if (editStart && row.startIso) editStart.value = toInputValue(new Date(row.startIso));
-  if (editEnd && row.expirationIso) editEnd.value = toInputValue(new Date(row.expirationIso));
+  if (editStart && row.startIso) {
+    const value = toLocalDateTimeValue(new Date(row.startIso));
+    if (editStartPicker) editStartPicker.setValue(value);
+    else editStart.value = value;
+  }
+  if (editEnd && row.expirationIso) {
+    const value = toLocalDateTimeValue(new Date(row.expirationIso));
+    if (editEndPicker) editEndPicker.setValue(value);
+    else editEnd.value = value;
+  }
   if (editModal) mountSfocOverlay(editModal, {
     initialFocus: document.getElementById('debugLogEditTraceLevelSelect'),
     onEscape: closeEditModal
@@ -196,7 +203,10 @@ function renderTable() {
       : t('debugLogs.viewTracesExtend15');
     const actionDisabled = rowBusy ? 'disabled' : '';
     tr.innerHTML = `
-      <td>${escapeHtml(String(row.userLabel || row.tracedEntityId || '—'))}</td>
+      <td class="debug-log-view-traces-user-cell" title="${escapeHtml(String(row.tracedEntityId || ''))}">
+        <span>${escapeHtml(String(row.userName || row.userLabel || t('debugLogs.userUnresolved')))}</span>
+        ${row.username ? '<small>' + escapeHtml(String(row.username)) + '</small>' : ''}
+      </td>
       <td>${escapeHtml(formatLevel(row))}</td>
       <td>${escapeHtml(formatDateTime(row.startIso))}</td>
       <td>${escapeHtml(formatDateTime(row.expirationIso))}</td>
@@ -346,8 +356,8 @@ async function saveEditTrace() {
   if (!editingTrace?.id || !state.leftOrgId) return;
   const { editLevel, editStart, editEnd, editSave } = els();
   const debugLevelId = String(editLevel?.value || '').replace(/[^a-zA-Z0-9]/g, '');
-  const startIso = editStart?.value ? new Date(editStart.value).toISOString() : '';
-  const expirationIso = editEnd?.value ? new Date(editEnd.value).toISOString() : '';
+  const startIso = toUtcIsoFromLocalDateTime(editStart?.value);
+  const expirationIso = toUtcIsoFromLocalDateTime(editEnd?.value);
   if (!debugLevelId) {
     showToast(t('debugLogs.traceLevelRequired'), 'warn');
     return;
@@ -432,8 +442,11 @@ export function openDebugLogViewTracesModal() {
 }
 
 export function setupDebugLogViewTracesModal() {
-  const { modal, openBtn, addTraceBtn, closeBtn, refreshBtn, showInactive, editCancel, editSave } = els();
+  const { modal, openBtn, addTraceBtn, closeBtn, refreshBtn, showInactive, editCancel, editSave, editStart, editEnd } = els();
   if (!modal) return;
+
+  editStartPicker = createDateTimePicker(editStart, { label: t('dateRange.openCalendar') });
+  editEndPicker = createDateTimePicker(editEnd, { label: t('dateRange.openCalendar') });
 
   setDebugLogTraceModalOnCreated(() => void loadTraces());
 

@@ -129,6 +129,7 @@ import { ensureExtensionExceptionReporting } from '../shared/posthogClient.js';
 import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.js';
 import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
 import { applyUiModeToDocument, loadUiMode } from '../shared/uiMode.js';
+import { ensureWorkbenchIconSprite } from './workbench/iconRegistry.js';
 
 function applyStaticTranslations() {
   const brandLogo = document.getElementById('sidebarBrandLogo');
@@ -169,6 +170,7 @@ function applyLandingDiscoverBanner() {
 }
 
 async function init() {
+  const iconSpritePromise = ensureWorkbenchIconSprite();
   const uiModePromise = loadUiMode();
   const workbenchModulePromise = uiModePromise.then((mode) => (
     mode === 'v2' ? import('./workbench/workbenchShell.js') : null
@@ -187,7 +189,12 @@ async function init() {
   // El shell solo lee estado local y monta la capa exterior. Arrancarlo aquí permite
   // solapar ese trabajo con la navegación legacy sin adelantar el estado "ready".
   const workbenchSetupPromise = uiMode === 'v2'
-    ? workbenchModulePromise.then(({ setupWorkbenchShell }) => setupWorkbenchShell())
+    ? workbenchModulePromise.then(async ({ setupWorkbenchShell }) => {
+      // El splash permanece visible hasta disponer de los símbolos internos: los
+      // iconos montados después nunca necesitan cargar el sprite externo.
+      await iconSpritePromise;
+      return setupWorkbenchShell();
+    })
     : null;
 
   const typeSelect = document.getElementById('typeSelect');
@@ -223,6 +230,7 @@ async function init() {
   applyArtifactTypeUi();
   applyFeatureControlsUi();
   if (workbenchSetupPromise) await workbenchSetupPromise;
+  else await iconSpritePromise;
   revealAppNavigation();
   void refreshLandingToolRecents();
   void maybeShowToolOnboarding(getSelectedArtifactType());

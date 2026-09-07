@@ -40,8 +40,10 @@ import {
   restDescribeGlobal,
   restDescribeSobject,
   restRequestWithSid,
+  getSalesforceServerTime,
   listRestApiVersions
 } from '../shared/salesforceApi.js';
+import { normalizeSalesforceIdKey } from '../shared/salesforceIds.js';
 import { isRestWriteMethod } from '../shared/restExplorerApi.js';
 import { executeDml, retrieveRecord, retrieveLayout } from '../shared/dataWorkbenchApi.js';
 import {
@@ -75,7 +77,14 @@ import {
   validateRunTestsBodyForApi
 } from '../shared/apexTestRunBodyApi.js';
 import { scheduleTerminalJobsTraceCleanup, scheduleNoJobTraceCleanup } from './apexTestTraceAlarms.js';
-import { fetchAllEnvironmentStatusRows, fetchSessionDetailForOrg, invalidateDescribeCacheForOrg } from './environmentStatus.js';
+import {
+  fetchAllEnvironmentStatusRows,
+  fetchSessionDetailForOrg,
+  fetchTrustDetailForOrg,
+  fetchTrustIncidentDetailForOrg,
+  fetchTrustMaintenanceDetailForOrg,
+  invalidateDescribeCacheForOrg
+} from './environmentStatus.js';
 import { pollDeployStatus, fetchDeployDetail, cancelDeployRequest } from '../shared/deployStatusApi.js';
 import { fetchApexClassSource } from '../shared/apexClassSource.js';
 import { resolveDeployCoverageLineSets } from '../shared/apexCoverageLines.js';
@@ -1745,8 +1754,32 @@ export function installMessageHandlers() {
           }
           case 'environmentStatus:getAll': {
             try {
-              const result = await fetchAllEnvironmentStatusRows();
+              const result = await fetchAllEnvironmentStatusRows({ locale: message.locale, force: !!message.force });
               reply(result);
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'environmentStatus:getTrustDetail': {
+            try {
+              reply(await fetchTrustDetailForOrg(String(message.orgId || ''), message.options || {}));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'environmentStatus:getIncidentDetail': {
+            try {
+              reply(await fetchTrustIncidentDetailForOrg(String(message.orgId || ''), String(message.incidentId || ''), message.locale));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'environmentStatus:getMaintenanceDetail': {
+            try {
+              reply(await fetchTrustMaintenanceDetailForOrg(String(message.orgId || ''), String(message.maintenanceId || ''), message.locale));
             } catch (e) {
               replyHandlerError(reply, e);
             }
@@ -3190,6 +3223,26 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'salesforce:serverTime': {
+            const { orgId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              reply({ ok: true, ...(await getSalesforceServerTime(org.instanceUrl, sid, org.apiVersion)) });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
           case 'debugLogs:list': {
             const { orgId, sinceIso, untilIso } = message;
             const saved = await loadSavedOrgs();
@@ -3206,8 +3259,8 @@ export function installMessageHandlers() {
             try {
               const since = String(sinceIso || '');
               const until = String(untilIso || '');
-              if (!since || !until) {
-                reply({ ok: false, error: 'Missing date range' });
+              if (!since) {
+                reply({ ok: false, error: 'Missing start date' });
                 break;
               }
               await loadExtensionSettings();
@@ -3487,7 +3540,7 @@ export function installMessageHandlers() {
               const userIds = [
                 ...new Set(traces.map((t) => String(t.tracedEntityId || '').replace(/[^a-zA-Z0-9]/g, '')).filter(Boolean))
               ];
-              const namesById = {};
+              const usersById = {};
               for (let i = 0; i < userIds.length; i += 100) {
                 const chunk = userIds.slice(i, i + 100);
                 const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
@@ -3506,15 +3559,22 @@ export function installMessageHandlers() {
                   const id = String(row?.Id || '').replace(/[^a-zA-Z0-9]/g, '');
                   const name = String(row?.Name || '').trim();
                   const username = String(row?.Username || '').trim();
-                  if (!id) continue;
-                  if (name && username) namesById[id] = `${name} (${username})`;
-                  else namesById[id] = name || username || id;
+                  const key = normalizeSalesforceIdKey(id);
+                  if (!key) continue;
+                  usersById[key] = { userName: name, username };
                 }
               }
-              const enriched = traces.map((tr) => ({
-                ...tr,
-                userLabel: namesById[tr.tracedEntityId] || tr.tracedEntityId || ''
-              }));
+              const enriched = traces.map((tr) => {
+                const resolvedUser = usersById[normalizeSalesforceIdKey(tr.tracedEntityId)];
+                const userName = resolvedUser?.userName || tr.tracedEntityName || '';
+                return {
+                  ...tr,
+                  userName,
+                  username: resolvedUser?.username || '',
+                  userResolved: Boolean(userName),
+                  userLabel: userName
+                };
+              });
               reply({ ok: true, traces: enriched });
             } catch (e) {
               replyHandlerError(reply, e);
@@ -3640,8 +3700,8 @@ export function installMessageHandlers() {
             try {
               const since = String(sinceIso || '');
               const until = String(untilIso || '');
-              if (!since || !until) {
-                reply({ ok: false, error: 'Missing date range' });
+              if (!since) {
+                reply({ ok: false, error: 'Missing start date' });
                 break;
               }
               const soqlDateTime = (v) => {
@@ -3657,8 +3717,8 @@ export function installMessageHandlers() {
                 Math.min(50000, Number(limit) || getSetupAuditQueryDefaultLimit())
               );
               const sinceDt = soqlDateTime(since);
-              const untilDt = soqlDateTime(until);
-              const soql = `SELECT Id, CreatedDate, CreatedById, CreatedBy.Name, CreatedBy.Username, Section, Action, Display FROM SetupAuditTrail WHERE CreatedDate >= ${sinceDt} AND CreatedDate <= ${untilDt} ORDER BY CreatedDate DESC LIMIT ${parsedLimit}`;
+              const untilDt = until ? soqlDateTime(until) : '';
+              const soql = `SELECT Id, CreatedDate, CreatedById, CreatedBy.Name, CreatedBy.Username, Section, Action, Display FROM SetupAuditTrail WHERE CreatedDate >= ${sinceDt}${untilDt ? ' AND CreatedDate <= ' + untilDt : ''} ORDER BY CreatedDate DESC LIMIT ${parsedLimit}`;
               const rows = await restQueryAll(org.instanceUrl, sid, org.apiVersion, soql);
               reply({ ok: true, rows: Array.isArray(rows) ? rows : [] });
             } catch (e) {
@@ -3727,11 +3787,11 @@ export function installMessageHandlers() {
               }
               const since = String(sinceIso || '');
               const until = String(untilIso || '');
-              if (!since || !until) {
-                reply({ ok: false, error: 'Missing date range' });
+              if (!since) {
+                reply({ ok: false, error: 'Missing start date' });
                 break;
               }
-              if (new Date(since).getTime() > new Date(until).getTime()) {
+              if (until && new Date(since).getTime() > new Date(until).getTime()) {
                 reply({ ok: false, error: 'Invalid date range' });
                 break;
               }

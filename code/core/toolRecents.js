@@ -67,6 +67,28 @@ export async function toggleToolPin(toolId) {
   return cache;
 }
 
+/**
+ * Alterna un favorito compartido por varias herramientas relacionadas.
+ * Al activarlo conserva como destino la herramienta desde la que se realizó
+ * la acción; al desactivarlo elimina el favorito de todo el grupo.
+ *
+ * @param {string[]} toolIds
+ * @param {string} preferredToolId
+ */
+export async function toggleToolPinGroup(toolIds, preferredToolId) {
+  const group = [...new Set((Array.isArray(toolIds) ? toolIds : [])
+    .filter((toolId) => typeof toolId === 'string' && toolId.trim()))];
+  if (!group.length) return cache;
+  await loadToolRecents();
+  const pinned = cache.pins.some((toolId) => group.includes(toolId));
+  const remainingPins = cache.pins.filter((toolId) => !group.includes(toolId));
+  const toolId = group.includes(preferredToolId) ? preferredToolId : group[0];
+  const pins = pinned ? remainingPins : [toolId, ...remainingPins].slice(0, MAX_PINS);
+  cache = { ...cache, pins };
+  await saveToolRecents();
+  return cache;
+}
+
 export function getToolRecentsSnapshot() {
   return { ...cache, recents: [...cache.recents], pins: [...cache.pins] };
 }

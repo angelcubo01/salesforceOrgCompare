@@ -1,5 +1,8 @@
 import { POSTHOG_DEBUG } from './telemetryConfig.js';
-import { waitForFeatureFlags } from './posthogFeatureFlagLoader.js';
+import {
+  getCachedManagedFeatureFlag,
+  waitForFeatureFlags
+} from './posthogFeatureFlagLoader.js';
 
 /** Feature flag remoto (PostHog). Rollout 0 % por defecto; activar gradualmente en el dashboard. */
 export const SUPPORT_FLAG = 'sfoc_support';
@@ -45,6 +48,15 @@ export function resetSupportFlagCacheForTests() {
 export async function isPosthogSupportFlagEnabled(ph) {
   if (!ph) return false;
   if (cachedSupportEnabled !== null) return cachedSupportEnabled;
+
+  // El snapshot se completa junto con todas las flags al abrir el popup.
+  // Así Support no espera ni provoca una consulta posterior a PostHog.
+  const cachedFlag = await getCachedManagedFeatureFlag(SUPPORT_FLAG);
+  if (cachedFlag) {
+    const payload = parseSupportFlagPayload(cachedFlag.payload);
+    cachedSupportEnabled = cachedFlag.enabled === true && payload.enabled !== false;
+    return cachedSupportEnabled;
+  }
 
   await waitForFeatureFlags(ph, 8000);
 

@@ -1,5 +1,8 @@
 import { POSTHOG_DEBUG } from './telemetryConfig.js';
-import { ensureFeatureFlagsLoaded } from './posthogFeatureFlagLoader.js';
+import {
+  ensureFeatureFlagsLoaded,
+  getCachedManagedFeatureFlag
+} from './posthogFeatureFlagLoader.js';
 import { parseFeatureControlsPayload, DEFAULT_FEATURE_CONTROLS } from './featureControls.js';
 import { writeFeatureControlsCache, readFeatureControlsCache } from './featureControlsCache.js';
 
@@ -47,13 +50,26 @@ function dispatchFeatureControlsReady(config) {
  */
 export async function loadFeatureControlsFromPosthog(ph, opts = {}) {
   if (!ph) {
-    cachedConfig = {
-      ...DEFAULT_FEATURE_CONTROLS,
-      modes: {},
-      tools: {},
-      metadataTypes: {},
-      actions: {}
-    };
+    cachedConfig = await readFeatureControlsCache();
+    return cachedConfig;
+  }
+
+  // El snapshot se obtiene en bloque al abrir el popup. Evita esperar al SDK o
+  // usar una evaluación parcial al inicializar otra página de la extensión.
+  const cachedFlag = await getCachedManagedFeatureFlag(FEATURE_CONTROLS_FLAG);
+  if (cachedFlag) {
+    if (!cachedFlag.enabled) {
+      cachedConfig = {
+        ...DEFAULT_FEATURE_CONTROLS,
+        modes: {},
+        tools: {},
+        metadataTypes: {},
+        actions: {}
+      };
+    } else {
+      cachedConfig = parseFeatureControlsPayload(cachedFlag.payload);
+    }
+    await writeFeatureControlsCache(cachedConfig);
     return cachedConfig;
   }
 

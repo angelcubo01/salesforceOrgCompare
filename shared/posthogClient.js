@@ -44,9 +44,6 @@ import {
   hookFeatureControlsOnFeatureFlags
 } from './posthogFeatureControlsFlag.js';
 import {
-  hookLogiAdvisorOnFeatureFlags
-} from './logi/posthogLogiAdvisorFlag.js';
-import {
   invalidateFeatureFlagsCache,
   pauseFeatureFlagsReloading
 } from './posthogFeatureFlagLoader.js';
@@ -242,7 +239,8 @@ export async function initPosthogClient(opts = {}) {
       try {
         pauseFeatureFlagsReloading(ph);
         hookFeatureControlsOnFeatureFlags(ph, undefined, { skipInitialRun: true });
-        hookLogiAdvisorOnFeatureFlags(ph);
+        // Logi no se refresca al llegar flags del SDK: su acceso y límites se
+        // resuelven únicamente desde Ajustes o el detalle de un log.
 
         if (!telemetryEnabled) {
           ph.opt_out_capturing();

@@ -44,4 +44,15 @@ describe('i18n', () => {
     setLang('es');
     expect(t('code.toolGroup.streaming')).toBe('Eventos');
   });
+  it('translates Environment Status health in Spanish and English', () => {
+    setLang('es');
+    expect(t('envStatus.health.operational')).toBe('Operativo');
+    setLang('en');
+    expect(t('envStatus.health.operational')).toBe('Operational');
+    expect(t('envStatus.sectionActiveIncidents')).toBe('Active incidents');
+    expect(t('envStatus.openTrust')).toBe('Open Trust');
+    expect(t('envStatus.rootCause')).toBe('Root cause');
+    expect(t('envStatus.timelineHint')).toBe('Hover or select a bar to view its details.');
+    expect(t('envStatus.noMetrics')).toBe('No metrics are available for this instance.');
+  });
 });

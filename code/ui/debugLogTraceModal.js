@@ -5,6 +5,9 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { getApexTestsTraceDebugLevel } from '../../shared/extensionSettings.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
+import { createDateTimePicker } from './dateTimeRangePicker.js';
+import { getSalesforceNow } from './salesforceServerClock.js';
+import { toLocalDateTimeValue, toUtcIsoFromLocalDateTime } from '../../shared/salesforceTime.js';
 
 const SEARCH_DEBOUNCE_MS = 280;
 const MIN_SUGGEST_LEN = 2;
@@ -16,6 +19,8 @@ let suggestGeneration = 0;
 let selectedUser = null;
 /** @type {(() => void) | null} */
 let onTraceCreated = null;
+let traceStartPicker = null;
+let traceEndPicker = null;
 
 function els() {
   return {
@@ -31,18 +36,20 @@ function els() {
   };
 }
 
-function toInputValue(d) {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function setDefaultDates() {
+async function setDefaultDates() {
   const { startInput, endInput } = els();
   if (!startInput || !endInput) return;
-  const now = new Date();
+  const clock = state.leftOrgId
+    ? await getSalesforceNow(state.leftOrgId, { refresh: true }).catch(() => null)
+    : null;
+  const now = new Date(clock?.nowMs || Date.now());
   const end = new Date(now.getTime() + 30 * 60 * 1000);
-  startInput.value = toInputValue(now);
-  endInput.value = toInputValue(end);
+  const startValue = toLocalDateTimeValue(now);
+  const endValue = toLocalDateTimeValue(end);
+  if (traceStartPicker) traceStartPicker.setValue(startValue);
+  else startInput.value = startValue;
+  if (traceEndPicker) traceEndPicker.setValue(endValue);
+  else endInput.value = endValue;
 }
 
 function hideSuggestions() {
@@ -241,7 +248,7 @@ export function openDebugLogTraceModal() {
   if (!modal) return;
   if (userInput) userInput.value = '';
   clearSelectedUser();
-  setDefaultDates();
+  void setDefaultDates();
   if (submitBtn) submitBtn.disabled = false;
   mountSfocOverlay(modal, { initialFocus: userInput, onEscape: closeModal });
   void loadDebugLevels();
@@ -267,8 +274,8 @@ async function submitTrace() {
   const { userIdHidden, levelSelect, startInput, endInput, submitBtn } = els();
   const userId = String(userIdHidden?.value || selectedUser?.id || '').replace(/[^a-zA-Z0-9]/g, '');
   const debugLevelId = String(levelSelect?.value || '').replace(/[^a-zA-Z0-9]/g, '');
-  const startIso = startInput?.value ? new Date(startInput.value).toISOString() : '';
-  const expirationIso = endInput?.value ? new Date(endInput.value).toISOString() : '';
+  const startIso = toUtcIsoFromLocalDateTime(startInput?.value);
+  const expirationIso = toUtcIsoFromLocalDateTime(endInput?.value);
 
   const validationError = validateTraceForm({ userId, debugLevelId, startIso, expirationIso });
   if (validationError) {
@@ -313,8 +320,11 @@ async function submitTrace() {
 }
 
 export function setupDebugLogTraceModal() {
-  const { modal, userInput, cancelBtn, submitBtn } = els();
+  const { modal, userInput, cancelBtn, submitBtn, startInput, endInput } = els();
   if (!modal) return;
+
+  traceStartPicker = createDateTimePicker(startInput, { label: t('dateRange.openCalendar') });
+  traceEndPicker = createDateTimePicker(endInput, { label: t('dateRange.openCalendar') });
 
   cancelBtn?.addEventListener('click', () => closeModal());
   submitBtn?.addEventListener('click', () => void submitTrace());

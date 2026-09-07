@@ -1,6 +1,9 @@
 import { POSTHOG_DEBUG } from './telemetryConfig.js';
 import { getTelemetryEnabled } from './extensionSettings.js';
-import { waitForFeatureFlags } from './posthogFeatureFlagLoader.js';
+import {
+  getCachedManagedFeatureFlag,
+  waitForFeatureFlags
+} from './posthogFeatureFlagLoader.js';
 
 export { waitForFeatureFlags } from './posthogFeatureFlagLoader.js';
 
@@ -115,21 +118,27 @@ export async function maybeStartSessionReplay(ph) {
     return;
   }
 
-  await waitForFeatureFlags(ph);
+  const cachedFlag = await getCachedManagedFeatureFlag(SESSION_REPLAY_FLAG);
+  let flagOn = cachedFlag?.enabled;
+  let rawPayload = cachedFlag?.payload;
 
-  let flagOn = true;
-  let rawPayload;
-  try {
-    if (typeof ph.isFeatureEnabled === 'function') {
-      const evaluated = ph.isFeatureEnabled(SESSION_REPLAY_FLAG);
-      flagOn = evaluated === undefined || evaluated === null ? true : !!evaluated;
+  // Compatibilidad con el callback de la misma recarga del popup: no abre red,
+  // solo lee el estado que ya tiene el SDK antes de que el snapshot se persista.
+  if (!cachedFlag) {
+    await waitForFeatureFlags(ph);
+    try {
+      if (typeof ph.isFeatureEnabled === 'function') {
+        flagOn = ph.isFeatureEnabled(SESSION_REPLAY_FLAG) === true;
+      } else {
+        flagOn = false;
+      }
+      if (typeof ph.getFeatureFlagPayload === 'function') {
+        rawPayload = ph.getFeatureFlagPayload(SESSION_REPLAY_FLAG);
+      }
+    } catch {
+      setSkipReason('feature_flags_error');
+      return;
     }
-    if (typeof ph.getFeatureFlagPayload === 'function') {
-      rawPayload = ph.getFeatureFlagPayload(SESSION_REPLAY_FLAG);
-    }
-  } catch {
-    setSkipReason('feature_flags_error');
-    return;
   }
   if (!flagOn) {
     setSkipReason('flag_off');

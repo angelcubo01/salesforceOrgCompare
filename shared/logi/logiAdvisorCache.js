@@ -6,11 +6,11 @@ import {
 
 export const LOGI_ADVISOR_STORAGE_KEY = 'sfocLogiAdvisorCache';
 
-/** Short freshness window (telemetry/debug). */
-export const LOGI_ADVISOR_CACHE_TTL_MS = 15 * 60 * 1000;
+/** Ventana compartida para comprobar acceso, límites y configuración de Logi. */
+export const LOGI_ADVISOR_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-/** Min interval before force:true may hit the proxy again (local lease / write-safe). */
-export const LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS = 2 * 60 * 60 * 1000;
+/** Máximo de una comprobación remota por instalación cada 6 h. */
+export const LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 /**
  * @typedef {object} LogiAdvisorCacheEntry
@@ -86,15 +86,16 @@ export function isLogiAdvisorCacheFresh(cachedAt, ttlMs = LOGI_ADVISOR_CACHE_TTL
 }
 
 /**
- * Skip proxy when we already have an operational remote config.
- * - Without force: reuse any operational fromRemote cache.
- * - With force: only skip while within LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS (2h lease).
+ * Skip proxy when an authoritative remote response is cached, incluso si Logi
+ * estaba desactivado para el usuario. Así no se reconsulta la cohorte al abrir
+ * varios logs o Ajustes dentro de la misma ventana.
+ * - Without force: never open red; chat/uso reutilizan siempre caché.
+ * - With force: only skip while within LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS (6 h).
  * @param {LogiAdvisorCacheEntry | null | undefined} entry
  * @param {{ force?: boolean, minIntervalMs?: number }} [opts]
  */
 export function canSkipLogiAdvisorRemoteFetch(entry, opts = {}) {
   if (!entry || entry.fromRemote !== true) return false;
-  if (!isLogiAdvisorOperational(entry.config)) return false;
   if (opts.force === true) {
     const minMs = Number(opts.minIntervalMs);
     const ttl = Number.isFinite(minMs) && minMs > 0 ? minMs : LOGI_ADVISOR_REMOTE_MIN_INTERVAL_MS;
@@ -145,8 +146,8 @@ export async function writeLogiAdvisorCache(config, opts = {}) {
 export async function clearLogiAdvisorCache(opts = {}) {
   const disabled = { ...DEFAULT_LOGI_ADVISOR_CONFIG };
   await writeLogiAdvisorCache(disabled, {
-    fromRemote: false,
-    cachedAt: 0
+    fromRemote: opts.fromRemote === true,
+    cachedAt: opts.fromRemote === true ? Date.now() : 0
   });
   return disabled;
 }

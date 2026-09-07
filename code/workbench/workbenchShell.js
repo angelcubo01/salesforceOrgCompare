@@ -1,5 +1,5 @@
 import { state } from '../core/state.js';
-import { loadToolRecents, getToolRecentsSnapshot, isToolPinned, toggleToolPin } from '../core/toolRecents.js';
+import { loadToolRecents, getToolRecentsSnapshot, isToolPinned, toggleToolPinGroup } from '../core/toolRecents.js';
 import {
   APP_NAV_MODE_HOME,
   TOOL_I18N,
@@ -14,7 +14,7 @@ import {
 } from '../../shared/featureControls.js';
 import { getCachedFeatureControlsConfig } from '../../shared/posthogFeatureControlsFlag.js';
 import { getCurrentLang, t } from '../../shared/i18n.js';
-import { ACTION_ICONS, CATEGORY_ICONS, STATE_ICONS, createIcon } from './iconRegistry.js';
+import { ACTION_ICONS, CATEGORY_ICONS, STATE_ICONS, createIcon, updateIcon } from './iconRegistry.js';
 import { comparisonToggleIdForTool } from '../ui/appComparisonToggle.js';
 import {
   MARKETING_CAPABILITIES,
@@ -44,10 +44,13 @@ let pendingHistorySelection = null;
 let readOnlyByOrgId = {};
 let initialized = false;
 let headerActionObservers = [];
+let headerStateSyncers = [];
 let headerRenderSignature = '';
 let navigationRenderSignature = '';
 let workbenchNavigationDepth = 0;
 let navigationGeneration = 0;
+let scheduledRender = false;
+let scheduledRenderGeneration = 0;
 let prefsWriteQueue = Promise.resolve();
 let availabilityConfig = null;
 let availabilityLang = '';
@@ -336,12 +339,18 @@ function createWorkspaceNavButton(item, targetTab = preferredTabForWorkspace(ite
 function favoriteWorkspaceEntries() {
   const { pins } = getToolRecentsSnapshot();
   const result = [];
+  const workspaceIds = new Set();
   for (const toolId of pins) {
     const route = getWorkspaceRouteForTool(toolId);
     if (!route) continue;
     const item = getWorkspaceById(route.workspaceId);
     const tabInfo = item && getTabById(item.id, route.tabId);
     if (!item || !tabInfo || !tabVisibility(tabInfo).visible) continue;
+    // Las pestañas de un mismo espacio de trabajo pueden corresponder a
+    // herramientas distintas (por ejemplo, Apex/VF y LWC/Aura en Edit code).
+    // La categoría Favoritas representa espacios de trabajo, no pestañas.
+    if (workspaceIds.has(item.id)) continue;
+    workspaceIds.add(item.id);
     result.push({ item, tabInfo });
     if (result.length >= 6) break;
   }
@@ -351,19 +360,38 @@ function favoriteWorkspaceEntries() {
 function renderToolSubbar() {
   const host = document.getElementById('workbenchToolSubbar');
   if (!host) return;
-  host.classList.add('is-switching');
-  host.replaceChildren();
+  const entries = !openCategoryId
+    ? []
+    : openCategoryId === 'favorites'
+      ? favoriteWorkspaceEntries()
+      : visibleWorkspaces(openCategoryId).map((item) => ({ item, tabInfo: preferredTabForWorkspace(item) }));
+  const signature = JSON.stringify([openCategoryId, entries.map(({ item, tabInfo }) => {
+    const target = tabInfo || preferredTabForWorkspace(item);
+    const availability = target ? tabVisibility(target) : { disabled: true, message: '' };
+    return [item.id, target?.id || '', t(item.labelKey), availability.disabled, availability.message];
+  })]);
+  if (host.dataset.renderSignature === signature) {
+    syncToolSubbarState(host);
+    return;
+  }
+  host.dataset.renderSignature = signature;
+  const fragment = document.createDocumentFragment();
   if (openCategoryId) {
     host.setAttribute('aria-label', t('workbench.subbar.categoryLabel', { category: categoryLabel(openCategoryId) }));
-    if (openCategoryId === 'favorites') {
-      for (const { item, tabInfo } of favoriteWorkspaceEntries()) {
-        host.appendChild(createWorkspaceNavButton(item, tabInfo, true));
-      }
-    } else {
-      for (const item of visibleWorkspaces(openCategoryId)) host.appendChild(createWorkspaceNavButton(item));
-    }
+    for (const { item, tabInfo } of entries) fragment.appendChild(createWorkspaceNavButton(item, tabInfo, openCategoryId === 'favorites'));
   }
-  requestAnimationFrame(() => host.classList.remove('is-switching'));
+  host.replaceChildren(fragment);
+  syncToolSubbarState(host);
+}
+
+function syncToolSubbarState(host = document.getElementById('workbenchToolSubbar')) {
+  if (!host) return;
+  host.querySelectorAll('.workbench-tool-button').forEach((button) => {
+    const current = button.dataset.exactTabCurrent === 'true'
+      ? button.dataset.workspaceId === activeWorkspaceId && button.dataset.tabId === activeTabId
+      : button.dataset.workspaceId === activeWorkspaceId;
+    button.setAttribute('aria-current', current ? 'page' : 'false');
+  });
 }
 
 function getNavigationSignature() {
@@ -421,12 +449,7 @@ function renderWorkbenchNavigation() {
     navigationRenderSignature = signature;
     renderToolSubbar();
   } else if (openCategoryId) {
-    document.querySelectorAll('.workbench-tool-button').forEach((button) => {
-      const current = button.dataset.exactTabCurrent === 'true'
-        ? button.dataset.workspaceId === activeWorkspaceId && button.dataset.tabId === activeTabId
-        : button.dataset.workspaceId === activeWorkspaceId;
-      button.setAttribute('aria-current', current ? 'page' : 'false');
-    });
+    syncToolSubbarState();
   }
   renderMarketingCapabilities();
   syncCategoryButtons();
@@ -559,6 +582,7 @@ function createHeaderAction(action, { menuItem = false } = {}) {
     button.setAttribute('aria-label', label);
   };
   sync();
+  headerStateSyncers.push(sync);
   observeHeaderActionState(action, sync);
   button.addEventListener('click', () => {
     closeHeaderMoreMenu();
@@ -597,6 +621,10 @@ function createCompareControl(sourceId) {
   const button = el('button', 'workbench-compare-control');
   button.type = 'button';
   button.dataset.sourceId = sourceId;
+  const icon = source.querySelector('svg')?.cloneNode(true) || null;
+  const label = el('span', 'workbench-compare-control-label');
+  if (icon) button.appendChild(icon);
+  button.appendChild(label);
 
   const sync = () => {
     button.disabled = !!source.disabled;
@@ -605,7 +633,11 @@ function createCompareControl(sourceId) {
     button.classList.toggle('is-retrieve', source.classList.contains('retrieve-button'));
     button.title = source.title || source.getAttribute('aria-label') || '';
     button.setAttribute('aria-label', source.getAttribute('aria-label') || button.title);
-    button.innerHTML = source.innerHTML;
+    const sourceIcon = source.querySelector('svg');
+    const sourceUse = sourceIcon?.querySelector('use');
+    const buttonIcon = button.querySelector('svg');
+    if (sourceUse && buttonIcon) updateIcon(buttonIcon, String(sourceUse.getAttribute('href') || '').replace(/^.*#icon-/, ''));
+    label.textContent = source.textContent?.trim() || '';
   };
   sync();
 
@@ -928,10 +960,16 @@ function markMovedActionSources(actions) {
   }
 }
 
-function createToolFavoriteButton(tabInfo) {
+function workspaceToolIds(item, tabInfo) {
+  const toolIds = item?.tabs?.map(({ toolId }) => toolId) || [tabInfo?.toolId];
+  return [...new Set(toolIds.filter(Boolean))];
+}
+
+function createToolFavoriteButton(item, tabInfo) {
   if (!tabInfo?.toolId) return null;
-  const tool = t(tabInfo.labelKey);
-  const pinned = isToolPinned(tabInfo.toolId);
+  const toolIds = workspaceToolIds(item, tabInfo);
+  const tool = t(item?.labelKey || tabInfo.labelKey);
+  const pinned = toolIds.some((toolId) => isToolPinned(toolId));
   const label = pinned
     ? t('workbench.favorites.remove', { tool })
     : t('workbench.favorites.add', { tool });
@@ -939,12 +977,13 @@ function createToolFavoriteButton(tabInfo) {
   button.type = 'button';
   button.id = 'workbenchToolFavoriteBtn';
   button.dataset.toolId = tabInfo.toolId;
+  if (item?.id) button.dataset.workspaceId = item.id;
   button.setAttribute('aria-pressed', String(pinned));
   button.setAttribute('aria-label', label);
   button.title = label;
   button.appendChild(createIcon(ACTION_ICONS.favorite, { size: 18 }));
   button.addEventListener('click', () => {
-    void toggleToolPin(tabInfo.toolId);
+    void toggleToolPinGroup(toolIds, tabInfo.toolId);
   });
   return button;
 }
@@ -973,7 +1012,7 @@ function createContextHeader() {
   title.id = 'workbenchContextTitle';
   title.tabIndex = -1;
   titleLine.appendChild(title);
-  const favoriteButton = createToolFavoriteButton(currentTab);
+  const favoriteButton = createToolFavoriteButton(item, currentTab);
   if (favoriteButton) titleLine.appendChild(favoriteButton);
   titleCopy.appendChild(titleLine);
   const description = item ? translatedDescription(item) : '';
@@ -1022,10 +1061,7 @@ function createContextHeader() {
   const theme = makeIconButton('workbenchThemeBtn', themeIcon, t('workbench.action.theme'));
   theme.addEventListener('click', () => {
     document.getElementById('appThemeToggleInput')?.click();
-    requestAnimationFrame(() => {
-      headerRenderSignature = '';
-      renderWorkbenchHeader();
-    });
+    requestAnimationFrame(syncWorkbenchHeaderState);
   });
   actions.appendChild(theme);
   main.appendChild(actions);
@@ -1074,6 +1110,45 @@ function handleTabKeydown(event, item) {
   });
 }
 
+function disconnectHeaderObservers(observers) {
+  for (const observer of observers) observer.disconnect();
+}
+
+function syncFavoriteButtonState() {
+  const button = document.getElementById('workbenchToolFavoriteBtn');
+  const workspaceId = button?.dataset.workspaceId;
+  const item = workspaceId ? getWorkspaceById(workspaceId) : null;
+  const tabInfo = item && getTabById(item.id, activeTabId) || (activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null);
+  if (!button || !item || !tabInfo) return;
+  const pinned = workspaceToolIds(item, tabInfo).some((toolId) => isToolPinned(toolId));
+  const tool = t(item.labelKey || tabInfo.labelKey);
+  const label = pinned ? t('workbench.favorites.remove', { tool }) : t('workbench.favorites.add', { tool });
+  button.setAttribute('aria-pressed', String(pinned));
+  button.setAttribute('aria-label', label);
+  button.title = label;
+}
+
+/** Sincroniza propiedades efímeras sin reemplazar ningún SVG ni cabecera. */
+export function syncWorkbenchHeaderState() {
+  headerStateSyncers.forEach((sync) => sync());
+  syncFavoriteButtonState();
+  const isLight = document.documentElement.dataset.uiTheme === 'light';
+  updateIcon(document.querySelector('#workbenchThemeBtn .sfoc-icon'), isLight ? ACTION_ICONS.darkTheme : ACTION_ICONS.lightTheme);
+}
+
+/** Coalesce eventos redundantes y descarta commits de una navegación obsoleta. */
+export function scheduleWorkbenchRender(reason = 'state', generation = navigationGeneration) {
+  scheduledRenderGeneration = generation;
+  if (scheduledRender) return;
+  scheduledRender = true;
+  queueMicrotask(() => {
+    scheduledRender = false;
+    if (scheduledRenderGeneration !== navigationGeneration) return;
+    renderWorkbenchShell();
+    syncWorkbenchHeaderState();
+  });
+}
+
 export function renderWorkbenchHeader() {
   const editor = document.getElementById('editorContainer');
   if (!editor) return;
@@ -1086,24 +1161,32 @@ export function renderWorkbenchHeader() {
   const tabsSignature = item
     ? visibleTabs(item).map((candidate) => [candidate.id, tabVisibility(candidate).disabled, tabVisibility(candidate).message])
     : [];
-  const signature = JSON.stringify({
-    activeCategoryId,
-    activeWorkspaceId,
-    activeTabId,
-    theme: document.documentElement.dataset.uiTheme || '',
-    compactActions: window.matchMedia('(max-width: 1120px)').matches,
-    orgSignature,
-    tabsSignature
-  });
-  if (signature === headerRenderSignature && document.getElementById('workbenchContextHeader')) return;
-  headerRenderSignature = signature;
-  for (const observer of headerActionObservers) observer.disconnect();
+  const signature = JSON.stringify({ activeCategoryId, activeWorkspaceId, activeTabId,
+    compactActions: window.matchMedia('(max-width: 1120px)').matches, orgSignature, tabsSignature });
+  const previousHeader = document.getElementById('workbenchContextHeader');
+  if (signature === headerRenderSignature && previousHeader) {
+    syncWorkbenchHeaderState();
+    return;
+  }
+  // Se prepara íntegramente el árbol nuevo antes de sustituir el actual: no se
+  // deja nunca un hueco visual ni se recrean iconos durante el estado intermedio.
+  const previousObservers = headerActionObservers;
+  const previousSyncers = headerStateSyncers;
   headerActionObservers = [];
-  closeHeaderMoreMenu();
-  document.getElementById('workbenchContextHeader')?.remove();
+  headerStateSyncers = [];
+  const activeElement = document.activeElement;
+  const focusId = previousHeader?.contains(activeElement) ? activeElement.id : '';
+  const focusActionId = previousHeader?.contains(activeElement) ? activeElement?.dataset?.actionId : '';
   const header = createContextHeader();
+  disconnectHeaderObservers(previousObservers);
+  previousSyncers.length = 0;
+  closeHeaderMoreMenu();
+  headerRenderSignature = signature;
   const classicHeader = editor.querySelector('.app-mode-tabs-wrap');
-  editor.insertBefore(header, classicHeader || editor.children[1] || null);
+  if (previousHeader) previousHeader.replaceWith(header);
+  else editor.insertBefore(header, classicHeader || editor.children[1] || null);
+  if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
+  else if (focusActionId) header.querySelector(`[data-action-id="${CSS.escape(focusActionId)}"]`)?.focus({ preventScroll: true });
 }
 
 export function renderWorkbenchShell() {
@@ -1123,14 +1206,14 @@ function syncFromLegacyNavigation(event = null) {
     // Las acciones de cabecera reflejan controles legacy que se actualizan al
     // final de `applyArtifactTypeUi`. Sin esta segunda pasada, Inicio podía
     // conservar una cabecera sin sus acciones tras venir de otra herramienta.
-    headerRenderSignature = '';
-    renderWorkbenchShell();
+    if (workbenchNavigationDepth === 0) scheduleWorkbenchRender('artifact-ui-applied');
+    else syncWorkbenchHeaderState();
     return;
   }
   if (event?.detail?.source === 'tool-handlers-ready') {
     if (activeWorkspaceId && activeTabId) void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
-    headerRenderSignature = '';
-    renderWorkbenchHeader();
+    if (workbenchNavigationDepth === 0) scheduleWorkbenchRender('tool-handlers-ready');
+    else syncWorkbenchHeaderState();
     return;
   }
   if (workbenchNavigationDepth > 0) return;
@@ -1159,7 +1242,7 @@ function syncFromLegacyNavigation(event = null) {
   }
   pendingHistorySelection = null;
   closeToolSubbar();
-  renderWorkbenchShell();
+  scheduleWorkbenchRender('legacy-navigation');
 }
 
 async function applyWorkspaceTabVariant(workspaceId, tabId) {
@@ -1196,7 +1279,10 @@ export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
   activeCategoryId = item.categoryId;
   document.body.dataset.workbenchWorkspace = workspaceId;
   document.body.dataset.workbenchTab = tabId;
-  renderWorkbenchShell();
+  // Durante la navegación se actualiza la navegación lateral, pero la cabecera
+  // existente permanece visible hasta el commit final.
+  renderWorkbenchNavigation();
+  syncWorkbenchHeaderState();
   try {
     if (!sameLegacyTool) {
       await navigateToModeAndTool(tabInfo.legacyMode, tabInfo.toolId, { userInitiated: opts.userInitiated === true });
@@ -1222,8 +1308,7 @@ export async function navigateToWorkspaceTab(workspaceId, tabId, opts = {}) {
     // terminado de mostrar/ocultar sus fuentes. Forzamos una segunda pasada
     // con el contexto ya estable para no conservar acciones de la herramienta
     // anterior.
-    headerRenderSignature = '';
-    renderWorkbenchShell();
+    scheduleWorkbenchRender('navigation-complete', requestId);
     return true;
   } finally {
     workbenchNavigationDepth = Math.max(0, workbenchNavigationDepth - 1);
@@ -1609,8 +1694,8 @@ export async function setupWorkbenchShell() {
   document.addEventListener('sfoc:artifact-ui-applied', syncFromLegacyNavigation);
   document.addEventListener('sfoc:tool-recents-change', () => {
     navigationRenderSignature = '';
-    headerRenderSignature = '';
-    renderWorkbenchShell();
+    renderWorkbenchNavigation();
+    syncWorkbenchHeaderState();
   });
   document.addEventListener('pointerdown', () => { lastInputWasKeyboard = false; }, true);
   document.addEventListener('keydown', (event) => {
@@ -1633,22 +1718,20 @@ export async function setupWorkbenchShell() {
   window.addEventListener('resize', () => {
     const compact = window.matchMedia('(max-width: 1120px)').matches;
     if (compact === (JSON.parse(headerRenderSignature || '{}').compactActions ?? compact)) return;
-    headerRenderSignature = '';
-    renderWorkbenchHeader();
+    scheduleWorkbenchRender('resize');
   });
   window.addEventListener('popstate', (event) => {
     pendingHistorySelection = event.state?.sfocWorkbench || null;
   });
   for (const id of ['leftOrg', 'rightOrg']) {
     const select = document.getElementById(id);
-    select?.addEventListener('change', () => requestAnimationFrame(renderWorkbenchHeader));
-    if (select) new MutationObserver(() => requestAnimationFrame(renderWorkbenchHeader)).observe(select, { childList: true });
+    select?.addEventListener('change', () => scheduleWorkbenchRender('org-change'));
+    if (select) new MutationObserver(() => scheduleWorkbenchRender('org-options-change')).observe(select, { childList: true });
   }
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes[READ_ONLY_STORAGE_KEY]) {
       readOnlyByOrgId = changes[READ_ONLY_STORAGE_KEY].newValue || {};
-      headerRenderSignature = '';
-      renderWorkbenchHeader();
+      scheduleWorkbenchRender('read-only-change');
     }
   });
 }

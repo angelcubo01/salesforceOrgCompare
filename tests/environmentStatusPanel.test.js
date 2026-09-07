@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildTimelineIntervals,
   canExpandSessionDetail,
   escapeHtml,
+  formatDuration,
+  formatTrustDate,
+  hasActiveSalesforceSession,
   renderSessionDetailGridHtml,
   toggleExpandedOrg
 } from '../code/ui/environmentStatusPanelHelpers.js';
@@ -15,9 +19,9 @@ describe('environmentStatusPanelHelpers', () => {
     expect([...expanded]).toEqual(['b']);
   });
 
-  it('allows expand only for active auth', () => {
+  it('allows Trust detail even with an expired session', () => {
     expect(canExpandSessionDetail('active')).toBe(true);
-    expect(canExpandSessionDetail('expired')).toBe(false);
+    expect(canExpandSessionDetail('expired')).toBe(true);
   });
 
   it('escapes html in detail grid', () => {
@@ -29,5 +33,21 @@ describe('environmentStatusPanelHelpers', () => {
 
   it('escapeHtml handles quotes', () => {
     expect(escapeHtml(`"'`)).toBe('&quot;&#39;');
+  });
+
+  it('identifies the active Salesforce session used by the main table', () => {
+    expect(hasActiveSalesforceSession({ auth: 'active' })).toBe(true);
+    expect(hasActiveSalesforceSession({ auth: 'expired' })).toBe(false);
+    expect(hasActiveSalesforceSession(null)).toBe(false);
+  });
+
+  it('formats Trust dates, durations and open intervals with injected now', () => {
+    expect(formatDuration(90 * 60000)).toBe('1h 30m');
+    expect(formatTrustDate('2026-01-02T03:04:00Z', 'en')).toContain('02/01/2026');
+    const intervals = buildTimelineIntervals(
+      [{ startTime: '2026-01-01T00:00:00Z' }],
+      Date.parse('2025-12-31T00:00:00Z'), Date.parse('2026-01-03T00:00:00Z'), Date.parse('2026-01-02T00:00:00Z')
+    );
+    expect(intervals[0].width).toBeGreaterThan(0);
   });
 });
