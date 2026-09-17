@@ -8,6 +8,7 @@ import { showToast } from './toast.js';
 import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
 import { guardToolAction } from './featureControlsUi.js';
+import { getCodeEditorPersistenceEnabled } from '../../shared/extensionSettings.js';
 import {
   formatMetadataApiVersion,
   buildDeployApiVersionWindow,

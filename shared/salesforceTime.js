@@ -1,5 +1,11 @@
 const CLOCK_WARNING_THRESHOLD_MS = 60 * 1000;
 
+import { getDateDisplayFormat } from './extensionSettings.js';
+import {
+  formatLocalDateTimeParts,
+  parseLocalDateTimeParts
+} from './dateDisplay.js';
+
 export { CLOCK_WARNING_THRESHOLD_MS };
 
 export function calculateSalesforceClockOffset(serverNowMs, requestStartedMs, responseReceivedMs) {
@@ -34,16 +40,10 @@ export function formatSalesforceClockOffset(offsetMs, locale = 'es') {
   return amount + suffix + ' ' + direction;
 }
 
-export function toUtcIsoFromLocalDateTime(value) {
-  let raw = String(value || '').trim().replace(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})$/, '$1T$2');
-  const display = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})$/);
-  if (display) {
-    const [, first, second, year, time] = display;
-    raw = `${year}-${second}-${first}T${time}`;
-  }
-  if (!raw) return '';
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+export function toUtcIsoFromLocalDateTime(value, dateDisplayFormat = getDateDisplayFormat()) {
+  const parts = parseLocalDateTimeParts(value, dateDisplayFormat);
+  if (!parts) return '';
+  return new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second).toISOString();
 }
 
 export function toLocalDateTimeValue(value) {
@@ -52,6 +52,20 @@ export function toLocalDateTimeValue(value) {
   const pad = (n) => String(n).padStart(2, '0');
   return String(date.getFullYear()) + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
     + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+
+/** Formatea una fecha para la interfaz siguiendo el ajuste global, siempre en hora local. */
+export function formatDateTimeForDisplay(value, { includeSeconds = true } = {}) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return formatLocalDateTimeParts({
+    year: date.getFullYear(),
+    month: date.getMonth() + 1,
+    day: date.getDate(),
+    hour: date.getHours(),
+    minute: date.getMinutes(),
+    second: date.getSeconds()
+  }, getDateDisplayFormat(), { includeSeconds });
 }
 
 export function isValidUtcRange(sinceIso, untilIso) {

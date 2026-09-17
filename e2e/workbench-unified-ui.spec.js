@@ -396,12 +396,14 @@ test('la cabecera del comparador aloja estado y controles sin desbordar', async 
     expect(metrics.headerHeight, `comparator@${width}: altura de cabecera estable`).toBeLessThanOrEqual(80);
   }
 
-  // Los clones conservan el comportamiento del control original.
+  // El tirador del borde conserva el espacio de trabajo y deja libres los
+  // controles del diff para acciones propias del visor.
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect(page.locator('.workbench-compare-control[data-source-id="retrieveAllBtn"]')).toBeVisible();
-  await page.locator('.workbench-compare-control[data-source-id="toggleSidebarBtn"]').click();
+  await expect(page.locator('.workbench-compare-control[data-source-id="toggleSidebarBtn"]')).toHaveCount(0);
+  await page.locator('#sidebarToggleRailBtn').click();
   await expect(page.locator('body')).toHaveClass(/sidebar-collapsed/);
-  await expect(page.locator('.workbench-compare-control[data-source-id="toggleSidebarBtn"]')).toHaveClass(/is-active/);
+  await expect(page.locator('#sidebarToggleRailBtn')).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('Apex Quality alterna una sola acciÃ³n principal entre hub y runner', async ({

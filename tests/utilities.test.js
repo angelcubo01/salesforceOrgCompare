@@ -4,7 +4,8 @@ import {
   normalizeMonacoThemeId,
   normalizeExtensionConfig,
   MONACO_THEME_IDS,
-  defaultMonacoThemeForUiTheme
+  defaultMonacoThemeForUiTheme,
+  normalizeDateDisplayFormat
 } from '../shared/extensionSettings.js';
 import { buildOrgPicklistLabel, sameGroupKey } from '../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
@@ -29,6 +30,12 @@ describe('extensionSettings', () => {
     expect(normalizeMonacoThemeId('vs-dark')).toBe('vs-dark');
     expect(normalizeMonacoThemeId('invalid')).toBe('sfoc-editor-dark');
     expect(MONACO_THEME_IDS).toContain('sfoc-editor-light');
+  });
+
+  it('usa DD/MM/AAAA como formato de fecha predeterminado', () => {
+    expect(normalizeDateDisplayFormat('mdy')).toBe('mdy');
+    expect(normalizeDateDisplayFormat('otro')).toBe('dmy');
+    expect(normalizeExtensionConfig({}).dateDisplayFormat).toBe('dmy');
   });
 
   it('empareja tema Monaco SFOC con apariencia de la app', () => {

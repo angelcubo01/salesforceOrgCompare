@@ -16,6 +16,7 @@ import {
   pickBestApexLogForTestRun,
   restSoqlQueryPage,
   probeApiVersion,
+  getSalesforceServerTime,
   resolveApexLogsInWindowLimit
 } from '../shared/salesforceApi.js';
 
@@ -326,6 +327,28 @@ describe('probeApiVersion', () => {
   it('devuelve la última versión de la lista', async () => {
     const v = await probeApiVersion('https://example.my.salesforce.com', 'sid');
     expect(v).toBe('62.0');
+  });
+});
+
+describe('getSalesforceServerTime', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('lee la hora desde el recurso Versions, sin requerir acceso a /limits', async () => {
+    const fetchMock = vi.fn(async () => new Response('[]', {
+      status: 200,
+      headers: { date: 'Wed, 17 Sep 2026 10:30:00 GMT' }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await getSalesforceServerTime('https://example.my.salesforce.com', 'sid', '63.0');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.my.salesforce.com/services/data/',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(result.serverNowIso).toBe('2026-09-17T10:30:00.000Z');
   });
 });
 

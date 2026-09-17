@@ -421,12 +421,32 @@ export function setupDiffNavigation() {
 }
 
 export function setupSidebarToggle() {
-  const toggleBtn = document.getElementById('toggleSidebarBtn');
-  if (!toggleBtn) return;
-  toggleBtn.addEventListener('click', () => {
+  const legacyToggle = document.getElementById('toggleSidebarBtn');
+  const railToggle = document.getElementById('sidebarToggleRailBtn');
+  if (!legacyToggle && !railToggle) return;
+
+  const syncToggleState = (collapsed) => {
+    const label = t(collapsed ? 'code.showSearchPanel' : 'code.hideSearchPanel');
+    for (const button of [legacyToggle, railToggle]) {
+      if (!button) continue;
+      button.classList.toggle('active', collapsed);
+      button.setAttribute('aria-expanded', String(!collapsed));
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    }
+    if (railToggle) {
+      railToggle.dataset.state = collapsed ? 'collapsed' : 'expanded';
+      const railLabel = railToggle.querySelector('.sidebar-toggle-rail-label');
+      if (railLabel) railLabel.textContent = label;
+    }
+  };
+
+  const toggleSidebar = () => {
     const collapsed = document.body.classList.toggle('sidebar-collapsed');
-    // El propio botón refleja el estado: la cabecera v2 clona esa clase para
-    // pintar el control como activo cuando la lista está plegada.
-    toggleBtn.classList.toggle('active', collapsed);
-  });
+    syncToggleState(collapsed);
+  };
+
+  legacyToggle?.addEventListener('click', toggleSidebar);
+  railToggle?.addEventListener('click', toggleSidebar);
+  syncToggleState(document.body.classList.contains('sidebar-collapsed'));
 }

@@ -54,6 +54,9 @@ ehthumbs.db
 
 services/*
 
+#github
+.github/*
+
 # Scripts (herramientas locales, no publicados en el repo)
 scripts/*
 !scripts/sync-vanilla-calendar-vendor.mjs

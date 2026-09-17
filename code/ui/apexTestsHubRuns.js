@@ -1621,8 +1621,21 @@ function removeDetailLoading(host) {
 
 function getRunDetailInnerScrollEl(host) {
   if (!host) return null;
-  if (host.classList.contains('apex-tests-runs-detail-inner')) return host;
-  return host.querySelector('.apex-tests-runs-detail-inner');
+  const inner = host.classList.contains('apex-tests-runs-detail-inner')
+    ? host
+    : host.querySelector('.apex-tests-runs-detail-inner');
+  return inner?.querySelector('.apex-tests-runs-detail-results') || inner;
+}
+
+function ensureDetailResultsContainer(host) {
+  let results = host?.querySelector('.apex-tests-runs-detail-results');
+  if (results) return results;
+  results = document.createElement('div');
+  results.className = 'apex-tests-runs-detail-results';
+  const table = host?.querySelector('.apex-tests-runs-failures-table');
+  if (table) results.appendChild(table);
+  host?.appendChild(results);
+  return results;
 }
 
 function restoreElementScroll(el, scrollTop) {
@@ -1631,6 +1644,29 @@ function restoreElementScroll(el, scrollTop) {
   requestAnimationFrame(() => {
     el.scrollTop = scrollTop;
   });
+}
+
+function captureScrollAnchorInContainer(container, element) {
+  if (!container || !element) return null;
+  const containerRect = container.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  if (elementRect.bottom <= containerRect.top || elementRect.top >= containerRect.bottom) return null;
+  return {
+    offset: elementRect.top - containerRect.top,
+    scrollTop: container.scrollTop
+  };
+}
+
+function restoreScrollAnchorInContainer(container, element, anchor) {
+  if (!container || !element || !anchor || !element.isConnected) return false;
+  const apply = () => {
+    if (!element.isConnected) return;
+    const offset = element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollTop = Math.max(0, anchor.scrollTop + offset - anchor.offset);
+  };
+  apply();
+  requestAnimationFrame(apply);
+  return true;
 }
 
 function readDetailFilterPrefs(host) {
@@ -1732,7 +1768,8 @@ function ensureDetailFilterToolbar(host, orgId, savedState = null) {
   if (!bar) {
     bar = buildDetailFilterToolbar(host);
     const tbl = host.querySelector('.apex-tests-runs-failures-table');
-    if (tbl) host.insertBefore(bar, tbl);
+    const results = tbl?.closest('.apex-tests-runs-detail-results');
+    if (results) host.insertBefore(bar, results);
     else host.appendChild(bar);
     wireDetailFilterToolbar(host, orgId);
   }
@@ -1848,11 +1885,11 @@ function fillMethodsTbody(tb, rows, orgId, host = null) {
 }
 
 function getMethodsTableScrollEl(host, tbl) {
-  const inner = getRunDetailInnerScrollEl(host);
-  if (inner) return inner;
   return (
+    tbl?.closest('.apex-tests-runs-detail-results') ||
     tbl?.closest('.apex-tests-runs-table-scroll') ||
     tbl?.parentElement ||
+    getRunDetailInnerScrollEl(host) ||
     host
   );
 }
@@ -1948,7 +1985,7 @@ async function refreshExpandedMethodsInPlace() {
     thead.appendChild(buildMethodsDetailTableHeadRow());
     tbl.appendChild(thead);
     tbl.appendChild(document.createElement('tbody'));
-    host.appendChild(tbl);
+    ensureDetailResultsContainer(host).appendChild(tbl);
   }
   const tb = tbl.querySelector('tbody');
   if (!tb) return;
@@ -2210,7 +2247,10 @@ async function populateRunDetailInner(inner, orgId, jobId, opts = {}) {
       const tb = document.createElement('tbody');
       fillMethodsTbody(tb, fails.rows, orgId);
       tbl.appendChild(tb);
-      inner.replaceChildren(tbl);
+      const results = document.createElement('div');
+      results.className = 'apex-tests-runs-detail-results';
+      results.appendChild(tbl);
+      inner.replaceChildren(results);
     }
   }
 
@@ -2249,7 +2289,10 @@ async function populateRunDetailInner(inner, orgId, jobId, opts = {}) {
   tb.dataset.identitySig = methodsIdentitySignature(methodRows);
   tbl.appendChild(tb);
   if (toolbar) inner.appendChild(toolbar);
-  inner.appendChild(tbl);
+  const results = document.createElement('div');
+  results.className = 'apex-tests-runs-detail-results';
+  results.appendChild(tbl);
+  inner.appendChild(results);
   wireDetailFilterToolbar(inner, orgId);
 }
 
@@ -2980,11 +3023,12 @@ async function renderHubRunsTable(opts = {}) {
   let savedDetailScroll = 0;
   const tableWrap = document.getElementById('apexTestsRunsTableWrap');
   const savedWrapScroll = tableWrap?.scrollTop ?? 0;
+  let savedWrapAnchor = null;
   if (reopenKey) {
     detachedDetailRow = findExpandedDetailRow(reopenKey);
+    savedWrapAnchor = captureScrollAnchorInContainer(tableWrap, detachedDetailRow);
     savedExpandFilter = readDetailFilterState(detachedDetailRow?.querySelector('.apex-tests-runs-detail-inner'));
-    savedDetailScroll =
-      detachedDetailRow?.querySelector('.apex-tests-runs-detail-inner')?.scrollTop ?? 0;
+    savedDetailScroll = getRunDetailInnerScrollEl(detachedDetailRow)?.scrollTop ?? 0;
     detachedDetailRow?.remove();
   }
   tbody.innerHTML = '';
@@ -3257,8 +3301,7 @@ async function renderHubRunsTable(opts = {}) {
     if (anchor && parsed) {
       if (detachedDetailRow) {
         anchor.insertAdjacentElement('afterend', detachedDetailRow);
-        const detailInner = detachedDetailRow.querySelector('.apex-tests-runs-detail-inner');
-        restoreElementScroll(detailInner, savedDetailScroll);
+        restoreElementScroll(getRunDetailInnerScrollEl(detachedDetailRow), savedDetailScroll);
         syncAllExpandButtonStates();
       } else {
         const poll = pollsByOrgId[parsed.orgId];
@@ -3282,7 +3325,9 @@ async function renderHubRunsTable(opts = {}) {
 
   await refreshOtherOrgQueuePanel(list, enriched);
 
-  restoreElementScroll(tableWrap, savedWrapScroll);
+  if (!restoreScrollAnchorInContainer(tableWrap, detachedDetailRow, savedWrapAnchor)) {
+    restoreElementScroll(tableWrap, savedWrapScroll);
+  }
 
   if (pollValues.length && !allFailed) {
     if (shouldStopPollingAfterRuns(runsForStop, list)) {

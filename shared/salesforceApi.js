@@ -52,13 +52,14 @@ async function restFetchWithSid(instanceUrl, sid, path, init = {}) {
 
 /**
  * Obtiene la hora del servidor Salesforce desde la cabecera HTTP Date.
- * La consulta a Limits es ligera, autenticada y no modifica datos.
+ * El recurso Versions no consume cuota de API y, a diferencia de /limits,
+ * no requiere el permiso "View Setup and Configuration".
  */
 export async function getSalesforceServerTime(instanceUrl, sid, apiVersion) {
   const res = await restFetchWithSid(
     instanceUrl,
     sid,
-    '/services/data/v' + apiVersion + '/limits',
+    '/services/data/',
     { method: 'GET' }
   );
   const rawDate = String(res.headers.get('date') || '').trim();

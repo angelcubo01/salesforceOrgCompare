@@ -1,6 +1,6 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
-import { t, getCurrentLang } from '../../shared/i18n.js';
+import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import {
@@ -17,6 +17,7 @@ import { createDateTimeRangePicker } from './dateTimeRangePicker.js';
 import { createTablePagination } from './tablePagination.js';
 import { getSalesforceNow } from './salesforceServerClock.js';
 import {
+  formatDateTimeForDisplay,
   isValidUtcRange,
   toLocalDateTimeValue,
   toUtcIsoFromLocalDateTime
@@ -70,15 +71,7 @@ function formatDateTime(value) {
   if (!value) return '—';
   const d = parseSalesforceDateTime(value) || new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  const lang = getCurrentLang() === 'en' ? 'en-GB' : 'es-ES';
-  return d.toLocaleString(lang, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+  return formatDateTimeForDisplay(d) || String(value);
 }
 
 function normalizeSfId(value) {

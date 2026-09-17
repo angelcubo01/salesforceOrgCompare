@@ -699,7 +699,6 @@ function createCompareToolbar() {
     'toggleWordWrapBtn',
     'copyUnifiedDiffBtn',
     'exportDiffHtmlBtn',
-    'toggleSidebarBtn',
     'prevDiffBtn',
     'nextDiffBtn'
   ]) {
@@ -1154,6 +1153,10 @@ export function renderWorkbenchHeader() {
   if (!editor) return;
   const item = activeWorkspaceId ? getWorkspaceById(activeWorkspaceId) : null;
   const tabInfo = activeWorkspaceId && activeTabId ? getTabById(activeWorkspaceId, activeTabId) : null;
+  // El cambio de herramienta legacy termina de forma asíncrona. La misma
+  // pestaña del workbench no puede reutilizar una cabecera creada con los
+  // controles de la herramienta anterior mientras ese cambio se completa.
+  const toolId = document.getElementById('typeSelect')?.value || state.selectedArtifactType || '';
   const orgSignature = selectedOrgIds(tabInfo).map((orgId) => {
     const env = environmentForOrg(orgId);
     return [orgId, orgDisplayName(orgId), env.className, !!readOnlyByOrgId[orgId]];
@@ -1161,7 +1164,7 @@ export function renderWorkbenchHeader() {
   const tabsSignature = item
     ? visibleTabs(item).map((candidate) => [candidate.id, tabVisibility(candidate).disabled, tabVisibility(candidate).message])
     : [];
-  const signature = JSON.stringify({ activeCategoryId, activeWorkspaceId, activeTabId,
+  const signature = JSON.stringify({ activeCategoryId, activeWorkspaceId, activeTabId, toolId,
     compactActions: window.matchMedia('(max-width: 1120px)').matches, orgSignature, tabsSignature });
   const previousHeader = document.getElementById('workbenchContextHeader');
   if (signature === headerRenderSignature && previousHeader) {

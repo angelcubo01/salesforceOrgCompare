@@ -372,6 +372,11 @@ const translations = {
     'settings.sectionGeneral': 'General',
     'settings.language': 'Idioma de la interfaz',
     'settings.languageHint': 'Se aplica al popup, al comparador y a ventanas como el visor de log o cobertura de metadatos.',
+    'settings.dateDisplayFormat': 'Formato de fecha',
+    'settings.dateDisplayFormatHint': 'Se aplica a todos los selectores y fechas mostradas. Salesforce recibe siempre fechas ISO UTC.',
+    'settings.dateDisplayFormat.dmy': 'DD/MM/AAAA',
+    'settings.dateDisplayFormat.mdy': 'MM/DD/AAAA',
+    'settings.dateDisplayFormat.ymd': 'AAAA-MM-DD',
     'settings.uiTheme': 'Apariencia de la aplicación',
     'settings.uiThemeHint':
       'Modo claro u oscuro del comparador y herramientas. Al cambiarlo, el editor adopta el tema SFOC claro u oscuro; puedes elegir otro tema de editor después.',
@@ -562,12 +567,12 @@ const translations = {
     'settings.backupExport': 'Exportar copia',
     'settings.backupImportMerge': 'Importar (fusionar)',
     'settings.backupImportReplace': 'Importar (sustituir todo)',
-    'settings.backupHint': 'Incluye entornos, ajustes, ficheros pineados/guardados, scripts de Anonymous Apex, perfiles de ejecución de tests Apex. No incluye sesiones (SID).',
+    'settings.backupHint': 'Incluye entornos, ajustes, favoritos de herramientas, ficheros pineados/guardados, consultas guardadas, scripts de Anonymous Apex, perfiles de tests Apex y preferencias de integración. No incluye sesiones (SID) ni secretos.',
     'settings.backupExportError': 'No se ha podido exportar la copia.',
     'settings.backupImportError': 'Copia no válida o incompatible.',
     'settings.backupImportOk': 'Copia importada. Entornos procesados: {count}.',
     'settings.backupImportReplaceConfirm':
-      '¿Sustituir entornos, ajustes, elementos guardados/pineados, scripts y perfiles de tests Apex por el contenido del fichero?',
+      '¿Sustituir entornos, ajustes, favoritos, elementos guardados/pineados, consultas, scripts y perfiles de tests Apex por el contenido del fichero?',
 
     // ── Code.html / sidebar ──
     'code.metadataType': 'Tipo de metadatos',
@@ -713,6 +718,8 @@ const translations = {
     'code.retrieveToolbar': 'Retrieve',
     'code.noDifferences': 'Sin diferencias',
     'code.showHideList': 'Mostrar/ocultar lista',
+    'code.hideSearchPanel': 'Ocultar panel de búsqueda',
+    'code.showSearchPanel': 'Mostrar panel de búsqueda',
     'code.prevDiff': 'Diferencia anterior',
     'code.nextDiff': 'Siguiente diferencia',
     'code.exportDiffHtmlTitle': 'Exportar diff como HTML',
@@ -3295,6 +3302,11 @@ const translations = {
     'settings.language': 'Interface language',
     'settings.languageHint':
       'Applies to the popup, the compare view, and windows such as the log or coverage viewer.',
+    'settings.dateDisplayFormat': 'Date format',
+    'settings.dateDisplayFormatHint': 'Applies to every date picker and displayed date. Salesforce always receives UTC ISO dates.',
+    'settings.dateDisplayFormat.dmy': 'DD/MM/YYYY',
+    'settings.dateDisplayFormat.mdy': 'MM/DD/YYYY',
+    'settings.dateDisplayFormat.ymd': 'YYYY-MM-DD',
     'settings.uiTheme': 'Application appearance',
     'settings.uiThemeHint':
       'Light or dark UI for the compare view and tools. Changing appearance also sets the editor to the matching SFOC light or dark theme; you can pick a different editor theme later.',
@@ -3486,12 +3498,12 @@ const translations = {
     'settings.backupImportMerge': 'Import (merge)',
     'settings.backupImportReplace': 'Import (replace all)',
     'settings.backupHint':
-      'Includes organizations, settings, pinned/saved files, Anonymous Apex scripts, Apex test run profiles. Does not include session tokens (SID).',
+      'Includes organizations, settings, tool favorites, pinned/saved files, saved queries, Anonymous Apex scripts, Apex test profiles, and integration preferences. Does not include session tokens (SID) or secrets.',
     'settings.backupExportError': 'Could not export backup.',
     'settings.backupImportError': 'Invalid or incompatible backup.',
     'settings.backupImportOk': 'Backup imported. Orgs processed: {count}.',
     'settings.backupImportReplaceConfirm':
-      'Replace organizations, settings, pinned/saved items, scripts, and Apex test profiles with file contents?',
+      'Replace organizations, settings, favorites, pinned/saved items, queries, scripts, and Apex test profiles with file contents?',
 
     // ── Code.html / sidebar ──
     'code.metadataType': 'Metadata type',
@@ -3638,6 +3650,8 @@ const translations = {
     'code.retrieveToolbar': 'Retrieve',
     'code.noDifferences': 'No differences',
     'code.showHideList': 'Show/hide list',
+    'code.hideSearchPanel': 'Hide search panel',
+    'code.showSearchPanel': 'Show search panel',
     'code.prevDiff': 'Previous difference',
     'code.nextDiff': 'Next difference',
     'code.exportDiffHtmlTitle': 'Export diff as HTML',

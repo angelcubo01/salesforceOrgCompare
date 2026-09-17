@@ -1,4 +1,4 @@
-import { restDescribeSobject, restQueryAll } from './salesforceApi.js';
+import { restDescribeSobject, restQueryAll, toolingQueryAll } from './salesforceApi.js';
 import {
   buildCompareFieldList,
   detectRowAlignment
@@ -6,6 +6,33 @@ import {
 
 function escapeSoqlLiteral(value) {
   return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function isCustomMetadataType(apiName) {
+  return String(apiName || '').trim().toLowerCase().endsWith('__mdt');
+}
+
+/**
+ * Los tipos Custom Metadata admiten SOQL, pero no exponen el recurso REST
+ * `/sobjects/{type}/describe`. EntityParticle es la fuente de Tooling API
+ * para conocer los campos de una entidad, incluidos los de `__mdt`.
+ */
+async function describeCustomMetadataType(instanceUrl, sid, apiVersion, apiName) {
+  const soql =
+    'SELECT QualifiedApiName, DataType, IsCalculated ' +
+    `FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${escapeSoqlLiteral(apiName)}' ` +
+    'ORDER BY QualifiedApiName';
+  const particles = await toolingQueryAll(instanceUrl, sid, apiVersion, soql);
+
+  return {
+    fields: (particles || [])
+      .map((particle) => ({
+        name: String(particle?.QualifiedApiName || '').trim(),
+        type: String(particle?.DataType || '').trim().toLowerCase(),
+        calculated: particle?.IsCalculated === true
+      }))
+      .filter((field) => field.name)
+  };
 }
 
 /**
@@ -54,7 +81,9 @@ export async function fetchSetupRecordsForType(instanceUrl, sid, apiVersion, typ
     throw new Error('Missing type API name');
   }
 
-  const describe = await restDescribeSobject(instanceUrl, sid, apiVersion, apiName);
+  const describe = isCustomMetadataType(apiName)
+    ? await describeCustomMetadataType(instanceUrl, sid, apiVersion, apiName)
+    : await restDescribeSobject(instanceUrl, sid, apiVersion, apiName);
   const describeFields = Array.isArray(describe?.fields) ? describe.fields : [];
   const fieldNames = buildCompareFieldList(describeFields);
   const alignment = detectRowAlignment(describeFields);

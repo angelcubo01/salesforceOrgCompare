@@ -95,6 +95,14 @@ export const MONACO_THEME_IDS = [
   'hc-light'
 ];
 
+export const DATE_DISPLAY_FORMATS = ['dmy', 'mdy', 'ymd'];
+
+/** @param {unknown} raw */
+export function normalizeDateDisplayFormat(raw) {
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  return DATE_DISPLAY_FORMATS.includes(value) ? value : 'dmy';
+}
+
 /** @param {unknown} raw */
 export function normalizeUiTheme(raw) {
   return raw === 'light' ? 'light' : 'dark';
@@ -119,6 +127,8 @@ const DEFAULTS = {
   uiTheme: /** @type {'dark' | 'light'} */ ('dark'),
   /** Tema del editor Monaco (diff y paneles que usan Monaco). */
   monacoTheme: 'sfoc-editor-dark',
+  /** Formato de fecha de la interfaz; no afecta a las fechas enviadas a Salesforce. */
+  dateDisplayFormat: 'dmy',
   nativeDiffMaxChars: 1_800_000,
   maxMonacoModelChars: 2_000_000,
   maxDiffAlgorithmChars: 400_000,
@@ -203,6 +213,10 @@ function normalizeConfig(partial) {
     }
     if (k === 'monacoTheme') {
       next[k] = normalizeMonacoThemeId(src[k] != null ? src[k] : next[k]);
+      continue;
+    }
+    if (k === 'dateDisplayFormat') {
+      next[k] = normalizeDateDisplayFormat(src[k] != null ? src[k] : next[k]);
       continue;
     }
     if (k === 'apexTestsTraceDebugLevel') {
@@ -367,6 +381,11 @@ export function getMonacoThemeId() {
   return normalizeMonacoThemeId(cache.monacoTheme);
 }
 
+/** @returns {'dmy' | 'mdy' | 'ymd'} */
+export function getDateDisplayFormat() {
+  return normalizeDateDisplayFormat(cache.dateDisplayFormat);
+}
+
 /** @returns {boolean} */
 export function getTelemetryEnabled() {
   return cache.telemetryEnabled !== false;
@@ -447,4 +466,15 @@ export function applyUiThemeToDocument(doc = typeof document !== 'undefined' ? d
   const t = getUiTheme();
   doc.documentElement.dataset.uiTheme = t;
   doc.documentElement.style.colorScheme = t === 'light' ? 'light' : 'dark';
+}
+
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    const change = changes?.[EXTENSION_CONFIG_KEY];
+    if (areaName !== 'local' || !change) return;
+    cache = normalizeConfig(change.newValue);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('sfoc:extension-settings-changed'));
+    }
+  });
 }

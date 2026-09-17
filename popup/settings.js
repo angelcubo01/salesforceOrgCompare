@@ -17,6 +17,8 @@ import {
   EXTENSION_FIELD_BOUNDS,
   EXTENSION_CONFIG_KEY,
   MONACO_THEME_IDS,
+  DATE_DISPLAY_FORMATS,
+  normalizeDateDisplayFormat,
   normalizeMonacoThemeId,
   applyUiThemeToDocument,
   defaultMonacoThemeForUiTheme
@@ -41,6 +43,11 @@ import {
   normalizeLogiQuickActionPromptStore
 } from '../shared/logi/logiQuickActionPrompts.js';
 import { wireSfInjectSettings } from '../sfInject/popup/settingsPanel.js';
+import { SF_INJECT_CONFIG_KEY, normalizeSfInjectConfig } from '../sfInject/lib/settings.js';
+import {
+  STORAGE_KEY as APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY,
+  normalizeApexLogTextFilterPrefs
+} from '../shared/apexLogTextFilterPrefs.js';
 
 const MONACO_THEME_I18N_KEYS = {
   'sfoc-editor-dark': 'settings.monacoThemeSfocDark',
@@ -51,7 +58,19 @@ const MONACO_THEME_I18N_KEYS = {
   'hc-light': 'settings.monacoThemeHcLight'
 };
 
+const TOOL_RECENTS_STORAGE_KEY = 'sfocToolRecents';
+const QUERY_EXPLORER_SAVED_KEY = 'sfoc_query_explorer_saved_queries';
+const ORG_READ_ONLY_STORAGE_KEY = 'sfocOrgReadOnlyById';
+const MAX_TOOL_FAVORITES = 8;
+const MAX_SAVED_QUERIES = 100;
+
 function refreshAppearanceSelectLabels() {
+  const dateSel = document.getElementById('settingsDateDisplayFormat');
+  if (dateSel) {
+    for (const o of Array.from(dateSel.options)) {
+      o.textContent = t(`settings.dateDisplayFormat.${o.value}`);
+    }
+  }
   const uiSel = document.getElementById('settingsUiTheme');
   if (uiSel) {
     for (const o of Array.from(uiSel.options)) {
@@ -68,6 +87,7 @@ function refreshAppearanceSelectLabels() {
 }
 
 function wireAppearanceSettings() {
+  const dateSel = document.getElementById('settingsDateDisplayFormat');
   const uiSel = document.getElementById('settingsUiTheme');
   const monSel = document.getElementById('settingsMonacoTheme');
   if (uiSel) {
@@ -77,6 +97,15 @@ function wireAppearanceSettings() {
       o.value = val;
       o.textContent = t(val === 'light' ? 'settings.uiThemeLight' : 'settings.uiThemeDark');
       uiSel.appendChild(o);
+    }
+  }
+  if (dateSel) {
+    dateSel.innerHTML = '';
+    for (const format of DATE_DISPLAY_FORMATS) {
+      const o = document.createElement('option');
+      o.value = format;
+      o.textContent = t(`settings.dateDisplayFormat.${format}`);
+      dateSel.appendChild(o);
     }
   }
   if (monSel) {
@@ -90,8 +119,13 @@ function wireAppearanceSettings() {
     }
   }
   void loadExtensionSettings().then((cfg) => {
+    if (dateSel) dateSel.value = normalizeDateDisplayFormat(cfg.dateDisplayFormat);
     if (uiSel) uiSel.value = cfg.uiTheme === 'light' ? 'light' : 'dark';
     if (monSel) monSel.value = normalizeMonacoThemeId(cfg.monacoTheme);
+  });
+  dateSel?.addEventListener('change', async () => {
+    const cfg = await saveExtensionSettings({ dateDisplayFormat: dateSel.value });
+    dateSel.value = normalizeDateDisplayFormat(cfg.dateDisplayFormat);
   });
   uiSel?.addEventListener('change', async () => {
     const v = uiSel.value === 'light' ? 'light' : 'dark';
@@ -171,6 +205,103 @@ function writeLocalAnonScripts(list) {
   } catch {
     /* ignore */
   }
+}
+
+function normalizeToolFavorites(raw) {
+  const pins = Array.isArray(raw) ? raw : [];
+  return [...new Set(
+    pins.map((toolId) => String(toolId || '').trim()).filter(Boolean)
+  )].slice(0, MAX_TOOL_FAVORITES);
+}
+
+function normalizeReadOnlyOrgs(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out = {};
+  for (const [orgId, readOnly] of Object.entries(raw)) {
+    const id = String(orgId || '').trim();
+    if (id && readOnly === true) out[id] = true;
+  }
+  return out;
+}
+
+function filterReadOnlyOrgsForBackupOrgs(readOnlyOrgs, orgConfig) {
+  const orgs = orgConfig?.orgs && typeof orgConfig.orgs === 'object' ? orgConfig.orgs : {};
+  const allowedIds = new Set(Object.keys(orgs));
+  return Object.fromEntries(
+    Object.entries(readOnlyOrgs).filter(([orgId]) => allowedIds.has(orgId))
+  );
+}
+
+function readLocalSavedQueries() {
+  try {
+    const raw = localStorage.getItem(QUERY_EXPLORER_SAVED_KEY);
+    return normalizeSavedQueries(raw ? JSON.parse(raw) : []);
+  } catch {
+    return [];
+  }
+}
+
+function normalizeSavedQueries(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seenNames = new Set();
+  for (const query of raw) {
+    if (!query || typeof query !== 'object') continue;
+    const name = String(query.name || '').trim();
+    const body = String(query.body || '');
+    const key = name.toLocaleLowerCase();
+    if (!name || !body.trim() || seenNames.has(key)) continue;
+    seenNames.add(key);
+    out.push({
+      id: String(query.id || `q_${Date.now()}_${out.length}`),
+      name,
+      body,
+      api: query.api === 'tooling' ? 'tooling' : 'rest',
+      lang: query.lang === 'sosl' ? 'sosl' : 'soql',
+      updatedAt: Number.isFinite(Number(query.updatedAt)) ? Number(query.updatedAt) : Date.now()
+    });
+    if (out.length >= MAX_SAVED_QUERIES) break;
+  }
+  return out;
+}
+
+function writeLocalSavedQueries(queries) {
+  try {
+    localStorage.setItem(
+      QUERY_EXPLORER_SAVED_KEY,
+      JSON.stringify(normalizeSavedQueries(queries))
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+function savedQueryKey(query) {
+  return String(query?.name || '').trim().toLocaleLowerCase();
+}
+
+function mergeSavedQueries(current, incoming) {
+  const out = normalizeSavedQueries(current);
+  const seen = new Set(out.map(savedQueryKey).filter(Boolean));
+  for (const query of normalizeSavedQueries(incoming)) {
+    const key = savedQueryKey(query);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(query);
+    if (out.length >= MAX_SAVED_QUERIES) break;
+  }
+  return out;
+}
+
+function mergeSfInjectConfig(current, incoming) {
+  const currentConfig = normalizeSfInjectConfig(current);
+  const incomingConfig = normalizeSfInjectConfig(incoming);
+  return normalizeSfInjectConfig({
+    ...currentConfig,
+    ...incomingConfig,
+    integrations: { ...currentConfig.integrations, ...incomingConfig.integrations },
+    prefs: { ...currentConfig.prefs, ...incomingConfig.prefs }
+  });
 }
 
 function applyStaticTranslations() {
@@ -425,7 +556,11 @@ function wireOrgsBackup() {
         'savedCodeItems',
         'pinnedKeys',
         APEX_TEST_RUN_PROFILES_STORAGE_KEY,
-        LOGI_QUICK_ACTION_PROMPTS_KEY
+        LOGI_QUICK_ACTION_PROMPTS_KEY,
+        TOOL_RECENTS_STORAGE_KEY,
+        ORG_READ_ONLY_STORAGE_KEY,
+        SF_INJECT_CONFIG_KEY,
+        APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY
       ]),
       getOrCreateTelemetryInstallId()
     ]);
@@ -434,7 +569,7 @@ function wireOrgsBackup() {
       return;
     }
     const payload = {
-      formatVersion: 2,
+      formatVersion: 3,
       exportedAt: new Date().toISOString(),
       orgConfig: res.payload,
       localConfig: {
@@ -447,6 +582,16 @@ function wireOrgsBackup() {
         ),
         logiQuickActionPrompts: normalizeLogiQuickActionFullStore(
           local?.[LOGI_QUICK_ACTION_PROMPTS_KEY]
+        ),
+        toolFavorites: normalizeToolFavorites(local?.[TOOL_RECENTS_STORAGE_KEY]?.pins),
+        queryExplorerSavedQueries: readLocalSavedQueries(),
+        orgReadOnlyById: filterReadOnlyOrgsForBackupOrgs(
+          normalizeReadOnlyOrgs(local?.[ORG_READ_ONLY_STORAGE_KEY]),
+          res.payload
+        ),
+        sfInjectSettings: normalizeSfInjectConfig(local?.[SF_INJECT_CONFIG_KEY]),
+        apexLogTextFilterPrefs: normalizeApexLogTextFilterPrefs(
+          local?.[APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY]
         ),
         telemetryInstallId
       }
@@ -520,14 +665,37 @@ function wireOrgsBackup() {
     const incomingProfiles = Array.isArray(data.localConfig.apexTestRunProfiles)
       ? normalizeApexTestRunProfileList(data.localConfig.apexTestRunProfiles)
       : null;
-    const incomingTelemetryId = data.localConfig.telemetryInstallId;
     const incomingLogiPrompts = data.localConfig.logiQuickActionPrompts;
+    const hasToolFavorites = Object.hasOwn(data.localConfig, 'toolFavorites');
+    const incomingToolFavorites = normalizeToolFavorites(data.localConfig.toolFavorites);
+    const hasSavedQueries = Object.hasOwn(data.localConfig, 'queryExplorerSavedQueries');
+    const incomingSavedQueries = normalizeSavedQueries(data.localConfig.queryExplorerSavedQueries);
+    const hasReadOnlyOrgs = Object.hasOwn(data.localConfig, 'orgReadOnlyById');
+    const incomingReadOnlyOrgs = filterReadOnlyOrgsForBackupOrgs(
+      normalizeReadOnlyOrgs(data.localConfig.orgReadOnlyById),
+      data.orgConfig
+    );
+    const hasSfInjectSettings = Object.hasOwn(data.localConfig, 'sfInjectSettings');
+    const incomingSfInjectSettings = normalizeSfInjectConfig(data.localConfig.sfInjectSettings);
+    const hasApexLogTextFilterPrefs = Object.hasOwn(data.localConfig, 'apexLogTextFilterPrefs');
+    const incomingApexLogTextFilterPrefs = normalizeApexLogTextFilterPrefs(
+      data.localConfig.apexLogTextFilterPrefs
+    );
+    const incomingTelemetryId = data.localConfig.telemetryInstallId;
 
     if (importReplace) {
       const replacePayload = {
         savedCodeItems: incomingSavedItems,
         pinnedKeys: incomingPinnedKeys
       };
+      if (hasToolFavorites) {
+        replacePayload[TOOL_RECENTS_STORAGE_KEY] = { recents: [], pins: incomingToolFavorites };
+      }
+      if (hasReadOnlyOrgs) replacePayload[ORG_READ_ONLY_STORAGE_KEY] = incomingReadOnlyOrgs;
+      if (hasSfInjectSettings) replacePayload[SF_INJECT_CONFIG_KEY] = incomingSfInjectSettings;
+      if (hasApexLogTextFilterPrefs) {
+        replacePayload[APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY] = incomingApexLogTextFilterPrefs;
+      }
       if (incomingSettings && typeof incomingSettings === 'object') {
         replacePayload[EXTENSION_CONFIG_KEY] = incomingSettings;
         await chrome.storage.local.set(replacePayload);
@@ -543,12 +711,17 @@ function wireOrgsBackup() {
         await importLogiQuickActionPromptStore(incomingLogiPrompts, { replace: true });
       }
       await applyTelemetryInstallIdFromBackup(incomingTelemetryId, { replace: true });
+      if (hasSavedQueries) writeLocalSavedQueries(incomingSavedQueries);
     } else {
       const current = await chrome.storage.local.get([
         EXTENSION_CONFIG_KEY,
         'savedCodeItems',
         'pinnedKeys',
-        APEX_TEST_RUN_PROFILES_STORAGE_KEY
+        APEX_TEST_RUN_PROFILES_STORAGE_KEY,
+        TOOL_RECENTS_STORAGE_KEY,
+        ORG_READ_ONLY_STORAGE_KEY,
+        SF_INJECT_CONFIG_KEY,
+        APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY
       ]);
       const mergedSettings = {
         ...(current?.[EXTENSION_CONFIG_KEY] || {}),
@@ -556,11 +729,40 @@ function wireOrgsBackup() {
       };
       const mergedSavedItems = mergeSavedCodeItems(current?.savedCodeItems, incomingSavedItems);
       const mergedPinned = [...new Set([...(current?.pinnedKeys || []), ...incomingPinnedKeys])].slice(0, 5);
-      await chrome.storage.local.set({
+      const mergePayload = {
         [EXTENSION_CONFIG_KEY]: mergedSettings,
         savedCodeItems: mergedSavedItems,
         pinnedKeys: mergedPinned
-      });
+      };
+      if (hasToolFavorites) {
+        const currentRecents = current?.[TOOL_RECENTS_STORAGE_KEY];
+        mergePayload[TOOL_RECENTS_STORAGE_KEY] = {
+          recents: Array.isArray(currentRecents?.recents) ? currentRecents.recents : [],
+          pins: normalizeToolFavorites([
+            ...(currentRecents?.pins || []),
+            ...incomingToolFavorites
+          ])
+        };
+      }
+      if (hasReadOnlyOrgs) {
+        mergePayload[ORG_READ_ONLY_STORAGE_KEY] = {
+          ...normalizeReadOnlyOrgs(current?.[ORG_READ_ONLY_STORAGE_KEY]),
+          ...incomingReadOnlyOrgs
+        };
+      }
+      if (hasSfInjectSettings) {
+        mergePayload[SF_INJECT_CONFIG_KEY] = mergeSfInjectConfig(
+          current?.[SF_INJECT_CONFIG_KEY],
+          incomingSfInjectSettings
+        );
+      }
+      if (hasApexLogTextFilterPrefs) {
+        mergePayload[APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY] = {
+          ...normalizeApexLogTextFilterPrefs(current?.[APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY]),
+          ...incomingApexLogTextFilterPrefs
+        };
+      }
+      await chrome.storage.local.set(mergePayload);
       const currentScripts = readLocalAnonScripts();
       const seenNames = new Set(currentScripts.map((s) => String(s?.name || '').trim().toLocaleLowerCase()));
       const mergedScripts = [...currentScripts];
@@ -582,6 +784,9 @@ function wireOrgsBackup() {
         await importLogiQuickActionPromptStore(incomingLogiPrompts, { replace: false });
       }
       await applyTelemetryInstallIdFromBackup(incomingTelemetryId, { replace: false });
+      if (hasSavedQueries) {
+        writeLocalSavedQueries(mergeSavedQueries(readLocalSavedQueries(), incomingSavedQueries));
+      }
     }
 
     setStatus(t('settings.backupImportOk', { count: res.count ?? 0 }), false);

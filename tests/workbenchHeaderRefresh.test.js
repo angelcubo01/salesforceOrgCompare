@@ -20,6 +20,11 @@ describe('actualización de acciones de cabecera', () => {
     expect(shell).toContain("scheduleWorkbenchRender('artifact-ui-applied')");
     expect(artifactUi.match(/new CustomEvent\('sfoc:artifact-ui-applied'\)/g)).toHaveLength(2);
   });
+  it('incluye la herramienta efectiva en la firma para no reutilizar sus acciones anteriores', () => {
+    const shell = readFileSync(join(root, 'code', 'workbench', 'workbenchShell.js'), 'utf8');
+    expect(shell).toContain("const toolId = document.getElementById('typeSelect')?.value || state.selectedArtifactType || '';");
+    expect(shell).toContain('activeWorkspaceId, activeTabId, toolId,');
+  });
   it('does not recreate cloned controls or fade the tool subbar', () => {
     const shell = readFileSync(join(root, 'code', 'workbench', 'workbenchShell.js'), 'utf8');
     const css = readFileSync(join(root, 'code', 'workbench', 'workbench-refresh.css'), 'utf8');

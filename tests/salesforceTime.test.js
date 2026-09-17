@@ -5,7 +5,8 @@ import {
   hasMeaningfulSalesforceClockOffset,
   isValidUtcRange,
   serverNowFromOffset,
-  toUtcIsoFromLocalDateTime
+  toUtcIsoFromLocalDateTime,
+  formatDateTimeForDisplay
 } from '../shared/salesforceTime.js';
 import { normalizeSalesforceIdKey } from '../shared/salesforceIds.js';
 
@@ -29,6 +30,17 @@ describe('hora de Salesforce', () => {
     expect(since.endsWith('Z')).toBe(true);
     expect(isValidUtcRange(since, until)).toBe(true);
     expect(isValidUtcRange(until, since)).toBe(false);
+  });
+
+  it('interpreta de forma estricta el formato elegido y no intercambia día y mes', () => {
+    expect(toUtcIsoFromLocalDateTime('13/09/2026 14:20', 'dmy')).toBeTruthy();
+    expect(toUtcIsoFromLocalDateTime('09/13/2026 14:20', 'mdy')).toBeTruthy();
+    expect(toUtcIsoFromLocalDateTime('13/09/2026 14:20', 'mdy')).toBe('');
+    expect(toUtcIsoFromLocalDateTime('31/02/2026 14:20', 'dmy')).toBe('');
+  });
+
+  it('muestra las fechas con DD/MM/AAAA por defecto', () => {
+    expect(formatDateTimeForDisplay('2026-09-13T14:20:00.000Z')).toMatch(/^13\/09\/2026 /);
   });
 });
 

@@ -35,6 +35,7 @@ describe('sfoc modal safety', () => {
     expect(focusSource).toContain("event.key !== 'Tab'");
     expect(source).toContain("event.key === 'Escape' && entry.escapeSafe");
     expect(source).toContain('focusTarget.focus()');
+    expect(source).toContain('void ensureWorkbenchIconSprite();');
   });
 
   it('usa CONFIRMO o CONFIRM en vez del nombre de la empresa', async () => {

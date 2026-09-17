@@ -1,5 +1,5 @@
 import { t } from '../../shared/i18n.js';
-import { createIcon, STATE_ICONS } from '../workbench/iconRegistry.js';
+import { createIcon, ensureWorkbenchIconSprite, STATE_ICONS } from '../workbench/iconRegistry.js';
 import { state } from '../core/state.js';
 import { activateDialogFocus, deactivateDialogFocus } from '../../shared/dialogFocus.js';
 
@@ -204,6 +204,9 @@ export function matchesSfocConfirmationText(value, requiredText) {
  */
 export function openSfocModal(opts) {
   closeSfocModal();
+  // Settings reutiliza este modal sin arrancar el workbench. Garantizamos que
+  // los <use> de los iconos tengan su sprite disponible tambien en esa pagina.
+  void ensureWorkbenchIconSprite();
   previousFocus = /** @type {HTMLElement | null} */ (document.activeElement);
   activeOnClose = opts.onClose || null;
   const variant = opts.variant || (opts.danger ? 'destructive' : 'standard');

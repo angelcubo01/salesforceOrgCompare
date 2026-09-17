@@ -451,6 +451,9 @@ body {
 body.sidebar-collapsed .sidebar {
   display: none;
 }
+.sidebar-toggle-rail {
+  display: none;
+}
 .resize-handle {
   position: absolute;
   top: 0;
@@ -3033,8 +3036,18 @@ body.artifact-apex-tests #editorContainer.editor {
 }
 .apex-tests-runs-detail-inner {
   padding: 10px 12px 12px 12px;
+  max-height: 320px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.apex-tests-runs-detail-results {
+  min-height: 0;
   max-height: 240px;
   overflow: auto;
+  border: 1px solid #1e293b;
+  border-radius: 6px;
 }
 .apex-tests-runs-detail-loading,
 .apex-tests-runs-detail-empty {
@@ -3060,9 +3073,13 @@ body.artifact-apex-tests #editorContainer.editor {
   vertical-align: top;
 }
 .apex-tests-runs-failures-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   color: #94a3b8;
   font-weight: 600;
   background: #0f172a;
+  box-shadow: 0 1px 0 #334155;
 }
 .apex-tests-runs-msg-cell {
   word-break: break-word;
@@ -4642,6 +4659,8 @@ body.artifact-apex-tests #editorContainer.editor {
 
 .org-dropdowns {
   display: flex;
+  position: relative;
+  z-index: var(--sfoc-z-app-chrome);
   padding: 12px var(--sfoc-workspace-pad-x);
   border-bottom: 1px solid rgba(51, 65, 85, 0.65);
   background: linear-gradient(135deg, #2a3038 0%, #22282f 100%);
@@ -9385,13 +9404,17 @@ body.artifact-query-explorer-compare .query-explorer-split {
 
 .debug-log-browser-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  /* Keep the date controls and the action buttons in their own usable columns.
+     A fixed minimum track was overflowing inside narrow workbench windows. */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 8px;
+  align-items: end;
 }
 
 .debug-log-browser-field {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .debug-log-browser-field-label {
@@ -9658,8 +9681,9 @@ body.artifact-query-explorer-compare .query-explorer-split {
 
 .setup-audit-filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+  align-items: end;
 }
 
 .setup-audit-field {
@@ -9676,6 +9700,7 @@ body.artifact-query-explorer-compare .query-explorer-split {
 
 .setup-audit-input {
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   border: 1px solid #475569;
   border-radius: 8px;
@@ -13340,6 +13365,49 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
   align-items: end;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* The filter grids use the same column count in each row.  This keeps the
+   date range and its actions aligned with the filters above it, while the
+   breakpoints make room before any native date picker can collide with a
+   neighbouring control. */
+@media (max-width: 1500px) {
+  .debug-log-browser-filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1024px) {
+  .debug-log-browser-filters,
+  .setup-audit-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .debug-log-browser-head {
+    flex-wrap: wrap;
+  }
+
+  .debug-log-browser-head-actions {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .debug-log-browser-filters,
+  .setup-audit-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .debug-log-browser-filter-actions,
+  .setup-audit-filter-actions {
+    align-items: stretch;
+  }
+
+  .debug-log-browser-filter-actions .debug-log-browser-open-btn,
+  .setup-audit-filter-actions .setup-audit-open-btn {
+    flex: 1 1 0;
+  }
 }
 
 .sfoc-table-empty-row td {
@@ -13390,7 +13458,7 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
 }
 
 .vc[data-vc-input] {
-  z-index: 3100;
+  z-index: calc(var(--sfoc-z-app-chrome) - 1);
   background: var(--sfoc-surface-raised, #172238);
   border: 1px solid var(--sfoc-border-strong, #48617f);
   border-radius: 10px;

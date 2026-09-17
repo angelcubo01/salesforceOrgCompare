@@ -1,6 +1,7 @@
 import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { t } from '../../../shared/i18n.js';
 import { listLogiSessions } from '../../../shared/logi/logiAdvisorSession.js';
+import { formatDateTimeForDisplay } from '../../../shared/salesforceTime.js';
 
 /**
  * @param {HTMLElement} modal
@@ -26,12 +27,7 @@ export async function refreshLogiSessionPicker(modal, opts = {}) {
     ...sessions.map(({ key, label, session }) => {
       const turns = session.messages.filter((m) => m.role === 'user').length;
       const stamp = session.updatedAt
-        ? new Date(session.updatedAt).toLocaleString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
+        ? formatDateTimeForDisplay(session.updatedAt, { includeSeconds: false })
         : '';
       const suffix = turns ? ` · ${turns}` : '';
       const text = `${label}${suffix}${stamp ? ` · ${stamp}` : ''}`;

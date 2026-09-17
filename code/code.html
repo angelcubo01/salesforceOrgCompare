@@ -78,7 +78,7 @@
       </select>
     </div>
     <div class="content">
-        <div class="sidebar">
+        <div id="sidebar" class="sidebar">
         <div class="resize-handle"></div>
         <div class="sidebar-header">
           <p id="sidebarHomeHint" class="sidebar-home-hint hidden" data-i18n="code.sidebarHomeHint"></p>
@@ -167,6 +167,12 @@
         </div>
       </div>
       <div id="editorContainer" class="editor">
+        <button id="sidebarToggleRailBtn" class="sidebar-toggle-rail" type="button" aria-controls="sidebar" aria-expanded="true" title="Ocultar panel de búsqueda" aria-label="Ocultar panel de búsqueda">
+          <svg class="sidebar-toggle-rail-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          <span class="sidebar-toggle-rail-label" aria-hidden="true">Ocultar panel de búsqueda</span>
+        </button>
         <div class="app-mode-tabs-wrap">
           <nav
             class="app-mode-tabs"

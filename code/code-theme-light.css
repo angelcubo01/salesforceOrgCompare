@@ -1348,6 +1348,10 @@ html[data-ui-theme="light"] .apex-tests-runs-failures-table th {
   background: #f1f5f9;
 }
 
+html[data-ui-theme="light"] .apex-tests-runs-detail-results {
+  border-color: #e2e8f0;
+}
+
 html[data-ui-theme="light"] .apex-tests-runs-stacktrace-pre {
   background: #f8fafc;
   color: #0f172a;

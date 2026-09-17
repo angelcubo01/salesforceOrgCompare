@@ -16,6 +16,7 @@ import { handleToolError } from '../../shared/reportToolError.js';
 import { getReturnContext, returnToQuickEditEditor } from '../lib/quickEditDeployContext.js';
 import { confirmSfocOrgAction, mountSfocOverlay, unmountSfocOverlay } from './sfocModal.js';
 import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
+import { formatDateTimeForDisplay } from '../../shared/salesforceTime.js';
 
 const POLL_ACTIVE_MS = 3000;
 const POLL_IDLE_MS = 15000;
@@ -53,6 +54,71 @@ const inlineFailedDeployDetails = new Map();
 const deployRowHintById = new Map();
 /** @type {Record<string, unknown> | null} */
 let lastPollData = null;
+
+const DEPLOY_DETAIL_SCROLL_ANCHOR_IDS = [
+  'deployStatusGlobalError',
+  'deployStatusFailuresSection',
+  'deployStatusTestFailuresSection',
+  'deployStatusCoverageWarningsSection',
+  'deployStatusSlowTestsSection',
+  'deployStatusComponentsSection'
+];
+
+function isVisibleWithin(container, element) {
+  if (!container || !element || element.classList.contains('hidden')) return false;
+  const containerRect = container.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  return rect.height > 0 && rect.bottom > containerRect.top && rect.top < containerRect.bottom;
+}
+
+function captureScrollAnchor(container, elements) {
+  if (!container) return null;
+  const element = elements.find((candidate) => isVisibleWithin(container, candidate));
+  if (!element) return null;
+  const containerRect = container.getBoundingClientRect();
+  return {
+    element,
+    elementId: element.id || '',
+    inlineDetailId: element.dataset.deployInlineDetailId || '',
+    offset: element.getBoundingClientRect().top - containerRect.top,
+    scrollTop: container.scrollTop
+  };
+}
+
+function restoreScrollAnchor(container, anchor) {
+  if (!container || !anchor) return;
+  const element = anchor.element?.isConnected
+    ? anchor.element
+    : anchor.elementId
+      ? document.getElementById(anchor.elementId)
+      : anchor.inlineDetailId
+        ? document.querySelector(
+          `[data-deploy-inline-detail-id="${CSS.escape(anchor.inlineDetailId)}"]`
+        )
+        : null;
+  if (!element || element.classList.contains('hidden')) return;
+  const apply = () => {
+    if (!element.isConnected) return;
+    const offset = element.getBoundingClientRect().top - container.getBoundingClientRect().top;
+    container.scrollTop = Math.max(0, anchor.scrollTop + offset - anchor.offset);
+  };
+  apply();
+  requestAnimationFrame(apply);
+}
+
+function captureDeploySummaryScrollAnchor() {
+  const container = document.querySelector('.deploy-status-panel-inner');
+  const details = [...document.querySelectorAll('.deploy-status-inline-detail-row')];
+  return { container, anchor: captureScrollAnchor(container, details) };
+}
+
+function captureDeployDetailScrollAnchor() {
+  const container = document.querySelector('.deploy-status-panel-inner');
+  const sections = DEPLOY_DETAIL_SCROLL_ANCHOR_IDS
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  return { container, anchor: captureScrollAnchor(container, sections) };
+}
 
 function setPanelLoading(loading) {
   document.getElementById('deployStatusLoading')?.classList.toggle('hidden', !loading);
@@ -204,16 +270,7 @@ function renderStackTraceSourceLinks(stackTrace, fallbackClassName = '') {
 
 function formatDateTime(value) {
   if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  const lang = getCurrentLang() === 'en' ? 'en-GB' : 'es-ES';
-  return d.toLocaleString(lang, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+  return formatDateTimeForDisplay(value, { includeSeconds: false }) || String(value);
 }
 
 function formatBytes(n) {
@@ -890,7 +947,10 @@ function renderInlineFailedDeployDetail(detail) {
 }
 
 function rerenderInlineFailedDeployments() {
-  if (viewMode === 'summary' && lastPollData?.failedHistory) renderHistoryTable(lastPollData.failedHistory, 'failed');
+  if (viewMode !== 'summary' || !lastPollData?.failedHistory) return;
+  const scrollState = captureDeploySummaryScrollAnchor();
+  renderHistoryTable(lastPollData.failedHistory, 'failed');
+  restoreScrollAnchor(scrollState.container, scrollState.anchor);
 }
 
 async function toggleInlineFailedDeployDetails(asyncId) {
@@ -954,6 +1014,7 @@ function renderHistoryTable(history, bucket) {
         if (inlineDetail) {
           const detailRow = document.createElement('tr');
           detailRow.className = 'deploy-status-inline-detail-row';
+          detailRow.dataset.deployInlineDetailId = asyncId;
           const detailCell = document.createElement('td');
           detailCell.colSpan = 5;
           if (inlineDetail.state === 'loading') {
@@ -1524,6 +1585,7 @@ function renderDetailView(data) {
 }
 
 function renderSummaryView(data) {
+  const scrollState = captureDeploySummaryScrollAnchor();
   mergeFailedCoverageHints(data?.failedCoverageHints);
   if (data?.active?.asyncId && data.activeSoap) {
     cacheDeployRowHintsFromSoap(data.active.asyncId, data.activeSoap);
@@ -1535,12 +1597,15 @@ function renderSummaryView(data) {
   renderPendingQueueTable(data?.pendingQueue || data?.pendingHistory, data?.active?.asyncId);
   renderHistoryTable(data?.failedHistory, 'failed');
   renderHistoryTable(data?.succeededHistory, 'succeeded');
+  restoreScrollAnchor(scrollState.container, scrollState.anchor);
 }
 
 function renderPanel(data) {
   applyViewMode();
   if (viewMode === 'detail') {
+    const scrollState = captureDeployDetailScrollAnchor();
     renderDetailView(data);
+    restoreScrollAnchor(scrollState.container, scrollState.anchor);
   } else {
     renderSummaryView(data);
   }

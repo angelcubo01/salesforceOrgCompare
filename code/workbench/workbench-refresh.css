@@ -467,7 +467,9 @@ body[data-ui-mode="v2"] .workbench-context-title:focus-visible {
 
 /* Cabecera contextual */
 body[data-ui-mode="v2"] .workbench-context-header {
-  z-index: calc(var(--sfoc-z-app-chrome) - 1);
+  /* El calendario se ancla en el cuerpo con una capa inferior. La cabecera
+     debe conservarse por delante igual que el selector de entorno. */
+  z-index: var(--sfoc-z-app-chrome);
   min-height: 60px;
   border-bottom-color: var(--workbench-border);
   background: var(--workbench-header-bg);
@@ -1174,6 +1176,108 @@ body[data-ui-mode="v2"] .sidebar {
   border-right-color: var(--workbench-border);
   background: var(--sfoc-bg-panel);
   box-shadow: none;
+}
+
+/* El panel del comparador se pliega desde su propio borde, separado de las
+   acciones que afectan al diff. */
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar {
+  transition: width 180ms ease, min-width 180ms ease, max-width 180ms ease, opacity 140ms ease, border-color 180ms ease;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"].sidebar-collapsed .sidebar {
+  display: flex;
+  width: 0;
+  min-width: 0;
+  max-width: 0;
+  border-right-color: transparent;
+  opacity: 0;
+  pointer-events: none;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"].sidebar-collapsed .sidebar > * {
+  visibility: hidden;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail {
+  position: absolute;
+  z-index: calc(var(--sfoc-z-tool-panel) + 1);
+  top: 50%;
+  left: 0;
+  display: inline-flex;
+  width: 24px;
+  height: 64px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--workbench-border);
+  border-left: 0;
+  border-radius: 0 var(--sfoc-radius-md) var(--sfoc-radius-md) 0;
+  background: color-mix(in srgb, var(--sfoc-bg-panel) 94%, var(--sfoc-accent));
+  color: var(--sfoc-text-muted);
+  cursor: pointer;
+  transform: translateY(-50%);
+  box-shadow: 2px 2px 8px rgba(15, 23, 42, 0.18);
+  transition: width 160ms ease, color 160ms ease, background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail:hover,
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail:focus-visible {
+  width: 28px;
+  border-color: var(--sfoc-accent);
+  background: color-mix(in srgb, var(--sfoc-accent) 18%, var(--sfoc-bg-panel));
+  color: var(--sfoc-text);
+  box-shadow: 2px 2px 12px color-mix(in srgb, var(--sfoc-accent) 20%, transparent);
+  outline: none;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail:focus-visible {
+  outline: 3px solid var(--workbench-focus);
+  outline-offset: 2px;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail-icon {
+  flex: 0 0 auto;
+  transition: transform 180ms ease;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail[data-state="collapsed"] .sidebar-toggle-rail-icon {
+  transform: rotate(180deg);
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail-label {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  width: max-content;
+  max-width: min(210px, calc(100vw - 52px));
+  padding: 6px 8px;
+  border: 1px solid var(--workbench-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-4px, -50%);
+  transition: opacity 140ms ease, transform 140ms ease;
+  white-space: nowrap;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail:hover .sidebar-toggle-rail-label,
+body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail:focus-visible .sidebar-toggle-rail-label {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar,
+  body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail,
+  body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail-icon,
+  body[data-ui-mode="v2"][data-workbench-workspace="comparator"] .sidebar-toggle-rail-label {
+    transition: none;
+  }
 }
 
 body[data-ui-mode="v2"] .sidebar-header {
