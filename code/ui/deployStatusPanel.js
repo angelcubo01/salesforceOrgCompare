@@ -815,9 +815,35 @@ const DETAIL_DEPLOY_CHART_IDS = {
   runningTest: 'deployStatusRunningTest'
 };
 
-function renderStackTraceCell(stackTrace, fallbackClassName = '') {
+function createDeployStackTraceKey(stackTrace, fallbackClassName = '', identity = '') {
+  const value = `${fallbackClassName}\u0000${identity}\u0000${stackTrace}`;
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `stack-${(hash >>> 0).toString(36)}`;
+}
+
+function captureOpenDeployStackTraceKeys(root = document) {
+  return new Set(
+    [...root.querySelectorAll('details.deploy-status-stack-details[open][data-deploy-stack-key]')]
+      .map((detail) => detail.dataset.deployStackKey)
+      .filter(Boolean)
+  );
+}
+
+function restoreOpenDeployStackTraces(keys, root = document) {
+  if (!keys?.size) return;
+  for (const detail of root.querySelectorAll('details.deploy-status-stack-details[data-deploy-stack-key]')) {
+    if (keys.has(detail.dataset.deployStackKey)) detail.open = true;
+  }
+}
+
+function renderStackTraceCell(stackTrace, fallbackClassName = '', identity = '') {
   if (!stackTrace) return '—';
-  return `<details class="deploy-status-stack-details">
+  const key = createDeployStackTraceKey(stackTrace, fallbackClassName, identity);
+  return `<details class="deploy-status-stack-details" data-deploy-stack-key="${key}">
     <summary>${escapeHtml(t('deployStatus.viewStackTrace'))}</summary>
     <pre class="deploy-status-stack-pre">${renderStackTraceSourceLinks(stackTrace, fallbackClassName)}</pre>
   </details>`;
@@ -910,14 +936,14 @@ function renderInlineComponentFailures(failures) {
 
 function renderInlineTestFailures(failures) {
   if (!failures.length) return '';
-  const rows = failures.map((failure) => {
+  const rows = failures.map((failure, index) => {
     const className = decodeDeployText(failure?.className);
     const methodName = decodeDeployText(failure?.methodName);
     const message = decodeDeployText(failure?.message);
     const stackTrace = decodeDeployText(failure?.stackTrace);
     const classFrame = parseApexStackTraceFrames(stackTrace).find((frame) => frame.className === className);
     const initialLine = classFrame?.initialLine;
-    return `<tr><td>${sourceLinkHtml(className, initialLine)}</td><td>${className && methodName ? sourceLinkHtml(className, initialLine, methodName) : escapeHtml(methodName)}</td><td>${escapeHtml(message)}</td><td>${renderStackTraceCell(stackTrace, className)}</td></tr>`;
+    return `<tr><td>${sourceLinkHtml(className, initialLine)}</td><td>${className && methodName ? sourceLinkHtml(className, initialLine, methodName) : escapeHtml(methodName)}</td><td>${escapeHtml(message)}</td><td>${renderStackTraceCell(stackTrace, className, `${className}:${methodName}:${message}:${index}`)}</td></tr>`;
   }).join('');
   return `<section><h4>${escapeHtml(t('deployStatus.sectionTestFailures'))}</h4><div class="deploy-status-table-wrap"><table class="deploy-status-table"><thead><tr><th>${escapeHtml(t('deployStatus.colClass'))}</th><th>${escapeHtml(t('deployStatus.colMethod'))}</th><th>${escapeHtml(t('deployStatus.colMessage'))}</th><th>${escapeHtml(t('deployStatus.colStackTrace'))}</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
 }
@@ -949,7 +975,9 @@ function renderInlineFailedDeployDetail(detail) {
 function rerenderInlineFailedDeployments() {
   if (viewMode !== 'summary' || !lastPollData?.failedHistory) return;
   const scrollState = captureDeploySummaryScrollAnchor();
+  const openStackTraceKeys = captureOpenDeployStackTraceKeys();
   renderHistoryTable(lastPollData.failedHistory, 'failed');
+  restoreOpenDeployStackTraces(openStackTraceKeys);
   restoreScrollAnchor(scrollState.container, scrollState.anchor);
 }
 
@@ -1267,7 +1295,7 @@ function renderTestFailuresSection(soap) {
   const failures = soap?.runTestResult?.failures || [];
   section.classList.toggle('hidden', !failures.length);
   tbody.innerHTML = '';
-  for (const f of failures) {
+  for (const [index, f] of failures.entries()) {
     const className = decodeDeployText(f.className);
     const methodName = decodeDeployText(f.methodName);
     const message = decodeDeployText(f.message);
@@ -1279,7 +1307,7 @@ function renderTestFailuresSection(soap) {
       <td class="deploy-status-mono">${sourceLinkHtml(className, initialLine)}</td>
       <td>${className && methodName ? sourceLinkHtml(className, initialLine, methodName) : escapeHtml(methodName)}</td>
       <td>${escapeHtml(message)}</td>
-      <td>${renderStackTraceCell(stackTrace, className)}</td>
+      <td>${renderStackTraceCell(stackTrace, className, `${className}:${methodName}:${message}:${index}`)}</td>
       <td>${escapeHtml(f.time ? `${f.time} ms` : '—')}</td>
     `;
     tbody.appendChild(tr);
@@ -1586,6 +1614,7 @@ function renderDetailView(data) {
 
 function renderSummaryView(data) {
   const scrollState = captureDeploySummaryScrollAnchor();
+  const openStackTraceKeys = captureOpenDeployStackTraceKeys();
   mergeFailedCoverageHints(data?.failedCoverageHints);
   if (data?.active?.asyncId && data.activeSoap) {
     cacheDeployRowHintsFromSoap(data.active.asyncId, data.activeSoap);
@@ -1597,6 +1626,7 @@ function renderSummaryView(data) {
   renderPendingQueueTable(data?.pendingQueue || data?.pendingHistory, data?.active?.asyncId);
   renderHistoryTable(data?.failedHistory, 'failed');
   renderHistoryTable(data?.succeededHistory, 'succeeded');
+  restoreOpenDeployStackTraces(openStackTraceKeys);
   restoreScrollAnchor(scrollState.container, scrollState.anchor);
 }
 
@@ -1604,7 +1634,9 @@ function renderPanel(data) {
   applyViewMode();
   if (viewMode === 'detail') {
     const scrollState = captureDeployDetailScrollAnchor();
+    const openStackTraceKeys = captureOpenDeployStackTraceKeys();
     renderDetailView(data);
+    restoreOpenDeployStackTraces(openStackTraceKeys);
     restoreScrollAnchor(scrollState.container, scrollState.anchor);
   } else {
     renderSummaryView(data);

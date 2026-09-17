@@ -176,7 +176,7 @@ test('audita cabecera, acciones y superficie de todos los workspaces V2', async 
         await expect(page.locator('.compare-context-title')).toBeHidden();
         const compareToolbar = page.locator('#workbenchContextHeader .workbench-compare-toolbar');
         await expect(compareToolbar).toBeVisible();
-        await expect(compareToolbar.locator('.workbench-compare-control')).toHaveCount(8);
+        await expect(compareToolbar.locator('.workbench-compare-control')).toHaveCount(7);
         await expect(compareToolbar.locator('.workbench-compare-control[hidden]:visible')).toHaveCount(0);
         continue;
       }

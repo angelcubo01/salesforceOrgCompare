@@ -3952,19 +3952,28 @@ body.artifact-apex-tests #editorContainer.editor {
   color: #64748b;
   min-height: 1.2em;
 }
+.field-dependency-org-hint:empty {
+  display: none;
+}
 .field-dep-controls {
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-width: 520px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+  max-width: 960px;
+}
+.field-dep-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
 }
 .field-dep-label {
   display: block;
   font-size: 0.8rem;
   font-weight: 600;
   color: #94a3b8;
-  margin-top: 4px;
+  margin: 0;
 }
 .field-dep-select {
   width: 100%;
@@ -3985,7 +3994,7 @@ body.artifact-apex-tests #editorContainer.editor {
   background-color: #0f172a;
 }
 .field-dep-retrieve-btn {
-  margin-top: 8px;
+  margin: 0;
   padding: 10px 16px;
   font-size: 0.875rem;
   font-weight: 600;
@@ -3994,6 +4003,12 @@ body.artifact-apex-tests #editorContainer.editor {
   background: #1d4ed8;
   color: #f8fafc;
   cursor: pointer;
+}
+@media (max-width: 700px) {
+  .field-dep-controls {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: none;
+  }
 }
 .field-dep-retrieve-btn:disabled {
   opacity: 0.45;
@@ -11524,29 +11539,89 @@ body.quick-open-active {
   overflow: hidden;
 }
 
-.permission-diff-toolbar {
+.permission-diff-query-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.16fr) minmax(0, 0.92fr);
+  gap: 10px;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="security-access"] .permission-diff-panel-inner {
+  padding-top: 10px !important;
+  gap: 8px;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="security-access"] #permissionDiffStatus:empty {
+  display: none;
+}
+
+.permission-diff-query-card {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px 16px;
-  padding: 8px 10px;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(51, 65, 85, 0.78);
   border-radius: 10px;
-  border: 1px solid rgba(51, 65, 85, 0.75);
   background: rgba(15, 23, 42, 0.45);
 }
 
-.permission-diff-section-tabs {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
+.permission-diff-query-card:focus-within {
+  border-color: rgba(34, 211, 238, 0.65);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.08);
 }
 
-.permission-diff-section-tabs.hidden {
-  display: none;
+.permission-diff-query-card-head h3,
+.permission-diff-result-section-head h3 {
+  margin: 0;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.permission-diff-query-card-head p {
+  margin: 2px 0 0;
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.permission-diff-query-card .permission-diff-filters {
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.permission-diff-query-card .permission-diff-field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.permission-diff-query-card .permission-diff-name-field {
+  flex: 1.25 1 0;
+  min-width: 0;
+  max-width: none;
+}
+
+#permissionDiffResourceBlock .permission-diff-field:first-child {
+  flex: 0.8 1 0;
+}
+
+#permissionDiffResourceBlock .permission-diff-field:nth-child(2) {
+  flex: 1.2 1 0;
+}
+
+#permissionDiffResourceBlock .permission-diff-name-field {
+  flex: 1.3 1 0;
+}
+
+#permissionDiffCustomPermBlock .permission-diff-field:first-child {
+  flex: 1.1 1 0;
+}
+
+.permission-diff-query-card .permission-diff-input,
+.permission-diff-query-card .permission-diff-select {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
 }
 
 .permission-diff-head {
@@ -11723,30 +11798,6 @@ body.quick-open-active {
   padding-bottom: 6px;
 }
 
-.permission-diff-direction-bar {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.permission-diff-direction {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(71, 85, 105, 0.85);
-  background: rgba(30, 41, 59, 0.55);
-  color: #cbd5e1;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.permission-diff-direction.is-active {
-  border-color: rgba(34, 211, 238, 0.65);
-  background: rgba(34, 211, 238, 0.14);
-  color: #67e8f9;
-}
-
 .permission-diff-filters-shared {
   margin-top: 0;
 }
@@ -11761,22 +11812,6 @@ body.quick-open-active {
   display: none;
 }
 
-.permission-diff-tab {
-  padding: 6px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(71, 85, 105, 0.85);
-  background: rgba(30, 41, 59, 0.6);
-  color: #cbd5e1;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.permission-diff-tab.is-active {
-  border-color: rgba(34, 211, 238, 0.65);
-  background: rgba(34, 211, 238, 0.15);
-  color: #67e8f9;
-}
-
 .permission-diff-summary {
   margin: 0;
   font-size: 12px;
@@ -11789,6 +11824,32 @@ body.quick-open-active {
   overflow: auto;
   border: 1px solid rgba(51, 65, 85, 0.85);
   border-radius: 10px;
+}
+
+.permission-diff-container-results {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+}
+
+.permission-diff-result-section {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+}
+
+.permission-diff-result-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.permission-diff-result-section .permission-diff-table-wrap {
+  flex: none;
+  min-height: 100px;
+  max-height: 320px;
 }
 
 .permission-diff-table {
@@ -11847,6 +11908,30 @@ body.quick-open-active {
 .permission-diff-table:not(.is-compare) .perm-diff-col-right,
 .permission-diff-table:not(.is-compare) .perm-diff-col-detail {
   display: none;
+}
+
+@media (max-width: 1050px) {
+  .permission-diff-query-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-diff-query-card .permission-diff-filters {
+    flex-wrap: wrap;
+  }
+
+  .permission-diff-query-card .permission-diff-field {
+    flex: 1 1 10rem;
+  }
+
+  .permission-diff-query-card .permission-diff-name-field {
+    flex-basis: 14rem;
+  }
+
+  #permissionDiffResourceBlock .permission-diff-field,
+  #permissionDiffResourceBlock .permission-diff-name-field,
+  #permissionDiffCustomPermBlock .permission-diff-field:first-child {
+    flex: 1 1 10rem;
+  }
 }
 
 .perm-flags {
@@ -12861,6 +12946,27 @@ body.quick-open-active {
   align-content: start;
 }
 
+.object-describe-primary-controls .object-describe-object-field {
+  min-width: min(22rem, 100%);
+  max-width: 520px;
+}
+
+.object-describe-advanced-options {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.object-describe-advanced-options summary {
+  width: max-content;
+  cursor: pointer;
+  color: #93c5fd;
+}
+
+.object-describe-advanced-options[open] {
+  display: grid;
+  gap: 8px;
+}
+
 .object-describe-table-search-wrap {
   width: 100%;
   max-width: 100%;
@@ -12868,7 +12974,7 @@ body.quick-open-active {
 
 .object-describe-summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 8px;
   font-size: 0.8rem;
   color: #cbd5e1;
@@ -12887,7 +12993,65 @@ body.quick-open-active {
   color: #e2e8f0;
 }
 
+.object-describe-results {
+  display: flex;
+  flex: 1 0 280px;
+  flex-direction: column;
+  min-height: 280px;
+  gap: 8px;
+}
+
+.object-describe-table-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.object-describe-table-tab {
+  flex: 0 0 auto;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 7px;
+  background: rgba(30, 41, 59, 0.58);
+  color: #94a3b8;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.object-describe-table-tab:hover,
+.object-describe-table-tab:focus-visible {
+  border-color: #60a5fa;
+  color: #dbeafe;
+}
+
+.object-describe-table-tab:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.object-describe-table-tab.is-active {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.24);
+  color: #eff6ff;
+}
+
+.object-describe-table-section {
+  display: none;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.object-describe-table-section.is-active {
+  display: flex;
+}
+
 .object-describe-table-wrap {
+  flex: 1 1 0;
+  min-height: 0;
   overflow: auto;
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 8px;
@@ -12900,6 +13064,9 @@ body.quick-open-active {
 }
 
 .object-describe-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   text-align: left;
   padding: 8px 10px;
   background: rgba(30, 41, 59, 0.8);

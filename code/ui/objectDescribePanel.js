@@ -22,6 +22,12 @@ let lastDescribe = null;
 let loadInFlight = false;
 let tableSearchQuery = '';
 
+const resultTableSections = {
+  fields: 'objectDescribeFieldsSection',
+  childRels: 'objectDescribeChildRelsSection',
+  recordTypes: 'objectDescribeRecordTypesSection'
+};
+
 function escapeHtml(v) {
   return String(v ?? '')
     .replace(/&/g, '&amp;')
@@ -138,6 +144,37 @@ function renderTable(tbodyId, rows, columns) {
   }
 }
 
+function updateResultTableTabs(counts) {
+  document.querySelectorAll('[data-object-describe-table]').forEach((tab) => {
+    const table = tab.dataset.objectDescribeTable;
+    const label = t(tab.dataset.labelKey || '');
+    tab.textContent = t('objectDescribe.tableTabCount', { label, count: counts[table] || 0 });
+  });
+}
+
+function activateResultTable(table) {
+  if (!resultTableSections[table]) return;
+  document.querySelectorAll('[data-object-describe-table]').forEach((tab) => {
+    const active = tab.dataset.objectDescribeTable === table;
+    tab.classList.toggle('is-active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  Object.entries(resultTableSections).forEach(([name, sectionId]) => {
+    const section = document.getElementById(sectionId);
+    const active = name === table;
+    section?.classList.toggle('is-active', active);
+    if (!section) return;
+    if (active) {
+      section.hidden = false;
+      section.removeAttribute('hidden');
+      section.style.display = 'flex';
+    } else {
+      section.hidden = true;
+      section.style.removeProperty('display');
+    }
+  });
+}
+
 function renderDescribe() {
   const summaryEl = document.getElementById('objectDescribeSummary');
   if (!lastDescribe) {
@@ -145,14 +182,14 @@ function renderDescribe() {
     renderTable('objectDescribeFieldsTbody', [], ['apiName', 'label', 'type', 'required', 'custom', 'referenceTo']);
     renderTable('objectDescribeChildRelsTbody', [], ['relationshipName', 'childSObject', 'field']);
     renderTable('objectDescribeRecordTypesTbody', [], ['name', 'recordTypeId', 'active']);
+    updateResultTableTabs({ fields: 0, childRels: 0, recordTypes: 0 });
     return;
   }
   const summary = summarizeDescribe(lastDescribe);
   if (summaryEl) {
     summaryEl.innerHTML = `
       <div class="object-describe-summary-grid">
-        <div><span class="object-describe-k">${escapeHtml(t('objectDescribe.summaryName'))}</span> ${escapeHtml(summary.label)} (${escapeHtml(summary.name)})</div>
-        <div><span class="object-describe-k">${escapeHtml(t('objectDescribe.summaryKeyPrefix'))}</span> ${escapeHtml(summary.keyPrefix || '—')}</div>
+        <div><span class="object-describe-k">${escapeHtml(t('objectDescribe.summaryName'))}</span> ${escapeHtml(summary.label)} (${escapeHtml(summary.name)}) · ${escapeHtml(summary.keyPrefix || '—')}</div>
         <div><span class="object-describe-k">${escapeHtml(t('objectDescribe.summaryFlags'))}</span> ${escapeHtml([summary.custom ? 'custom' : 'standard', summary.queryable ? 'queryable' : '', summary.createable ? 'createable' : '', summary.updateable ? 'updateable' : ''].filter(Boolean).join(', '))}</div>
         <div><span class="object-describe-k">${escapeHtml(t('objectDescribe.summaryCounts'))}</span> ${escapeHtml(t('objectDescribe.summaryCountsValue', { fields: summary.fieldCount, children: summary.childRelationshipCount, rts: summary.recordTypeCount }))}</div>
       </div>
@@ -162,17 +199,20 @@ function renderDescribe() {
     buildFieldRows(lastDescribe).sort((a, b) => a.apiName.localeCompare(b.apiName)),
     tableSearchQuery
   );
+  const childRels = filterTableRows(buildChildRelationshipRows(lastDescribe), tableSearchQuery);
+  const recordTypes = filterTableRows(buildRecordTypeRows(lastDescribe), tableSearchQuery);
   renderTable('objectDescribeFieldsTbody', fields, ['apiName', 'label', 'type', 'required', 'custom', 'referenceTo']);
   renderTable(
     'objectDescribeChildRelsTbody',
-    filterTableRows(buildChildRelationshipRows(lastDescribe), tableSearchQuery),
+    childRels,
     ['relationshipName', 'childSObject', 'field']
   );
   renderTable(
     'objectDescribeRecordTypesTbody',
-    filterTableRows(buildRecordTypeRows(lastDescribe), tableSearchQuery),
+    recordTypes,
     ['name', 'recordTypeId', 'active']
   );
+  updateResultTableTabs({ fields: fields.length, childRels: childRels.length, recordTypes: recordTypes.length });
 }
 
 function resolveIdAndDescribe() {
@@ -200,6 +240,9 @@ export function setupObjectDescribePanel() {
   document.getElementById('objectDescribeTableSearch')?.addEventListener('input', (e) => {
     tableSearchQuery = /** @type {HTMLInputElement} */ (e.target).value || '';
     renderDescribe();
+  });
+  document.querySelectorAll('[data-object-describe-table]').forEach((tab) => {
+    tab.addEventListener('click', () => activateResultTable(tab.dataset.objectDescribeTable));
   });
   document.getElementById('objectDescribeObjectSelect')?.addEventListener('change', (e) => {
     const name = /** @type {HTMLSelectElement} */ (e.target).value;

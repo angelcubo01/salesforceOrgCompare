@@ -243,7 +243,20 @@ export async function resolvePermissionContainer(instanceUrl, sid, apiVersion, c
     }
     const best = pickBestMatch(raw, rows, (r) => r.Name);
     if (!best) throw new Error(`Profile not found: ${containerName}`);
-    return { parentId: best.Id, containerType: 'Profile', name: best.Name };
+    // ObjectPermissions, FieldPermissions y SetupEntityAccess se relacionan con
+    // el PermissionSet propietario del perfil, no con el Id del Profile.
+    const profilePermissionSets =
+      (await restQuery(
+        instanceUrl,
+        sid,
+        apiVersion,
+        `SELECT Id FROM PermissionSet WHERE ProfileId = '${escapeSoqlLiteral(best.Id)}' LIMIT 1`
+      )) || [];
+    const profilePermissionSet = profilePermissionSets[0];
+    if (!profilePermissionSet?.Id) {
+      throw new Error(`Permission set for profile not found: ${best.Name}`);
+    }
+    return { parentId: profilePermissionSet.Id, containerType: 'Profile', name: best.Name };
   }
 
   let rows =

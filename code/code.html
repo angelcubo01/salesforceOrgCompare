@@ -1282,21 +1282,25 @@
             <p id="fieldDepOrgHint" class="field-dependency-org-hint" role="status"></p>
 
             <div id="fieldDepControls" class="field-dep-controls">
-              <label class="field-dep-label" for="fieldDepObjectSearch" data-i18n="fieldDep.searchObject">Buscar objeto</label>
-              <input
-                id="fieldDepObjectSearch"
-                type="search"
-                class="field-dep-search-input sfoc-query-input"
-                data-i18n-placeholder="fieldDep.filterByApi"
-                placeholder="Filtra por nombre de API…"
-                autocomplete="off"
-                spellcheck="false"
-                disabled
-              />
-              <label class="field-dep-label" for="fieldDepObjectSelect" data-i18n="fieldDep.customObject">Custom Object</label>
-              <select id="fieldDepObjectSelect" class="field-dep-select" disabled>
-                <option value="" data-i18n="fieldDep.loadingObjects">— Cargando objetos… —</option>
-              </select>
+              <div class="field-dep-field">
+                <label class="field-dep-label" for="fieldDepObjectSearch" data-i18n="fieldDep.searchObject">Buscar objeto</label>
+                <input
+                  id="fieldDepObjectSearch"
+                  type="search"
+                  class="field-dep-search-input sfoc-query-input"
+                  data-i18n-placeholder="fieldDep.filterByApi"
+                  placeholder="Filtra por nombre de API…"
+                  autocomplete="off"
+                  spellcheck="false"
+                  disabled
+                />
+              </div>
+              <div class="field-dep-field">
+                <label class="field-dep-label" for="fieldDepObjectSelect" data-i18n="fieldDep.customObject">Custom Object</label>
+                <select id="fieldDepObjectSelect" class="field-dep-select" disabled>
+                  <option value="" data-i18n="fieldDep.loadingObjects">— Cargando objetos… —</option>
+                </select>
+              </div>
               <button type="button" id="fieldDepRetrieveBtn" class="field-dep-retrieve-btn" disabled data-i18n="fieldDep.getDependencies">
                 Obtener dependencias
               </button>
@@ -1339,35 +1343,46 @@
               </div>
             </div>
             <p id="objectDescribeStatus" class="org-limits-status" role="status"></p>
-            <div class="object-describe-controls sfoc-tool-controls">
-              <div class="sfoc-tool-field">
+            <div class="object-describe-primary-controls sfoc-tool-controls">
+              <div class="sfoc-tool-field sfoc-tool-field--wide">
                 <label class="sfoc-tool-label" for="objectDescribeSearch" data-i18n="objectDescribe.search">Buscar</label>
                 <input id="objectDescribeSearch" type="search" class="sfoc-query-input" data-i18n-placeholder="objectDescribe.searchPlaceholder" placeholder="Filtrar por nombre o etiqueta…" autocomplete="off" />
               </div>
-              <div class="sfoc-tool-field sfoc-tool-field--narrow">
-                <label class="sfoc-tool-label" for="objectDescribeNsFilter" data-i18n="objectDescribe.nsFilter">Prefijo</label>
-                <input id="objectDescribeNsFilter" type="text" class="sfoc-query-input" data-i18n-placeholder="objectDescribe.nsFilterPlaceholder" placeholder="myns_" autocomplete="off" spellcheck="false" />
-              </div>
-              <div class="sfoc-tool-field">
+              <div class="sfoc-tool-field sfoc-tool-field--wide object-describe-object-field">
                 <label class="sfoc-tool-label" for="objectDescribeObjectSelect" data-i18n="objectDescribe.object">Objeto</label>
                 <select id="objectDescribeObjectSelect" class="sfoc-query-select">
                   <option value="" data-i18n="objectDescribe.selectObject">— Selecciona objeto —</option>
                 </select>
               </div>
               <button type="button" id="objectDescribeDescribeBtn" class="query-explorer-secondary-btn" data-i18n="objectDescribe.describe">Describe</button>
-              <div class="sfoc-tool-field">
-                <label class="sfoc-tool-label" for="objectDescribeIdInput" data-i18n="objectDescribe.recordId">Record Id</label>
-                <input id="objectDescribeIdInput" type="text" class="sfoc-query-input" placeholder="001…" autocomplete="off" spellcheck="false" />
-              </div>
-              <button type="button" id="objectDescribeResolveIdBtn" class="query-explorer-secondary-btn" data-i18n="objectDescribe.resolveId">Resolver objeto</button>
             </div>
+            <details class="object-describe-advanced-options">
+              <summary data-i18n="objectDescribe.advancedOptions">Opciones avanzadas</summary>
+              <div class="object-describe-controls sfoc-tool-controls">
+                <div class="sfoc-tool-field sfoc-tool-field--narrow">
+                  <label class="sfoc-tool-label" for="objectDescribeNsFilter" data-i18n="objectDescribe.nsFilter">Prefijo</label>
+                  <input id="objectDescribeNsFilter" type="text" class="sfoc-query-input" data-i18n-placeholder="objectDescribe.nsFilterPlaceholder" placeholder="myns_" autocomplete="off" spellcheck="false" />
+                </div>
+                <div class="sfoc-tool-field">
+                  <label class="sfoc-tool-label" for="objectDescribeIdInput" data-i18n="objectDescribe.recordId">Record Id</label>
+                  <input id="objectDescribeIdInput" type="text" class="sfoc-query-input" placeholder="001…" autocomplete="off" spellcheck="false" />
+                </div>
+                <button type="button" id="objectDescribeResolveIdBtn" class="query-explorer-secondary-btn" data-i18n="objectDescribe.resolveId">Resolver objeto</button>
+              </div>
+            </details>
             <div id="objectDescribeSummary" class="object-describe-summary"></div>
             <div class="sfoc-tool-field sfoc-tool-field--grow object-describe-table-search-wrap">
               <label class="sfoc-tool-label" for="objectDescribeTableSearch" data-i18n="objectDescribe.tableSearch">Filtrar tablas</label>
               <input id="objectDescribeTableSearch" type="search" class="sfoc-query-input" data-i18n-placeholder="objectDescribe.tableSearchPlaceholder" placeholder="Filtrar campos, relaciones y record types…" autocomplete="off" spellcheck="false" />
             </div>
-            <h3 class="object-describe-section-title" data-i18n="objectDescribe.fieldsTitle">Campos</h3>
-            <div class="object-describe-table-wrap">
+            <div class="object-describe-results">
+              <div class="object-describe-table-tabs" role="tablist" data-i18n-aria-label="objectDescribe.resultTabs" aria-label="Resultados del describe">
+                <button id="objectDescribeFieldsTab" class="object-describe-table-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="objectDescribeFieldsSection" data-object-describe-table="fields" data-label-key="objectDescribe.fieldsTitle" data-i18n="objectDescribe.fieldsTitle">Campos</button>
+                <button id="objectDescribeChildRelsTab" class="object-describe-table-tab" type="button" role="tab" aria-selected="false" aria-controls="objectDescribeChildRelsSection" data-object-describe-table="childRels" data-label-key="objectDescribe.childRelsTitle" data-i18n="objectDescribe.childRelsTitle">Relaciones hijas</button>
+                <button id="objectDescribeRecordTypesTab" class="object-describe-table-tab" type="button" role="tab" aria-selected="false" aria-controls="objectDescribeRecordTypesSection" data-object-describe-table="recordTypes" data-label-key="objectDescribe.recordTypesTitle" data-i18n="objectDescribe.recordTypesTitle">Record types</button>
+              </div>
+              <section id="objectDescribeFieldsSection" class="object-describe-table-section is-active" role="tabpanel" aria-labelledby="objectDescribeFieldsTab">
+                <div class="object-describe-table-wrap">
               <table class="object-describe-table">
                 <thead>
                   <tr>
@@ -1381,9 +1396,10 @@
                 </thead>
                 <tbody id="objectDescribeFieldsTbody"></tbody>
               </table>
-            </div>
-            <h3 class="object-describe-section-title" data-i18n="objectDescribe.childRelsTitle">Child relationships</h3>
-            <div class="object-describe-table-wrap">
+                </div>
+              </section>
+              <section id="objectDescribeChildRelsSection" class="object-describe-table-section" role="tabpanel" aria-labelledby="objectDescribeChildRelsTab" hidden>
+                <div class="object-describe-table-wrap">
               <table class="object-describe-table">
                 <thead>
                   <tr>
@@ -1394,9 +1410,10 @@
                 </thead>
                 <tbody id="objectDescribeChildRelsTbody"></tbody>
               </table>
-            </div>
-            <h3 class="object-describe-section-title" data-i18n="objectDescribe.recordTypesTitle">Record types</h3>
-            <div class="object-describe-table-wrap">
+                </div>
+              </section>
+              <section id="objectDescribeRecordTypesSection" class="object-describe-table-section" role="tabpanel" aria-labelledby="objectDescribeRecordTypesTab" hidden>
+                <div class="object-describe-table-wrap">
               <table class="object-describe-table">
                 <thead>
                   <tr>
@@ -1407,6 +1424,8 @@
                 </thead>
                 <tbody id="objectDescribeRecordTypesTbody"></tbody>
               </table>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -2237,33 +2256,26 @@
               </div>
             </div>
             <p id="permissionDiffStatus" class="permission-diff-status" role="status"></p>
-            <div class="permission-diff-toolbar">
-              <div class="permission-diff-direction-bar" role="tablist" data-i18n-aria-label="code.ariaPermDiffQueryMode">
-                <button type="button" class="permission-diff-direction is-active" data-perm-diff-direction="container" data-i18n="permDiff.dirContainer">Por permission set o perfil</button>
-                <button type="button" class="permission-diff-direction" data-perm-diff-direction="resource" data-i18n="permDiff.dirResource">Por objeto o campo</button>
-                <button type="button" class="permission-diff-direction" data-perm-diff-direction="customPermission" data-i18n="permDiff.dirCustomPermission">Por permiso personalizado</button>
-              </div>
-              <div id="permissionDiffSectionTabs" class="permission-diff-section-tabs" role="tablist" data-i18n-aria-label="code.ariaPermDiffSection">
-                <button type="button" class="permission-diff-tab is-active" data-perm-diff-section="object" role="tab" data-i18n="permDiff.tabObject">Objetos</button>
-                <button type="button" class="permission-diff-tab" data-perm-diff-section="field" role="tab" data-i18n="permDiff.tabField">Campos</button>
-                <button type="button" class="permission-diff-tab" data-perm-diff-section="setup" role="tab" data-i18n="permDiff.tabSetup">Configuración</button>
-              </div>
-            </div>
-            <div id="permissionDiffContainerBlock" class="permission-diff-filters">
-              <div class="permission-diff-field">
-                <label for="permissionDiffContainerType" class="permission-diff-field-label" data-i18n="permDiff.containerType">Tipo</label>
-                <select id="permissionDiffContainerType" class="permission-diff-input permission-diff-select">
-                  <option value="PermissionSet" data-i18n="permDiff.typePermissionSet">Conjunto de permisos</option>
-                  <option value="Profile" data-i18n="permDiff.typeProfile">Perfil</option>
-                </select>
-              </div>
+            <div id="permissionDiffQueryGrid" class="permission-diff-query-grid" data-i18n-aria-label="permDiff.queryOptions">
+              <section id="permissionDiffContainerBlock" class="permission-diff-query-card">
+                <div class="permission-diff-query-card-head">
+                  <h3 data-i18n="permDiff.queryContainerTitle">Perfil o permission set</h3>
+                  <p data-i18n="permDiff.queryContainerHint">Consulta todos sus permisos de una vez.</p>
+                </div>
+                <div class="permission-diff-filters">
               <div class="permission-diff-field permission-diff-name-field">
                 <label for="permissionDiffNameInput" class="permission-diff-field-label" data-i18n="permDiff.containerName">Nombre</label>
                 <input id="permissionDiffNameInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.containerNamePh" placeholder="Ej.: Mi_Conjunto_Permisos o Administrador" autocomplete="off" spellcheck="false" />
                 <div id="permissionDiffSuggestions" class="permission-diff-suggestions" hidden></div>
               </div>
-            </div>
-            <div id="permissionDiffResourceBlock" class="permission-diff-filters hidden">
+                </div>
+              </section>
+              <section id="permissionDiffResourceBlock" class="permission-diff-query-card">
+                <div class="permission-diff-query-card-head">
+                  <h3 data-i18n="permDiff.queryResourceTitle">Objeto o campo</h3>
+                  <p data-i18n="permDiff.queryResourceHint">Identifica rápidamente quién tiene acceso.</p>
+                </div>
+                <div class="permission-diff-filters">
               <div class="permission-diff-field">
                 <label for="permissionDiffResourceType" class="permission-diff-field-label" data-i18n="permDiff.resourceType">Recurso</label>
                 <select id="permissionDiffResourceType" class="permission-diff-input permission-diff-select">
@@ -2271,34 +2283,26 @@
                   <option value="field" data-i18n="permDiff.resourceField">Campo</option>
                 </select>
               </div>
-              <div class="permission-diff-field">
-                <label for="permissionDiffContainerFilter" class="permission-diff-field-label" data-i18n="permDiff.showContainers">Mostrar</label>
-                <select id="permissionDiffContainerFilter" class="permission-diff-input permission-diff-select">
-                  <option value="all" data-i18n="permDiff.containerFilterAll">Perfiles y conjuntos de permisos</option>
-                  <option value="Profile" data-i18n="permDiff.containerFilterProfile">Solo perfiles</option>
-                  <option value="PermissionSet" data-i18n="permDiff.containerFilterPermSet">Solo conjuntos de permisos</option>
-                </select>
-              </div>
               <div class="permission-diff-field permission-diff-name-field">
                 <label for="permissionDiffResourceInput" class="permission-diff-field-label" data-i18n="permDiff.resourceName">Nombre</label>
                 <input id="permissionDiffResourceInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.resourceNamePh" placeholder="Ej.: Cuenta o Cuenta.Nombre" autocomplete="off" spellcheck="false" />
                 <div id="permissionDiffResourceSuggestions" class="permission-diff-suggestions" hidden></div>
               </div>
-            </div>
-            <div id="permissionDiffCustomPermBlock" class="permission-diff-filters hidden">
-              <div class="permission-diff-field">
-                <label for="permissionDiffContainerFilterCp" class="permission-diff-field-label" data-i18n="permDiff.showContainers">Mostrar</label>
-                <select id="permissionDiffContainerFilterCp" class="permission-diff-input permission-diff-select">
-                  <option value="all" data-i18n="permDiff.containerFilterAll">Perfiles y conjuntos de permisos</option>
-                  <option value="Profile" data-i18n="permDiff.containerFilterProfile">Solo perfiles</option>
-                  <option value="PermissionSet" data-i18n="permDiff.containerFilterPermSet">Solo conjuntos de permisos</option>
-                </select>
-              </div>
+                </div>
+              </section>
+              <section id="permissionDiffCustomPermBlock" class="permission-diff-query-card">
+                <div class="permission-diff-query-card-head">
+                  <h3 data-i18n="permDiff.queryCustomPermissionTitle">Permiso personalizado</h3>
+                  <p data-i18n="permDiff.queryCustomPermissionHint">Revisa dónde se asigna un permiso personalizado.</p>
+                </div>
+                <div class="permission-diff-filters">
               <div class="permission-diff-field permission-diff-name-field">
                 <label for="permissionDiffCustomPermInput" class="permission-diff-field-label" data-i18n="permDiff.customPermName">Permiso personalizado</label>
                 <input id="permissionDiffCustomPermInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.customPermNamePh" placeholder="Ej.: My_Custom_Permission" autocomplete="off" spellcheck="false" />
                 <div id="permissionDiffCustomPermSuggestions" class="permission-diff-suggestions" hidden></div>
               </div>
+                </div>
+              </section>
             </div>
             <div class="permission-diff-filters permission-diff-filters-shared hidden">
               <div class="permission-diff-field">
@@ -2311,12 +2315,53 @@
               </label>
             </div>
             <p id="permissionDiffSummary" class="permission-diff-summary hidden"></p>
-            <div class="permission-diff-table-wrap hidden">
+            <div id="permissionDiffGenericResults" class="permission-diff-table-wrap hidden">
               <table id="permissionDiffTable" class="permission-diff-table">
                 <thead id="permissionDiffThead"></thead>
                 <tbody id="permissionDiffTbody"></tbody>
               </table>
               <p id="permissionDiffEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
+            </div>
+            <div id="permissionDiffContainerResults" class="permission-diff-container-results hidden">
+              <section class="permission-diff-result-section">
+                <div class="permission-diff-result-section-head">
+                  <h3 data-i18n="permDiff.tabObject">Objetos</h3>
+                  <p id="permissionDiffObjectSummary" class="permission-diff-summary"></p>
+                </div>
+                <div class="permission-diff-table-wrap">
+                  <table id="permissionDiffObjectTable" class="permission-diff-table">
+                    <thead id="permissionDiffObjectThead"></thead>
+                    <tbody id="permissionDiffObjectTbody"></tbody>
+                  </table>
+                  <p id="permissionDiffObjectEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
+                </div>
+              </section>
+              <section class="permission-diff-result-section">
+                <div class="permission-diff-result-section-head">
+                  <h3 data-i18n="permDiff.tabField">Campos</h3>
+                  <p id="permissionDiffFieldSummary" class="permission-diff-summary"></p>
+                </div>
+                <div class="permission-diff-table-wrap">
+                  <table id="permissionDiffFieldTable" class="permission-diff-table">
+                    <thead id="permissionDiffFieldThead"></thead>
+                    <tbody id="permissionDiffFieldTbody"></tbody>
+                  </table>
+                  <p id="permissionDiffFieldEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
+                </div>
+              </section>
+              <section class="permission-diff-result-section">
+                <div class="permission-diff-result-section-head">
+                  <h3 data-i18n="permDiff.tabSetup">Configuración</h3>
+                  <p id="permissionDiffSetupSummary" class="permission-diff-summary"></p>
+                </div>
+                <div class="permission-diff-table-wrap">
+                  <table id="permissionDiffSetupTable" class="permission-diff-table">
+                    <thead id="permissionDiffSetupThead"></thead>
+                    <tbody id="permissionDiffSetupTbody"></tbody>
+                  </table>
+                  <p id="permissionDiffSetupEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -2353,7 +2398,6 @@
                     <th scope="col" data-i18n="envStatus.colIncidents">Incidencias activas</th>
                     <th scope="col" data-i18n="envStatus.colMaintenance">Próximo mantenimiento</th>
                     <th scope="col" data-i18n="envStatus.colSession">Sesión</th>
-                    <th scope="col" data-i18n="envStatus.colDetail">Detalle</th>
                   </tr>
                 </thead>
                 <tbody id="environmentStatusTbody"></tbody>

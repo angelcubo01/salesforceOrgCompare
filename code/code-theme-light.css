@@ -3121,7 +3121,7 @@ html[data-ui-theme="light"] .permission-diff-status.is-error {
   color: #dc2626;
 }
 
-html[data-ui-theme="light"] .permission-diff-toolbar {
+html[data-ui-theme="light"] .permission-diff-query-card {
   border: 1px solid var(--sfoc-light-border);
   background: var(--sfoc-light-bg-elevated);
 }
@@ -3166,24 +3166,14 @@ html[data-ui-theme="light"] .permission-diff-diff-only {
   color: var(--sfoc-light-text);
 }
 
-html[data-ui-theme="light"] .permission-diff-direction,
-html[data-ui-theme="light"] .permission-diff-tab {
-  border: 1px solid var(--sfoc-light-border);
-  background: var(--sfoc-light-bg-elevated);
-  color: var(--sfoc-light-text-muted);
-}
-
-html[data-ui-theme="light"] .permission-diff-direction:hover,
-html[data-ui-theme="light"] .permission-diff-tab:hover {
-  background: var(--sfoc-light-bg-hover);
-  color: var(--sfoc-light-text);
-}
-
-html[data-ui-theme="light"] .permission-diff-direction.is-active,
-html[data-ui-theme="light"] .permission-diff-tab.is-active {
+html[data-ui-theme="light"] .permission-diff-query-card:focus-within {
   border-color: rgba(37, 99, 235, 0.65);
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+html[data-ui-theme="light"] .permission-diff-query-card-head h3,
+html[data-ui-theme="light"] .permission-diff-result-section-head h3 {
+  color: var(--sfoc-light-text);
 }
 
 html[data-ui-theme="light"] .permission-diff-table-wrap {
@@ -3471,6 +3461,32 @@ html[data-ui-theme="light"] .data-workbench-table-wrap,
 html[data-ui-theme="light"] .record-editor-table-wrap {
   border-color: var(--sfoc-light-border-subtle);
   background: #ffffff;
+}
+
+html[data-ui-theme="light"] .object-describe-advanced-options {
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme="light"] .object-describe-advanced-options summary {
+  color: #1d4ed8;
+}
+
+html[data-ui-theme="light"] .object-describe-table-tab {
+  border-color: var(--sfoc-light-border-subtle);
+  background: var(--sfoc-light-bg-hover);
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme="light"] .object-describe-table-tab:hover,
+html[data-ui-theme="light"] .object-describe-table-tab:focus-visible {
+  border-color: #2563eb;
+  color: #1e3a8a;
+}
+
+html[data-ui-theme="light"] .object-describe-table-tab.is-active {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1e3a8a;
 }
 
 html[data-ui-theme="light"] .rest-explorer-table th,

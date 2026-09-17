@@ -8,6 +8,9 @@ describe('actualizaciones en vivo', () => {
     expect(source).toContain('captureDeployDetailScrollAnchor()');
     expect(source).toContain('restoreScrollAnchor(scrollState.container, scrollState.anchor);');
     expect(source).toContain('detailRow.dataset.deployInlineDetailId = asyncId;');
+    expect(source).toContain('captureOpenDeployStackTraceKeys()');
+    expect(source).toContain('restoreOpenDeployStackTraces(openStackTraceKeys);');
+    expect(source).toContain('data-deploy-stack-key');
   });
 
   it('ancla la ejecución expandida de Apex Tests dentro de su tabla', async () => {

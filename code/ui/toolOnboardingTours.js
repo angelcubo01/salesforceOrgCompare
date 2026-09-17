@@ -102,7 +102,7 @@ export const TOOL_ONBOARDING_TOURS = Object.freeze({
     ])
   }),
   PermissionDiff: standardTour('PermissionDiff', '#permissionDiffPanel', {
-    context: '#permissionDiffSectionTabs', contextInteraction: SAFE, prepare: '#permissionDiffNameInput',
+    context: '#permissionDiffQueryGrid', contextInteraction: SAFE, prepare: '#permissionDiffNameInput',
     action: '#permissionDiffCompareToggle', result: '#permissionDiffTable'
   }),
   CustomSettingsCompare: standardTour('CustomSettingsCompare', '#customSettingsComparePanel', {

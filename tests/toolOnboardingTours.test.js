@@ -50,7 +50,7 @@ describe('toolOnboardingTours', () => {
       .map(({ anchor }) => anchor);
     expect(new Set(safeAnchors)).toEqual(new Set([
       '#debugLogBrowserFilters',
-      '#permissionDiffSectionTabs',
+      '#permissionDiffQueryGrid',
       '#dataWorkbenchTabImport'
     ]));
   });

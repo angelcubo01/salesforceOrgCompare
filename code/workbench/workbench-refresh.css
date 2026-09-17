@@ -1552,6 +1552,53 @@ body[data-ui-mode="v2"] .sfoc-tool-panel > .quick-edit-panel-inner {
   overflow: hidden;
 }
 
+/* Describe de objetos: la cabecera ya está en el shell del workbench. Al
+ * repartir el alto restante entre las tablas, cada resultado conserva filas
+ * visibles y un scroll propio en lugar de reducirse a una sola línea. */
+body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] .object-describe-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] .object-describe-panel-inner > .org-limits-head,
+body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] #objectDescribeStatus:empty {
+  display: none;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] .object-describe-results {
+  display: grid;
+  grid-template-rows: auto minmax(260px, 1fr);
+  flex: 1 0 300px;
+  min-height: 300px;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] .object-describe-table-section.is-active {
+  display: flex;
+}
+
+/* Dependencias de picklists: la cabecera contextual ya muestra título y
+   descripción. No reservamos espacio para la cabecera interna oculta y
+   mantenemos los dos selectores como un formulario compacto. */
+body[data-ui-mode="v2"][data-workbench-workspace="field-dependency"] .field-dependency-panel-inner {
+  padding: 16px !important;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="field-dependency"] .field-dependency-org-hint:empty {
+  display: none;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="field-dependency"] .field-dep-controls {
+  max-width: 960px;
+}
+
+@media (max-width: 700px) {
+  body[data-ui-mode="v2"][data-workbench-workspace="field-dependency"] .field-dependency-panel-inner {
+    padding: 12px !important;
+  }
+}
+
 body[data-ui-mode="v2"] :where(.workbench-legacy-tool-heading, .workbench-legacy-tool-description, .workbench-legacy-heading-group, .workbench-legacy-header-only) {
   display: none !important;
 }
