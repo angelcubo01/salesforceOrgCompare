@@ -58,12 +58,12 @@ function pickBestMatch(query, candidates, getName) {
 const OBJECT_PERMISSIONS_SOQL = `SELECT SobjectType,
   PermissionsCreate, PermissionsRead, PermissionsEdit, PermissionsDelete,
   PermissionsViewAllRecords, PermissionsModifyAllRecords
-  FROM ObjectPermissions WHERE ParentId = `;
+  FROM ObjectPermissions WHERE `;
 
 const FIELD_PERMISSIONS_SOQL = `SELECT SobjectType, Field, PermissionsRead, PermissionsEdit
-  FROM FieldPermissions WHERE ParentId = `;
+  FROM FieldPermissions WHERE `;
 
-const SETUP_ENTITY_SOQL = `SELECT SetupEntityType, SetupEntityId FROM SetupEntityAccess WHERE ParentId = `;
+const SETUP_ENTITY_SOQL = `SELECT SetupEntityType, SetupEntityId FROM SetupEntityAccess WHERE `;
 
 /**
  * Consulta SOQL por tipo de entidad de setup para resolver Id → nombre legible.
@@ -243,20 +243,12 @@ export async function resolvePermissionContainer(instanceUrl, sid, apiVersion, c
     }
     const best = pickBestMatch(raw, rows, (r) => r.Name);
     if (!best) throw new Error(`Profile not found: ${containerName}`);
-    // ObjectPermissions, FieldPermissions y SetupEntityAccess se relacionan con
-    // el PermissionSet propietario del perfil, no con el Id del Profile.
-    const profilePermissionSets =
-      (await restQuery(
-        instanceUrl,
-        sid,
-        apiVersion,
-        `SELECT Id FROM PermissionSet WHERE ProfileId = '${escapeSoqlLiteral(best.Id)}' LIMIT 1`
-      )) || [];
-    const profilePermissionSet = profilePermissionSets[0];
-    if (!profilePermissionSet?.Id) {
-      throw new Error(`Permission set for profile not found: ${best.Name}`);
-    }
-    return { parentId: profilePermissionSet.Id, containerType: 'Profile', name: best.Name };
+    return {
+      parentId: best.Id,
+      profileId: best.Id,
+      containerType: 'Profile',
+      name: best.Name
+    };
   }
 
   let rows =
@@ -404,19 +396,20 @@ export async function searchPermissionContainers(instanceUrl, sid, apiVersion, c
         instanceUrl,
         sid,
         apiVersion,
-        `SELECT Name FROM Profile WHERE Name LIKE '${like}' ORDER BY Name LIMIT 40`
+        `SELECT Id, Name FROM Profile WHERE Name LIKE '${like}' ORDER BY Name LIMIT 40`
       )) || []
-    ).map((r) => ({ kind: 'container', name: r.Name, containerType: 'Profile' }));
+    ).map((r) => ({ kind: 'container', id: r.Id, name: r.Name, containerType: 'Profile' }));
   }
   return (
     (await restQuery(
       instanceUrl,
       sid,
       apiVersion,
-      `SELECT Name FROM PermissionSet WHERE IsOwnedByProfile = false AND Name LIKE '${like}' ORDER BY Name LIMIT 40`
+      `SELECT Id, Name FROM PermissionSet WHERE IsOwnedByProfile = false AND Name LIKE '${like}' ORDER BY Name LIMIT 40`
     )) || []
   ).map((r) => ({
     kind: 'container',
+    id: r.Id,
     name: r.Name,
     containerType: 'PermissionSet'
   }));
@@ -433,6 +426,9 @@ export async function fetchPermissionContainerData(
   containerType,
   containerName
 ) {
+  if (containerType !== 'Profile' && containerType !== 'PermissionSet') {
+    throw new Error('A profile or permission set must be selected from the list');
+  }
   const container = await resolvePermissionContainer(
     instanceUrl,
     sid,
@@ -441,10 +437,13 @@ export async function fetchPermissionContainerData(
     containerName
   );
   const parentId = escapeSoqlLiteral(container.parentId);
+  const permissionParentFilter = container.containerType === 'Profile' && container.profileId
+    ? `Parent.Profile.Name = '${escapeSoqlLiteral(container.name)}'`
+    : `ParentId = '${parentId}'`;
   const [objectPermissions, fieldPermissions, setupRows] = await Promise.all([
-    restQueryAll(instanceUrl, sid, apiVersion, `${OBJECT_PERMISSIONS_SOQL}'${parentId}'`),
-    restQueryAll(instanceUrl, sid, apiVersion, `${FIELD_PERMISSIONS_SOQL}'${parentId}'`),
-    restQueryAll(instanceUrl, sid, apiVersion, `${SETUP_ENTITY_SOQL}'${parentId}'`)
+    restQueryAll(instanceUrl, sid, apiVersion, `${OBJECT_PERMISSIONS_SOQL}${permissionParentFilter}`),
+    restQueryAll(instanceUrl, sid, apiVersion, `${FIELD_PERMISSIONS_SOQL}${permissionParentFilter}`),
+    restQueryAll(instanceUrl, sid, apiVersion, `${SETUP_ENTITY_SOQL}${permissionParentFilter}`)
   ]);
   const setupEntityAccess = await enrichSetupEntityAccessNames(
     instanceUrl,
@@ -493,10 +492,10 @@ export async function resolveParentContainers(instanceUrl, sid, apiVersion, pare
         instanceUrl,
         sid,
         apiVersion,
-        `SELECT Id, Name, Label, IsOwnedByProfile, Profile.Name FROM PermissionSet WHERE Id IN (${inList2})`
+        `SELECT Id, Name, Label, IsOwnedByProfile, ProfileId, Profile.Name FROM PermissionSet WHERE Id IN (${inList2})`
       )) || [];
     for (const ps of psets) {
-      if (ps.IsOwnedByProfile && ps.Profile?.Name) {
+      if (ps.ProfileId && ps.Profile?.Name) {
         map.set(ps.Id, {
           containerType: 'Profile',
           name: ps.Profile.Name,

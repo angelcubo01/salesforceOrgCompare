@@ -2721,7 +2721,11 @@ export function installMessageHandlers() {
               break;
             }
             try {
-              const ct = containerType === 'Profile' ? 'Profile' : 'PermissionSet';
+              if (containerType !== 'Profile' && containerType !== 'PermissionSet') {
+                reply({ ok: false, error: 'Select a profile or permission set from the list' });
+                break;
+              }
+              const ct = containerType;
               const items = await searchPermissionContainers(
                 org.instanceUrl,
                 sid,
@@ -2868,7 +2872,11 @@ export function installMessageHandlers() {
               break;
             }
             try {
-              const ct = containerType === 'Profile' ? 'Profile' : 'PermissionSet';
+              if (containerType !== 'Profile' && containerType !== 'PermissionSet') {
+                reply({ ok: false, error: 'Select a profile or permission set from the list' });
+                break;
+              }
+              const ct = containerType;
               const data = await fetchPermissionContainerData(
                 org.instanceUrl,
                 sid,

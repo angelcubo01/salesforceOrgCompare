@@ -11601,16 +11601,8 @@ body[data-ui-mode="v2"][data-workbench-workspace="security-access"] #permissionD
   max-width: none;
 }
 
-#permissionDiffResourceBlock .permission-diff-field:first-child {
-  flex: 0.8 1 0;
-}
-
-#permissionDiffResourceBlock .permission-diff-field:nth-child(2) {
-  flex: 1.2 1 0;
-}
-
 #permissionDiffResourceBlock .permission-diff-name-field {
-  flex: 1.3 1 0;
+  flex: 1 1 0;
 }
 
 #permissionDiffCustomPermBlock .permission-diff-field:first-child {
@@ -11826,32 +11818,6 @@ body[data-ui-mode="v2"][data-workbench-workspace="security-access"] #permissionD
   border-radius: 10px;
 }
 
-.permission-diff-container-results {
-  display: grid;
-  gap: 16px;
-  min-height: 0;
-}
-
-.permission-diff-result-section {
-  display: grid;
-  gap: 8px;
-  min-height: 0;
-}
-
-.permission-diff-result-section-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
-}
-
-.permission-diff-result-section .permission-diff-table-wrap {
-  flex: none;
-  min-height: 100px;
-  max-height: 320px;
-}
-
 .permission-diff-table {
   width: 100%;
   border-collapse: collapse;
@@ -11877,6 +11843,14 @@ body[data-ui-mode="v2"][data-workbench-workspace="security-access"] #permissionD
 
 .permission-diff-col-key {
   font-family: ui-monospace, monospace;
+  white-space: nowrap;
+}
+
+.perm-diff-col-category {
+  width: 7.5rem;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 

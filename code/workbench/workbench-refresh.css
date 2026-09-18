@@ -1569,9 +1569,14 @@ body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] #objectDescr
 
 body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] .object-describe-results {
   display: grid;
-  grid-template-rows: auto minmax(260px, 1fr);
-  flex: 1 0 300px;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 1 1 300px;
+  height: auto;
   min-height: 300px;
+}
+
+body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] .object-describe-table-search-wrap {
+  flex: 0 0 auto;
 }
 
 body[data-ui-mode="v2"][data-workbench-workspace="object-describe"] .object-describe-table-section.is-active {

@@ -2276,13 +2276,6 @@
                   <p data-i18n="permDiff.queryResourceHint">Identifica rápidamente quién tiene acceso.</p>
                 </div>
                 <div class="permission-diff-filters">
-              <div class="permission-diff-field">
-                <label for="permissionDiffResourceType" class="permission-diff-field-label" data-i18n="permDiff.resourceType">Recurso</label>
-                <select id="permissionDiffResourceType" class="permission-diff-input permission-diff-select">
-                  <option value="object" data-i18n="permDiff.resourceObject">Objeto</option>
-                  <option value="field" data-i18n="permDiff.resourceField">Campo</option>
-                </select>
-              </div>
               <div class="permission-diff-field permission-diff-name-field">
                 <label for="permissionDiffResourceInput" class="permission-diff-field-label" data-i18n="permDiff.resourceName">Nombre</label>
                 <input id="permissionDiffResourceInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.resourceNamePh" placeholder="Ej.: Cuenta o Cuenta.Nombre" autocomplete="off" spellcheck="false" />
@@ -2321,47 +2314,6 @@
                 <tbody id="permissionDiffTbody"></tbody>
               </table>
               <p id="permissionDiffEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
-            </div>
-            <div id="permissionDiffContainerResults" class="permission-diff-container-results hidden">
-              <section class="permission-diff-result-section">
-                <div class="permission-diff-result-section-head">
-                  <h3 data-i18n="permDiff.tabObject">Objetos</h3>
-                  <p id="permissionDiffObjectSummary" class="permission-diff-summary"></p>
-                </div>
-                <div class="permission-diff-table-wrap">
-                  <table id="permissionDiffObjectTable" class="permission-diff-table">
-                    <thead id="permissionDiffObjectThead"></thead>
-                    <tbody id="permissionDiffObjectTbody"></tbody>
-                  </table>
-                  <p id="permissionDiffObjectEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
-                </div>
-              </section>
-              <section class="permission-diff-result-section">
-                <div class="permission-diff-result-section-head">
-                  <h3 data-i18n="permDiff.tabField">Campos</h3>
-                  <p id="permissionDiffFieldSummary" class="permission-diff-summary"></p>
-                </div>
-                <div class="permission-diff-table-wrap">
-                  <table id="permissionDiffFieldTable" class="permission-diff-table">
-                    <thead id="permissionDiffFieldThead"></thead>
-                    <tbody id="permissionDiffFieldTbody"></tbody>
-                  </table>
-                  <p id="permissionDiffFieldEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
-                </div>
-              </section>
-              <section class="permission-diff-result-section">
-                <div class="permission-diff-result-section-head">
-                  <h3 data-i18n="permDiff.tabSetup">Configuración</h3>
-                  <p id="permissionDiffSetupSummary" class="permission-diff-summary"></p>
-                </div>
-                <div class="permission-diff-table-wrap">
-                  <table id="permissionDiffSetupTable" class="permission-diff-table">
-                    <thead id="permissionDiffSetupThead"></thead>
-                    <tbody id="permissionDiffSetupTbody"></tbody>
-                  </table>
-                  <p id="permissionDiffSetupEmpty" class="permission-diff-empty hidden" data-i18n="permDiff.empty">No hay resultados con los filtros actuales.</p>
-                </div>
-              </section>
             </div>
           </div>
         </div>

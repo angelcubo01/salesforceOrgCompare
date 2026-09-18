@@ -124,6 +124,15 @@ describe('permissionsDiffCore', () => {
     ).toBe('Objeto / metadato: CC_Settings__c');
   });
 
+  it('keeps the full setup Id when its name cannot be resolved', () => {
+    expect(
+      formatSetupEntityLabel({
+        SetupEntityType: 'CustomEntityDefinition',
+        SetupEntityId: '01I1t000002JdujEAC'
+      }, (type) => (type === 'CustomEntityDefinition' ? 'Objeto / metadato' : type))
+    ).toBe('Objeto / metadato (01I1t000002JdujEAC)');
+  });
+
   it('diffBoolFields lists changed flags', () => {
     const ch = diffBoolFields(
       { PermissionsRead: true, PermissionsEdit: false },

@@ -52,7 +52,7 @@ export function normalizeSetupEntityAccess(row) {
 }
 
 /**
- * Etiqueta legible para filas de Setup (tipo + nombre API; sin repetir el Id si hay nombre).
+ * Etiqueta legible para filas de Setup (tipo + nombre API; conserva el Id completo si no hay nombre).
  * @param {{ SetupEntityType?: string, SetupEntityId?: string, SetupEntityName?: string }} rec
  * @param {(type: string) => string} [typeLabel]
  */
@@ -65,9 +65,7 @@ export function formatSetupEntityLabel(rec, typeLabel = (t) => t) {
     return typeText ? `${typeText}: ${name}` : name;
   }
   if (type && id) {
-    const short =
-      id.length > 12 ? `${id.slice(0, 4)}…${id.slice(-4)}` : id;
-    return typeText ? `${typeText} (${short})` : `${type}:${id}`;
+    return typeText ? `${typeText} (${id})` : `${type}:${id}`;
   }
   return type || id || '—';
 }
@@ -376,4 +374,3 @@ export function buildCustomPermAssignmentBundle(payload) {
 export function compareCustomPermAssignmentBundles(left, right) {
   return diffByKey(left.grants, right.grants, () => true);
 }
-
