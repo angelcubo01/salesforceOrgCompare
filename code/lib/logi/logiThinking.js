@@ -32,6 +32,8 @@ let thinkingRotateSessionKey = null;
 /** @type {'default' | 'tools' | 'org' | null} */
 let thinkingRotateMode = null;
 let thinkingRotateIndex = 0;
+/** @type {ReturnType<typeof setInterval> | null} */
+let thinkingElapsedTimer = null;
 
 export function stopThinkingRotation() {
   if (thinkingRotateTimer) {
@@ -41,6 +43,35 @@ export function stopThinkingRotation() {
   thinkingRotateSessionKey = null;
   thinkingRotateMode = null;
   thinkingRotateIndex = 0;
+  if (thinkingElapsedTimer) {
+    clearInterval(thinkingElapsedTimer);
+    thinkingElapsedTimer = null;
+  }
+}
+
+/**
+ * Muestra únicamente actividad verificable de la interfaz. No se usa ni se
+ * expone la cadena de razonamiento interna devuelta por el proveedor.
+ *
+ * @param {HTMLElement} modal
+ * @param {LogiThinkingDeps} deps
+ * @param {object | null | undefined} rt
+ */
+function syncThinkingTrace(modal, deps, rt) {
+  const status = modal.querySelector('[data-logi-thinking-status]');
+  const reason = modal.querySelector('[data-logi-thinking-reason]');
+  const elapsed = modal.querySelector('[data-logi-thinking-elapsed]');
+  if (status) status.textContent = String(rt?.thinkingStatus || deps.t('apexLogViewer.logi.thinking'));
+  if (reason) {
+    reason.textContent = String(rt?.thinkingReason || deps.t('apexLogViewer.logi.thinkingSafeTrace'));
+  }
+  if (elapsed) {
+    const startedAt = Number(rt?.thinkingStartedAt) || Date.now();
+    const totalSeconds = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    elapsed.textContent = `${minutes}:${seconds}`;
+  }
 }
 
 /**
@@ -77,7 +108,7 @@ export function formatToolActivityLabel(toolName, args, t) {
 /**
  * @typedef {object} LogiThinkingDeps
  * @property {(key: string, vars?: Record<string, unknown>) => string} t
- * @property {(sessionKey: string) => { processing?: boolean, cancelRequested?: boolean, thinkingMode?: string, thinkingReason?: string }} getRuntime
+ * @property {(sessionKey: string) => { processing?: boolean, cancelRequested?: boolean, thinkingMode?: string, thinkingReason?: string, thinkingStatus?: string, thinkingStartedAt?: number }} getRuntime
  * @property {(modal: HTMLElement) => string | null | undefined} getSessionKey
  * @property {(rt: object | null | undefined) => boolean} shouldShowThinking
  */
@@ -105,6 +136,7 @@ export function ensureThinkingRotation(modal, deps) {
     const key = keys[thinkingRotateIndex % keys.length] || keys[0];
     const el = modal.querySelector('.logi-advisor-thinking-text');
     if (el) el.textContent = formatThinkingLabel(deps.t(key), rt.thinkingReason);
+    syncThinkingTrace(modal, deps, rt);
     return;
   }
 
@@ -134,9 +166,22 @@ export function ensureThinkingRotation(modal, deps) {
     if (el) {
       el.textContent = formatThinkingLabel(deps.t(key), rtNow.thinkingReason);
     }
+    syncThinkingTrace(modal, deps, rtNow);
     thinkingRotateIndex += 1;
   };
 
   tick();
   thinkingRotateTimer = setInterval(tick, THINKING_ROTATE_MS);
+  thinkingElapsedTimer = setInterval(() => {
+    if (!modal.isConnected) {
+      stopThinkingRotation();
+      return;
+    }
+    const rtNow = deps.getRuntime(sessionKey);
+    if (!deps.shouldShowThinking(rtNow)) {
+      stopThinkingRotation();
+      return;
+    }
+    syncThinkingTrace(modal, deps, rtNow);
+  }, 1000);
 }

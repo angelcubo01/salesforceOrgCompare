@@ -6,7 +6,10 @@ import { bg } from './core/bridge.js';
 import { apexViewerIdbTake } from './lib/apexViewerIdb.js';
 import { parseApexDebugLog, formatLogSize, formatMs, sliceParsedForExecution } from '../shared/apexLogParser.js';
 import { parseApexLogExecutionContext } from '../shared/salesforceApi.js';
-import { mountApexLogTabs, setActiveApexLogTab, APEX_LOG_TABS } from './lib/apexLogViewer/tabs.js';
+import { mountApexLogTabs, setActiveApexLogTab, updateApexLogTabBadges, setComparisonTabVisible, APEX_LOG_TABS } from './lib/apexLogViewer/tabs.js';
+import { openComparisonSelector } from './lib/apexLogViewer/comparisonSelector.js';
+import { renderComparisonView } from './lib/apexLogViewer/comparisonView.js';
+import { compareApexLogs, buildComparisonLogiContext, getComparisonEntry } from '../shared/apexLogComparison.js';
 import { revealTreeLogLine } from './lib/apexLogViewer/rawTreeView.js';
 import { renderTimelineView, revealTimelineLogLine } from './lib/apexLogViewer/timelineView.js';
 import { renderSummaryView } from './lib/apexLogViewer/summaryView.js';
@@ -31,7 +34,7 @@ import {
   mountLogiAdvisor,
   openLogiAdvisor
 } from './lib/logi/logiAdvisorModal.js';
-import { bindLogiResumeMount } from './lib/logi/logiResumePanel.js';
+import { bindLogiResumeMount, refreshComparisonResumeButton } from './lib/logi/logiResumePanel.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -178,6 +181,7 @@ async function main() {
 
   const backBtn = document.getElementById('apexLogViewerBack');
   const downloadBtn = document.getElementById('apexLogViewerDownload');
+  const compareBtn = document.getElementById('apexLogCompareBtn');
   const titleEl = document.getElementById('apexLogViewerTitle');
   const metaEl = document.getElementById('apexLogViewerMeta');
   const nameEl = document.getElementById('apexLogViewerName');
@@ -223,6 +227,7 @@ async function main() {
         ...(res.downloadFileName ? { downloadFileName: res.downloadFileName } : {}),
         ...(res.defaultTab ? { defaultTab: res.defaultTab } : {}),
         ...(res.orgId ? { orgId: res.orgId } : {}),
+        ...(res.orgLabel ? { orgLabel: res.orgLabel } : {}),
         ...(res.instanceUrl ? { instanceUrl: res.instanceUrl } : {}),
         ...(res.logId ? { logId: res.logId } : {})
       };
@@ -238,6 +243,7 @@ async function main() {
           ...(rec.downloadFileName ? { downloadFileName: rec.downloadFileName } : {}),
           ...(rec.defaultTab ? { defaultTab: rec.defaultTab } : {}),
           ...(rec.orgId ? { orgId: rec.orgId } : {}),
+          ...(rec.orgLabel ? { orgLabel: rec.orgLabel } : {}),
           ...(rec.instanceUrl ? { instanceUrl: rec.instanceUrl } : {}),
           ...(rec.logId ? { logId: rec.logId } : {})
         };
@@ -276,6 +282,7 @@ async function main() {
   const viewerContext = {
     instanceUrl: payload.instanceUrl || '',
     orgId: payload.orgId || '',
+    orgLabel: payload.orgLabel || '',
     logId: payload.logId || ''
   };
 
@@ -292,12 +299,29 @@ async function main() {
 
   if (titleEl) titleEl.textContent = title;
   if (downloadBtn) downloadBtn.hidden = false;
+  if (compareBtn) compareBtn.hidden = false;
+  let comparisonState = null;
+  let comparisonTextNavigator = null;
 
   void mountLogiAdvisor({
     getParsed: () => getScopedParsed(),
     getRawContent: () => content,
+    getComparisonContext: () => comparisonState ? buildComparisonLogiContext(comparisonState.comparison, comparisonState.a, comparisonState.b) : null,
     payload: payload || {},
-    switchToSummary: () => onTabSelect('summary')
+    switchToSummary: () => {
+      if (!comparisonState) {
+        onTabSelect('summary');
+        return;
+      }
+      // El resumen de Logi de una comparación siempre vive en su subvista Resumen.
+      activeTabId = 'comparison';
+      setActiveApexLogTab('comparison');
+      renderTab('comparison', true);
+    },
+    isComparisonActive: () => Boolean(comparisonState),
+    getSummaryMount: () => comparisonState
+      ? document.getElementById('apexLogComparisonSummaryMount')
+      : document.getElementById('apexLogSummaryMount')
   });
 
   if (!mount) return;
@@ -308,7 +332,7 @@ async function main() {
   /** @type {string | number} */
   let selectedExecutionId = 'all';
   const renderedTabs = new Set();
-  let activeTabId = payload.defaultTab || 'summary';
+  let activeTabId = payload.defaultTab === 'comparison' ? 'summary' : (payload.defaultTab || 'summary');
   let highlightDecoIds = [];
   /** @type {number} file line number shown as editor line 1 minus 1 */
   let textFileLineOffset = 0;
@@ -467,7 +491,18 @@ async function main() {
 
   window.addEventListener('sfoc-logi-highlight-lines', (ev) => {
     const start = Number(ev?.detail?.startLine);
-    if (Number.isFinite(start) && start > 0) jumpToLogLine(start);
+    if (!Number.isFinite(start) || start < 1) return;
+    if (ev?.detail?.comparison === true && comparisonState) {
+      activeTabId = 'comparison';
+      setActiveApexLogTab('comparison');
+      renderTab('comparison', true);
+      comparisonTextNavigator?.showText({
+        side: ev?.detail?.side === 'b' ? 'b' : 'a',
+        line: start
+      });
+      return;
+    }
+    jumpToLogLine(start);
   });
 
   /**
@@ -580,6 +615,7 @@ async function main() {
       }, t);
     }
     refreshToolbar();
+    updateApexLogTabBadges(scoped);
     mountExecutionSelector(executionMount, parsedFull, selectedExecutionId, onExecutionSelect, t);
     syncTextEditorContent();
     renderTab(activeTabId, true);
@@ -601,6 +637,17 @@ async function main() {
       case 'summary':
         renderSummaryView(document.getElementById('apexLogSummaryMount'), parsed, jump, t, tabOpts);
         void bindLogiResumeMount(document.getElementById('apexLogSummaryMount'));
+        break;
+      case 'comparison':
+        if (comparisonState) {
+          comparisonTextNavigator = renderComparisonView(
+            document.getElementById('apexLogComparisonMount'),
+            comparisonState,
+            t,
+            monaco,
+            (logiMount) => { void bindLogiResumeMount(logiMount); }
+          );
+        }
         break;
       case 'errors':
         renderErrorsView(document.getElementById('apexLogErrorsMount'), parsed, jump, t);
@@ -648,6 +695,7 @@ async function main() {
   }
 
   function onTabSelect(tabId) {
+    if (tabId === 'comparison' && !comparisonState) tabId = 'summary';
     activeTabId = tabId;
     setActiveApexLogTab(tabId);
     renderTab(tabId);
@@ -658,6 +706,7 @@ async function main() {
   }
 
   mountApexLogTabs(tabsNav, tabLabel, onTabSelect, t);
+  setComparisonTabVisible(false);
   setActiveApexLogTab(activeTabId);
 
   try {
@@ -680,6 +729,7 @@ async function main() {
         parsedFull = parseApexDebugLog(content);
         selectedExecutionId = 'all';
         const firstError = refreshToolbar();
+        updateApexLogTabBadges(parsedFull);
         renderExecutionToolbarBadge(execBadgeEl, parsedFull, t);
         if (shouldShowExecutionSelector(parsedFull)) {
           mountExecutionSelector(executionMount, parsedFull, selectedExecutionId, onExecutionSelect, t);
@@ -722,6 +772,72 @@ async function main() {
       ? sanitizeLogDownloadFilename(String(payload.downloadFileName).trim())
       : `${sanitizeLogDownloadFilename(title)}.log`;
     downloadTextFile(body, name);
+  });
+
+  async function loadComparisonCandidates(orgId, limit) {
+    const res = await bg({ type: 'apexViewer:comparisonCandidates', orgIds: orgId ? [orgId] : [], limit });
+    if (!res?.ok) throw new Error(res?.error || 'No se pudieron cargar los logs');
+    return { items: res.candidates || [], hasMore: Boolean(res.hasMore) };
+  }
+
+  async function selectComparisonLog() {
+    const [saved, auth] = await Promise.all([
+      bg({ type: 'listSavedOrgs' }),
+      bg({ type: 'auth:getStatuses' }).catch(() => null)
+    ]);
+    openComparisonSelector({
+      t,
+      loadCandidates: loadComparisonCandidates,
+      orgs: (saved?.orgs || []).map((org) => ({ ...org, authStatus: auth?.statuses?.[org.id] || 'expired' })),
+      initialOrgId: viewerContext.orgId,
+      comparisonEntry: getComparisonEntry(content, parsedFull),
+      onPick: async (candidate) => {
+        if (!parsedFull) return { accepted: false, reason: 'notReady' };
+        let raw = candidate.content;
+        if (raw == null && candidate.orgId && candidate.logId) {
+          const res = await bg({ type: 'debugLogs:getBody', orgId: candidate.orgId, logId: candidate.logId });
+          if (!res?.ok) throw new Error(res?.error || 'No se pudo cargar el log');
+          raw = String(res.body || '');
+        }
+        const parsedB = parseApexDebugLog(String(raw || ''));
+        const comparison = compareApexLogs(content, parsedFull, String(raw || ''), parsedB);
+        if (!comparison.compatible.ok) {
+          return {
+            accepted: false,
+            reason: 'differentClass',
+            source: candidate.content != null ? 'local' : 'remote',
+            expectedEntry: comparison.compatible.a,
+            actualEntry: comparison.compatible.b
+          };
+        }
+        comparisonState = {
+          comparison,
+          a: {
+            parsed: parsedFull, raw: content, environment: viewerContext.orgLabel || viewerContext.instanceUrl || '—',
+            entry: getComparisonEntry(content, parsedFull).name, execution: getComparisonEntry(content, parsedFull),
+            logId: viewerContext.logId || payload.logId || '', user: parsedFull.user?.name || ''
+          },
+          b: {
+            parsed: parsedB, raw: String(raw || ''), environment: candidate.environment || t('apexLogViewer.compare.localEnvironment'),
+            entry: getComparisonEntry(String(raw || ''), parsedB).name, execution: getComparisonEntry(String(raw || ''), parsedB),
+            logId: candidate.logId || candidate.title || '', user: parsedB.user?.name || candidate.meta?.user || ''
+          }
+        };
+        setComparisonTabVisible(true);
+        refreshComparisonResumeButton();
+        onTabSelect('comparison');
+        return { accepted: true };
+      }
+    });
+  }
+
+  compareBtn?.addEventListener('click', () => void selectComparisonLog());
+  document.getElementById('apexLogCompareReplace')?.addEventListener('click', () => void selectComparisonLog());
+  document.getElementById('apexLogCompareClose')?.addEventListener('click', () => {
+    comparisonState = null;
+    refreshComparisonResumeButton();
+    setComparisonTabVisible(false);
+    onTabSelect('summary');
   });
 
   backBtn?.addEventListener('click', () => {

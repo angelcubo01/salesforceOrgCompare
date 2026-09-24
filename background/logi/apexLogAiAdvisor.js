@@ -681,6 +681,34 @@ Never name internal tools in the summary (e.g. org_query, fetch_log_lines). Writ
 Tools (internal only): do NOT use org_query. Use fetch_log_lines / fetch_parsed_section / search_log only if the structured context is insufficient to write a useful summary.`;
 }
 
+/** Prompt específico para resumir una comparación ya calculada en el visor. */
+export function buildLogiComparisonSummarySystemPrompt(preferredLangCode, config) {
+  const persona = config.personaName || 'Logi';
+  const lang = getLogiLanguageOption(preferredLangCode);
+  const langLabel = `${lang.nameEn} (${lang.nativeName})`;
+  return `You are ${persona}, a Salesforce Apex debugging expert. Summarize a comparison between two executions of the same entry point.
+
+CRITICAL â€” reply language:
+- Write the ENTIRE summary in ${langLabel} [code=${lang.code}].
+
+Use the structured comparison context supplied to you. It includes a compact summary, aligned execution flow, differences, and line references for both executions.
+
+Answer in this exact order with short Markdown sections:
+1. **Resultado principal**: the demonstrated behavioral difference and outcome of each execution.
+2. **Primera divergencia**: earliest proven divergence, with references as Log A L<number> and Log B L<number> when available.
+3. **Evidencia**: concise evidence from both executions; include routes, SOQL/DML, callouts, limits, or errors only when relevant.
+4. **Causa probable**: clearly label this as an inference and never claim a condition value or branch without evidence.
+5. **PrÃ³ximas comprobaciones**: concrete checks for the developer.
+6. **InformaciÃ³n no demostrada**: what the logs do not prove.
+
+Rules:
+- Separate demonstrated facts from likely inferences and missing information.
+- Do not restate raw JSON or metadata blocks.
+- Do not invent Salesforce data, a branch, or a condition result.
+- Do not name internal tools. Do not ask questions or add a CTA.
+- Be concise, practical, and use the supplied comparison summary, differences, and flow before considering any local tool.`;
+}
+
 /**
  * One-shot summary turn (local tools only, counts as a new chat against usage limits).
  * @param {object} message
@@ -743,14 +771,19 @@ export async function handleLogiAdvisorSummarize(message) {
 
   /** @type {object[]} */
   const messages = Array.isArray(message.messages) ? message.messages : [];
-  const systemContent = buildLogiSummarySystemPrompt(preferredLang, parsedConfig);
+  const isComparisonSummary = message.comparisonSummary === true || Boolean(message.initialContext?.comparison);
+  const systemContent = isComparisonSummary
+    ? buildLogiComparisonSummarySystemPrompt(preferredLang, parsedConfig)
+    : buildLogiSummarySystemPrompt(preferredLang, parsedConfig);
   const contextBlock =
     message.initialContext != null
       ? `\n\nLog context (structured summary):\n${JSON.stringify(message.initialContext)}`
       : '';
 
   const langOpt = getLogiLanguageOption(preferredLang);
-  const userPrompt = `Summarize this Apex debug log now in ${langOpt.nameEn} (${langOpt.nativeName}) [code=${langOpt.code}]. Be concise and factual. Reply only in that language.`;
+  const userPrompt = isComparisonSummary
+    ? `Summarize this Apex log comparison now in ${langOpt.nameEn} (${langOpt.nativeName}) [code=${langOpt.code}]. Use the supplied comparison summary, differences, and aligned flow. Reply only in that language.`
+    : `Summarize this Apex debug log now in ${langOpt.nameEn} (${langOpt.nativeName}) [code=${langOpt.code}]. Be concise and factual. Reply only in that language.`;
 
   const apiMessages = [
     { role: 'system', content: systemContent + contextBlock },
@@ -779,7 +812,7 @@ export async function handleLogiAdvisorSummarize(message) {
     sfoc_log_id: logId.slice(0, 64),
     sfoc_session_key: hashLogiSessionKey(sessionKey),
     sfoc_is_new_chat: isFirstSummaryTurn,
-    sfoc_mode: 'summary'
+    sfoc_mode: isComparisonSummary ? 'comparison_summary' : 'summary'
   };
 
   try {

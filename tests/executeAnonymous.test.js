@@ -66,7 +66,7 @@ describe('parseExecuteAnonymousSoapResponse', () => {
     const parsed = parseExecuteAnonymousSoapResponse(xml);
     expect(parsed.compiled).toBe(false);
     expect(parsed.success).toBe(false);
-    expect(parsed.compileProblem).toContain('Unexpected token');
+    expect(parsed.compileProblem).toBe("Unexpected token ';'.");
     expect(parsed.line).toBe(3);
     expect(parsed.column).toBe(12);
   });

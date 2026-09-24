@@ -14,13 +14,9 @@ import {
 } from '../../shared/featureControls.js';
 import { getCachedFeatureControlsConfig } from '../../shared/posthogFeatureControlsFlag.js';
 import { getCurrentLang, t } from '../../shared/i18n.js';
-import { ACTION_ICONS, CATEGORY_ICONS, STATE_ICONS, createIcon, updateIcon } from './iconRegistry.js';
+import { ACTION_ICONS, CATEGORY_ICONS, STATE_ICONS, TOOL_ICONS, createIcon, updateIcon } from './iconRegistry.js';
 import { comparisonToggleIdForTool } from '../ui/appComparisonToggle.js';
-import {
-  MARKETING_CAPABILITIES,
-  MARKETING_STEPS,
-  MARKETING_TRUST_ITEMS
-} from './landingContentRegistry.js';
+import { MARKETING_STEPS } from './landingContentRegistry.js';
 import {
   WORKBENCH_CATEGORIES,
   WORKBENCH_WORKSPACES,
@@ -1060,7 +1056,6 @@ function createContextHeader() {
   const theme = makeIconButton('workbenchThemeBtn', themeIcon, t('workbench.action.theme'));
   theme.addEventListener('click', () => {
     document.getElementById('appThemeToggleInput')?.click();
-    requestAnimationFrame(syncWorkbenchHeaderState);
   });
   actions.appendChild(theme);
   main.appendChild(actions);
@@ -1232,6 +1227,8 @@ function syncFromLegacyNavigation(event = null) {
     activeWorkspaceId = null;
     activeTabId = null;
     activeCategoryId = 'home';
+    document.body.dataset.workbenchWorkspace = '';
+    document.body.dataset.workbenchTab = '';
   } else {
     const fromHistory = validHistorySelection(pendingHistorySelection || history.state?.sfocWorkbench, toolId);
     const route = fromHistory || getWorkspaceRouteForTool(toolId);
@@ -1240,6 +1237,11 @@ function syncFromLegacyNavigation(event = null) {
       activeWorkspaceId = route.workspaceId;
       activeTabId = route.tabId;
       activeCategoryId = getWorkspaceById(route.workspaceId)?.categoryId || 'home';
+      // Actualizar la variante visual en el mismo cambio de herramienta evita
+      // que controles exclusivos del comparator se vean durante el import
+      // asíncrono del adaptador del nuevo workspace.
+      document.body.dataset.workbenchWorkspace = activeWorkspaceId;
+      document.body.dataset.workbenchTab = activeTabId;
       if (selectionChanged) void applyWorkspaceTabVariant(activeWorkspaceId, activeTabId);
     }
   }
@@ -1353,12 +1355,6 @@ function createMarketingButton(id, labelKey, iconName, className, handler) {
   return button;
 }
 
-function marketingToolIsVisible(toolId) {
-  const route = getWorkspaceRouteForTool(toolId);
-  const tabInfo = route && getTabById(route.workspaceId, route.tabId);
-  return !!tabInfo && tabVisibility(tabInfo).visible;
-}
-
 function marketingComparatorIsAvailable() {
   const category = getCategoryById('comparator');
   const item = category?.directWorkspaceId ? getWorkspaceById(category.directWorkspaceId) : null;
@@ -1373,81 +1369,110 @@ function openComparatorFromLanding(event) {
 function renderMarketingCapabilities() {
   const grid = document.getElementById('workbenchCapabilityGrid');
   if (!grid) return;
-  const visible = MARKETING_CAPABILITIES.filter((capability) => capability.toolIds.some(marketingToolIsVisible));
-  const signature = `${getCurrentLang()}|${visible.map((item) => item.id).join('|')}`;
+  const seenTools = new Set();
+  const sections = WORKBENCH_CATEGORIES
+    .filter((category) => category.id !== 'home' && category.id !== 'favorites')
+    .map((category) => {
+      const tools = [];
+      for (const item of WORKBENCH_WORKSPACES.filter((workspace) => workspace.categoryId === category.id)) {
+        for (const tabInfo of visibleTabs(item)) {
+          const availability = tabVisibility(tabInfo);
+          if (availability.disabled || seenTools.has(tabInfo.toolId)) continue;
+          seenTools.add(tabInfo.toolId);
+          tools.push({ item, tabInfo });
+        }
+      }
+      return { category, tools };
+    })
+    .filter(({ tools }) => tools.length > 0);
+  const visible = sections.flatMap(({ tools }) => tools);
+  const signature = `${getCurrentLang()}|${sections.map(({ category, tools }) => `${category.id}:${tools.map(({ item, tabInfo }) => `${item.id}:${tabInfo.id}`).join(',')}`).join('|')}`;
   if (grid.dataset.renderSignature !== signature) {
     grid.dataset.renderSignature = signature;
     grid.replaceChildren();
-    for (const capability of visible) {
-      const card = el('article', `workbench-capability-card workbench-capability-card--${capability.tone} is-${capability.size}`);
-      card.dataset.capabilityId = capability.id;
-      const top = el('div', 'workbench-capability-top');
-      const icon = el('span', 'workbench-capability-icon');
-      icon.appendChild(createIcon(capability.icon, { size: 24 }));
-      top.appendChild(icon);
-      top.appendChild(el('span', 'workbench-capability-label', t(capability.labelKey)));
-      card.appendChild(top);
-      card.appendChild(el('h3', 'workbench-capability-title', t(capability.titleKey)));
-      card.appendChild(el('p', 'workbench-capability-description', t(capability.descriptionKey)));
-      grid.appendChild(card);
+    let cardIndex = 0;
+    for (const { category, tools } of sections) {
+      const section = el('section', 'workbench-tool-catalog-section');
+      section.setAttribute('aria-label', categoryLabel(category.id));
+      const heading = el('div', 'workbench-tool-catalog-section-head');
+      const sectionIcon = el('span', 'workbench-tool-catalog-section-icon');
+      sectionIcon.appendChild(createIcon(CATEGORY_ICONS[category.id] || category.icon, { size: 19 }));
+      heading.appendChild(sectionIcon);
+      heading.appendChild(el('h3', '', categoryLabel(category.id)));
+      heading.appendChild(el('span', 'workbench-tool-catalog-section-count', String(tools.length)));
+      section.appendChild(heading);
+      const cards = el('div', 'workbench-tool-catalog-grid');
+      for (const { item, tabInfo } of tools) {
+        const card = el('button', 'workbench-tool-card');
+        card.type = 'button';
+        card.dataset.category = item.categoryId;
+        card.style.setProperty('--landing-delay', `${Math.min(cardIndex++, 11) * 42}ms`);
+        card.setAttribute('aria-label', `${t('workbench.marketing.catalog.open')}: ${toolLabel(tabInfo.toolId)}`);
+        card.addEventListener('click', () => {
+          void navigateToWorkspaceTab(item.id, tabInfo.id, { userInitiated: true });
+        });
+        const top = el('div', 'workbench-tool-card-top');
+        const icon = el('span', 'workbench-tool-card-icon');
+        icon.appendChild(createIcon(TOOL_ICONS[tabInfo.toolId] || item.icon, { size: 22 }));
+        top.appendChild(icon);
+        top.appendChild(el('span', 'workbench-tool-card-category', categoryLabel(item.categoryId)));
+        card.appendChild(top);
+        card.appendChild(el('span', 'workbench-tool-card-title', toolLabel(tabInfo.toolId)));
+        card.appendChild(el('span', 'workbench-tool-card-description', translatedDescription(item)));
+        const action = el('span', 'workbench-tool-card-action', t('workbench.marketing.catalog.open'));
+        action.appendChild(createIcon(ACTION_ICONS.forward, { size: 16 }));
+        card.appendChild(action);
+        cards.appendChild(card);
+      }
+      section.appendChild(cards);
+      grid.appendChild(section);
     }
   }
   document.getElementById('workbenchCapabilities')?.toggleAttribute('hidden', visible.length === 0);
+  const count = document.getElementById('workbenchCapabilityCount');
+  if (count) count.textContent = t('workbench.marketing.catalog.count', { count: visible.length });
   const comparatorAvailable = marketingComparatorIsAvailable();
   for (const button of document.querySelectorAll('[data-marketing-action="compare"]')) {
-    button.disabled = !comparatorAvailable;
-    button.setAttribute('aria-disabled', comparatorAvailable ? 'false' : 'true');
-    button.title = comparatorAvailable ? '' : t('workbench.marketing.comparatorUnavailable');
+    button.hidden = !comparatorAvailable;
   }
 }
 
 function createMarketingPreview() {
-  const preview = el('div', 'workbench-marketing-preview');
+  const preview = el('div', 'workbench-marketing-preview workbench-marketing-preview--commercial');
   preview.setAttribute('aria-hidden', 'true');
   const chrome = el('div', 'workbench-preview-chrome');
   const dots = el('span', 'workbench-preview-dots');
   dots.append(el('i'), el('i'), el('i'));
   chrome.appendChild(dots);
-  chrome.appendChild(el('span', 'workbench-preview-name', t('workbench.marketing.preview.label')));
+  chrome.appendChild(el('span', 'workbench-preview-name', t('workbench.marketing.preview.commercialLabel')));
   const ready = el('span', 'workbench-preview-ready');
   ready.appendChild(createIcon(STATE_ICONS.success, { size: 16 }));
-  ready.appendChild(el('span', '', t('workbench.marketing.preview.ready')));
+  ready.appendChild(el('span', '', t('workbench.marketing.preview.commercialReady')));
   chrome.appendChild(ready);
   preview.appendChild(chrome);
 
-  const orgs = el('div', 'workbench-preview-orgs');
-  const source = el('span', 'workbench-preview-org workbench-preview-org--sandbox');
-  source.appendChild(createIcon(STATE_ICONS.sandbox, { size: 16 }));
-  source.appendChild(el('span', '', t('workbench.marketing.preview.source')));
-  const target = el('span', 'workbench-preview-org workbench-preview-org--production');
-  target.appendChild(createIcon(STATE_ICONS.production, { size: 16 }));
-  target.appendChild(el('span', '', t('workbench.marketing.preview.target')));
-  orgs.appendChild(source);
-  orgs.appendChild(createIcon('arrows-diff', { size: 20, className: 'workbench-preview-swap' }));
-  orgs.appendChild(target);
-  preview.appendChild(orgs);
-
-  const editor = el('div', 'workbench-preview-editor');
-  const file = el('div', 'workbench-preview-file');
-  file.appendChild(createIcon('file-code', { size: 16 }));
-  file.appendChild(el('span', '', 'AccountService.cls'));
-  editor.appendChild(file);
-  for (const [number, type, code] of [
-    ['18', 'context', 'public with sharing class AccountService {'],
-    ['19', 'removed', '-  return accounts;'],
-    ['19', 'added', '+  return accounts.deepClone();'],
-    ['20', 'context', '}']
+  const stage = el('div', 'workbench-preview-commercial-stage');
+  stage.appendChild(el('span', 'workbench-preview-orbit workbench-preview-orbit--outer'));
+  stage.appendChild(el('span', 'workbench-preview-orbit workbench-preview-orbit--inner'));
+  const core = el('span', 'workbench-preview-commercial-core');
+  core.appendChild(createIcon('arrows-diff', { size: 30 }));
+  stage.appendChild(core);
+  for (const [iconName, tone] of [
+    ['search', 'search'],
+    ['arrows-diff', 'compare'],
+    ['circle-check', 'done']
   ]) {
-    const line = el('div', `workbench-preview-line is-${type}`);
-    line.appendChild(el('span', 'workbench-preview-line-number', number));
-    line.appendChild(el('code', '', code));
-    editor.appendChild(line);
+    const signal = el('span', `workbench-preview-signal workbench-preview-signal--${tone}`);
+    signal.appendChild(createIcon(iconName, { size: 18 }));
+    stage.appendChild(signal);
   }
-  preview.appendChild(editor);
-  const summary = el('div', 'workbench-preview-summary');
-  summary.appendChild(el('span', 'workbench-preview-summary-count', '3'));
-  summary.appendChild(el('span', '', t('workbench.marketing.preview.differences')));
-  preview.appendChild(summary);
+  preview.appendChild(stage);
+
+  const copy = el('div', 'workbench-preview-commercial-copy');
+  copy.appendChild(el('span', 'workbench-preview-commercial-kicker', t('workbench.marketing.preview.commercialKicker')));
+  copy.appendChild(el('strong', '', t('workbench.marketing.preview.commercialTitle')));
+  copy.appendChild(el('span', '', t('workbench.marketing.preview.commercialLead')));
+  preview.appendChild(copy);
   return preview;
 }
 
@@ -1522,12 +1547,16 @@ function decorateLanding() {
   capabilities.id = 'workbenchCapabilities';
   capabilities.setAttribute('aria-labelledby', 'workbenchCapabilitiesTitle');
   const capabilitiesHeader = el('div', 'workbench-marketing-section-header');
-  const capabilitiesTitle = el('h2', '', t('workbench.marketing.capabilities.title'));
+  const capabilitiesTitle = el('h2', '', t('workbench.marketing.catalog.title'));
   capabilitiesTitle.id = 'workbenchCapabilitiesTitle';
   capabilitiesHeader.appendChild(capabilitiesTitle);
-  capabilitiesHeader.appendChild(el('p', '', t('workbench.marketing.capabilities.lead')));
+  capabilitiesHeader.appendChild(el('p', '', t('workbench.marketing.catalog.lead')));
+  const capabilitiesCount = el('p', 'workbench-tool-catalog-count');
+  capabilitiesCount.id = 'workbenchCapabilityCount';
+  capabilitiesCount.setAttribute('aria-live', 'polite');
+  capabilitiesHeader.appendChild(capabilitiesCount);
   capabilities.appendChild(capabilitiesHeader);
-  const capabilityGrid = el('div', 'workbench-capability-grid');
+  const capabilityGrid = el('div', 'workbench-tool-catalog');
   capabilityGrid.id = 'workbenchCapabilityGrid';
   capabilities.appendChild(capabilityGrid);
   inner.insertBefore(capabilities, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
@@ -1552,44 +1581,7 @@ function decorateLanding() {
     steps.appendChild(item);
   });
   workflow.appendChild(steps);
-  inner.insertBefore(workflow, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
-
-  const trust = el('aside', 'workbench-trust-band');
-  trust.setAttribute('aria-labelledby', 'workbenchTrustTitle');
-  const trustCopy = el('div', 'workbench-trust-copy');
-  const trustTitle = el('h2', '', t('workbench.marketing.trust.title'));
-  trustTitle.id = 'workbenchTrustTitle';
-  trustCopy.appendChild(trustTitle);
-  trustCopy.appendChild(el('p', '', t('workbench.marketing.trust.lead')));
-  trust.appendChild(trustCopy);
-  const trustItems = el('div', 'workbench-trust-items');
-  for (const item of MARKETING_TRUST_ITEMS) {
-    const badge = el('span', `workbench-trust-badge workbench-trust-badge--${item.tone}`);
-    badge.appendChild(createIcon(item.icon, { size: 18 }));
-    badge.appendChild(el('span', '', t(item.labelKey)));
-    trustItems.appendChild(badge);
-  }
-  trust.appendChild(trustItems);
-  inner.insertBefore(trust, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
-
-  const finalCta = el('section', 'workbench-final-cta');
-  finalCta.setAttribute('aria-labelledby', 'workbenchFinalCtaTitle');
-  const finalCopy = el('div', 'workbench-final-cta-copy');
-  const finalTitle = el('h2', '', t('workbench.marketing.final.title'));
-  finalTitle.id = 'workbenchFinalCtaTitle';
-  finalCopy.appendChild(finalTitle);
-  finalCopy.appendChild(el('p', '', t('workbench.marketing.final.lead')));
-  finalCta.appendChild(finalCopy);
-  const finalActions = el('div', 'workbench-final-cta-actions');
-  const finalCompare = createMarketingButton(
-    'workbenchMarketingFinalCompare', 'workbench.marketing.primary', 'arrows-diff',
-    'is-primary', openComparatorFromLanding
-  );
-  finalCompare.dataset.marketingAction = 'compare';
-  finalActions.appendChild(finalCompare);
-  finalActions.appendChild(createMarketingSearchButton('workbench-marketing-search--compact'));
-  finalCta.appendChild(finalActions);
-  inner.insertBefore(finalCta, inner.querySelector('.app-landing-help-hint, .app-landing-footer'));
+  inner.insertBefore(workflow, capabilities);
 
   renderMarketingCapabilities();
 }
@@ -1695,6 +1687,7 @@ export async function setupWorkbenchShell() {
 
   document.addEventListener('sfoc:navigationchange', syncFromLegacyNavigation);
   document.addEventListener('sfoc:artifact-ui-applied', syncFromLegacyNavigation);
+  document.addEventListener('sfoc:theme-ui-synced', syncWorkbenchHeaderState);
   document.addEventListener('sfoc:tool-recents-change', () => {
     navigationRenderSignature = '';
     renderWorkbenchNavigation();

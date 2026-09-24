@@ -472,6 +472,16 @@ function linkifyTextSegment(text) {
   const lRangeRe = /\b(L)(\d+)\s*[-–—]\s*(L)?(\d+)\b/g;
   const lPrefixRe = /\b(L)(\d+)\b/g;
 
+  /** @param {string} source @param {number} offset */
+  const comparisonSideAt = (source, offset) => {
+    const before = source.slice(Math.max(0, offset - 24), offset);
+    const match = /\b(?:log|registro)\s+([ab])\s*$/i.exec(before);
+    return match ? match[1].toLowerCase() : '';
+  };
+
+  /** @param {string} side */
+  const sideAttr = (side) => (side === 'a' || side === 'b' ? ` data-log-side="${side}"` : '');
+
   /**
    * @param {string} match
    * @param {number} offset
@@ -509,14 +519,14 @@ function linkifyTextSegment(text) {
     if (!Number.isFinite(s) || !Number.isFinite(e) || s < 1 || e < 1) return match;
     const a = Math.min(s, e);
     const b = Math.max(s, e);
-    return `<button type="button" class="logi-md-line-ref" data-start-line="${a}" data-end-line="${b}">${p1}${start}-${end}</button>`;
+    return `<button type="button" class="logi-md-line-ref"${sideAttr(comparisonSideAt(out, offset))} data-start-line="${a}" data-end-line="${b}">${p1}${start}-${end}</button>`;
   });
 
   out = out.replace(lPrefixRe, (match, prefix, line, offset) => {
     if (isApexSourceLineContext(out, offset, offset + match.length)) return match;
     const n = Number(line);
     if (!Number.isFinite(n) || n < 1) return match;
-    return `<button type="button" class="logi-md-line-ref" data-line="${n}">${prefix}${line}</button>`;
+    return `<button type="button" class="logi-md-line-ref"${sideAttr(comparisonSideAt(out, offset))} data-line="${n}">${prefix}${line}</button>`;
   });
 
   return out;

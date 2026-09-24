@@ -67,6 +67,7 @@ describe('writeLogiSession / readLogiSession', () => {
       updatedAt: Date.now(),
       pending: true,
       thinkingStatus: 'thinking',
+      thinkingStartedAt: 123456789,
       queuedCount: 1
     });
 
@@ -76,6 +77,7 @@ describe('writeLogiSession / readLogiSession', () => {
     expect(session?.iteration).toBe(2);
     expect(session?.pending).toBe(true);
     expect(session?.thinkingStatus).toBe('thinking');
+    expect(session?.thinkingStartedAt).toBe(123456789);
     expect(session?.queuedCount).toBe(1);
   });
 

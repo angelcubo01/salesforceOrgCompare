@@ -1,4 +1,4 @@
-/** @typedef {'summary'|'errors'|'timeline'|'text'|'database'|'analysis'|'network'|'platform'} ApexLogTabId */
+/** @typedef {'summary'|'errors'|'timeline'|'text'|'database'|'analysis'|'network'|'platform'|'comparison'} ApexLogTabId */
 
 const SVG_DOC = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/></svg>`;
 
@@ -12,4 +12,5 @@ export const APEX_LOG_TAB_ICONS = {
   analysis: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v6"/><path d="M6 9h12"/><path d="M8 9v4"/><path d="M16 9v4"/><path d="M6 17h6"/><path d="M14 17h4"/></svg>`,
   network: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
   platform: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 14h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M10 10h4v4h-4z"/></svg>`
+  ,comparison: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h7M13 7h7M4 17h7M13 17h7"/><path d="m9 4 3 3-3 3M15 14l-3 3 3 3"/></svg>`
 };

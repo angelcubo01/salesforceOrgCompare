@@ -160,6 +160,15 @@ describe('onboarding i18n keys', () => {
         expect(t(`${prefix}.step1`)).not.toBe(`${prefix}.step1`);
       }
       expect(t('onboarding.gotIt')).not.toBe('onboarding.gotIt');
+      for (const key of [
+        'onboarding.common.overviewLabel', 'onboarding.common.contextLabel',
+        'onboarding.common.prepareLabel', 'onboarding.common.actionLabel',
+        'onboarding.common.resultLabel', 'onboarding.common.stepFocus',
+        'onboarding.common.overviewNote', 'onboarding.common.actionNote',
+        'onboarding.common.resultNote'
+      ]) {
+        expect(t(key), `${lang}:${key}`).not.toBe(key);
+      }
     });
 
     it(`claves help.tool.* en ${lang}`, () => {

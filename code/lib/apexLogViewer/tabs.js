@@ -1,6 +1,6 @@
 import { APEX_LOG_TAB_ICONS } from './tabIcons.js';
 
-/** @typedef {'summary'|'errors'|'timeline'|'text'|'database'|'analysis'|'network'|'platform'} ApexLogTabId */
+/** @typedef {'summary'|'errors'|'timeline'|'text'|'database'|'analysis'|'network'|'platform'|'comparison'} ApexLogTabId */
 
 
 
@@ -9,6 +9,8 @@ import { APEX_LOG_TAB_ICONS } from './tabIcons.js';
 export const APEX_LOG_TABS = [
 
   { id: 'summary', i18n: 'apexLogViewer.tab.summary', tooltipKey: 'apexLogViewer.tooltip.summary' },
+
+  { id: 'comparison', i18n: 'apexLogViewer.tab.comparison', tooltipKey: 'apexLogViewer.tab.comparison' },
 
   { id: 'errors', i18n: 'apexLogViewer.tab.errors', tooltipKey: 'apexLogViewer.tooltip.errors' },
 
@@ -32,7 +34,7 @@ export const APEX_LOG_TABS = [
 
 export const APEX_LOG_TAB_GROUPS = [
 
-  { labelKey: 'apexLogViewer.tabGroup.overview', tabs: ['summary', 'errors'] },
+  { labelKey: 'apexLogViewer.tabGroup.overview', tabs: ['summary', 'comparison', 'errors'] },
 
   { labelKey: 'apexLogViewer.tabGroup.navigation', tabs: ['timeline', 'text'] },
 
@@ -118,11 +120,18 @@ export function mountApexLogTabs(navEl, labelFn, onSelect, t) {
 
       btn.dataset.tab = tab.id;
 
+      btn.id = `apexLogTab-${tab.id}`;
+
       btn.setAttribute('role', 'tab');
 
       btn.setAttribute('aria-selected', tab.id === DEFAULT_TAB ? 'true' : 'false');
 
+      btn.setAttribute('aria-controls', `apexLogPanel-${tab.id}`);
+
+      btn.tabIndex = tab.id === DEFAULT_TAB ? 0 : -1;
+
       btn.title = t(tab.tooltipKey);
+      if (tab.id === 'comparison') btn.hidden = true;
 
 
 
@@ -145,6 +154,21 @@ export function mountApexLogTabs(navEl, labelFn, onSelect, t) {
       btn.append(icon, label);
 
       btn.addEventListener('click', () => onSelect(tab.id));
+
+      btn.addEventListener('keydown', (event) => {
+        const tabs = [...navEl.querySelectorAll('.apex-log-tab')];
+        const index = tabs.indexOf(btn);
+        if (index < 0) return;
+        let nextIndex = -1;
+        if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') nextIndex = 0;
+        else if (event.key === 'End') nextIndex = tabs.length - 1;
+        if (nextIndex < 0) return;
+        event.preventDefault();
+        tabs[nextIndex].focus();
+        onSelect(tabs[nextIndex].dataset.tab);
+      });
 
       groupEl.appendChild(btn);
 
@@ -178,6 +202,8 @@ export function setActiveApexLogTab(activeId) {
 
     el.setAttribute('aria-selected', on ? 'true' : 'false');
 
+    el.tabIndex = on ? 0 : -1;
+
   });
 
   document.querySelectorAll('.apex-log-panel').forEach((el) => {
@@ -188,8 +214,38 @@ export function setActiveApexLogTab(activeId) {
 
     el.toggleAttribute('hidden', !on);
 
+    if (on) el.setAttribute('aria-labelledby', `apexLogTab-${activeId}`);
+
   });
 
+}
+
+export function setComparisonTabVisible(visible) {
+  const tab = document.getElementById('apexLogTab-comparison');
+  if (tab) tab.hidden = !visible;
+}
+
+/** Indicadores discretos para dirigir el diagnóstico sin sobrecargar las pestañas. */
+export function updateApexLogTabBadges(parsed) {
+  const counts = {
+    errors: (parsed?.issues || []).filter((item) => item.type === 'error').length,
+    database: (parsed?.soql || []).length + (parsed?.dml || []).length,
+    network: (parsed?.callouts || []).length + (parsed?.userDebug || []).length,
+    platform: (parsed?.validations || []).length + (parsed?.workflows || []).length
+  };
+  for (const [tabId, count] of Object.entries(counts)) {
+    const tab = document.getElementById(`apexLogTab-${tabId}`);
+    if (!tab) continue;
+    tab.querySelector('.apex-log-tab-badge')?.remove();
+    const label = tab.querySelector('.apex-log-tab-label')?.textContent || tabId;
+    tab.setAttribute('aria-label', count ? `${label}: ${count}` : label);
+    if (!count) continue;
+    const badge = document.createElement('span');
+    badge.className = `apex-log-tab-badge${tabId === 'errors' ? ' apex-log-tab-badge--danger' : ''}`;
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.setAttribute('aria-hidden', 'true');
+    tab.appendChild(badge);
+  }
 }
 
 

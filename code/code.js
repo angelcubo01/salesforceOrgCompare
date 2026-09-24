@@ -231,8 +231,6 @@ async function init() {
   applyFeatureControlsUi();
   if (workbenchSetupPromise) await workbenchSetupPromise;
   else await iconSpritePromise;
-  revealAppNavigation();
-  void refreshLandingToolRecents();
   void maybeShowToolOnboarding(getSelectedArtifactType());
 
   ensureExtensionExceptionReporting();
@@ -273,9 +271,10 @@ async function init() {
     }
   });
 
-  await loadSavedOrgs();
-  await loadPinnedKeys();
-  await loadItemsFromStorage();
+  // Estos datos forman el estado visible inicial. No se puede cerrar el
+  // splash hasta que los selectores de entorno, la lista e historial estén
+  // hidratados y renderizados.
+  await Promise.all([loadSavedOrgs(), loadPinnedKeys(), loadItemsFromStorage()]);
   prunePinnedKeysToSavedItems();
 
   applyArtifactTypeUi();
@@ -335,29 +334,35 @@ async function init() {
   }
   renderEditor();
   refreshGeneratePackageXmlTypes();
-  void refreshMetadataTypeComparePanel();
-  void refreshApexTestsPanel();
-  void refreshAnonymousApexPanel();
-  void refreshOrgLimitsPanel();
-  void refreshEnvironmentStatusPanel();
-  void refreshDeployStatusPanel();
-  void refreshPermissionDiffPanel();
-  void refreshQueryExplorerPanel();
-  void refreshRestExplorerPanel();
-  void refreshObjectDescribePanel();
-  void refreshDataWorkbenchPanel();
-  void refreshBulkJobMonitorPanel();
-  void refreshEventMonitorPanel();
-  void refreshDebugLogBrowserPanel();
-  void refreshApexCoverageComparePanel();
-  void refreshCustomSettingsComparePanel();
-  void refreshCustomMetadataComparePanel();
-  void refreshRecordComparePanel();
-  void refreshSetupAuditTrailPanel();
-  void refreshFieldHistoryPanel();
-  void refreshQuickEditPanel();
-  void refreshLightningQuickEditPanel();
-  refreshDependencyExplorerPanel();
+  // Cada panel decide internamente si es el activo. Esperar sus promesas evita
+  // enseñar una aplicación a medio hidratar, sin bloquear por fallos aislados
+  // de un servicio o de un entorno.
+  await Promise.allSettled([
+    refreshLandingToolRecents(),
+    refreshMetadataTypeComparePanel(),
+    refreshApexTestsPanel(),
+    refreshAnonymousApexPanel(),
+    refreshOrgLimitsPanel(),
+    refreshEnvironmentStatusPanel(),
+    refreshDeployStatusPanel(),
+    refreshPermissionDiffPanel(),
+    refreshQueryExplorerPanel(),
+    refreshRestExplorerPanel(),
+    refreshObjectDescribePanel(),
+    refreshDataWorkbenchPanel(),
+    refreshBulkJobMonitorPanel(),
+    refreshEventMonitorPanel(),
+    refreshDebugLogBrowserPanel(),
+    refreshApexCoverageComparePanel(),
+    refreshCustomSettingsComparePanel(),
+    refreshCustomMetadataComparePanel(),
+    refreshRecordComparePanel(),
+    refreshSetupAuditTrailPanel(),
+    refreshFieldHistoryPanel(),
+    refreshQuickEditPanel(),
+    refreshLightningQuickEditPanel(),
+    Promise.resolve(refreshDependencyExplorerPanel())
+  ]);
   setupResizable();
   setupCompareListToolbar();
   setupDownloadAll();
@@ -381,4 +386,12 @@ async function init() {
   }, 600000);
 }
 
-init();
+init()
+  .catch((error) => {
+    // El splash nunca debe dejar la aplicación inaccesible ante un fallo de
+    // arranque; los paneles mostrarán su propio estado de error al abrirlos.
+    console.error('[sfoc] app bootstrap failed', error);
+  })
+  .finally(() => {
+    requestAnimationFrame(() => revealAppNavigation());
+  });

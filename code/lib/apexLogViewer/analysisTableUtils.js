@@ -84,7 +84,7 @@ export function normalizeDmlOperation(op) {
 export function mountSegmentControl(container, active, options, onSelect) {
   if (!container) return;
   container.replaceChildren();
-  container.className = 'apex-log-segment';
+  container.classList.add('apex-log-segment');
   for (const opt of options) {
     const btn = document.createElement('button');
     btn.type = 'button';

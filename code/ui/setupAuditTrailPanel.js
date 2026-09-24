@@ -20,7 +20,7 @@ let currentPage = 1;
 let lastLoadSignature = '';
 let dateRangePicker = null;
 let appliedFilters = { user: '', section: '', action: '', text: '' };
-let appliedDraftSignature = '';
+let filterChangeTimer = null;
 const pagination = createTablePagination({ initialPageSize: 25 });
 
 function getFilterElements() {
@@ -31,8 +31,6 @@ function getFilterElements() {
     section: document.getElementById('setupAuditSectionFilter'),
     action: document.getElementById('setupAuditActionFilter'),
     text: document.getElementById('setupAuditTextFilter'),
-    applyFilters: document.getElementById('setupAuditApplyFiltersBtn'),
-    resetFilters: document.getElementById('setupAuditResetFiltersBtn'),
     since: document.getElementById('setupAuditSince'),
     until: document.getElementById('setupAuditUntil'),
     pageSize: document.getElementById('setupAuditPageSize'),
@@ -94,47 +92,35 @@ function captureDraftFilters() {
   };
 }
 
-function captureDraftSignature() {
+function hasValidDateRange() {
   const { since, until } = getFilterElements();
-  return JSON.stringify({
-    ...captureDraftFilters(),
-    since: String(since?.value || ''),
-    until: dateRangePicker?.until?.isNowMode ? 'salesforce-now' : String(until?.value || '')
-  });
-}
-
-function updateFilterActionState() {
-  const { applyFilters, since, until } = getFilterElements();
-  if (!applyFilters) return;
-  const datesValid = Boolean(toUtcIsoFromLocalDateTime(since?.value))
+  return Boolean(toUtcIsoFromLocalDateTime(since?.value))
     && (dateRangePicker?.until?.isNowMode || isValidUtcRange(
       toUtcIsoFromLocalDateTime(since?.value),
       toUtcIsoFromLocalDateTime(until?.value)
     ));
-  applyFilters.disabled = !datesValid || captureDraftSignature() === appliedDraftSignature;
 }
 
-async function applyDraftFilters() {
+function applyCurrentFilters() {
   appliedFilters = captureDraftFilters();
-  appliedDraftSignature = captureDraftSignature();
   currentPage = 1;
-  lastLoadSignature = '';
-  updateFilterActionState();
-  await refreshSetupAuditTrailPanel();
-}
-
-function resetDraftFilters() {
-  const { user, section, action, text } = getFilterElements();
-  if (user) user.value = '';
-  if (section) section.value = '';
-  if (action) action.value = '';
-  if (text) text.value = '';
-  populateActionOptions(lastRows);
-  appliedFilters = captureDraftFilters();
-  appliedDraftSignature = captureDraftSignature();
-  currentPage = 1;
-  updateFilterActionState();
   renderRows();
+}
+
+function scheduleClientFilterUpdate(delay = 0) {
+  clearTimeout(filterChangeTimer);
+  filterChangeTimer = setTimeout(applyCurrentFilters, delay);
+}
+
+function scheduleDateRangeReload() {
+  if (!hasValidDateRange()) return;
+  clearTimeout(filterChangeTimer);
+  filterChangeTimer = setTimeout(() => {
+    appliedFilters = captureDraftFilters();
+    currentPage = 1;
+    lastLoadSignature = '';
+    void refreshSetupAuditTrailPanel();
+  }, 180);
 }
 
 function populateUserOptions(rows) {
@@ -166,7 +152,14 @@ function populateUserOptions(rows) {
     opt.title = entry.key;
     user.appendChild(opt);
   }
-  if ([...user.options].some((o) => o.value === current)) user.value = current;
+  if (current && ![...user.options].some((o) => o.value === current)) {
+    const retained = document.createElement('option');
+    retained.value = current;
+    retained.textContent = current;
+    retained.title = current;
+    user.appendChild(retained);
+  }
+  if (current) user.value = current;
 }
 
 function populateSectionOptions(rows) {
@@ -187,7 +180,13 @@ function populateSectionOptions(rows) {
     opt.textContent = value;
     section.appendChild(opt);
   }
-  if ([...section.options].some((o) => o.value === current)) section.value = current;
+  if (current && ![...section.options].some((o) => o.value === current)) {
+    const retained = document.createElement('option');
+    retained.value = current;
+    retained.textContent = current;
+    section.appendChild(retained);
+  }
+  if (current) section.value = current;
 }
 
 function populateActionOptions(rows) {
@@ -223,7 +222,13 @@ function populateActionOptions(rows) {
     action.appendChild(opt);
   }
   action.disabled = false;
-  if ([...action.options].some((o) => o.value === current)) action.value = current;
+  if (current && ![...action.options].some((o) => o.value === current)) {
+    const retained = document.createElement('option');
+    retained.value = current;
+    retained.textContent = current;
+    action.appendChild(retained);
+  }
+  if (current) action.value = current;
 }
 
 function updatePaginationUi(totalFilteredRows) {
@@ -384,37 +389,26 @@ export async function refreshSetupAuditTrailPanel() {
 }
 
 export function setupSetupAuditTrailPanel() {
-  const { user, section, action, text, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, applyFilters, resetFilters } = getFilterElements();
-  const onDraftChange = () => updateFilterActionState();
+  const { user, section, action, text, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput } = getFilterElements();
   if (user)
-    user.addEventListener('change', onDraftChange);
+    user.addEventListener('change', () => scheduleClientFilterUpdate());
   if (section)
     section.addEventListener('change', () => {
       if (action) action.value = '';
       populateActionOptions(lastRows);
-      onDraftChange();
+      scheduleClientFilterUpdate();
     });
   if (action)
-    action.addEventListener('change', onDraftChange);
+    action.addEventListener('change', () => scheduleClientFilterUpdate());
   if (text)
-    text.addEventListener('input', onDraftChange);
+    text.addEventListener('input', () => scheduleClientFilterUpdate(180));
   dateRangePicker = createDateTimeRangePicker({
     sinceInput: since,
     untilInput: until,
     sinceLabel: t('setupAudit.filterSince'),
     untilLabel: t('setupAudit.filterUntil'),
-    onDraftChange
+    onDraftChange: scheduleDateRangeReload
   });
-  for (const field of [user, section, action, text, since, until]) {
-    field?.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        if (!applyFilters?.disabled) void applyDraftFilters();
-      }
-    });
-  }
-  applyFilters?.addEventListener('click', () => void applyDraftFilters());
-  resetFilters?.addEventListener('click', resetDraftFilters);
   if (pageSize)
     pageSize.addEventListener('change', () => {
       pagination.setPageSize(pageSize.value, applyClientFilters(lastRows).length);
@@ -446,7 +440,6 @@ export function setupSetupAuditTrailPanel() {
     renderRows();
   });
   void ensureDefaultDateRange().then(() => {
-    if (!appliedDraftSignature) appliedDraftSignature = captureDraftSignature();
-    updateFilterActionState();
+    appliedFilters = captureDraftFilters();
   });
 }

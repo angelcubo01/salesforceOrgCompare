@@ -2,7 +2,7 @@ import { isLogiQuickActionId } from './apexLogAiContext.js';
 
 export const LOGI_SESSION_STORAGE_KEY = 'sfocLogiAdvisorSessions';
 
-/** @typedef {{ role: string, content?: string, quickActionId?: string, displayText?: string, lineRef?: { startLine: number, endLine: number, logId: string }, quoteRef?: { content: string }, tool_calls?: object[], tool_call_id?: string, name?: string }} LogiChatMessage */
+/** @typedef {{ role: string, content?: string, quickActionId?: string, displayText?: string, lineRef?: { startLine: number, endLine: number, logId: string }, quoteRef?: { content: string }, tool_calls?: object[], tool_call_id?: string, name?: string, turnId?: string }} LogiChatMessage */
 
 /**
  * @typedef {object} LogiAdvisorSession
@@ -12,6 +12,7 @@ export const LOGI_SESSION_STORAGE_KEY = 'sfocLogiAdvisorSessions';
  * @property {number} updatedAt
  * @property {boolean} [pending]
  * @property {string} [thinkingStatus]
+ * @property {number} [thinkingStartedAt]
  * @property {number} [queuedCount]
  * @property {string} [usageLimitReason]
  */
@@ -144,6 +145,7 @@ function normalizeSession(raw) {
           if (Array.isArray(msg.tool_calls)) out.tool_calls = msg.tool_calls;
           if (msg.tool_call_id != null) out.tool_call_id = String(msg.tool_call_id);
           if (msg.name != null) out.name = String(msg.name);
+          if (msg.turnId != null && String(msg.turnId).trim()) out.turnId = String(msg.turnId).trim().slice(0, 96);
           return out;
         })
         .filter(Boolean)
@@ -155,6 +157,9 @@ function normalizeSession(raw) {
   const updatedAt = Number.isFinite(Number(o.updatedAt)) ? Number(o.updatedAt) : Date.now();
   const pending = o.pending === true;
   const thinkingStatus = o.thinkingStatus != null ? String(o.thinkingStatus) : '';
+  const thinkingStartedAt = Number.isFinite(Number(o.thinkingStartedAt))
+    ? Math.max(0, Number(o.thinkingStartedAt))
+    : undefined;
   const queuedCount = Number.isFinite(Number(o.queuedCount))
     ? Math.max(0, Math.floor(Number(o.queuedCount)))
     : 0;
@@ -170,6 +175,7 @@ function normalizeSession(raw) {
     updatedAt,
     pending,
     thinkingStatus,
+    thinkingStartedAt,
     queuedCount,
     usageLimitReason
   };

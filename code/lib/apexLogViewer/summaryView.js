@@ -121,13 +121,34 @@ function renderLimitsPanel(ctx, t) {
     .map((l) => {
       const rowTone =
         l.pct >= 80 ? ' apex-log-summary-limit-row--warn' : l.pct >= 50 ? ' apex-log-summary-limit-row--caution' : '';
-      return `<div class="apex-log-summary-limit-row${rowTone}">
+      return `<div class="apex-log-summary-limit-row${rowTone}"${l.line ? ` data-line="${l.line}" tabindex="0" role="button"` : ''}>
         <span class="apex-log-summary-limit-key">${escapeHtml(l.key)}</span>
         <div class="apex-log-summary-limit-bar"><div class="apex-log-summary-limit-fill apex-log-summary-limit-fill--${limitTone(l.pct)}" style="width:${Math.min(100, l.pct)}%"></div></div>
         <span class="apex-log-summary-limit-val">${l.used} / ${l.max}</span>
       </div>`;
     })
     .join('');
+}
+
+/** Da prioridad a los eventos lentos y a patrones repetidos que se pueden investigar. */
+function renderHighlightsPanel(ctx, t) {
+  const items = [];
+  for (const event of ctx.slowest.filter((row) => row.line).slice(0, 3)) {
+    const label = event.label || event.name || event.kind || t('apexLogViewer.summary.slowestOp');
+    items.push(`<button type="button" class="apex-log-summary-highlight" data-line="${event.line}">
+      <span class="apex-log-summary-highlight-kicker">${escapeHtml(t('apexLogViewer.summary.topSlow'))}</span>
+      <span class="apex-log-summary-highlight-body">${escapeHtml(label)} · ${escapeHtml(formatMs(event.durationMs || 0))}</span>
+    </button>`);
+  }
+  if (ctx.duplicateGroups) {
+    items.push(`<button type="button" class="apex-log-summary-highlight" data-tab="database">
+      <span class="apex-log-summary-highlight-kicker">${escapeHtml(t('apexLogViewer.summary.soqlDuplicates'))}</span>
+      <span class="apex-log-summary-highlight-body">${escapeHtml(t('apexLogViewer.summary.soqlDuplicatesDetail', { count: ctx.duplicateGroups }))}</span>
+    </button>`);
+  }
+  return items.length
+    ? `<div class="apex-log-summary-highlights">${items.join('')}</div>`
+    : `<p class="apex-log-summary-muted">${escapeHtml(t('apexLogViewer.summary.noHighlights'))}</p>`;
 }
 
 /**
@@ -313,6 +334,10 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
         <h3>${escapeHtml(t('apexLogViewer.summary.panelLimits'))}</h3>
         <div id="apexLogSummaryLimitsBody">${renderLimitsPanel(ctx, t)}</div>
       </section>
+      <section class="apex-log-summary-panel" id="apexLogSummaryHighlightsPanel">
+        <h3>${escapeHtml(t('apexLogViewer.summary.panelHighlights'))}</h3>
+        ${renderHighlightsPanel(ctx, t)}
+      </section>
     </div>
     ${
       quickNav.length
@@ -352,6 +377,13 @@ export function renderSummaryView(mount, parsed, onJump, t, opts = {}) {
 
   mount.querySelectorAll('[data-line]').forEach((el) => {
     el.addEventListener('click', () => onJump(Number(el.getAttribute('data-line'))));
+    if (el.getAttribute('role') === 'button') {
+      el.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onJump(Number(el.getAttribute('data-line')));
+      });
+    }
   });
   mount.querySelectorAll('[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {

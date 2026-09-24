@@ -16,6 +16,12 @@ describe('linkifyLogiLineRefs', () => {
     expect(html).toMatch(/logi-md-line-ref/g);
   });
 
+  it('preserves the Log A / Log B side for comparison citations', () => {
+    const html = linkifyLogiLineRefs('Log A L42 diverges from Log B L17-L19.');
+    expect(html).toContain('data-log-side="a" data-line="42"');
+    expect(html).toContain('data-log-side="b" data-start-line="17" data-end-line="19"');
+  });
+
   it('does not linkify bare line/línea (often Apex source lines)', () => {
     const html = linkifyLogiLineRefs('See línea 10 then lines 40-80 and line 99');
     expect(html).not.toContain('logi-md-line-ref');

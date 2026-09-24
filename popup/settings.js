@@ -13,7 +13,7 @@ import {
   resetExtensionSettings,
   EXTENSION_ADVANCED_FIELD_KEYS,
   EXTENSION_ADVANCED_SECTIONS,
-  EXTENSION_GENERAL_NUMERIC_KEYS,
+  EXTENSION_ADVANCED_TOOL_DEFAULT_KEYS,
   EXTENSION_FIELD_BOUNDS,
   EXTENSION_CONFIG_KEY,
   MONACO_THEME_IDS,
@@ -345,18 +345,16 @@ function refreshAdvancedFieldI18n() {
     for (const key of section.keys) {
       const lb = document.getElementById(`adv_${key}_label`);
       const hi = document.getElementById(`adv_${key}_hint`);
-      if (lb) lb.textContent = t(`settings.adv.${key}.label`);
-      if (hi) hi.textContent = t(`settings.adv.${key}.hint`);
+      if (lb) lb.textContent = t(advancedFieldI18nKey(key, 'label'));
+      if (hi) hi.textContent = t(advancedFieldI18nKey(key, 'hint'));
     }
   }
 }
 
-const GENERAL_NUMERIC_FIELD_IDS = {
-  debugLogsDefaultRangeHours: 'settingsDebugLogsDefaultRangeHours',
-  setupAuditDefaultRangeHours: 'settingsSetupAuditDefaultRangeHours',
-  fieldHistoryDefaultRangeDays: 'settingsFieldHistoryDefaultRangeDays',
-  codeEditorMaxTabs: 'settingsCodeEditorMaxTabs'
-};
+function advancedFieldI18nKey(key, part) {
+  const group = EXTENSION_ADVANCED_TOOL_DEFAULT_KEYS.includes(key) ? 'general' : 'adv';
+  return `settings.${group}.${key}.${part}`;
+}
 
 function refreshGeneralTraceFieldI18n() {
   const lb = document.getElementById('settingsApexTraceDebugLevel_label');
@@ -371,32 +369,18 @@ function refreshGeneralTraceFieldI18n() {
   const hiOrgLimits = document.getElementById('settingsOrgLimitsWarningPercent_hint');
   if (lbOrgLimits) lbOrgLimits.textContent = t('settings.general.orgLimitsWarningPercent.label');
   if (hiOrgLimits) hiOrgLimits.textContent = t('settings.general.orgLimitsWarningPercent.hint');
-  for (const key of EXTENSION_GENERAL_NUMERIC_KEYS) {
-    const id = GENERAL_NUMERIC_FIELD_IDS[key];
-    const lbGen = document.getElementById(`${id}_label`);
-    const hiGen = document.getElementById(`${id}_hint`);
-    if (lbGen) lbGen.textContent = t(`settings.general.${key}.label`);
-    if (hiGen) hiGen.textContent = t(`settings.general.${key}.hint`);
-  }
 }
 
 function wireGeneralTraceSettings() {
   const inp = document.getElementById('settingsApexTraceDebugLevel');
   const inpCov = document.getElementById('settingsApexCoverageMinPercent');
   const inpOrgLimits = document.getElementById('settingsOrgLimitsWarningPercent');
-  const generalNumericInputs = Object.fromEntries(
-    EXTENSION_GENERAL_NUMERIC_KEYS.map((key) => [key, document.getElementById(GENERAL_NUMERIC_FIELD_IDS[key])])
-  );
   const btn = document.getElementById('settingsGeneralTraceSave');
   const statusEl = document.getElementById('settingsGeneralTraceStatus');
   void loadExtensionSettings().then((cfg) => {
     if (inp) inp.value = String(cfg.apexTestsTraceDebugLevel ?? '');
     if (inpCov) inpCov.value = String(cfg.apexTestsCoverageMinPercent ?? '');
     if (inpOrgLimits) inpOrgLimits.value = String(cfg.orgLimitsWarningPercent ?? '');
-    for (const key of EXTENSION_GENERAL_NUMERIC_KEYS) {
-      const el = generalNumericInputs[key];
-      if (el) el.value = String(cfg[key] ?? '');
-    }
   });
   refreshGeneralTraceFieldI18n();
   btn?.addEventListener('click', async () => {
@@ -406,17 +390,10 @@ function wireGeneralTraceSettings() {
       apexTestsCoverageMinPercent: inpCov?.value ?? '',
       orgLimitsWarningPercent: inpOrgLimits?.value ?? ''
     };
-    for (const key of EXTENSION_GENERAL_NUMERIC_KEYS) {
-      partial[key] = generalNumericInputs[key]?.value ?? '';
-    }
     const cfg = await saveExtensionSettings(partial);
     if (inp) inp.value = String(cfg.apexTestsTraceDebugLevel ?? '');
     if (inpCov) inpCov.value = String(cfg.apexTestsCoverageMinPercent ?? '');
     if (inpOrgLimits) inpOrgLimits.value = String(cfg.orgLimitsWarningPercent ?? '');
-    for (const key of EXTENSION_GENERAL_NUMERIC_KEYS) {
-      const el = generalNumericInputs[key];
-      if (el) el.value = String(cfg[key] ?? '');
-    }
     if (statusEl) {
       statusEl.textContent = t('settings.advancedSaved');
       statusEl.style.color = '#94a3b8';
@@ -438,7 +415,7 @@ function appendAdvancedField(host, cfg, key) {
   lb.className = 'settings-label';
   lb.id = `adv_${key}_label`;
   lb.htmlFor = `adv_${key}`;
-  lb.textContent = t(`settings.adv.${key}.label`);
+  lb.textContent = t(advancedFieldI18nKey(key, 'label'));
   const inp = document.createElement('input');
   const b = EXTENSION_FIELD_BOUNDS[key];
   if (b) {
@@ -458,7 +435,7 @@ function appendAdvancedField(host, cfg, key) {
   const hint = document.createElement('p');
   hint.className = 'settings-hint settings-hint--field';
   hint.id = `adv_${key}_hint`;
-  hint.textContent = t(`settings.adv.${key}.hint`);
+  hint.textContent = t(advancedFieldI18nKey(key, 'hint'));
   wrap.appendChild(lb);
   wrap.appendChild(inp);
   wrap.appendChild(hint);

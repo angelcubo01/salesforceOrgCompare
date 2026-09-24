@@ -50,6 +50,33 @@ let lastSummaryLang = 'en';
 /** @type {boolean} */
 let logiResumeUiVisible = false;
 
+/** @type {number} */
+let summaryLoadingStartedAt = 0;
+/** @type {ReturnType<typeof setInterval> | null} */
+let summaryLoadingTimer = null;
+
+function stopSummaryLoadingTimer() {
+  if (summaryLoadingTimer) clearInterval(summaryLoadingTimer);
+  summaryLoadingTimer = null;
+  summaryLoadingStartedAt = 0;
+}
+
+function syncSummaryLoadingElapsed() {
+  if (!summaryLoadingStartedAt) return;
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - summaryLoadingStartedAt) / 1000));
+  const elapsed = `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`;
+  document.querySelectorAll('[data-logi-summary-elapsed]').forEach((node) => {
+    node.textContent = t('apexLogViewer.logi.resumeElapsed', { elapsed });
+  });
+}
+
+function startSummaryLoadingTimer() {
+  if (!summaryLoadingStartedAt) summaryLoadingStartedAt = Date.now();
+  syncSummaryLoadingElapsed();
+  if (summaryLoadingTimer) return;
+  summaryLoadingTimer = setInterval(syncSummaryLoadingElapsed, 1000);
+}
+
 /**
  * @param {HTMLElement | null | undefined} mount
  */
@@ -70,13 +97,13 @@ function trackLogiUi(action, props = {}) {
  */
 export function mountLogiResume(opts) {
   resumeOpts = opts;
-  const btn = document.getElementById('logiResumeBtn');
-  if (btn && !btn.dataset.logiResumeBound) {
+  ['logiResumeBtn', 'apexLogComparisonLogiSummary'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn || btn.dataset.logiResumeBound) return;
     btn.dataset.logiResumeBound = '1';
-    btn.addEventListener('click', () => {
-      void startLogiResume({ force: false });
-    });
-  }
+    btn.addEventListener('click', () => { void startLogiResume({ force: false }); });
+  });
+  syncComparisonResumeButton();
 }
 
 /**
@@ -93,8 +120,10 @@ export function setLogiResumeButtonVisible(visible) {
     if (span) span.textContent = label;
     else btn.setAttribute('aria-label', label);
   }
+  syncComparisonResumeButton();
   if (!visible) {
     cancelActiveResume();
+    stopSummaryLoadingTimer();
     clearResumeFromMount(getSummaryMount());
     return;
   }
@@ -143,6 +172,7 @@ export async function bindLogiResumeMount(mount) {
   }
 
   uiState = 'idle';
+  stopSummaryLoadingTimer();
   summaryText = '';
   errorReason = '';
   const el = mount.querySelector('#logiSummaryResume');
@@ -173,6 +203,7 @@ export async function startLogiResume(opts = {}) {
 
   cancelActiveResume();
   uiState = 'loading';
+  summaryLoadingStartedAt = Date.now();
   summaryText = '';
   errorReason = '';
   ensureSummaryTab();
@@ -243,7 +274,13 @@ export function getLogiResumeAskContext() {
 
 function currentSessionKey() {
   const payload = resumeOpts?.payload || {};
-  return buildLogiSessionKey(payload);
+  const base = buildLogiSessionKey(payload);
+  const comparison = resumeOpts?.getComparisonContext?.()?.comparison;
+  if (!comparison) return base;
+  const identity = `${comparison.logA?.environment || ''}|${comparison.logA?.entry || ''}|${comparison.logB?.environment || ''}|${comparison.logB?.entry || ''}`;
+  let hash = 0;
+  for (let i = 0; i < identity.length; i += 1) hash = ((hash * 31) + identity.charCodeAt(i)) | 0;
+  return `${base}::comparison::${Math.abs(hash).toString(36)}`;
 }
 
 function ensureSummaryTab() {
@@ -251,7 +288,20 @@ function ensureSummaryTab() {
 }
 
 function getSummaryMount() {
-  return document.getElementById('apexLogSummaryMount');
+  return resumeOpts?.getSummaryMount?.() || document.getElementById('apexLogSummaryMount');
+}
+
+function syncComparisonResumeButton() {
+  const btn = document.getElementById('apexLogComparisonLogiSummary');
+  if (!btn) return;
+  const active = Boolean(resumeOpts?.isComparisonActive?.());
+  btn.hidden = !(logiResumeUiVisible && active);
+  btn.textContent = t('apexLogViewer.logi.resumeComparisonButton');
+}
+
+/** Refreshes the comparison action after comparison state changes. */
+export function refreshComparisonResumeButton() {
+  syncComparisonResumeButton();
 }
 
 /**
@@ -298,13 +348,19 @@ function renderResumeInto(mount, view) {
       <span class="apex-log-summary-hero-icon apex-log-summary-hero-icon--logi" aria-hidden="true">${LOGI_RESUME_AI_ICON}</span>
       <div class="apex-log-summary-hero-body">
         ${titleRow}
-        <div class="apex-log-summary-logi-loading">
-          <span class="apex-log-viewer-loading-spinner apex-log-summary-logi-spinner" aria-hidden="true"></span>
-          <span>${escapeHtml(t('apexLogViewer.logi.resumeGenerating'))}</span>
+        <div class="apex-log-summary-logi-loading" role="status" aria-live="polite">
+          <span class="apex-log-summary-logi-pixel-loader" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="apex-log-summary-logi-loading-copy">
+            <span>${escapeHtml(t('apexLogViewer.logi.resumeGenerating'))}</span>
+            <small data-logi-summary-elapsed>${escapeHtml(t('apexLogViewer.logi.resumeElapsed', { elapsed: '0:00' }))}</small>
+          </span>
         </div>
       </div>`;
+    startSummaryLoadingTimer();
     return;
   }
+
+  stopSummaryLoadingTimer();
 
   if (view.state === 'error') {
     const msg = mapResumeError(view.reason);
@@ -370,10 +426,16 @@ function wireResumeLineRefs(el) {
         Number(btn.getAttribute('data-start-line') || btn.getAttribute('data-line')) || 0;
       const end = Number(btn.getAttribute('data-end-line') || start) || start;
       if (!Number.isFinite(start) || start < 1) return;
+      const comparison = Boolean(resumeOpts?.getComparisonContext?.()?.comparison);
+      const side = btn.getAttribute('data-log-side') === 'b' ? 'b' : 'a';
       try {
         window.dispatchEvent(
           new CustomEvent('sfoc-logi-highlight-lines', {
-            detail: { startLine: start, endLine: end > 0 ? end : start }
+            detail: {
+              startLine: start,
+              endLine: end > 0 ? end : start,
+              ...(comparison ? { comparison: true, side } : {})
+            }
           })
         );
       } catch {
@@ -435,11 +497,15 @@ async function runSummaryLoop(requestId) {
       : buildLogiSessionKey(payload);
   const lang = await resolveSummaryLang();
   lastSummaryLang = lang || normalizeLogiLanguage(undefined);
-  const initialContext = buildInitialLogContext(parsed, {
+  const baseContext = buildInitialLogContext(parsed, {
     orgId: payload.orgId,
     logId: payload.logId,
     instanceUrl: payload.instanceUrl
   });
+  const comparison = resumeOpts?.getComparisonContext?.();
+  const initialContext = comparison && typeof comparison === 'object'
+    ? { ...baseContext, ...comparison }
+    : baseContext;
 
   /** @type {object[]} */
   let messages = [];
@@ -464,6 +530,7 @@ async function runSummaryLoop(requestId) {
       title: payload.title,
       instanceUrl: payload.instanceUrl,
       ...(lang ? { logiLanguage: lang } : {}),
+      comparisonSummary: Boolean(comparison?.comparison),
       initialContext,
       messages,
       skipIterationReserve

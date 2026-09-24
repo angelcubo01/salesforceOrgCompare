@@ -2397,6 +2397,31 @@ function escapeXmlText(s) {
     .replace(/"/g, '&quot;');
 }
 
+/**
+ * Decodifica las entidades XML que Salesforce puede incluir en los mensajes SOAP.
+ * La respuesta se extrae como texto para poder manejar etiquetas con namespaces,
+ * por lo que el navegador no llega a hacer esta decodificación automáticamente.
+ */
+function decodeXmlText(s) {
+  const namedEntities = {
+    amp: '&',
+    apos: "'",
+    gt: '>',
+    lt: '<',
+    quot: '"'
+  };
+  return String(s ?? '').replace(/&(?:(#x[0-9a-f]+)|(#\d+)|([a-z]+));/gi, (entity, hex, decimal, name) => {
+    if (name) return namedEntities[name.toLowerCase()] ?? entity;
+    const codePoint = Number.parseInt(hex ? hex.slice(2) : decimal.slice(1), hex ? 16 : 10);
+    if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) return entity;
+    try {
+      return String.fromCodePoint(codePoint);
+    } catch {
+      return entity;
+    }
+  });
+}
+
 function extractSoapTagValue(xml, tagName) {
   try {
     const re = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
@@ -2404,7 +2429,7 @@ function extractSoapTagValue(xml, tagName) {
     if (!m) return null;
     const openTag = (m[0].match(new RegExp(`<${tagName}[^>]*>`, 'i')) || [''])[0];
     if (/xsi:nil\s*=\s*["']true["']/i.test(openTag)) return null;
-    return m[1] != null ? m[1].trim() : '';
+    return m[1] != null ? decodeXmlText(m[1]).trim() : '';
   } catch {
     return null;
   }

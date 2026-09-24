@@ -1188,6 +1188,35 @@ html[data-ui-theme="light"] .app-help-modal-tour:hover {
   background: #0b5cab;
 }
 
+html[data-ui-theme="light"] .app-onboarding-intro {
+  border-color: #9bc7e8;
+  background: #eaf5fe;
+}
+
+html[data-ui-theme="light"] .app-onboarding-step {
+  border-bottom-color: #e2e8f0;
+}
+
+html[data-ui-theme="light"] .app-onboarding-step-marker {
+  border-color: #9bc7e8;
+  background: #f0f9ff;
+  color: #0369a1;
+}
+
+html[data-ui-theme="light"] .app-onboarding-intro .app-onboarding-step-marker {
+  border-color: #0176d3;
+  background: #ffffff;
+  color: #0176d3;
+}
+
+html[data-ui-theme="light"] .app-onboarding-intro-copy {
+  color: #0c4a6e !important;
+}
+
+html[data-ui-theme="light"] .app-onboarding-step-copy {
+  color: #334155 !important;
+}
+
 html[data-ui-theme="light"] .app-landing-help-hint {
   color: var(--sfoc-light-text-muted);
 }
@@ -1721,6 +1750,25 @@ html[data-ui-theme="light"] .debug-log-browser-input[type='datetime-local']::-we
 html[data-ui-theme="light"] .setup-audit-input[type='datetime-local']::-webkit-calendar-picker-indicator {
   filter: none;
   opacity: 0.75;
+}
+
+/* Los selectores compartidos nacieron con la paleta oscura: en claro los
+ * activadores de calendario deben verse como controles de fecha, no como
+ * bloques oscuros. */
+html[data-ui-theme="light"] .sfoc-date-time-picker-button,
+html[data-ui-theme="light"] .sfoc-date-time-now-button,
+html[data-ui-theme="light"] .sfoc-calendar-now-button {
+  background: #ffffff;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+html[data-ui-theme="light"] .sfoc-date-time-picker-button:hover,
+html[data-ui-theme="light"] .sfoc-date-time-now-button:hover,
+html[data-ui-theme="light"] .sfoc-calendar-now-button:hover {
+  background: #eaf5fb;
+  border-color: #0284c7;
+  color: #0369a1;
 }
 
 html[data-ui-theme="light"] .debug-log-browser-page-label,

@@ -33,8 +33,8 @@ export function renderAnalysisView(mount, parsed, onJump, t, monaco, lightTheme,
   if (!mount) return;
   mount.innerHTML = `
     ${panelSectionHeading('analysis', t('apexLogViewer.tab.analysis'), t)}
-    <div class="apex-log-analysis-segments" id="apexLogAnalysisSegments"></div>
-    <div id="apexLogAnalysisContent"></div>`;
+    <div class="apex-log-view-switcher apex-log-analysis-segments" id="apexLogAnalysisSegments"></div>
+    <div class="apex-log-view-content" id="apexLogAnalysisContent"></div>`;
 
   const content = mount.querySelector('#apexLogAnalysisContent');
   const segmentsEl = mount.querySelector('#apexLogAnalysisSegments');
@@ -49,7 +49,7 @@ export function renderAnalysisView(mount, parsed, onJump, t, monaco, lightTheme,
   let active = 'tree';
   const renderSection = () => {
     if (!content) return;
-    content.innerHTML = `<div id="apexLogAnalysisSectionMount"></div>`;
+    content.innerHTML = `<div class="apex-log-subview" id="apexLogAnalysisSectionMount"></div>`;
     const sectionMount = content.querySelector('#apexLogAnalysisSectionMount');
     if (!sectionMount) return;
     if (active === 'tree') {

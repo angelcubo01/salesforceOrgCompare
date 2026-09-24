@@ -293,6 +293,8 @@ async function runLoad() {
   catch (error) { void handleToolError(error, { artifact_type: 'EnvironmentStatus', phase: 'fetch' }); if (status) status.textContent = t('envStatus.fetchError'); showToast(String(error?.message || error), 'error'); }
   finally { dismissSpinnerToast(); }
 }
-export async function refreshEnvironmentStatusPanel() { if (getSelectedArtifactType() === 'EnvironmentStatus' && !lastRows.length) void runLoad(); }
+export async function refreshEnvironmentStatusPanel() {
+  if (getSelectedArtifactType() === 'EnvironmentStatus' && !lastRows.length) await runLoad();
+}
 export function setupEnvironmentStatusPanel() { document.getElementById('environmentStatusRefreshBtn')?.addEventListener('click', () => void runLoad()); document.querySelectorAll('[data-env-status-filter]').forEach((button) => button.addEventListener('click', () => { activeFilter = button.getAttribute('data-env-status-filter') || 'all'; syncFilters(); void renderTable(); })); syncFilters(); }
 export async function reloadEnvironmentStatusIfActive() { if (getSelectedArtifactType() === 'EnvironmentStatus') void runLoad(); }

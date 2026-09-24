@@ -585,8 +585,10 @@ export async function initializeAppNavigation(args = {}) {
   await persistAfterOperationChange(false);
 }
 
-/** Quita el ocultamiento de arranque una vez resuelta la vista inicial. */
+/** Quita el ocultamiento de arranque una vez hidratada la vista inicial. */
 export function revealAppNavigation() {
+  const splash = document.getElementById('appBootSplash');
+  splash?.setAttribute('aria-busy', 'false');
   document.body.classList.remove('app-nav-booting');
 }
 

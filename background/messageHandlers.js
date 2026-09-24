@@ -3692,6 +3692,32 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'apexViewer:comparisonCandidates': {
+            const saved = await loadSavedOrgs();
+            const requested = Array.isArray(message.orgIds) && message.orgIds.length
+              ? message.orgIds.map(String)
+              : Object.keys(saved);
+            const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+            const requestedLimit = Math.max(10, Math.min(100, Math.floor(Number(message.limit) || 20)));
+            const candidates = [];
+            for (const orgId of requested.slice(0, 12)) {
+              const org = saved[orgId];
+              if (!org) continue;
+              const sid = await resolveSidForOrg(org);
+              if (!sid) continue;
+              try {
+                const rows = await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, '', { limit: requestedLimit });
+                const recentRows = rows.slice().reverse();
+                const enriched = await enrichApexLogRowsWithExecutionContext(org.instanceUrl, sid, org.apiVersion, recentRows, { maxBodyFetches: Math.min(12, recentRows.length), concurrency: 2 });
+                for (const row of enriched) candidates.push({
+                  id: `${orgId}:${row.Id}`, orgId, logId: row.Id, environment: org.label || org.displayName || org.instanceUrl,
+                  meta: { user: row.LogUser?.Name || row.LogUserId || '', type: row.Type || row.Operation || '', name: row.Name || row.Location || '', method: row.Method || '', result: row.Status || '', sizeBytes: row.LogLength || 0, durationMs: row.DurationMilliseconds || 0, date: row.StartTime || '' }
+                });
+              } catch { /* una org sin acceso no impide elegir las demás */ }
+            }
+            reply({ ok: true, candidates, hasMore: candidates.length >= requestedLimit });
+            break;
+          }
           case 'setupAuditTrail:list': {
             const { orgId, sinceIso, untilIso, limit } = message;
             const saved = await loadSavedOrgs();

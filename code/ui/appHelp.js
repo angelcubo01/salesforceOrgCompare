@@ -99,13 +99,27 @@ function collectOnboardingSteps(key, maxSteps = 4) {
 /**
  * @param {HTMLElement} bodyEl
  * @param {string[]} paragraphs
+ * @param {boolean} [onboarding]
  */
-function fillModalBody(bodyEl, paragraphs) {
+function fillModalBody(bodyEl, paragraphs, onboarding = false) {
   bodyEl.innerHTML = '';
-  for (const text of paragraphs) {
+  bodyEl.classList.toggle('app-help-modal-body--onboarding', onboarding);
+  for (const [index, text] of paragraphs.entries()) {
     const p = document.createElement('p');
     p.textContent = text;
-    bodyEl.appendChild(p);
+    if (!onboarding) {
+      bodyEl.appendChild(p);
+      continue;
+    }
+    const item = document.createElement(index === 0 ? 'div' : 'article');
+    item.className = index === 0 ? 'app-onboarding-intro' : 'app-onboarding-step';
+    const marker = document.createElement('span');
+    marker.className = 'app-onboarding-step-marker';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.textContent = index === 0 ? '✦' : String(index).padStart(2, '0');
+    p.className = index === 0 ? 'app-onboarding-intro-copy' : 'app-onboarding-step-copy';
+    item.append(marker, p);
+    bodyEl.appendChild(item);
   }
 }
 
@@ -182,7 +196,7 @@ function refreshToolOnboardingModalContent(tool) {
   const key = `onboarding.tool.${tool}`;
   const title = t(`${key}.title`);
   titleEl.textContent = title !== `${key}.title` ? title : t('help.title');
-  fillModalBody(bodyEl, collectOnboardingSteps(key));
+  fillModalBody(bodyEl, collectOnboardingSteps(key), true);
 }
 
 function showModal() {

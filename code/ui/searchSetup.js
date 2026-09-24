@@ -161,6 +161,10 @@ function ensureSearchResultsPortal(results) {
 }
 
 export function hideSidebarSearchResults() {
+  // Los resultados del comparator se resuelven de forma asíncrona y se
+  // renderizan en un portal fuera del sidebar. Invalidamos cualquier búsqueda
+  // pendiente para que no reaparezca al cambiar de herramienta o ir a Inicio.
+  sidebarSearchGeneration++;
   const results = document.getElementById('searchResults');
   if (!results) return;
   results.hidden = true;

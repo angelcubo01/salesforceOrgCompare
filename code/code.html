@@ -12,6 +12,7 @@
       }
       .app-boot-splash {
         display: none;
+        visibility: hidden;
         position: fixed;
         inset: 0;
         z-index: var(--sfoc-z-boot, 1600);
@@ -25,6 +26,20 @@
       }
       body.app-nav-booting .app-boot-splash {
         display: flex;
+      }
+      body.app-nav-booting.app-boot-prefs-ready .app-boot-splash {
+        visibility: visible;
+      }
+      html[data-ui-theme="light"] .app-boot-splash {
+        background: #f6f9fc;
+        color: #1f2937;
+      }
+      html[data-ui-theme="light"] .app-boot-splash-spinner {
+        border-color: #cbd5e1;
+        border-top-color: #0284c7;
+      }
+      html[data-ui-theme="light"] .app-boot-splash-text {
+        color: #334155;
       }
       .app-boot-splash-spinner {
         width: 28px;
@@ -2743,10 +2758,6 @@
                 <label for="debugLogBrowserUntil" class="debug-log-browser-field-label" data-i18n="debugLogs.filterUntil">Hasta</label>
                 <input id="debugLogBrowserUntil" type="datetime-local" class="debug-log-browser-input" />
               </div>
-              <div class="debug-log-browser-filter-actions">
-                <button type="button" id="debugLogBrowserApplyFiltersBtn" class="debug-log-browser-open-btn" data-i18n="filters.apply">Aplicar filtros</button>
-                <button type="button" id="debugLogBrowserResetFiltersBtn" class="debug-log-browser-open-btn" data-i18n="filters.reset">Restablecer</button>
-              </div>
             </div>
             <div class="debug-log-browser-pagination debug-log-browser-pagination-top">
               <button type="button" id="debugLogBrowserFirstPage" class="debug-log-browser-open-btn sfoc-page-icon-btn" aria-label="First page">«</button>
@@ -3289,7 +3300,6 @@
                 <button type="button" id="fieldHistoryLoadBtn" class="field-history-open-btn field-history-primary-btn" data-i18n="fieldHistory.loadHistory" disabled>
                   Cargar historial
                 </button>
-                <button type="button" id="fieldHistoryResetFiltersBtn" class="field-history-open-btn" data-i18n="filters.reset">Restablecer</button>
               </div>
             </div>
             <p class="field-history-hint" data-i18n="fieldHistory.retentionHint">
@@ -3380,10 +3390,6 @@
               <div class="setup-audit-field">
                 <label for="setupAuditUntil" class="setup-audit-field-label" data-i18n="setupAudit.filterUntil">Hasta</label>
                 <input id="setupAuditUntil" type="datetime-local" class="setup-audit-input" />
-              </div>
-              <div class="setup-audit-filter-actions">
-                <button type="button" id="setupAuditApplyFiltersBtn" class="setup-audit-open-btn" data-i18n="filters.apply">Aplicar filtros</button>
-                <button type="button" id="setupAuditResetFiltersBtn" class="setup-audit-open-btn" data-i18n="filters.reset">Restablecer</button>
               </div>
             </div>
             <div class="setup-audit-pagination setup-audit-pagination-top">

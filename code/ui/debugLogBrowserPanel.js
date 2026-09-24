@@ -32,7 +32,7 @@ const enrichingIds = new Set();
 let isLoading = false;
 let dateRangePicker = null;
 let appliedFilters = { user: '', operation: '', status: '', text: '' };
-let appliedDraftSignature = '';
+let filterChangeTimer = null;
 const pagination = createTablePagination({ initialPageSize: 25 });
 let sortState = { key: 'StartTime', direction: 'desc' };
 let tableState = 'initial';
@@ -119,8 +119,6 @@ function getFilterElements() {
     operation: document.getElementById('debugLogBrowserOperationFilter'),
     rowStatus: document.getElementById('debugLogBrowserStatusFilter'),
     text: document.getElementById('debugLogBrowserTextFilter'),
-    applyFilters: document.getElementById('debugLogBrowserApplyFiltersBtn'),
-    resetFilters: document.getElementById('debugLogBrowserResetFiltersBtn'),
     since: document.getElementById('debugLogBrowserSince'),
     until: document.getElementById('debugLogBrowserUntil'),
     pageSize: document.getElementById('debugLogBrowserPageSize'),
@@ -226,46 +224,36 @@ function captureDraftFilters() {
   };
 }
 
-function captureDraftSignature() {
+function hasValidDateRange() {
   const { since, until } = getFilterElements();
-  return JSON.stringify({
-    ...captureDraftFilters(),
-    since: String(since?.value || ''),
-    until: dateRangePicker?.until?.isNowMode ? 'salesforce-now' : String(until?.value || '')
-  });
-}
-
-function updateFilterActionState() {
-  const { applyFilters, since, until } = getFilterElements();
-  if (!applyFilters) return;
   const sinceIso = toUtcIsoFromLocalDateTime(since?.value);
   const untilIso = toUtcIsoFromLocalDateTime(until?.value);
-  const valid = Boolean(sinceIso)
+  return Boolean(sinceIso)
     && (dateRangePicker?.until?.isNowMode || isValidUtcRange(sinceIso, untilIso));
-  applyFilters.disabled = !valid || captureDraftSignature() === appliedDraftSignature;
 }
 
-async function applyDraftFilters() {
+function applyCurrentFilters() {
   appliedFilters = captureDraftFilters();
-  appliedDraftSignature = captureDraftSignature();
-  currentPage = 1;
-  cancelPageEnrichment();
-  lastLoadSignature = '';
-  await refreshDebugLogBrowserPanel();
-}
-
-function resetDraftFilters() {
-  const { user, operation, rowStatus, text } = getFilterElements();
-  if (user) user.value = '';
-  if (operation) operation.value = '';
-  if (rowStatus) rowStatus.value = '';
-  if (text) text.value = '';
-  appliedFilters = captureDraftFilters();
-  appliedDraftSignature = captureDraftSignature();
   currentPage = 1;
   cancelPageEnrichment();
   renderRowsAndEnrich();
-  updateFilterActionState();
+}
+
+function scheduleClientFilterUpdate(delay = 0) {
+  clearTimeout(filterChangeTimer);
+  filterChangeTimer = setTimeout(applyCurrentFilters, delay);
+}
+
+function scheduleDateRangeReload() {
+  if (!hasValidDateRange()) return;
+  clearTimeout(filterChangeTimer);
+  filterChangeTimer = setTimeout(() => {
+    appliedFilters = captureDraftFilters();
+    currentPage = 1;
+    cancelPageEnrichment();
+    lastLoadSignature = '';
+    void refreshDebugLogBrowserPanel();
+  }, 180);
 }
 
 function formatBytes(value) {
@@ -296,7 +284,13 @@ function populateOperationOptions(rows) {
     opt.textContent = op;
     operation.appendChild(opt);
   }
-  if ([...operation.options].some((o) => o.value === current)) operation.value = current;
+  if (current && ![...operation.options].some((o) => o.value === current)) {
+    const retained = document.createElement('option');
+    retained.value = current;
+    retained.textContent = current;
+    operation.appendChild(retained);
+  }
+  if (current) operation.value = current;
 }
 
 function populateUserOptions(rows) {
@@ -328,7 +322,14 @@ function populateUserOptions(rows) {
     opt.title = u.id;
     user.appendChild(opt);
   }
-  if ([...user.options].some((o) => o.value === current)) user.value = current;
+  if (current && ![...user.options].some((o) => o.value === current)) {
+    const retained = document.createElement('option');
+    retained.value = current;
+    retained.textContent = current;
+    retained.title = current;
+    user.appendChild(retained);
+  }
+  if (current) user.value = current;
 }
 
 function updatePaginationUi(totalFilteredRows) {
@@ -680,32 +681,21 @@ export async function refreshDebugLogBrowserPanel() {
 }
 
 export function setupDebugLogBrowserPanel() {
-  const { user, operation, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, rowStatus, text, applyFilters, resetFilters } =
+  const { user, operation, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, rowStatus, text } =
     getFilterElements();
-  const applyOnEnter = (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      void applyDraftFilters();
-    }
-  };
-  for (const field of [user, operation, rowStatus, text, since, until]) {
-    field?.addEventListener('keydown', applyOnEnter);
-  }
   const refreshBtn = document.getElementById('debugLogBrowserRefreshBtn');
-  if (refreshBtn) refreshBtn.addEventListener('click', () => void applyDraftFilters());
-  applyFilters?.addEventListener('click', () => void applyDraftFilters());
-  resetFilters?.addEventListener('click', () => resetDraftFilters());
+  if (refreshBtn) refreshBtn.addEventListener('click', () => void refreshLogsNow());
   dateRangePicker = createDateTimeRangePicker({
     sinceInput: since,
     untilInput: until,
     sinceLabel: t('debugLogs.filterSince'),
     untilLabel: t('debugLogs.filterUntil'),
-    onDraftChange: updateFilterActionState
+    onDraftChange: scheduleDateRangeReload
   });
-  for (const field of [user, operation, rowStatus, text]) {
-    field?.addEventListener('input', updateFilterActionState);
-    field?.addEventListener('change', updateFilterActionState);
-  }
+  user?.addEventListener('change', () => scheduleClientFilterUpdate());
+  operation?.addEventListener('change', () => scheduleClientFilterUpdate());
+  rowStatus?.addEventListener('change', () => scheduleClientFilterUpdate());
+  text?.addEventListener('input', () => scheduleClientFilterUpdate(180));
   if (pageSize)
     pageSize.addEventListener('change', () => {
       pagination.setPageSize(pageSize.value, applyClientFilters(lastRows).length);
@@ -794,8 +784,7 @@ export function setupDebugLogBrowserPanel() {
     });
   }
   void ensureDefaultDateRange().then(() => {
-    if (!appliedDraftSignature) appliedDraftSignature = captureDraftSignature();
-    updateFilterActionState();
+    appliedFilters = captureDraftFilters();
   });
   document.querySelectorAll('#debugLogBrowserTableWrap th[data-sort]').forEach((header) => {
     header.addEventListener('click', () => {

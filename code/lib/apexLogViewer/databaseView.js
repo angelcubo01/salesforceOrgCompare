@@ -15,8 +15,8 @@ export function renderDatabaseView(mount, parsed, onJump, t) {
   if (!mount) return;
   mount.innerHTML = `
     ${panelSectionHeading('database', t('apexLogViewer.tab.database'), t)}
-    <div class="apex-log-database-segments" id="apexLogDatabaseSegments"></div>
-    <div id="apexLogDatabaseContent"></div>`;
+    <div class="apex-log-view-switcher apex-log-database-segments" id="apexLogDatabaseSegments"></div>
+    <div class="apex-log-view-content" id="apexLogDatabaseContent"></div>`;
 
   const content = mount.querySelector('#apexLogDatabaseContent');
   const segmentsEl = mount.querySelector('#apexLogDatabaseSegments');
@@ -31,7 +31,7 @@ export function renderDatabaseView(mount, parsed, onJump, t) {
   let active = 'soql';
   const renderSection = () => {
     if (!content) return;
-    content.innerHTML = `<div class="apex-log-database-section" id="apexLogDatabaseSectionMount"></div>`;
+    content.innerHTML = `<div class="apex-log-subview apex-log-database-section" id="apexLogDatabaseSectionMount"></div>`;
     const sectionMount = content.querySelector('#apexLogDatabaseSectionMount');
     if (!sectionMount) return;
     if (active === 'soql') renderSoqlView(sectionMount, parsed, onJump, t);

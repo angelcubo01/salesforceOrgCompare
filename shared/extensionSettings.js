@@ -3,6 +3,8 @@
  * Consumidas por code.html, viewerLimits y hub de Apex tests.
  */
 
+import { saveBootPresentationPrefs } from './bootPresentationPrefs.js';
+
 export const EXTENSION_CONFIG_KEY = 'soc_extension_config';
 
 /** @type {Record<string, { min: number, max: number }>} */
@@ -64,24 +66,25 @@ export const EXTENSION_ADVANCED_ANONYMOUS_APEX_KEYS = [
   'anonymousApexLogSearchDelayMs'
 ];
 
-/** Secciones del formulario Avanzado (headingKey null = sin subtítulo). */
-export const EXTENSION_ADVANCED_SECTIONS = [
-  { headingKey: null, keys: EXTENSION_ADVANCED_LEGACY_KEYS },
-  { headingKey: 'settings.adv.metadataOpsHeading', keys: EXTENSION_ADVANCED_METADATA_KEYS },
-  { headingKey: 'settings.adv.dataLimitsHeading', keys: EXTENSION_ADVANCED_DATA_LIMIT_KEYS },
-  { headingKey: 'settings.adv.anonymousApexHeading', keys: EXTENSION_ADVANCED_ANONYMOUS_APEX_KEYS }
-];
-
-/** Todas las claves Avanzado (aplanado, para guardar/cargar). */
-export const EXTENSION_ADVANCED_FIELD_KEYS = EXTENSION_ADVANCED_SECTIONS.flatMap((s) => s.keys);
-
-/** Claves numéricas en Ajustes → General (guardado con botón General). */
-export const EXTENSION_GENERAL_NUMERIC_KEYS = [
+/** Valores predeterminados de herramientas, configurables en Ajustes → Avanzado. */
+export const EXTENSION_ADVANCED_TOOL_DEFAULT_KEYS = [
   'debugLogsDefaultRangeHours',
   'setupAuditDefaultRangeHours',
   'fieldHistoryDefaultRangeDays',
   'codeEditorMaxTabs'
 ];
+
+/** Secciones del formulario Avanzado (headingKey null = sin subtítulo). */
+export const EXTENSION_ADVANCED_SECTIONS = [
+  { headingKey: null, keys: EXTENSION_ADVANCED_LEGACY_KEYS },
+  { headingKey: 'settings.adv.metadataOpsHeading', keys: EXTENSION_ADVANCED_METADATA_KEYS },
+  { headingKey: 'settings.adv.dataLimitsHeading', keys: EXTENSION_ADVANCED_DATA_LIMIT_KEYS },
+  { headingKey: 'settings.adv.anonymousApexHeading', keys: EXTENSION_ADVANCED_ANONYMOUS_APEX_KEYS },
+  { headingKey: 'settings.adv.toolDefaultsHeading', keys: EXTENSION_ADVANCED_TOOL_DEFAULT_KEYS }
+];
+
+/** Todas las claves Avanzado (aplanado, para guardar/cargar). */
+export const EXTENSION_ADVANCED_FIELD_KEYS = EXTENSION_ADVANCED_SECTIONS.flatMap((s) => s.keys);
 
 const LEGACY_NATIVE_DIFF_KEY = 'soc_native_diff_max_chars';
 
@@ -152,7 +155,7 @@ const DEFAULTS = {
   codeEditorPersistEnabled: true,
   debugLogsDefaultRangeHours: 24,
   setupAuditDefaultRangeHours: 24,
-  fieldHistoryDefaultRangeDays: 30,
+  fieldHistoryDefaultRangeDays: 1,
   codeEditorMaxTabs: 15,
   metadataRetrieveMaxAttempts: 60,
   metadataRetrievePackageMaxAttempts: 90,
@@ -266,6 +269,7 @@ export async function loadExtensionSettings() {
   } catch {
     cache = normalizeConfig({});
   }
+  saveBootPresentationPrefs({ theme: cache.uiTheme });
   return cache;
 }
 
@@ -279,6 +283,7 @@ export async function saveExtensionSettings(partial) {
   } catch {
     /* ignore */
   }
+  saveBootPresentationPrefs({ theme: cache.uiTheme });
   return cache;
 }
 
@@ -289,6 +294,7 @@ export async function resetExtensionSettings() {
   } catch {
     /* ignore */
   }
+  saveBootPresentationPrefs({ theme: cache.uiTheme });
   return cache;
 }
 
@@ -473,6 +479,7 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     const change = changes?.[EXTENSION_CONFIG_KEY];
     if (areaName !== 'local' || !change) return;
     cache = normalizeConfig(change.newValue);
+    saveBootPresentationPrefs({ theme: cache.uiTheme });
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('sfoc:extension-settings-changed'));
     }

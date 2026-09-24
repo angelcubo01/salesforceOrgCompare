@@ -99,16 +99,26 @@ function emitChatTurnSuccess(sessionKey, payload = {}) {
 
 const LOGI_AVATAR_SVG = `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 5a2 2 0 0 1 2-2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5zm10 0v4h4M8 13h8M8 17h5"/></svg>`;
 
-const THINKING_BUBBLE_HTML = `<div class="logi-advisor-msg logi-advisor-msg--assistant logi-advisor-msg--thinking" aria-live="polite">
-  <span class="logi-advisor-msg-avatar">${LOGI_AVATAR_SVG}</span>
-  <div class="logi-advisor-msg-wrap">
-    <span class="logi-advisor-msg-name">Logi</span>
-    <div class="logi-advisor-msg-body logi-advisor-msg-body--thinking">
-      <span class="logi-advisor-thinking-spinner" aria-hidden="true"></span>
-      <span class="logi-advisor-thinking-text"></span>
+function getThinkingBubbleHtml() {
+  return `<div class="logi-advisor-msg logi-advisor-msg--assistant logi-advisor-msg--thinking" aria-live="polite">
+    <span class="logi-advisor-msg-avatar">${LOGI_AVATAR_SVG}</span>
+    <div class="logi-advisor-msg-wrap">
+      <span class="logi-advisor-msg-name">Logi</span>
+      <details class="logi-advisor-thinking-card" open>
+        <summary class="logi-advisor-msg-body logi-advisor-msg-body--thinking">
+          <span class="logi-advisor-thinking-spinner" aria-hidden="true"></span>
+          <span class="logi-advisor-thinking-text"></span>
+          <span class="logi-advisor-thinking-elapsed" data-logi-thinking-elapsed aria-label="${escapeHtml(t('apexLogViewer.logi.thinkingElapsed'))}">0:00</span>
+        </summary>
+        <div class="logi-advisor-thinking-trace">
+          <span class="logi-advisor-thinking-trace-label">${escapeHtml(t('apexLogViewer.logi.thinkingStep'))}</span>
+          <strong data-logi-thinking-status></strong>
+          <span data-logi-thinking-reason></span>
+        </div>
+      </details>
     </div>
-  </div>
-</div>`;
+  </div>`;
+}
 
 const QUICK_ACTIONS_COLLAPSED_KEY = 'sfocLogiQuickActionsCollapsed';
 const LOGI_PANEL_LAYOUT_KEY = 'sfocLogiPanelLayout';
@@ -173,7 +183,7 @@ const QUICK_ACTION_META = {
 
 /** @typedef {{ id: string, text: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, summaryRef?: LogiSummaryRef, displayText?: string }} QueuedMessage */
 
-/** @typedef {{ role: string, content?: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, summaryRef?: LogiSummaryRef, displayText?: string, tool_calls?: object[], tool_call_id?: string, name?: string }} ChatMessage */
+/** @typedef {{ role: string, content?: string, quickActionId?: string, lineRef?: LogiLineRef, quoteRef?: LogiQuoteRef, summaryRef?: LogiSummaryRef, displayText?: string, tool_calls?: object[], tool_call_id?: string, name?: string, turnId?: string }} ChatMessage */
 
 let modalEl = null;
 let quickActionEditModalEl = null;
@@ -221,6 +231,7 @@ let panelLayout = { mode: 'docked', width: LOGI_PANEL_WIDTH_DEFAULT };
  * @property {string} thinkingStatus
  * @property {string} thinkingReason
  * @property {'default' | 'tools' | 'org'} thinkingMode
+ * @property {number} thinkingStartedAt
  * @property {string | null} activeRequestId
  * @property {string | null} activeTurnId
  * @property {boolean} cancelRequested
@@ -298,8 +309,13 @@ function getOrgFlowDeps() {
     processLlmResponse,
     mapErrorReason,
     buildChatMessageExtras,
-    showOrgQueryApproval: (pending, orgId) =>
-      showOrgQueryApproval(pending, orgId, { t, escapeHtml })
+    showOrgQueryApproval: (pending, orgId, modal) =>
+      showOrgQueryApproval(pending, orgId, {
+        t,
+        escapeHtml,
+        mount: modal?.querySelector('#logiAdvisorMessages'),
+        root: modal
+      })
   };
 }
 
@@ -321,6 +337,7 @@ function createRuntime() {
     thinkingStatus: '',
     thinkingReason: '',
     thinkingMode: 'default',
+    thinkingStartedAt: 0,
     activeRequestId: null,
     activeTurnId: null,
     cancelRequested: false,
@@ -604,6 +621,7 @@ function finishTurnUi(sessionKey, turnId, modal) {
   rt.thinkingStatus = '';
   rt.thinkingReason = '';
   rt.thinkingMode = 'default';
+  rt.thinkingStartedAt = 0;
   rt.activeTurnId = null;
   rt.activeRequestId = null;
   refreshUiIfBound(modal, sessionKey);
@@ -715,6 +733,7 @@ function applySavedToRuntime(saved, rt) {
   if (saved.pending) {
     rt.processing = true;
     rt.thinkingStatus = saved.thinkingStatus || '';
+    rt.thinkingStartedAt = Number(saved.thinkingStartedAt) || Number(saved.updatedAt) || Date.now();
   }
 }
 
@@ -741,6 +760,7 @@ async function persistRuntime(sessionKey) {
     isNewChat: rt.isNewChat,
     pending: rt.processing,
     thinkingStatus: rt.thinkingStatus || '',
+    thinkingStartedAt: rt.thinkingStartedAt || undefined,
     queuedCount: rt.messageQueue.length,
     usageLimitReason: rt.usageLimitReason || undefined,
     updatedAt: Date.now()
@@ -805,6 +825,7 @@ function startSessionPoll(modal, sessionKey) {
     applySavedToRuntime(saved, rt);
     rt.processing = false;
     rt.thinkingStatus = '';
+    rt.thinkingStartedAt = 0;
     stopSessionPoll();
     if (modal._sessionKey === sessionKey) {
       bindSession(sessionKey);
@@ -881,7 +902,7 @@ async function ensureLogiAdvisorConfigLoaded() {
 }
 
 export async function mountLogiAdvisor(opts) {
-  const { getParsed, getRawContent, payload, switchToSummary } = opts;
+  const { getParsed, getRawContent, getComparisonContext, getSummaryMount, isComparisonActive, payload, switchToSummary } = opts;
   currentAdvisorPayload = payload || null;
   btnEl = document.getElementById('logiAdvisorBtn');
   if (!btnEl) return;
@@ -889,12 +910,16 @@ export async function mountLogiAdvisor(opts) {
   mountLogiResume({
     getParsed,
     getRawContent,
+    getComparisonContext,
+    getSummaryMount,
+    isComparisonActive,
     payload: payload || {},
     switchToSummary,
     openAskLogi: (askCtx) => {
       void openLogiModal({
         getParsed,
         getRawContent,
+        getComparisonContext,
         payload: payload || {},
         summaryText: askCtx?.summaryText
       });
@@ -937,6 +962,7 @@ export async function mountLogiAdvisor(opts) {
     void openLogiModal({
       getParsed,
       getRawContent,
+      getComparisonContext,
       payload: payload || {}
     }).catch((err) => {
       console.error('[logi] open modal failed', err);
@@ -950,6 +976,7 @@ export async function mountLogiAdvisor(opts) {
     void openLogiModal({
       getParsed,
       getRawContent,
+      getComparisonContext,
       payload: payload || {}
     }).catch((err) => {
       console.error('[logi] open modal failed', err);
@@ -1093,6 +1120,7 @@ async function onLogiSessionsStorageChanged(store) {
   applySavedToRuntime(saved, rt);
   rt.processing = false;
   rt.thinkingStatus = '';
+  rt.thinkingStartedAt = 0;
   stopSessionPoll();
 
   if (modalEl.hidden) {
@@ -1296,6 +1324,7 @@ function ensureModal() {
 export function closeLogiModal() {
   if (!modalEl) return;
   closeQuickActionEditModal();
+  modalEl.dispatchEvent(new Event('sfoc-logi-approval-cancel'));
   if (boundSessionKey) {
     void persistRuntime(boundSessionKey);
   }
@@ -1703,6 +1732,7 @@ async function openLogiModal(ctx) {
   } else if (!saved?.pending) {
     rt.processing = false;
     rt.thinkingStatus = '';
+    rt.thinkingStartedAt = 0;
   }
 
   bindSession(sessionKey);
@@ -2308,6 +2338,71 @@ function renderUserMessageHtml(message) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {Record<string, unknown>}
+ */
+function parseToolArguments(raw) {
+  if (!raw || typeof raw !== 'string') return {};
+  try {
+    const value = JSON.parse(raw);
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? /** @type {Record<string, unknown>} */ (value)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Una traza breve, desplegable y segura. Enseñamos la operación que Logi ha
+ * realizado, no argumentos en bruto, respuestas de herramientas ni razonamiento
+ * interno del modelo.
+ *
+ * @param {ChatMessage} message
+ * @param {number} messageIndex
+ * @param {ChatMessage[]} sessionMessages
+ */
+function renderToolTraceHtml(message, messageIndex, sessionMessages) {
+  const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+  if (!calls.length) return '';
+
+  const items = calls
+    .map((call, callIndex) => {
+      const tc = /** @type {{ id?: string, function?: { name?: string, arguments?: string } }} */ (call || {});
+      const toolId = String(tc.id || '');
+      const name = String(tc.function?.name || '');
+      const args = parseToolArguments(tc.function?.arguments);
+      const label = formatToolActivityLabel(name, args, t) || t('apexLogViewer.logi.thinkingTools');
+      const result = sessionMessages
+        .slice(messageIndex + 1)
+        .find((candidate) => candidate.role === 'tool' && (!toolId || candidate.tool_call_id === toolId));
+      const failed = /(?:^|[,{\s])(?:error|ok)\s*[":=]\s*(?:true|false)/i.test(
+        String(result?.content || '')
+      ) && /(?:error\s*[":=]\s*true|ok\s*[":=]\s*false)/i.test(String(result?.content || ''));
+      const state = failed
+        ? t('apexLogViewer.logi.toolTraceFailed')
+        : result
+          ? t('apexLogViewer.logi.toolTraceComplete')
+          : t('apexLogViewer.logi.toolTracePending');
+      return `<li class="logi-advisor-tool-trace-item">
+        <span class="logi-advisor-tool-trace-check" aria-hidden="true">${failed ? '!' : '✓'}</span>
+        <span class="logi-advisor-tool-trace-label">${escapeHtml(label)}</span>
+        <span class="logi-advisor-tool-trace-state${failed ? ' is-error' : ''}">${escapeHtml(state)}</span>
+      </li>`;
+    })
+    .join('');
+  const countLabel = t('apexLogViewer.logi.toolTraceCount', { count: calls.length });
+  return `<details class="logi-advisor-tool-trace-card" open>
+    <summary>
+      <span class="logi-advisor-tool-trace-summary-icon" aria-hidden="true">✓</span>
+      <span>${escapeHtml(t('apexLogViewer.logi.toolTraceTitle'))}</span>
+      <span class="logi-advisor-tool-trace-count">${escapeHtml(countLabel)}</span>
+    </summary>
+    <ul>${items}</ul>
+  </details>`;
+}
+
+/**
  * @param {HTMLElement} modal
  */
 function renderMessages(modal) {
@@ -2340,9 +2435,14 @@ function renderMessages(modal) {
         return renderUserMessageHtml(m);
       }
       if (m.role === 'assistant') {
-        if (isLogiWelcomeGreeting(m.content || '')) return '';
+        // Las actividades son un estado temporal del turno activo. No deben
+        // quedar como líneas huérfanas cuando Logi ya ha contestado.
+        const toolTrace = showThinking && m.turnId === rt?.activeTurnId
+          ? renderToolTraceHtml(m, idx, sessionMessages)
+          : '';
+        if (isLogiWelcomeGreeting(m.content || '')) return toolTrace;
         const bodyHtml = formatAssistantHtml(m.content || '', modal);
-        if (!isVisibleAssistantContent(m.content || '') || !bodyHtml.trim()) return '';
+        if (!isVisibleAssistantContent(m.content || '') || !bodyHtml.trim()) return toolTrace;
         const actions = `<div class="logi-advisor-msg-actions">
           <button type="button" class="logi-advisor-msg-action" data-logi-msg-action="copy" data-msg-index="${idx}">${escapeHtml(copyLabel)}</button>
           <button type="button" class="logi-advisor-msg-action" data-logi-msg-action="regenerate" data-msg-index="${idx}">${escapeHtml(regenerateLabel)}</button>
@@ -2363,7 +2463,7 @@ function renderMessages(modal) {
             </div>`;
           }
         }
-        return `<div class="logi-advisor-msg logi-advisor-msg--assistant">
+        return `${toolTrace}<div class="logi-advisor-msg logi-advisor-msg--assistant">
           <span class="logi-advisor-msg-avatar">${LOGI_AVATAR_SVG}</span>
           <div class="logi-advisor-msg-wrap">
             <span class="logi-advisor-msg-name">Logi</span>
@@ -2404,7 +2504,7 @@ function renderMessages(modal) {
   });
 
   if (showThinking) {
-    mount.insertAdjacentHTML('beforeend', THINKING_BUBBLE_HTML);
+    mount.insertAdjacentHTML('beforeend', getThinkingBubbleHtml());
     ensureThinkingRotation(modal, getThinkingDeps());
   } else {
     stopThinkingRotation();
@@ -2656,6 +2756,7 @@ async function drainQueue(modal) {
   rt.processing = true;
   rt.thinkingStatus = '';
   rt.thinkingMode = 'default';
+  rt.thinkingStartedAt = Date.now();
   rt.cancelRequested = false;
   rt.activeTurnId = turnId;
   rt.activeRequestId = createRequestId();
@@ -2704,6 +2805,7 @@ async function drainQueue(modal) {
       rt.thinkingStatus = '';
       rt.thinkingReason = '';
       rt.thinkingMode = 'default';
+      rt.thinkingStartedAt = 0;
       rt.activeTurnId = null;
       rt.activeRequestId = null;
     }
@@ -2754,6 +2856,7 @@ async function cancelActiveGeneration(modal, opts = {}) {
   rt.thinkingStatus = '';
   rt.thinkingReason = '';
   rt.thinkingMode = 'default';
+  rt.thinkingStartedAt = 0;
   rt.activeTurnId = null;
   rt.activeRequestId = null;
 
@@ -2905,8 +3008,20 @@ function appendStreamDelta(modal, sessionKey, delta) {
   if (!mount) return;
 
   let bubble = mount.querySelector('.logi-advisor-msg--streaming');
+  const existingBody = bubble?.querySelector('[data-stream-body]');
+  const prev = existingBody?.dataset.raw || modal._logiStreamRaw || '';
+  const next = prev + delta;
+  modal._logiStreamRaw = next;
+
+  // Los primeros fragmentos pueden contener solo sintaxis Markdown incompleta.
+  // Hasta disponer de texto real conservamos la tarjeta de actividad, en lugar
+  // de pintar bloques o líneas sin significado para la persona usuaria.
+  const visible = getVisibleAssistantContent(next);
+  const meaningful = visible.replace(/[\s#>*_`|\-]/g, '');
+  if (meaningful.length < 3) return;
+
   if (!bubble) {
-    // Hide thinking bubble while streaming text.
+    // Sustituye el estado de actividad solo cuando ya existe respuesta visible.
     mount.querySelector('.logi-advisor-msg--thinking')?.remove();
     stopThinkingRotation();
     bubble = document.createElement('div');
@@ -2922,10 +3037,8 @@ function appendStreamDelta(modal, sessionKey, delta) {
 
   const body = bubble.querySelector('[data-stream-body]');
   if (!body) return;
-  const prev = body.dataset.raw || '';
-  const next = prev + delta;
   body.dataset.raw = next;
-  body.innerHTML = formatAssistantHtml(next, modal);
+  body.innerHTML = formatAssistantHtml(visible, modal);
   mount.scrollTop = mount.scrollHeight;
 }
 
@@ -2933,6 +3046,7 @@ function appendStreamDelta(modal, sessionKey, delta) {
  * @param {HTMLElement} modal
  */
 function clearStreamBubble(modal) {
+  if (modal) modal._logiStreamRaw = '';
   modal?.querySelector('.logi-advisor-msg--streaming')?.remove();
 }
 
@@ -3053,13 +3167,15 @@ async function processLlmResponse(res, modal, sessionKey, ctx, parsed, raw, payl
     rt.messages.push({
       role: 'assistant',
       content: '',
-      tool_calls: [tc]
+      tool_calls: [tc],
+      turnId
     });
     rt.messages.push({
       role: 'tool',
       tool_call_id: tc.id,
       name,
-      content: toolResult
+      content: toolResult,
+      turnId
     });
 
     rt.thinkingMode = 'tools';
@@ -3206,11 +3322,13 @@ function buildLogContextForModal(modal, parsed, payload, sessionKey) {
   });
   const rt = getRuntime(sessionKey);
   const summary = typeof rt.resumeSummary === 'string' ? rt.resumeSummary.trim() : '';
-  if (!summary || !rt.isNewChat) return base;
+  const comparison = modal?._ctx?.getComparisonContext?.();
+  const withComparison = comparison && typeof comparison === 'object' ? { ...base, ...comparison } : base;
+  if (!summary || !rt.isNewChat) return withComparison;
   const lang = getPromptLang(rt.messages);
   const header =
     lang === 'en' ? 'Prior Logi summary (user opened chat from resume):' : 'Resumen previo de Logi (el usuario abrió el chat desde el resumen):';
-  return `${base}\n\n---\n${header}\n${summary}`;
+  return { ...withComparison, resumeSummary: `${header}\n${summary}` };
 }
 
 /**

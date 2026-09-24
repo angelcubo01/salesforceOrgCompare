@@ -17,7 +17,7 @@ let searchTimer = null;
 let suggestGeneration = 0;
 /** @type {{ id: string, name: string, username: string } | null} */
 let selectedUser = null;
-/** @type {(() => void) | null} */
+/** @type {((trace: Record<string, unknown>) => void) | null} */
 let onTraceCreated = null;
 let traceStartPicker = null;
 let traceEndPicker = null;
@@ -308,9 +308,25 @@ async function submitTrace() {
       return;
     }
     const userLabel = selectedUser ? formatUserLabel(selectedUser) : userId;
+    const selectedLevel = levelSelect?.selectedOptions?.[0];
     showToast(t('debugLogs.traceSuccess', { user: userLabel }), 'info');
     closeModal();
-    onTraceCreated?.();
+    // La consulta de TraceFlag puede tardar unos instantes en reflejar un alta
+    // recién confirmada. Entregamos la traza creada a la vista para que no
+    // desaparezca entre el POST correcto y la siguiente lectura.
+    onTraceCreated?.({
+      id: String(res.traceFlagId || '').replace(/[^a-zA-Z0-9]/g, ''),
+      tracedEntityId: userId,
+      userName: selectedUser?.name || '',
+      username: selectedUser?.username || '',
+      userLabel: selectedUser?.name || userLabel,
+      debugLevelId,
+      debugLevelLabel: String(selectedLevel?.textContent || '').trim(),
+      debugLevelDeveloperName: '',
+      startIso,
+      expirationIso,
+      logType: 'USER_DEBUG'
+    });
   } catch {
     showToast(t('debugLogs.traceError'), 'error');
   } finally {

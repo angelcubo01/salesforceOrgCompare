@@ -24,6 +24,7 @@ import {
   toLocalDateTimeValue,
   toUtcIsoFromLocalDateTime
 } from '../../shared/salesforceTime.js';
+import { getSalesforceNow } from './salesforceServerClock.js';
 
 /** @type {Array<Record<string, unknown>>} */
 let allTraces = [];
@@ -35,6 +36,11 @@ let loadGeneration = 0;
 let busyRowId = '';
 let editStartPicker = null;
 let editEndPicker = null;
+// La creación usa la hora de Salesforce. La lista debe usar esa misma
+// referencia para no ocultar una traza válida si el reloj local difiere.
+let traceNowMs = Date.now();
+/** @type {Map<string, Record<string, unknown>>} */
+let justCreatedTraces = new Map();
 
 function els() {
   return {
@@ -75,14 +81,18 @@ function traceDateValidationMessage(code) {
 }
 
 function canExtendTrace(row) {
-  return canExtendOrReactivateUserDebugTrace(row);
+  return canExtendOrReactivateUserDebugTrace(row, traceNowMs);
 }
 
 function visibleTraces() {
   const { showInactive } = els();
   const includeInactive = !!showInactive?.checked;
   if (includeInactive) return allTraces;
-  return allTraces.filter((row) => isUserDebugTraceVisibleByDefault(row));
+  return allTraces.filter((row) => isUserDebugTraceVisibleByDefault(row, traceNowMs));
+}
+
+function pendingCreatedTraces() {
+  return [...justCreatedTraces.values()];
 }
 
 function setLoading(on) {
@@ -178,8 +188,8 @@ function renderTable() {
   empty?.classList.add('hidden');
   for (const row of rows) {
     const tr = document.createElement('tr');
-    const active = isUserDebugTraceActive(row);
-    const recentlyInactive = isUserDebugTraceRecentlyInactive(row);
+    const active = isUserDebugTraceActive(row, traceNowMs);
+    const recentlyInactive = isUserDebugTraceRecentlyInactive(row, traceNowMs);
     const statusKey = active ? 'debugLogs.viewTracesStatusActive' : 'debugLogs.viewTracesStatusInactive';
     const statusClass = active
       ? 'debug-log-view-traces-status debug-log-view-traces-status--active'
@@ -232,26 +242,38 @@ async function loadTraces() {
   const gen = ++loadGeneration;
   setLoading(true);
   try {
-    const res = await bg({
-      type: 'debugLogs:listTraces',
-      orgId: state.leftOrgId
-    });
+    const [res, clock] = await Promise.all([
+      bg({
+        type: 'debugLogs:listTraces',
+        orgId: state.leftOrgId
+      }),
+      getSalesforceNow(state.leftOrgId).catch(() => null)
+    ]);
     if (gen !== loadGeneration) return;
+    traceNowMs = Number.isFinite(Number(clock?.nowMs)) ? Number(clock.nowMs) : Date.now();
     if (!res?.ok) {
       const msg =
         res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('debugLogs.viewTracesLoadError');
       void handleToolResponseFailure(res, { artifact_type: 'DebugLogs', phase: 'list_traces' });
       showToast(msg, 'error');
-      allTraces = [];
+      allTraces = pendingCreatedTraces();
       renderTable();
       return;
     }
-    allTraces = Array.isArray(res.traces) ? res.traces : [];
+    const fetchedTraces = Array.isArray(res.traces) ? res.traces : [];
+    const fetchedIds = new Set(fetchedTraces.map((trace) => String(trace?.id || '')));
+    for (const id of fetchedIds) justCreatedTraces.delete(id);
+    // Conserva el alta recién creada hasta que Salesforce la devuelva en la
+    // consulta. Solo vive mientras este diálogo está abierto.
+    allTraces = [
+      ...fetchedTraces,
+      ...pendingCreatedTraces().filter((trace) => !fetchedIds.has(String(trace.id || '')))
+    ];
     renderTable();
   } catch {
     if (gen !== loadGeneration) return;
     showToast(t('debugLogs.viewTracesLoadError'), 'error');
-    allTraces = [];
+    allTraces = pendingCreatedTraces();
     renderTable();
   } finally {
     if (gen === loadGeneration) setLoading(false);
@@ -272,7 +294,7 @@ async function extendTrace(row) {
       type: 'debugLogs:extendTrace',
       orgId: state.leftOrgId,
       traceFlagId: row.id,
-      allowReactivate: isUserDebugTraceRecentlyInactive(row)
+      allowReactivate: isUserDebugTraceRecentlyInactive(row, traceNowMs)
     });
     if (!res?.ok) {
       const msg =
@@ -416,7 +438,21 @@ function closeModal() {
   loadGeneration++;
   allTraces = [];
   cachedDebugLevels = [];
+  justCreatedTraces.clear();
   busyRowId = '';
+}
+
+function handleTraceCreated(trace) {
+  const id = String(trace?.id || '');
+  if (id) justCreatedTraces.set(id, trace);
+  // createTrace sustituye cualquier USER_DEBUG previo del mismo usuario.
+  const userId = String(trace?.tracedEntityId || '');
+  if (userId) {
+    allTraces = allTraces.filter((row) => String(row?.tracedEntityId || '') !== userId || row?.id === id);
+  }
+  if (id) allTraces = [trace, ...allTraces.filter((row) => row?.id !== id)];
+  renderTable();
+  void loadTraces();
 }
 
 export function openDebugLogViewTracesModal() {
@@ -442,7 +478,7 @@ export function setupDebugLogViewTracesModal() {
   editStartPicker = createDateTimePicker(editStart, { label: t('dateRange.openCalendar') });
   editEndPicker = createDateTimePicker(editEnd, { label: t('dateRange.openCalendar') });
 
-  setDebugLogTraceModalOnCreated(() => void loadTraces());
+  setDebugLogTraceModalOnCreated(handleTraceCreated);
 
   openBtn?.addEventListener('click', () => openDebugLogViewTracesModal());
   addTraceBtn?.addEventListener('click', () => openDebugLogTraceModal());

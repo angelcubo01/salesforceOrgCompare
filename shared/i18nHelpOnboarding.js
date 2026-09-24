@@ -301,6 +301,15 @@ export const helpOnboardingEs = {
   'onboarding.common.actionTitle': 'Completa el flujo',
   'onboarding.common.resultTitle': 'Resultado y siguientes pasos',
   'onboarding.common.viewsTitle': 'Vistas de la herramienta',
+  'onboarding.common.overviewLabel': 'QUÉ VAS A CONSEGUIR',
+  'onboarding.common.contextLabel': 'PUNTO DE PARTIDA',
+  'onboarding.common.prepareLabel': 'PREPARA EL FLUJO',
+  'onboarding.common.actionLabel': 'ACCIÓN PRINCIPAL',
+  'onboarding.common.resultLabel': 'REVISA EL RESULTADO',
+  'onboarding.common.stepFocus': 'En este paso',
+  'onboarding.common.overviewNote': 'Tour breve de {count} pasos. Puedes salir cuando quieras.',
+  'onboarding.common.actionNote': 'No se ejecutará nada durante el tour; vuelve aquí cuando estés listo.',
+  'onboarding.common.resultNote': 'Listo: al finalizar puedes continuar desde este punto.',
 
   'onboarding.tool.Comparator.title': 'Comparador de metadatos',
   'onboarding.tool.Comparator.lead':
@@ -830,6 +839,15 @@ export const helpOnboardingEn = {
   'onboarding.common.actionTitle': 'Complete the flow',
   'onboarding.common.resultTitle': 'Result and next steps',
   'onboarding.common.viewsTitle': 'Tool views',
+  'onboarding.common.overviewLabel': 'WHAT YOU WILL ACHIEVE',
+  'onboarding.common.contextLabel': 'STARTING POINT',
+  'onboarding.common.prepareLabel': 'SET UP THE FLOW',
+  'onboarding.common.actionLabel': 'PRIMARY ACTION',
+  'onboarding.common.resultLabel': 'REVIEW THE RESULT',
+  'onboarding.common.stepFocus': 'In this step',
+  'onboarding.common.overviewNote': 'A short {count}-step tour. You can leave whenever you want.',
+  'onboarding.common.actionNote': 'Nothing runs during the tour; come back here when you are ready.',
+  'onboarding.common.resultNote': 'All set: when you finish, continue from this point.',
 
   'onboarding.tool.Comparator.title': 'Metadata comparator',
   'onboarding.tool.Comparator.lead':

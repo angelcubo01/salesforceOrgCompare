@@ -30,7 +30,7 @@
         <button
           type="button"
           id="logiResumeBtn"
-          class="logi-advisor-btn logi-advisor-btn--resume"
+          class="apex-log-viewer-download logi-advisor-btn logi-advisor-btn--resume"
           data-i18n="apexLogViewer.logi.resumeButton"
           hidden
         >
@@ -42,7 +42,7 @@
         <button
           type="button"
           id="logiAdvisorBtn"
-          class="logi-advisor-btn"
+          class="apex-log-viewer-download logi-advisor-btn"
           data-i18n="apexLogViewer.logi.button"
           hidden
         >
@@ -57,6 +57,13 @@
         >
           Descargar
         </button>
+        <button
+          type="button"
+          id="apexLogCompareBtn"
+          class="apex-log-viewer-download"
+          data-i18n="apexLogViewer.compare.button"
+          hidden
+        >Comparar con otro log</button>
         <span
           id="apexLogViewerUser"
           class="apex-log-viewer-user ph-no-capture"
@@ -74,31 +81,40 @@
       </div>
     </div>
     <main class="apex-log-panels">
-      <div class="apex-log-panel is-active" data-panel="summary">
+      <div id="apexLogPanel-summary" class="apex-log-panel is-active" data-panel="summary" role="tabpanel">
         <div id="apexLogSummaryMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="errors" hidden>
+      <div id="apexLogPanel-comparison" class="apex-log-panel" data-panel="comparison" role="tabpanel" hidden>
+        <div class="apex-log-comparison-toolbar">
+          <button type="button" id="apexLogComparisonLogiSummary" class="apex-log-viewer-download apex-log-comparison-logi-action" data-i18n="apexLogViewer.logi.resumeComparisonButton" hidden>Resumir comparación con Logi</button>
+          <span class="apex-log-viewer-toolbar-spacer" aria-hidden="true"></span>
+          <button type="button" id="apexLogCompareReplace" class="apex-log-viewer-download" data-i18n="apexLogViewer.compare.replace">Sustituir Log B</button>
+          <button type="button" id="apexLogCompareClose" class="apex-log-viewer-download" data-i18n="apexLogViewer.compare.close">Cerrar comparación</button>
+        </div>
+        <div id="apexLogComparisonMount" class="apex-log-panel-scroll"></div>
+      </div>
+      <div id="apexLogPanel-errors" class="apex-log-panel" data-panel="errors" role="tabpanel" hidden>
         <div id="apexLogErrorsMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="text" hidden>
+      <div id="apexLogPanel-text" class="apex-log-panel" data-panel="text" role="tabpanel" hidden>
         <div id="apexLogTextToolbar" class="apex-log-text-toolbar"></div>
         <span id="apexLogTextFilterCount" class="apex-log-text-filter-count"></span>
         <div id="apexLogViewerMount" class="apex-log-viewer-editor"></div>
       </div>
-      <div class="apex-log-panel" data-panel="timeline" hidden>
+      <div id="apexLogPanel-timeline" class="apex-log-panel" data-panel="timeline" role="tabpanel" hidden>
         <div id="apexLogTimelineToolbar" class="apex-log-panel-toolbar"></div>
         <div id="apexLogTimelineMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="database" hidden>
+      <div id="apexLogPanel-database" class="apex-log-panel" data-panel="database" role="tabpanel" hidden>
         <div id="apexLogDatabaseMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="analysis" hidden>
+      <div id="apexLogPanel-analysis" class="apex-log-panel" data-panel="analysis" role="tabpanel" hidden>
         <div id="apexLogAnalysisMount" class="apex-log-panel-scroll apex-log-panel-scroll--analysis"></div>
       </div>
-      <div class="apex-log-panel" data-panel="network" hidden>
+      <div id="apexLogPanel-network" class="apex-log-panel" data-panel="network" role="tabpanel" hidden>
         <div id="apexLogNetworkMount" class="apex-log-panel-scroll"></div>
       </div>
-      <div class="apex-log-panel" data-panel="platform" hidden>
+      <div id="apexLogPanel-platform" class="apex-log-panel" data-panel="platform" role="tabpanel" hidden>
         <div id="apexLogPlatformMount" class="apex-log-panel-scroll"></div>
       </div>
     </main>

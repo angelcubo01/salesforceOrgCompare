@@ -39,8 +39,46 @@ let __authStatuses = {};
 let __orgAliases = {};
 let __orgGroups = {};
 let __savedRefreshGeneration = 0;
+let __hasRenderedSavedList = false;
 /** @type {HTMLElement | null} */
 let __dragRowEl = null;
+const AUTH_STATUS_SNAPSHOT_KEY = 'sfocPopupAuthStatusSnapshot';
+const AUTH_STATUS_SNAPSHOT_MAX_AGE_MS = 10 * 60 * 1000;
+
+function normalizeAuthStatuses(statuses) {
+  if (!statuses || typeof statuses !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(statuses).filter(([, status]) => status === 'active' || status === 'expired')
+  );
+}
+
+async function loadAuthStatusSnapshot() {
+  try {
+    const raw = await chrome.storage.local.get(AUTH_STATUS_SNAPSHOT_KEY);
+    const snapshot = raw?.[AUTH_STATUS_SNAPSHOT_KEY];
+    const updatedAt = Number(snapshot?.updatedAt);
+    if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > AUTH_STATUS_SNAPSHOT_MAX_AGE_MS) {
+      return { statuses: {}, isFresh: false };
+    }
+    return { statuses: normalizeAuthStatuses(snapshot.statuses), isFresh: true };
+  } catch {
+    return { statuses: {}, isFresh: false };
+  }
+}
+
+async function saveAuthStatusSnapshot(statuses, orgs) {
+  try {
+    const validIds = new Set((orgs || []).map((org) => String(org?.id || '')).filter(Boolean));
+    const filtered = Object.fromEntries(
+      Object.entries(normalizeAuthStatuses(statuses)).filter(([orgId]) => validIds.has(orgId))
+    );
+    await chrome.storage.local.set({
+      [AUTH_STATUS_SNAPSHOT_KEY]: { updatedAt: Date.now(), statuses: filtered }
+    });
+  } catch {
+    /* El refresco de estado sigue funcionando aunque no se pueda persistir. */
+  }
+}
 
 function encodeGroupAttr(groupName) {
   return groupName ? encodeURIComponent(groupName) : '';
@@ -347,6 +385,7 @@ function showOrgsLoading() {
 }
 
 function renderSaved(orgs) {
+  __hasRenderedSavedList = true;
   window.__lastOrgs = orgs;
   const ul = document.getElementById('savedList');
   ul.innerHTML = '';
@@ -387,25 +426,63 @@ function renderSaved(orgs) {
   wireSavedListDragReorder(ul);
 }
 
+function setInitialAuthLoading(visible) {
+  const ul = document.getElementById('savedList');
+  if (!ul) return;
+
+  ul.querySelector('#savedListAuthLoading')?.remove();
+  if (!visible) return;
+
+  const li = el('li', 'row orgs-auth-loading-row');
+  li.id = 'savedListAuthLoading';
+  li.setAttribute('role', 'status');
+  li.setAttribute('aria-live', 'polite');
+  li.setAttribute('aria-busy', 'true');
+
+  const inner = el('div', 'orgs-auth-loading-inner');
+  inner.appendChild(el('span', 'orgs-auth-loading-text', t('popup.loadingOrgs')));
+  inner.appendChild(el('span', 'orgs-auth-loading-spinner'));
+  li.appendChild(inner);
+  ul.appendChild(li);
+}
+
 async function refreshSaved() {
   const generation = ++__savedRefreshGeneration;
-  const [res] = await Promise.all([
+  // Iniciar la validaciÃ³n ya: puede tardar una llamada a Salesforce por
+  // entorno, pero no depende de que terminemos de leer la lista local.
+  const authStatusesPromise = bg({ type: 'auth:getStatuses' });
+  const [res, , authSnapshot] = await Promise.all([
     bg({ type: 'listSavedOrgs' }),
-    loadOrgExtras()
+    loadOrgExtras(),
+    loadAuthStatusSnapshot()
   ]);
-  const orgs = res.ok ? (res.orgs || []) : [];
-  renderSaved(orgs);
+  const hasSavedList = Boolean(res?.ok);
+  const orgs = hasSavedList ? (res.orgs || []) : (window.__lastOrgs || []);
+  // Pintar el último resultado conocido evita el estado gris entre la carga
+  // de la lista local y la comprobación actual contra Salesforce.
+  const isInitialRender = !__hasRenderedSavedList;
+  const waitForInitialAuth = isInitialRender && orgs.length > 0 && !authSnapshot.isFresh;
+  if (isInitialRender && !waitForInitialAuth) {
+    if (authSnapshot.isFresh) __authStatuses = authSnapshot.statuses;
+    renderSaved(orgs);
+  }
   window.__savedOrgIds = new Set(orgs.map((o) => o.id));
   window.__savedOrgs = orgs;
 
   // Verificar cada sesión puede implicar una petición a Salesforce por org.
   // La lista ya está disponible en storage, así que no bloqueamos el popup:
   // actualizamos únicamente los indicadores cuando lleguen los resultados.
-  void bg({ type: 'auth:getStatuses' }).then((auth) => {
+  void authStatusesPromise.then((auth) => {
     if (generation !== __savedRefreshGeneration) return;
-    __authStatuses = auth?.ok ? (auth.statuses || {}) : {};
+    if (!auth?.ok) {
+      if (waitForInitialAuth) renderSaved(orgs);
+      return;
+    }
+    __authStatuses = normalizeAuthStatuses(auth.statuses);
     renderSaved(orgs);
+    void saveAuthStatusSnapshot(__authStatuses, orgs);
   }).catch(() => {
+    if (generation === __savedRefreshGeneration && waitForInitialAuth) renderSaved(orgs);
     // La lista sigue siendo utilizable aunque la verificación de sesión falle.
   });
   return orgs;
@@ -446,7 +523,7 @@ async function refreshDetected(savedOrgs) {
 }
 
 async function refresh() {
-  showOrgsLoading();
+  if (!__hasRenderedSavedList) showOrgsLoading();
   const savedOrgs = await refreshSaved();
   await refreshDetected(savedOrgs);
   return savedOrgs;

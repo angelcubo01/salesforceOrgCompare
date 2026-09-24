@@ -8,6 +8,76 @@ let activeSession = null;
 let sessionSequence = 0;
 let driverFactory = null;
 
+const TOUR_STEP_PRESENTATION = Object.freeze({
+  overview: { icon: 'spark', tone: 'discover', labelKey: 'onboarding.common.overviewLabel', noteKey: 'onboarding.common.overviewNote', animated: true },
+  context: { icon: 'target', tone: 'context', labelKey: 'onboarding.common.contextLabel' },
+  prepare: { icon: 'sliders', tone: 'prepare', labelKey: 'onboarding.common.prepareLabel' },
+  action: { icon: 'bolt', tone: 'action', labelKey: 'onboarding.common.actionLabel', noteKey: 'onboarding.common.actionNote', animated: true },
+  result: { icon: 'check', tone: 'result', labelKey: 'onboarding.common.resultLabel', noteKey: 'onboarding.common.resultNote', animated: true }
+});
+
+function presentationForStep(stepId) {
+  return TOUR_STEP_PRESENTATION[stepId] || TOUR_STEP_PRESENTATION.context;
+}
+
+function createTourIcon(icon) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '2');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute('d', {
+    spark: 'm12 2 1.7 6.3L20 10l-6.3 1.7L12 18l-1.7-6.3L4 10l6.3-1.7L12 2Zm6 13 .8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8L18 15Z',
+    target: 'M12 3a9 9 0 1 0 9 9M12 7a5 5 0 1 0 5 5m-5-2a2 2 0 1 0 2 2m0-9v4m-4 5h4',
+    sliders: 'M4 6h16M4 12h16M4 18h16M8 4v4m8-4v4m-5 8v4',
+    bolt: 'm13 2-8 12h6l-1 8 8-12h-6l1-8Z',
+    check: 'm5 12 4.2 4.2L19 6.5'
+  }[icon] || 'M5 12h14');
+  svg.appendChild(path);
+  return svg;
+}
+
+function decoratePopover(popover, item, totalSteps) {
+  const presentation = presentationForStep(item.id);
+  const title = popover.title;
+  const description = popover.description;
+  if (!title || !description) return;
+
+  popover.wrapper.dataset.tourStep = item.id;
+  title.replaceChildren();
+  const badge = document.createElement('span');
+  badge.className = `sfoc-driver-step-badge is-${presentation.tone}${presentation.animated ? ' is-animated' : ''}`;
+  badge.appendChild(createTourIcon(presentation.icon));
+  badge.appendChild(document.createTextNode(t(presentation.labelKey)));
+  const titleText = document.createElement('span');
+  titleText.className = 'sfoc-driver-step-title';
+  titleText.textContent = t(item.titleKey);
+  title.append(badge, titleText);
+
+  description.replaceChildren();
+  const guidance = document.createElement('p');
+  guidance.className = 'sfoc-driver-guidance';
+  const emphasis = document.createElement('strong');
+  emphasis.textContent = `${t('onboarding.common.stepFocus')}: `;
+  guidance.append(emphasis, document.createTextNode(t(item.descriptionKey)));
+  description.appendChild(guidance);
+  if (presentation.noteKey) {
+    const note = document.createElement('p');
+    note.className = `sfoc-driver-note is-${presentation.tone}${presentation.animated ? ' is-animated' : ''}`;
+    note.appendChild(createTourIcon(presentation.icon));
+    const noteText = presentation.noteKey === 'onboarding.common.overviewNote'
+      ? t(presentation.noteKey, { count: totalSteps })
+      : t(presentation.noteKey);
+    note.appendChild(document.createTextNode(noteText));
+    description.appendChild(note);
+  }
+}
+
 async function resolveDriverFactory() {
   if (driverFactory) return driverFactory;
   const module = await import('../../vendor/driver.js/driver.js.mjs');
@@ -123,7 +193,9 @@ async function finalizeSession(session, outcome, { alreadyDestroyed = false } = 
   await persist;
 }
 
-function renderCustomPopover(popover, session) {
+function renderCustomPopover(popover, session, hookOptions) {
+  const activeStep = session.definition.steps[hookOptions?.index];
+  if (activeStep) decoratePopover(popover, activeStep, session.definition.steps.length);
   popover.closeButton.setAttribute('aria-label', t('onboarding.common.skip'));
   popover.closeButton.title = t('onboarding.common.skip');
   popover.progress.setAttribute('aria-live', 'polite');

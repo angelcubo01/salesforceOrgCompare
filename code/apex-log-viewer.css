@@ -1,11 +1,156 @@
+html[data-sfoc-document='apex-log-viewer'] {
+  /* Alias de transición: el visor se alimenta de los tokens compartidos. */
+  --alb-bg: var(--sfoc-color-canvas);
+  --alb-text: var(--sfoc-color-text);
+  --alb-muted: var(--sfoc-color-text-secondary);
+  --alb-border: var(--sfoc-color-border);
+  --alb-accent: var(--sfoc-color-focus);
+  --alb-warning: var(--sfoc-color-warning);
+  --alb-chip-bg: var(--sfoc-color-surface-subtle);
+  --alb-gantt-grid: color-mix(in srgb, var(--sfoc-color-border) 55%, transparent);
+  --alb-page-pad-x: var(--sfoc-space-4);
+  --alb-mono: var(--sfoc-font-mono);
+}
+
+.apex-log-compare-dialog {
+  box-sizing: border-box;
+  inline-size: min(860px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  color: var(--sfoc-color-text);
+  background: var(--sfoc-color-surface);
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-2, 8px);
+  padding: 0;
+}
+.apex-log-compare-dialog::backdrop { background: color-mix(in srgb, #000 45%, transparent); }
+.apex-log-compare-incompatible-dialog { width:min(520px, calc(100vw - 32px)); padding:0; color:var(--sfoc-color-text); background:var(--sfoc-color-surface); border:1px solid var(--sfoc-color-border); border-radius:var(--sfoc-radius-2, 8px); box-shadow:0 20px 55px rgba(0,0,0,.42); }
+.apex-log-compare-incompatible-dialog::backdrop { background:color-mix(in srgb, #000 55%, transparent); }
+.apex-log-compare-incompatible-dialog__body { padding:var(--sfoc-space-4); }
+.apex-log-compare-incompatible-dialog header { display:flex; align-items:flex-start; gap:12px; }
+.apex-log-compare-incompatible-dialog h2 { margin:0; font-size:var(--sfoc-font-size-4, 18px); }
+.apex-log-compare-incompatible-dialog p { margin:5px 0 0; color:var(--sfoc-color-text-secondary); line-height:1.45; }
+.apex-log-compare-incompatible-dialog__icon { display:grid; place-items:center; flex:0 0 auto; width:30px; height:30px; border:1px solid var(--sfoc-color-error); border-radius:50%; color:var(--sfoc-color-error); background:color-mix(in srgb, var(--sfoc-color-error) 12%, transparent); font-weight:800; }
+.apex-log-compare-incompatible-dialog dl { display:grid; gap:8px; margin:var(--sfoc-space-4) 0; }
+.apex-log-compare-incompatible-dialog dl > div { display:grid; gap:4px; padding:9px 10px; border:1px solid var(--sfoc-color-border); border-radius:4px; background:var(--sfoc-color-surface-subtle); }
+.apex-log-compare-incompatible-dialog dt { color:var(--sfoc-color-text-secondary); font-size:12px; font-weight:600; }
+.apex-log-compare-incompatible-dialog dd { margin:0; overflow-wrap:anywhere; font:12px/1.4 var(--sfoc-font-mono); }
+.apex-log-compare-incompatible-dialog footer { display:flex; justify-content:flex-end; }
+.apex-log-compare-dialog__body { box-sizing:border-box; width:100%; padding: var(--sfoc-space-4); }
+.apex-log-compare-dialog header, .apex-log-compare-dialog footer, .apex-log-compare-dialog__actions, .apex-log-comparison-toolbar { display:flex; gap:var(--sfoc-space-2); align-items:center; justify-content:space-between; }
+.apex-log-compare-dialog button, .apex-log-comparison button { font: inherit; color:inherit; background:var(--sfoc-color-surface); border:1px solid var(--sfoc-color-border); border-radius:4px; padding:6px 9px; cursor:pointer; }
+.apex-log-compare-candidates { display:grid; gap:8px; max-height:420px; overflow:auto; margin:12px 0; }
+.apex-log-compare-candidate { text-align:left; display:grid; gap:3px; width:100%; }
+.apex-log-compare-candidate:hover, .apex-log-compare-candidate:focus-visible { outline:2px solid var(--sfoc-color-focus); outline-offset:1px; }
+.apex-log-compare-spinner { width:20px; height:20px; border:3px solid var(--sfoc-color-border); border-top-color:var(--sfoc-color-focus); border-radius:50%; animation:apex-log-compare-spin .8s linear infinite; justify-self:center; margin:24px; }
+@keyframes apex-log-compare-spin { to { transform:rotate(360deg); } }
+.apex-log-comparison { padding:var(--sfoc-space-4); color:var(--sfoc-color-text); }
+.apex-log-comparison__summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin-bottom:12px; }
+.apex-log-comparison__summary > div, .apex-log-comparison__warning { border:1px solid var(--sfoc-color-border); border-radius:4px; padding:10px; background:var(--sfoc-color-surface); }
+.apex-log-comparison__summary strong, .apex-log-comparison__summary span { display:block; }
+.apex-log-comparison__warning { border-inline-start:4px solid var(--sfoc-color-warning); }
+.apex-log-comparison__subtabs { display:flex; gap:6px; flex-wrap:wrap; margin:12px 0; }
+.apex-log-comparison__table { width:100%; border-collapse:collapse; font-size:13px; }
+.apex-log-comparison__table th, .apex-log-comparison__table td { border:1px solid var(--sfoc-color-border); padding:7px; text-align:left; vertical-align:top; }
+.apex-log-comparison__flow { margin:0; padding-left:26px; font-family:var(--sfoc-font-mono); }
+.apex-log-comparison__flow li { margin:4px 0; border-inline-start:3px solid var(--sfoc-color-border); padding-inline-start:7px; }
+.apex-log-comparison__flow .is-onlyA, .apex-log-comparison__flow .is-onlyB { border-color:var(--sfoc-color-warning); }
+.apex-log-comparison__text { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
+.apex-log-comparison__text pre { margin:0; overflow:auto; max-height:60vh; padding:10px; border:1px solid var(--sfoc-color-border); background:var(--sfoc-color-surface-subtle); font:12px/1.45 var(--sfoc-font-mono); }
+@media (max-width: 700px) { .apex-log-comparison__text { grid-template-columns:1fr; } .apex-log-comparison-toolbar { flex-wrap:wrap; padding:8px; } }
+
+/* Comparación: misma escala de controles, tarjetas y bordes que el resto del visor. */
+.apex-log-compare-dialog__header { align-items:flex-start; border-bottom:1px solid var(--sfoc-color-border); padding-bottom:var(--sfoc-space-3); }
+.apex-log-compare-dialog__header h2 { margin:0; font-size:var(--sfoc-font-size-4, 18px); }
+.apex-log-compare-dialog__header p { color:var(--sfoc-color-text-secondary); margin:4px 0 0; }
+.apex-log-compare-dialog__icon { min-width:32px; font-size:20px !important; line-height:1; }
+.apex-log-compare-upload { margin-top:var(--sfoc-space-3); }
+.apex-log-compare-dropzone { display:grid; place-items:center; gap:6px; width:100%; min-height:92px; box-sizing:border-box; border-style:dashed !important; color:var(--sfoc-color-text-secondary) !important; text-align:center; }
+.apex-log-compare-dropzone strong { color:var(--sfoc-color-text); }
+.apex-log-compare-dropzone.is-dragover, .apex-log-compare-dropzone:hover { border-color:var(--sfoc-color-focus) !important; background:var(--sfoc-color-surface-subtle) !important; }
+.apex-log-compare-divider { display:flex; align-items:center; gap:10px; color:var(--sfoc-color-text-secondary); font-size:12px; margin:var(--sfoc-space-4) 0; }
+.apex-log-compare-divider::before, .apex-log-compare-divider::after { content:''; height:1px; background:var(--sfoc-color-border); flex:1; }
+.apex-log-compare-remote { display:grid; grid-template-columns:130px minmax(0, 1fr); width:100%; box-sizing:border-box; align-items:center; gap:8px 12px; }
+.apex-log-compare-remote select { width:100%; box-sizing:border-box; color:var(--sfoc-color-text); background:var(--sfoc-color-surface); border:1px solid var(--sfoc-color-border); border-radius:4px; min-height:32px; padding:5px 8px; font:inherit; }
+.apex-log-compare-org-picker { position:relative; width:100%; min-width:0; }
+.apex-log-compare-org-trigger { --apex-log-compare-chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5' fill='none'%3E%3Cpath d='M1 1.25L4 3.75L7 1.25' stroke='%239aa4b2' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); width:100%; min-height:30px; box-sizing:border-box; position:relative; display:flex; align-items:center; justify-content:center; padding:6px 28px 6px 22px !important; border-radius:8px !important; border-color:#555 !important; color:var(--sfoc-color-text) !important; background-image:var(--apex-log-compare-chevron), linear-gradient(135deg, #555 0%, #404040 100%) !important; background-repeat:no-repeat !important; background-position:left 9px center, 0 0 !important; background-size:8px 5px, 100% 100% !important; box-shadow:0 2px 4px rgba(0, 0, 0, .2); }
+.apex-log-compare-org-trigger.is-connected { border-color:#22c55e !important; color:#4ade80 !important; }
+.apex-log-compare-org-trigger > span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.apex-log-compare-org-info { position:absolute; right:9px; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:14px; height:14px; border:1px solid currentColor; border-radius:50%; color:#9aa4b2; font-family:Georgia, serif; font-size:10px; font-style:italic; font-weight:700; }
+.apex-log-compare-org-popup { position:absolute; z-index:20; top:calc(100% + 4px); left:0; right:0; max-height:190px; overflow:auto; padding:4px; border:1px solid #555; border-radius:8px; background:#2a2f37; box-shadow:0 8px 24px rgba(0,0,0,.45); }
+.apex-log-compare-org-row { display:flex; align-items:center; justify-content:center; width:100%; min-height:28px; border:0 !important; border-radius:5px !important; background:transparent !important; color:#e0e0e0 !important; font-size:12px !important; padding:5px 20px !important; }
+.apex-log-compare-org-row:hover, .apex-log-compare-org-row.is-selected { background:#454c57 !important; }
+.apex-log-compare-org-row.is-connected { color:#4ade80 !important; }
+.apex-log-compare-org-row.is-disconnected { color:#f87171 !important; }
+.apex-log-compare-candidates { grid-column:1 / -1; width:100%; box-sizing:border-box; border:1px solid var(--sfoc-color-border); border-radius:4px; padding:6px; background:var(--sfoc-color-surface-subtle); min-height:76px; max-height:430px; }
+.apex-log-compare-candidate { background:var(--sfoc-color-surface) !important; padding:9px !important; }
+.apex-log-compare-candidate__title { color:var(--sfoc-color-text); font-weight:600; }
+.apex-log-compare-candidate__details { color:var(--sfoc-color-text-secondary); font-size:12px; }
+.apex-log-compare-empty { color:var(--sfoc-color-text-secondary); margin:12px; }
+.apex-log-compare-load-more { justify-self:center; margin:6px auto 2px; }
+.apex-log-comparison-toolbar { border-bottom:1px solid var(--sfoc-color-border); background:var(--sfoc-color-surface); padding:8px var(--sfoc-space-4); }
+.apex-log-comparison-toolbar .apex-log-viewer-toolbar-spacer { flex:1; }
+.apex-log-comparison__summary > article { display:grid; gap:5px; border:1px solid var(--sfoc-color-border); border-top:3px solid var(--sfoc-color-focus); border-radius:var(--sfoc-radius-2, 8px); padding:12px; background:linear-gradient(145deg, var(--sfoc-color-surface), var(--sfoc-color-surface-subtle)); min-width:0; box-shadow:0 3px 12px color-mix(in srgb, var(--sfoc-color-canvas) 28%, transparent); }
+.apex-log-comparison__summary > article:nth-child(2) { border-top-color:#a78bfa; }
+.apex-log-comparison__summary > article:nth-child(3) { border-top-color:var(--sfoc-color-warning); }
+.apex-log-comparison__summary > article:nth-child(4) { border-top-color:var(--sfoc-color-error); }
+.apex-log-comparison__summary > article strong { overflow-wrap:anywhere; font-size:13px; }
+.apex-log-comparison__result { color:var(--sfoc-color-text-secondary); margin-top:2px; font-weight:600; }
+.apex-log-comparison__execution-context { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; margin-bottom:12px; }
+.apex-log-comparison__execution-card { display:grid; gap:6px; min-width:0; padding:11px; border:1px solid var(--sfoc-color-border); border-radius:var(--sfoc-radius-2, 8px); background:var(--sfoc-color-surface-subtle); }
+.apex-log-comparison__execution-card > strong { font-size:14px; }
+.apex-log-comparison__environment { overflow-wrap:anywhere; color:var(--sfoc-color-text-secondary); font-size:12px; }
+.apex-log-comparison__execution-card > span:not(.apex-log-comparison__environment) { display:grid; grid-template-columns:100px minmax(0, 1fr); gap:8px; overflow-wrap:anywhere; font-size:12px; }
+.apex-log-comparison__execution-card b { color:var(--sfoc-color-text-secondary); font-weight:600; }
+.apex-log-comparison__subtabs button[aria-selected='true'] { background:var(--sfoc-color-focus); border-color:var(--sfoc-color-focus); color:var(--sfoc-color-on-accent, #fff); }
+.apex-log-comparison__text-tools { display:flex; flex-wrap:wrap; align-items:center; gap:12px; padding:8px 0; color:var(--sfoc-color-text-secondary); font-size:13px; }
+.apex-log-comparison__text-tools label { display:flex; align-items:center; gap:5px; }
+.apex-log-comparison__text-tools input[type='search'] { min-height:28px; color:var(--sfoc-color-text); background:var(--sfoc-color-surface); border:1px solid var(--sfoc-color-border); border-radius:4px; padding:2px 6px; }
+.apex-log-comparison__monaco { height:min(62vh, 720px); min-height:360px; border:1px solid var(--sfoc-color-border); border-radius:4px; overflow:hidden; background:var(--sfoc-color-surface-subtle); }
+.apex-log-comparison__monaco .monaco-diff-editor { height:100% !important; }
+.apex-log-comparison__guide { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin:0 0 var(--sfoc-space-3); padding:10px 12px; border:1px solid var(--sfoc-color-border); border-inline-start:4px solid var(--sfoc-color-focus); border-radius:var(--sfoc-radius-2, 8px); background:var(--sfoc-color-surface-subtle); }
+.apex-log-comparison__guide strong { font-size:14px; }
+.apex-log-comparison__guide p { flex-basis:100%; margin:0; color:var(--sfoc-color-text-secondary); font-size:13px; line-height:1.45; }
+.apex-log-comparison__flow-toggle { display:flex; align-items:center; gap:5px; color:var(--sfoc-color-text); font-size:13px; cursor:pointer; }
+.apex-log-comparison__flow-cards, .apex-log-comparison__difference-cards { display:grid; gap:10px; margin:0; padding:0; list-style:none; }
+.apex-log-comparison__diagnosis { display:grid; gap:12px; margin:0 0 var(--sfoc-space-3); padding:14px; border:1px solid var(--sfoc-color-border); border-radius:var(--sfoc-radius-2, 8px); background:linear-gradient(135deg, var(--sfoc-color-surface-subtle), var(--sfoc-color-surface)); }
+.apex-log-comparison__diagnosis > header { display:flex; align-items:flex-start; gap:10px; }
+.apex-log-comparison__diagnosis > header strong { display:block; margin-bottom:3px; }
+.apex-log-comparison__diagnosis > header p { margin:0; overflow-wrap:anywhere; color:var(--sfoc-color-text-secondary); font:13px/1.4 var(--sfoc-font-mono); }
+.apex-log-comparison__metrics { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; }
+.apex-log-comparison__metrics article { display:grid; gap:4px; padding:9px; border:1px solid var(--sfoc-color-border); border-radius:4px; background:var(--sfoc-color-surface); }
+.apex-log-comparison__metrics strong { color:var(--sfoc-color-text-secondary); font-size:12px; font-weight:600; }
+.apex-log-comparison__metrics span { font-size:22px; font-weight:700; }
+.apex-log-comparison__summary-differences { display:grid; gap:10px; }
+.apex-log-comparison__summary-differences h3 { margin:0; font-size:14px; }
+.apex-log-comparison__flow-card, .apex-log-comparison__difference-card { border:1px solid var(--sfoc-color-border); border-inline-start:4px solid var(--sfoc-color-text-secondary); border-radius:var(--sfoc-radius-2, 8px); background:var(--sfoc-color-surface); padding:10px 12px; }
+.apex-log-comparison__flow-card.is-onlyA { border-inline-start-color:var(--sfoc-color-warning); }
+.apex-log-comparison__flow-card.is-onlyB { border-inline-start-color:var(--sfoc-color-focus); }
+.apex-log-comparison__flow-card.is-same { opacity:.82; }
+.apex-log-comparison__flow-card > strong, .apex-log-comparison__difference-card > strong { display:block; margin:5px 0 10px; overflow-wrap:anywhere; }
+.apex-log-comparison__state { display:inline-flex; align-items:center; min-height:20px; padding:1px 7px; border:1px solid currentColor; border-radius:999px; color:var(--sfoc-color-text-secondary); font-size:12px; font-weight:600; }
+.apex-log-comparison__flow-evidence, .apex-log-comparison__difference-evidence { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:8px; }
+.apex-log-comparison__flow-evidence > div, .apex-log-comparison__difference-evidence > div { display:grid; gap:5px; min-width:0; padding:8px; border:1px solid var(--sfoc-color-border); border-radius:4px; background:var(--sfoc-color-surface-subtle); }
+.apex-log-comparison__flow-evidence b, .apex-log-comparison__difference-evidence b { font-size:12px; }
+.apex-log-comparison__difference-card header { display:flex; align-items:center; justify-content:space-between; gap:8px; color:var(--sfoc-color-text-secondary); font-size:12px; }
+.apex-log-comparison__difference-card > p { margin:0 0 10px; color:var(--sfoc-color-text-secondary); font-size:13px; }
+.apex-log-comparison__difference-card.is-high { border-inline-start-color:var(--sfoc-color-error); }
+.apex-log-comparison__difference-card.is-medium { border-inline-start-color:var(--sfoc-color-warning); }
+.apex-log-comparison__difference-card.is-low { border-inline-start-color:var(--sfoc-color-focus); }
+.apex-log-comparison__difference-evidence span { overflow-wrap:anywhere; font:12px/1.4 var(--sfoc-font-mono); }
+.apex-log-comparison__filters { display:flex; flex-wrap:wrap; gap:10px; }
+.apex-log-comparison__filters label { display:grid; gap:4px; color:var(--sfoc-color-text-secondary); font-size:12px; }
+.apex-log-comparison__filters select { min-height:30px; min-width:150px; color:var(--sfoc-color-text); background:var(--sfoc-color-surface); border:1px solid var(--sfoc-color-border); border-radius:4px; font:inherit; }
+@media (max-width: 620px) { .apex-log-comparison__flow-evidence, .apex-log-comparison__difference-evidence, .apex-log-comparison__metrics { grid-template-columns:1fr; } .apex-log-comparison__difference-card header { align-items:flex-start; flex-direction:column; } }
+@media (max-width: 520px) { .apex-log-compare-remote, .apex-log-comparison__execution-context { grid-template-columns:1fr; } }
+
 html,
 body {
   margin: 0;
   height: 100%;
   overflow: hidden;
-  background: var(--alb-bg);
-  color: var(--alb-text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', Arial, sans-serif;
+  background: var(--sfoc-color-canvas);
+  color: var(--sfoc-color-text);
+  font-family: var(--sfoc-font-sans);
   display: flex;
   flex-direction: column;
 }
@@ -19,7 +164,7 @@ body {
   flex-shrink: 0;
   position: relative;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.72);
+  background: color-mix(in srgb, var(--sfoc-color-surface) 92%, transparent);
   backdrop-filter: blur(8px);
 }
 
@@ -194,6 +339,13 @@ body {
   background: rgba(56, 189, 248, 0.22);
   color: #7dd3fc;
 }
+.apex-log-comparison-logi-action:hover,
+.apex-log-comparison-logi-action:focus-visible {
+  color:#f8fafc;
+  border-color:#a78bfa;
+  background:linear-gradient(135deg, #0ea5e9 0%, #6366f1 100%);
+  box-shadow:0 0 0 2px rgba(139, 92, 246, .18), 0 6px 16px rgba(14, 165, 233, .24);
+}
 
 .apex-log-viewer-download:disabled {
   opacity: 0.45;
@@ -298,10 +450,133 @@ body {
 }
 
 .apex-log-tab.is-active {
-  border-color: rgba(34, 211, 238, 0.65);
-  background: rgba(34, 211, 238, 0.15);
-  color: #67e8f9;
-  box-shadow: inset 0 -2px 0 #38bdf8;
+  border-color: var(--sfoc-color-primary);
+  background: var(--sfoc-color-primary-soft);
+  color: var(--sfoc-color-text);
+  box-shadow: inset 0 -2px 0 var(--sfoc-color-primary);
+}
+
+/* Estructura común de vistas compuestas (Datos, Red, Plataforma y Análisis). */
+.apex-log-view-switcher {
+  align-self: flex-start;
+  margin: 0 12px 12px;
+  min-height: var(--sfoc-control-height-sm);
+  background: var(--sfoc-color-surface);
+  border-color: var(--sfoc-color-border);
+  box-shadow: var(--sfoc-shadow-sm);
+}
+
+.apex-log-segment-btn {
+  min-height: var(--sfoc-control-height-sm);
+  padding: 0 12px;
+}
+
+.apex-log-segment-btn + .apex-log-segment-btn {
+  border-left: 1px solid var(--sfoc-color-border);
+}
+
+.apex-log-view-content {
+  min-width: 0;
+  padding: 0 12px 12px;
+}
+
+.apex-log-subview {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-sm);
+}
+
+.apex-log-subview > .apex-log-panel-heading {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--sfoc-color-border);
+  background: var(--sfoc-color-surface-subtle);
+}
+
+.apex-log-subview > .apex-log-panel-toolbar {
+  margin: 12px;
+  padding: 10px;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface-subtle);
+}
+
+.apex-log-subview > .apex-log-summary-section,
+.apex-log-subview > .apex-log-soql-dupes,
+.apex-log-subview > .apex-log-table-wrap,
+.apex-log-subview > .apex-log-panel-content {
+  margin: 0 12px 12px;
+}
+
+.apex-log-table-wrap {
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+}
+
+.apex-log-table-wrap .apex-log-empty {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.apex-log-data-table td.apex-log-empty {
+  padding: 18px 12px;
+}
+
+/* La cronología comparte el mismo marco y las acciones no quedan flotando. */
+.apex-log-panel[data-panel='timeline'] #apexLogTimelineToolbar {
+  margin: 0 12px 12px;
+  padding: 10px;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface-subtle);
+}
+
+.apex-log-panel[data-panel='timeline'] #apexLogTimelineMount {
+  margin: 0 12px 12px;
+  overflow: hidden;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-sm);
+}
+
+.apex-log-panel[data-panel='timeline'] #apexLogTimelineMount > .apex-log-panel-heading,
+.apex-log-panel[data-panel='timeline'] .apex-log-gantt-top {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.apex-log-gantt-actions {
+  gap: 8px;
+}
+
+.apex-log-gantt-action {
+  min-height: var(--sfoc-control-height-sm);
+  border-radius: var(--sfoc-radius-sm);
+}
+
+.apex-log-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--sfoc-radius-pill);
+  background: var(--sfoc-color-surface-elevated);
+  color: var(--sfoc-color-text-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.apex-log-tab-badge--danger {
+  background: color-mix(in srgb, var(--sfoc-color-danger) 18%, var(--sfoc-color-surface));
+  color: var(--sfoc-color-danger);
 }
 
 .apex-log-panels {
@@ -961,7 +1236,11 @@ body {
 }
 
 .apex-log-empty {
-  padding: 24px;
+  margin: var(--sfoc-space-3);
+  padding: var(--sfoc-space-5);
+  border: 1px dashed var(--sfoc-color-border-strong);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface-subtle);
   text-align: center;
   color: var(--alb-muted);
   font-size: 13px;
@@ -1060,6 +1339,21 @@ html[data-ui-theme='light'] .apex-log-viewer-download {
   border-color: #7ea4cb;
 }
 
+html[data-ui-theme='light'] .apex-log-summary-logi-loading {
+  background: linear-gradient(100deg, rgba(47, 95, 159, 0.1), rgba(255, 255, 255, 0.7));
+  border-color: #9bbad8;
+}
+
+html[data-ui-theme='light'] .apex-log-summary-logi-loading-copy > span {
+  color: #1f3f61;
+}
+
+html[data-ui-theme='light'] .apex-log-summary-logi-loading-copy small {
+  color: #1f3f61;
+  background: rgba(255, 255, 255, 0.72);
+  border-color: #9bbad8;
+}
+
 html[data-ui-theme='light'] .apex-log-tab.is-active {
   border-color: rgba(47, 95, 159, 0.45);
   background: rgba(47, 95, 159, 0.12);
@@ -1128,8 +1422,9 @@ html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
 .apex-log-summary-card {
   padding: 10px 12px;
   border: 1px solid var(--alb-border);
-  border-radius: 8px;
-  background: rgba(30, 41, 59, 0.5);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1282,8 +1577,9 @@ html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
 .apex-log-summary-panel {
   padding: 12px;
   border: 1px solid var(--alb-border);
-  border-radius: 8px;
-  background: rgba(30, 41, 59, 0.35);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-sm);
 }
 
 .apex-log-summary-panel--full {
@@ -1362,6 +1658,15 @@ html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
 
 .apex-log-summary-limit-row:last-child {
   margin-bottom: 0;
+}
+
+.apex-log-summary-limit-row[data-line] {
+  cursor: pointer;
+  border-radius: var(--sfoc-radius-sm);
+}
+
+.apex-log-summary-limit-row[data-line]:hover {
+  background: var(--sfoc-color-hover);
 }
 
 .apex-log-summary-limit-key {
@@ -2179,6 +2484,41 @@ html[data-ui-theme='light'] .apex-log-help-item {
   font-size: 14px;
 }
 
+/* Cierre de la migración visual: las superficies no dependen de valores Slate
+   locales y responden de igual forma a los dos temas de la aplicación. */
+.apex-log-viewer-back,
+.apex-log-tabs-help,
+.apex-log-panel-help,
+.apex-log-gantt-action,
+.apex-log-filter,
+.apex-log-filter-select,
+.apex-log-segment-btn,
+.apex-log-find-input,
+.apex-log-help-dialog {
+  background-color: var(--sfoc-color-surface);
+  border-color: var(--sfoc-color-border);
+  color: var(--sfoc-color-text);
+}
+
+.apex-log-data-table th,
+.apex-log-group-row td {
+  background: var(--sfoc-color-surface-elevated);
+}
+
+.apex-log-summary-lead,
+.apex-log-summary-context,
+.apex-log-help-item,
+.apex-log-json-pre {
+  background: var(--sfoc-color-surface-subtle);
+}
+
+.apex-log-tab:hover:not(.is-active),
+.apex-log-gantt-action:hover,
+.apex-log-segment-btn:hover:not(.is-active) {
+  background: var(--sfoc-color-hover);
+  color: var(--sfoc-color-text);
+}
+
 html[data-ui-theme='light'] .apex-log-viewer-loading {
   background: rgba(248, 250, 252, 0.88);
 }
@@ -2503,18 +2843,78 @@ html[data-ui-theme='light'] .apex-log-error-card {
 }
 
 .apex-log-summary-logi-loading {
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   margin-top: 8px;
-  font-size: 12px;
+  min-height: 54px;
+  padding: 9px 11px;
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  border-radius: 8px;
+  background: linear-gradient(100deg, rgba(14, 165, 233, 0.12), rgba(15, 23, 42, 0.12));
+  font-size: 13px;
   color: var(--alb-muted);
 }
 
-.apex-log-summary-logi-spinner {
-  width: 16px;
-  height: 16px;
-  border-width: 2px;
+.apex-log-summary-logi-pixel-loader {
+  display: grid;
+  grid-template-columns: repeat(3, 6px);
+  grid-template-rows: repeat(3, 6px);
+  gap: 3px;
+  flex: 0 0 auto;
+  place-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(56, 189, 248, 0.16);
+}
+
+.apex-log-summary-logi-pixel-loader i {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: #38bdf8;
+  box-shadow: 0 0 7px rgba(56, 189, 248, 0.36);
+  animation: apex-logi-pixel-shimmer 1.25s ease-in-out infinite;
+}
+
+.apex-log-summary-logi-pixel-loader i:nth-child(2),
+.apex-log-summary-logi-pixel-loader i:nth-child(6) { animation-delay: .12s; }
+.apex-log-summary-logi-pixel-loader i:nth-child(3),
+.apex-log-summary-logi-pixel-loader i:nth-child(7) { animation-delay: .24s; }
+.apex-log-summary-logi-pixel-loader i:nth-child(4),
+.apex-log-summary-logi-pixel-loader i:nth-child(8) { animation-delay: .36s; }
+.apex-log-summary-logi-pixel-loader i:nth-child(5),
+.apex-log-summary-logi-pixel-loader i:nth-child(9) { animation-delay: .48s; }
+
+@keyframes apex-logi-pixel-shimmer {
+  0%, 100% { opacity: .24; transform: scale(.68); background: #38bdf8; }
+  50% { opacity: 1; transform: scale(1); background: #a5f3fc; }
+}
+
+.apex-log-summary-logi-loading-copy {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  min-width: 0;
+}
+
+.apex-log-summary-logi-loading-copy > span {
+  color: var(--alb-text);
+  font-weight: 600;
+}
+
+.apex-log-summary-logi-loading-copy small {
+  padding: 2px 7px;
+  color: #bae6fd;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  border-radius: 999px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .apex-log-summary-logi-md {
@@ -2765,3 +3165,130 @@ html[data-ui-theme='light'] .apex-log-error-card {
 }
 .toast.info { border-color: #60a5fa; color: #e6f0ff; }
 .toast.success { border-color: var(--sfoc-success); color: #bbf7d0; }
+
+/* Consolidación final: esta capa prevalece sobre las reglas históricas. */
+.apex-log-view-switcher {
+  align-self: flex-start;
+  margin: 0 12px 12px;
+  min-height: var(--sfoc-control-height-sm);
+  background: var(--sfoc-color-surface);
+  border-color: var(--sfoc-color-border);
+  box-shadow: var(--sfoc-shadow-sm);
+}
+
+.apex-log-segment-btn {
+  min-height: var(--sfoc-control-height-sm);
+  padding: 0 12px;
+}
+
+.apex-log-segment-btn + .apex-log-segment-btn { border-left: 1px solid var(--sfoc-color-border); }
+
+.apex-log-view-content { min-width: 0; padding: 0 12px 12px; }
+
+.apex-log-subview {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-sm);
+}
+
+.apex-log-subview > .apex-log-panel-heading {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--sfoc-color-border);
+  background: var(--sfoc-color-surface-subtle);
+}
+
+.apex-log-subview > .apex-log-panel-toolbar {
+  margin: 12px;
+  padding: 10px;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface-subtle);
+}
+
+.apex-log-subview > .apex-log-summary-section,
+.apex-log-subview > .apex-log-soql-dupes,
+.apex-log-subview > .apex-log-table-wrap,
+.apex-log-subview > .apex-log-panel-content { margin: 0 12px 12px; }
+
+.apex-log-table-wrap {
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface);
+}
+
+.apex-log-table-wrap .apex-log-empty {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.apex-log-panel[data-panel='timeline'] #apexLogTimelineToolbar {
+  margin: 0 12px 12px;
+  padding: 10px;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-sm);
+  background: var(--sfoc-color-surface-subtle);
+}
+
+.apex-log-panel[data-panel='timeline'] #apexLogTimelineMount {
+  margin: 0 12px 12px;
+  overflow: hidden;
+  border: 1px solid var(--sfoc-color-border);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface);
+  box-shadow: var(--sfoc-shadow-sm);
+}
+
+.apex-log-panel[data-panel='timeline'] #apexLogTimelineMount > .apex-log-panel-heading,
+.apex-log-panel[data-panel='timeline'] .apex-log-gantt-top { padding-left: 12px; padding-right: 12px; }
+
+.apex-log-gantt-actions { gap: 8px; }
+.apex-log-gantt-action { min-height: var(--sfoc-control-height-sm); border-radius: var(--sfoc-radius-sm); }
+
+/* Contornos de interacción: visibles sin competir con el contenido del log. */
+.apex-log-panel-scroll > .apex-log-panel-heading {
+  margin: 0 0 12px;
+  border: 1px solid var(--sfoc-color-border-strong);
+  border-radius: var(--sfoc-radius-md);
+  background: var(--sfoc-color-surface);
+}
+
+.apex-log-view-switcher,
+.apex-log-segment {
+  border-color: var(--sfoc-color-border-strong);
+}
+
+.apex-log-segment-btn + .apex-log-segment-btn {
+  border-left-color: var(--sfoc-color-border-strong);
+}
+
+.apex-log-gantt-action,
+.apex-log-tabs-help,
+.apex-log-panel-help {
+  border-color: var(--sfoc-color-border-strong);
+}
+
+.apex-log-gantt-action:hover,
+.apex-log-tabs-help:hover,
+.apex-log-panel-help:hover {
+  border-color: var(--sfoc-color-focus);
+}
+
+/* Debe prevalecer también cuando el tema claro aporta reglas históricas. */
+.apex-log-tab {
+  background: var(--sfoc-color-surface);
+  border-color: var(--sfoc-color-border);
+  color: var(--sfoc-color-text-secondary);
+}
+.apex-log-tab[hidden] { display:none !important; }
+
+.apex-log-tab.is-active {
+  border-color: var(--sfoc-color-primary);
+  background: var(--sfoc-color-primary-soft);
+  color: var(--sfoc-color-text);
+  box-shadow: inset 0 -2px 0 var(--sfoc-color-primary);
+}

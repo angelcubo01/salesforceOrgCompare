@@ -3,7 +3,7 @@ import { buildInitialLogContext, formatOrgQueryToolResult, truncateText } from '
 /**
  * @param {object} pending
  * @param {string} orgId
- * @param {{ t: (key: string) => string, escapeHtml: (s: string) => string }} deps
+ * @param {{ t: (key: string) => string, escapeHtml: (s: string) => string, mount?: HTMLElement | null, root?: HTMLElement | null }} deps
  */
 export function showOrgQueryApproval(pending, orgId, deps) {
   const { t, escapeHtml } = deps;
@@ -24,10 +24,17 @@ export function showOrgQueryApproval(pending, orgId, deps) {
     const variantLabel =
       toolName === 'describe_sobject_fields' ? 'describe' : pending.variant || 'rest-soql';
 
-    const overlay = document.createElement('div');
-    overlay.className = 'logi-advisor-approval ph-no-capture';
-    overlay.innerHTML = `
-      <div class="logi-advisor-approval-panel" role="alertdialog" aria-modal="true">
+    const mount = deps.mount;
+    if (!mount) {
+      resolve(false);
+      return;
+    }
+    const card = document.createElement('article');
+    card.className = 'logi-advisor-approval-card ph-no-capture';
+    card.setAttribute('role', 'group');
+    card.innerHTML = `
+      <div class="logi-advisor-approval-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2 4 5v6c0 5.1 3.4 9.9 8 11 4.6-1.1 8-5.9 8-11V5l-8-3Zm-1.1 14.6-3.2-3.2 1.4-1.4 1.8 1.8 4.3-4.3 1.4 1.4-5.7 5.7Z"/></svg></div>
+      <div class="logi-advisor-approval-panel">
         <h3>${escapeHtml(t(titleKey))}</h3>
         <p class="logi-advisor-approval-reason">${escapeHtml(pending.reason || '')}</p>
         <dl class="logi-advisor-approval-meta">
@@ -40,13 +47,19 @@ export function showOrgQueryApproval(pending, orgId, deps) {
           <button type="button" class="logi-advisor-approval-approve">${escapeHtml(t('apexLogViewer.logi.queryApprove'))}</button>
         </div>
       </div>`;
-    document.body.appendChild(overlay);
+    mount.appendChild(card);
+    mount.scrollTop = mount.scrollHeight;
+    const root = deps.root;
     const cleanup = (ok) => {
-      overlay.remove();
+      root?.removeEventListener('sfoc-logi-approval-cancel', onClose);
+      card.remove();
       resolve(ok);
     };
-    overlay.querySelector('.logi-advisor-approval-deny')?.addEventListener('click', () => cleanup(false));
-    overlay.querySelector('.logi-advisor-approval-approve')?.addEventListener('click', () => cleanup(true));
+    const onClose = () => cleanup(false);
+    root?.addEventListener('sfoc-logi-approval-cancel', onClose, { once: true });
+    card.querySelector('.logi-advisor-approval-deny')?.addEventListener('click', () => cleanup(false));
+    card.querySelector('.logi-advisor-approval-approve')?.addEventListener('click', () => cleanup(true));
+    requestAnimationFrame(() => card.querySelector('.logi-advisor-approval-deny')?.focus());
   });
 }
 
@@ -68,7 +81,7 @@ export function showOrgQueryApproval(pending, orgId, deps) {
  * @property {(res: object, modal: HTMLElement, sessionKey: string, ctx: object, parsed: object, raw: string, payload: object, lang: 'es'|'en', requestId: string, turnId: string) => Promise<void>} processLlmResponse
  * @property {(reason?: string, error?: string) => string} mapErrorReason
  * @property {() => Record<string, unknown>} buildChatMessageExtras
- * @property {(pending: object, orgId: string) => Promise<boolean>} showOrgQueryApproval
+ * @property {(pending: object, orgId: string, modal: HTMLElement) => Promise<boolean>} showOrgQueryApproval
  */
 
 /**
@@ -107,7 +120,7 @@ export async function runPendingOrgQueryFlow(
     return;
   }
 
-  const approved = await deps.showOrgQueryApproval(pending, payload.orgId);
+  const approved = await deps.showOrgQueryApproval(pending, payload.orgId, modal);
   if (!deps.shouldApplyTurnResult(sessionKey, turnId)) return;
 
   const toolName = pending.toolName || 'org_query';

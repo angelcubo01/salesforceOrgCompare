@@ -19,6 +19,7 @@ function sanitizeApexViewerDownloadFileName(name) {
  *   initialLine?: number,
  *   defaultTab?: string,
  *   orgId?: string,
+ *   orgLabel?: string,
  *   instanceUrl?: string,
  *   logId?: string
  * }} [viewerOpts]
@@ -39,6 +40,7 @@ export async function openApexLogViewerWithPayload(title, content, viewerOpts = 
     ...(initialLine != null ? { initialLine } : {}),
     ...(viewerOpts.defaultTab ? { defaultTab: viewerOpts.defaultTab } : {}),
     ...(viewerOpts.orgId ? { orgId: viewerOpts.orgId } : {}),
+    ...(viewerOpts.orgLabel ? { orgLabel: viewerOpts.orgLabel } : {}),
     ...(viewerOpts.instanceUrl ? { instanceUrl: viewerOpts.instanceUrl } : {}),
     ...(viewerOpts.logId ? { logId: viewerOpts.logId } : {})
   };

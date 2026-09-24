@@ -13,8 +13,8 @@ export function renderNetworkView(mount, parsed, onJump, t) {
   if (!mount) return;
   mount.innerHTML = `
     ${panelSectionHeading('network', t('apexLogViewer.tab.network'), t)}
-    <div class="apex-log-network-segments" id="apexLogNetworkSegments"></div>
-    <div id="apexLogNetworkContent"></div>`;
+    <div class="apex-log-view-switcher apex-log-network-segments" id="apexLogNetworkSegments"></div>
+    <div class="apex-log-view-content" id="apexLogNetworkContent"></div>`;
 
   const content = mount.querySelector('#apexLogNetworkContent');
   const segmentsEl = mount.querySelector('#apexLogNetworkSegments');
@@ -28,7 +28,7 @@ export function renderNetworkView(mount, parsed, onJump, t) {
   let active = (parsed?.callouts || []).length ? 'callouts' : 'debug';
   const renderSection = () => {
     if (!content) return;
-    content.innerHTML = `<div id="apexLogNetworkSectionMount"></div>`;
+    content.innerHTML = `<div class="apex-log-subview" id="apexLogNetworkSectionMount"></div>`;
     const sectionMount = content.querySelector('#apexLogNetworkSectionMount');
     if (!sectionMount) return;
     if (active === 'callouts') renderCalloutView(sectionMount, parsed, onJump, t);

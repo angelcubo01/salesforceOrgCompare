@@ -339,7 +339,7 @@ li.dragging {
 .muted { color: #888; }
 .org-name { 
   font-weight: 500; 
-  color: #e0e0e0;
+  color: var(--sfoc-color-text);
 }
 
 /* Auth status colors */
@@ -871,5 +871,35 @@ body.popup-opening-app > .popup-telemetry-notice {
 .orgs-loading-text {
   font-size: 13px;
   color: #888;
+}
+
+.orgs-auth-loading-row {
+  justify-content: center;
+  min-height: 62px;
+  border-style: dashed;
+  opacity: .82;
+  pointer-events: none;
+}
+
+.orgs-auth-loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+}
+
+.orgs-auth-loading-text {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.orgs-auth-loading-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(161, 177, 207, .28);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: popup-open-spin .75s linear infinite;
 }
 

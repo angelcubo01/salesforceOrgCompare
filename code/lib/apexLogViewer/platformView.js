@@ -13,8 +13,8 @@ export function renderPlatformView(mount, parsed, onJump, t) {
   if (!mount) return;
   mount.innerHTML = `
     ${panelSectionHeading('platform', t('apexLogViewer.tab.platform'), t)}
-    <div class="apex-log-platform-segments" id="apexLogPlatformSegments"></div>
-    <div id="apexLogPlatformContent"></div>`;
+    <div class="apex-log-view-switcher apex-log-platform-segments" id="apexLogPlatformSegments"></div>
+    <div class="apex-log-view-content" id="apexLogPlatformContent"></div>`;
 
   const content = mount.querySelector('#apexLogPlatformContent');
   const segmentsEl = mount.querySelector('#apexLogPlatformSegments');
@@ -28,7 +28,7 @@ export function renderPlatformView(mount, parsed, onJump, t) {
   let active = 'validations';
   const renderSection = () => {
     if (!content) return;
-    content.innerHTML = `<div id="apexLogPlatformSectionMount"></div>`;
+    content.innerHTML = `<div class="apex-log-subview" id="apexLogPlatformSectionMount"></div>`;
     const sectionMount = content.querySelector('#apexLogPlatformSectionMount');
     if (!sectionMount) return;
     if (active === 'validations') renderValidationsView(sectionMount, parsed, onJump, t);

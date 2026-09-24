@@ -32,6 +32,7 @@ let historyLoading = false;
 let filterEventsPaused = false;
 let dateRangePicker = null;
 let appliedFilters = { user: '', text: '', fields: [] };
+let filterChangeTimer = null;
 const pagination = createTablePagination({ initialPageSize: 25 });
 
 /** @type {{ objectApiName: string, historyObject: string, parentField: string, trackedFields: Array<{ apiName: string, label: string, type: string }>, historyEnabled: boolean, historyQueryable: boolean } | null} */
@@ -53,7 +54,6 @@ function getFilterElements() {
     since: document.getElementById('fieldHistorySince'),
     until: document.getElementById('fieldHistoryUntil'),
     loadBtn: document.getElementById('fieldHistoryLoadBtn'),
-    resetFilters: document.getElementById('fieldHistoryResetFiltersBtn'),
     clockNotice: document.getElementById('fieldHistoryClockNotice'),
     pageSize: document.getElementById('fieldHistoryPageSize'),
     firstPage: document.getElementById('fieldHistoryFirstPage'),
@@ -248,6 +248,43 @@ function updateFilterActionState() {
     || (!dateRangePicker?.until?.isNowMode && !isValidUtcRange(sinceIso, untilIso));
 }
 
+function hasValidDateRange() {
+  const { since, until } = getFilterElements();
+  const sinceIso = toUtcIsoFromLocalDateTime(since?.value);
+  const untilIso = toUtcIsoFromLocalDateTime(until?.value);
+  return Boolean(sinceIso)
+    && (dateRangePicker?.until?.isNowMode || isValidUtcRange(sinceIso, untilIso));
+}
+
+function applyCurrentFilters() {
+  if (filterEventsPaused) return;
+  appliedFilters = captureDraftFilters();
+  currentPage = 1;
+  renderRows();
+  updateFilterActionState();
+}
+
+function scheduleClientFilterUpdate(delay = 0) {
+  clearTimeout(filterChangeTimer);
+  filterChangeTimer = setTimeout(applyCurrentFilters, delay);
+}
+
+function canAutomaticallyLoadHistory() {
+  const { recordId } = getFilterElements();
+  return !historyLoading
+    && Boolean(state.leftOrgId)
+    && Boolean(historyContext?.historyEnabled)
+    && isValidSalesforceRecordId(recordId?.value)
+    && hasValidDateRange();
+}
+
+function scheduleHistoryReload() {
+  updateFilterActionState();
+  if (!canAutomaticallyLoadHistory()) return;
+  clearTimeout(filterChangeTimer);
+  filterChangeTimer = setTimeout(() => void loadFieldHistory(), 250);
+}
+
 function applyClientFilters(rows) {
   const userValue = String(appliedFilters.user || '').trim();
   const textNeedle = normalizeLower(appliedFilters.text);
@@ -301,8 +338,14 @@ function populateUserOptions(rows) {
     opt.title = entry.key;
     user.appendChild(opt);
   }
-  if ([...user.options].some((o) => o.value === current)) user.value = current;
-  else user.value = '';
+  if (current && ![...user.options].some((o) => o.value === current)) {
+    const retained = document.createElement('option');
+    retained.value = current;
+    retained.textContent = current;
+    retained.title = current;
+    user.appendChild(retained);
+  }
+  if (current) user.value = current;
 }
 
 function updatePaginationUi(totalFilteredRows) {
@@ -540,8 +583,6 @@ async function loadFieldHistory() {
     currentPage = 1;
     filterEventsPaused = true;
     try {
-      const { user } = getFilterElements();
-      if (user) user.value = '';
       populateUserOptions(lastRows);
       if (status) status.textContent = '';
       renderRows({ force: true });
@@ -589,7 +630,6 @@ export function setupFieldHistoryPanel() {
     since,
     until,
     recordId,
-    resetFilters
   } = getFilterElements();
 
   let suggestTimer = null;
@@ -615,24 +655,24 @@ export function setupFieldHistoryPanel() {
   if (user)
     user.addEventListener('change', () => {
       if (filterEventsPaused) return;
-      updateFilterActionState();
+      scheduleClientFilterUpdate();
     });
   if (text)
     text.addEventListener('input', () => {
       if (filterEventsPaused) return;
-      updateFilterActionState();
+      scheduleClientFilterUpdate(180);
     });
   if (fieldFilter)
     fieldFilter.addEventListener('change', () => {
-      updateFilterActionState();
+      scheduleHistoryReload();
     });
-  recordId?.addEventListener('input', updateFilterActionState);
+  recordId?.addEventListener('input', scheduleHistoryReload);
   dateRangePicker = createDateTimeRangePicker({
     sinceInput: since,
     untilInput: until,
     sinceLabel: t('fieldHistory.filterSince'),
     untilLabel: t('fieldHistory.filterUntil'),
-    onDraftChange: updateFilterActionState
+    onDraftChange: scheduleHistoryReload
   });
   for (const field of [recordId, user, text, fieldFilter, since, until]) {
     field?.addEventListener('keydown', (event) => {
@@ -642,15 +682,6 @@ export function setupFieldHistoryPanel() {
       }
     });
   }
-  resetFilters?.addEventListener('click', () => {
-    if (user) user.value = '';
-    if (text) text.value = '';
-    if (fieldFilter) [...fieldFilter.options].forEach((option) => { option.selected = false; });
-    appliedFilters = captureDraftFilters();
-    currentPage = 1;
-    renderRows();
-    updateFilterActionState();
-  });
   if (pageSize)
     pageSize.addEventListener('change', () => {
       pagination.setPageSize(pageSize.value, applyClientFilters(lastRows).length);
