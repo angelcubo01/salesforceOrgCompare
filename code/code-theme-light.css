@@ -563,9 +563,9 @@ html[data-ui-theme="light"] .editor {
 
 html[data-ui-theme="light"] .file-viewer-loading-bar {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.98) 100%);
-  border-top: 1px solid #cbd5e1;
+  border-bottom: 1px solid #cbd5e1;
   color: var(--sfoc-light-text-muted);
-  box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
 }
 
 html[data-ui-theme="light"] .file-viewer-loading-spinner {

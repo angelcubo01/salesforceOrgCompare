@@ -570,6 +570,10 @@
             Siguiente →
           </button>
         </div>
+        <div id="fileViewerLoadingBar" class="file-viewer-loading-bar hidden" aria-live="polite" aria-busy="true">
+          <span class="file-viewer-loading-spinner" aria-hidden="true"></span>
+          <span class="file-viewer-loading-text" data-i18n="code.loadingFile">Cargando fichero…</span>
+        </div>
         <div id="monacoContainer" class="monaco-container ph-no-capture">
           <div id="noOrgMessage" class="no-org-message hidden">
           <div class="no-org-content">
@@ -577,10 +581,6 @@
             <p data-i18n="code.selectOrgHint">Elige una organización de Salesforce en los desplegables superiores para ver y comparar código.</p>
             <p class="no-org-instructions" data-i18n="code.selectOrgInstructions">Si aún no has conectado ninguna org, ve a una pestaña de Salesforce y pulsa el botón de la extensión para añadirla.</p>
           </div>
-          </div>
-          <div id="fileViewerLoadingBar" class="file-viewer-loading-bar hidden" aria-live="polite" aria-busy="true">
-            <span class="file-viewer-loading-spinner" aria-hidden="true"></span>
-            <span class="file-viewer-loading-text" data-i18n="code.loadingFile">Cargando fichero…</span>
           </div>
         </div>
         </div>
