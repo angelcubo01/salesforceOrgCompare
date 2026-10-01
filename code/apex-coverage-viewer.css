@@ -43,6 +43,13 @@ body {
   white-space: nowrap;
 }
 
+.apex-cov-viewer-source-notice {
+  flex: 1 1 100%;
+  order: 4;
+  color: #fbbf24;
+  font-size: 11px;
+}
+
 .apex-cov-viewer-user {
   flex-shrink: 0;
   display: inline-flex;

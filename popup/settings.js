@@ -43,6 +43,7 @@ import {
   normalizeLogiQuickActionPromptStore
 } from '../shared/logi/logiQuickActionPrompts.js';
 import { wireSfInjectSettings } from '../sfInject/popup/settingsPanel.js';
+import { openQuickLinksSettingsModal } from '../sfInject/popup/quickLinksSettings.js';
 import { SF_INJECT_CONFIG_KEY, normalizeSfInjectConfig } from '../sfInject/lib/settings.js';
 import {
   STORAGE_KEY as APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY,
@@ -300,7 +301,8 @@ function mergeSfInjectConfig(current, incoming) {
     ...currentConfig,
     ...incomingConfig,
     integrations: { ...currentConfig.integrations, ...incomingConfig.integrations },
-    prefs: { ...currentConfig.prefs, ...incomingConfig.prefs }
+    prefs: { ...currentConfig.prefs, ...incomingConfig.prefs },
+    quickLinks: { ...currentConfig.quickLinks, ...incomingConfig.quickLinks }
   });
 }
 
@@ -488,6 +490,64 @@ function wireAdvancedPanel() {
       statusEl.style.color = '#94a3b8';
     }
   });
+}
+
+function wireSettingsTabs() {
+  const tabs = Array.from(document.querySelectorAll('[data-settings-tab]'));
+  const content = Array.from(document.querySelectorAll('[data-settings-tab-content]'));
+  if (!tabs.length || !content.length) return;
+
+  let activeTab = 'general';
+
+  const setActiveTab = (tabId) => {
+    const nextTab = tabs.find((tab) => tab.dataset.settingsTab === tabId && !tab.hidden);
+    if (!nextTab) return;
+    activeTab = tabId;
+    for (const tab of tabs) {
+      const selected = tab === nextTab;
+      tab.classList.toggle('is-active', selected);
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+    }
+    for (const section of content) {
+      section.hidden = section.dataset.settingsTabContent !== activeTab;
+    }
+  };
+
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => setActiveTab(tab.dataset.settingsTab));
+    tab.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const visibleTabs = tabs.filter((item) => !item.hidden);
+      const index = visibleTabs.indexOf(tab);
+      if (index < 0) return;
+      const nextIndex =
+        event.key === 'Home'
+          ? 0
+          : event.key === 'End'
+            ? visibleTabs.length - 1
+            : (index + (event.key === 'ArrowRight' ? 1 : -1) + visibleTabs.length) % visibleTabs.length;
+      const nextTab = visibleTabs[nextIndex];
+      setActiveTab(nextTab.dataset.settingsTab);
+      nextTab.focus();
+    });
+  }
+
+  document.addEventListener('sfoc:settings-logi-availability', (event) => {
+    const logiTab = document.getElementById('settingsTabLogi');
+    const visible = event.detail?.visible === true;
+    if (!logiTab) return;
+    logiTab.hidden = !visible;
+    if (!visible && activeTab === 'logi') {
+      setActiveTab('general');
+    } else {
+      setActiveTab(activeTab);
+    }
+  });
+
+  setActiveTab(activeTab);
+  return setActiveTab;
 }
 
 function wireLanguageSelect() {
@@ -779,12 +839,18 @@ async function main() {
   document.documentElement.lang = getCurrentLang() === 'en' ? 'en' : 'es';
   document.title = t('settings.pageTitle');
   applyStaticTranslations();
+  const setActiveSettingsTab = wireSettingsTabs();
   wireLanguageSelect();
   wireAppearanceSettings();
   wireGeneralTraceSettings();
   wireAdvancedPanel();
   wireOrgsBackup();
   wireSfInjectSettings(t);
+  const settingsQuery = new URLSearchParams(window.location.search);
+  if (settingsQuery.get('quickLinks') === '1') {
+    setActiveSettingsTab?.('salesforce-integration');
+    void openQuickLinksSettingsModal(t, { orgId: settingsQuery.get('orgId') || '' });
+  }
 
   const manifest = chrome.runtime.getManifest();
   const verEl = document.getElementById('settingsVersion');

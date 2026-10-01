@@ -73,6 +73,10 @@ import {
 } from './orgWriteGuard.js';
 import { extractApexTestRunJobId } from '../shared/extractApexTestRunJobId.js';
 import {
+  fetchApexTestCoverageLines,
+  fetchApexTestRunCoverageSummary
+} from '../shared/apexTestCoverage.js';
+import {
   sanitizeRunTestsBodyForApi,
   validateRunTestsBodyForApi
 } from '../shared/apexTestRunBodyApi.js';
@@ -89,11 +93,106 @@ import { pollDeployStatus, fetchDeployDetail, cancelDeployRequest } from '../sha
 import { fetchApexClassSource } from '../shared/apexClassSource.js';
 import { resolveDeployCoverageLineSets } from '../shared/apexCoverageLines.js';
 import {
+  decodeZipBase64,
+  extractZipFileContent,
+  getZipEntries,
+  normalizeRetrieveZipPath
+} from '../code/lib/zipBinary.js';
+import {
   findApexSymbolAt,
   inferApexCallOwner,
   isApexIdentifier,
   resolveDefinitionInApexClass
 } from '../shared/apexSourceDefinitions.js';
+
+const DEPLOY_PACKAGE_ARCHIVES_STORAGE_KEY = 'deployPackageArchives';
+const DEPLOY_PACKAGE_ARCHIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_DEPLOY_PACKAGE_ARCHIVES = 3;
+
+function deployPackageArchiveKey(orgId, asyncId) {
+  return `${String(orgId || '')}:${String(asyncId || '')}`;
+}
+
+function pruneDeployPackageArchives(raw) {
+  const now = Date.now();
+  const entries = Object.entries(raw && typeof raw === 'object' ? raw : {})
+    .filter(([, item]) => item && typeof item === 'object' && typeof item.zipBase64 === 'string')
+    .filter(([, item]) => now - Number(item.savedAt || 0) <= DEPLOY_PACKAGE_ARCHIVE_TTL_MS)
+    .sort(([, a], [, b]) => Number(b.savedAt || 0) - Number(a.savedAt || 0))
+    .slice(0, MAX_DEPLOY_PACKAGE_ARCHIVES);
+  return Object.fromEntries(entries);
+}
+
+async function rememberDeployPackageArchive(orgId, asyncId, zipBase64) {
+  if (!orgId || !asyncId || !zipBase64) return;
+  try {
+    const stored = await chrome.storage.local.get(DEPLOY_PACKAGE_ARCHIVES_STORAGE_KEY);
+    const archives = pruneDeployPackageArchives(stored[DEPLOY_PACKAGE_ARCHIVES_STORAGE_KEY]);
+    archives[deployPackageArchiveKey(orgId, asyncId)] = { savedAt: Date.now(), zipBase64 };
+    await chrome.storage.local.set({
+      [DEPLOY_PACKAGE_ARCHIVES_STORAGE_KEY]: pruneDeployPackageArchives(archives)
+    });
+  } catch {
+    /* El deploy continúa; únicamente no se conserva su paquete local. */
+  }
+}
+
+async function readDeployPackageSource(orgId, asyncId, className) {
+  try {
+    const stored = await chrome.storage.local.get(DEPLOY_PACKAGE_ARCHIVES_STORAGE_KEY);
+    const archives = pruneDeployPackageArchives(stored[DEPLOY_PACKAGE_ARCHIVES_STORAGE_KEY]);
+    const packageEntry = archives[deployPackageArchiveKey(orgId, asyncId)];
+    if (!packageEntry?.zipBase64) return { reason: 'DEPLOY_PACKAGE_UNAVAILABLE' };
+    const bytes = decodeZipBase64(packageEntry.zipBase64);
+    const entries = getZipEntries(bytes) || [];
+    const name = String(className || '').trim().toLowerCase();
+    const candidates = [`classes/${name}.cls`, `triggers/${name}.trigger`];
+    const entry = entries.find((item) => {
+      const path = normalizeRetrieveZipPath(item.fileName).toLowerCase();
+      return candidates.some((candidate) => path === candidate || path.endsWith(`/${candidate}`));
+    });
+    if (!entry) return { reason: 'DEPLOY_SOURCE_NOT_IN_PACKAGE' };
+    const body = await extractZipFileContent(bytes, entry);
+    return body == null ? { reason: 'DEPLOY_SOURCE_NOT_IN_PACKAGE' } : { body };
+  } catch {
+    return { reason: 'DEPLOY_PACKAGE_UNAVAILABLE' };
+  }
+}
+
+/** Obtiene el código actual de una clase o trigger desde el entorno elegido como origen. */
+async function fetchDeployCoverageSource(org, sid, className) {
+  const name = String(className || '').trim();
+  if (!name) return null;
+
+  const apexClass = await fetchApexClassSource(org, sid, { className: name });
+  if (apexClass?.body) return { ...apexClass, type: 'ApexClass' };
+
+  const soql =
+    `SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger` +
+    ` WHERE Name = '${escapeSoqlLiteral(name)}' LIMIT 1`;
+  let rows = [];
+  try {
+    rows = (await restQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+  } catch {
+    rows = [];
+  }
+  if (!rows.length) {
+    try {
+      rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+    } catch {
+      rows = [];
+    }
+  }
+  const trigger = rows[0];
+  if (!trigger?.Body) return null;
+  return {
+    id: String(trigger.Id || ''),
+    name: String(trigger.Name || name),
+    body: String(trigger.Body),
+    lastModifiedDate: trigger.LastModifiedDate ? String(trigger.LastModifiedDate) : '',
+    type: 'ApexTrigger'
+  };
+}
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
 function queryExplorerCatchErrorPayload(e) {
@@ -403,29 +502,45 @@ async function batchOutcomeCountsForTerminalJobs(instanceUrl, sid, apiVersion, j
     .map((id) => `'${escapeSoqlLiteral(String(id))}'`)
     .join(',');
   try {
-    const aggSoql = `SELECT AsyncApexJobId, Outcome, COUNT(Id) FROM ApexTestResult WHERE AsyncApexJobId IN (${inList}) GROUP BY AsyncApexJobId, Outcome`;
-    const agg = await toolingQuery(instanceUrl, sid, apiVersion, aggSoql);
+    const aggSoql = `SELECT AsyncApexJobId, Outcome, IsTestSetup, COUNT(Id) FROM ApexTestResult WHERE AsyncApexJobId IN (${inList}) GROUP BY AsyncApexJobId, Outcome, IsTestSetup`;
+    let agg;
+    let supportsIsTestSetup = true;
+    try {
+      agg = await toolingQuery(instanceUrl, sid, apiVersion, aggSoql);
+    } catch {
+      supportsIsTestSetup = false;
+      const legacyAggSoql = `SELECT AsyncApexJobId, Outcome, COUNT(Id) FROM ApexTestResult WHERE AsyncApexJobId IN (${inList}) GROUP BY AsyncApexJobId, Outcome`;
+      agg = await toolingQuery(instanceUrl, sid, apiVersion, legacyAggSoql);
+    }
     for (const row of agg || []) {
       const jid = row.AsyncApexJobId != null ? String(row.AsyncApexJobId) : '';
       if (!jid) continue;
       const k = row.Outcome != null ? String(row.Outcome) : '?';
+      if (k === 'Pass' && isTestSetupApexTestResult(row)) continue;
       const n = aggregateCountFromRow(row);
       if (!map.has(jid)) map.set(jid, {});
       const oc = map.get(jid);
       oc[k] = (oc[k] || 0) + n;
+      if (jid.length >= 15) map.set(jid.slice(0, 15), oc);
     }
-    await Promise.all(
-      [...map.entries()].map(async ([jid, oc]) => {
-        const adjusted = await adjustOutcomeCountsExcludingTestSetup(
-          instanceUrl,
-          sid,
-          apiVersion,
-          jid,
-          oc
-        );
-        map.set(jid, adjusted);
-      })
-    );
+    if (!supportsIsTestSetup) {
+      await Promise.all(
+        jobIdsForResults.map(async (jobId) => {
+          const id = String(jobId);
+          const current = map.get(id) || map.get(id.slice(0, 15));
+          if (!current) return;
+          const adjusted = await adjustOutcomeCountsExcludingTestSetup(
+            instanceUrl,
+            sid,
+            apiVersion,
+            id,
+            current
+          );
+          map.set(id, adjusted);
+          if (id.length >= 15) map.set(id.slice(0, 15), adjusted);
+        })
+      );
+    }
     return map;
   } catch {
     return null;
@@ -1296,6 +1411,7 @@ export function installMessageHandlers() {
                   zipBase64,
                   deployOpts
                 );
+                await rememberDeployPackageArchive(orgId, asyncId, zipBase64);
                 await recordLocalAudit({
                   action: checkOnly ? 'deploy_validate' : 'deploy',
                   orgId: String(orgId),
@@ -1311,6 +1427,7 @@ export function installMessageHandlers() {
                 zipBase64,
                 deployOpts
               );
+              await rememberDeployPackageArchive(orgId, result.asyncId, zipBase64);
               await recordLocalAudit({
                 action: checkOnly ? 'deploy_validate' : 'deploy',
                 orgId: String(orgId),
@@ -1374,6 +1491,7 @@ export function installMessageHandlers() {
                   zipBase64,
                   deployOpts
                 );
+                await rememberDeployPackageArchive(orgId, asyncId, zipBase64);
                 await recordLocalAudit({
                   action: checkOnly ? 'deploy_validate' : 'deploy',
                   orgId: String(orgId),
@@ -1389,6 +1507,7 @@ export function installMessageHandlers() {
                 zipBase64,
                 deployOpts
               );
+              await rememberDeployPackageArchive(orgId, result.asyncId, zipBase64);
               await recordLocalAudit({
                 action: checkOnly ? 'deploy_validate' : 'deploy',
                 orgId: String(orgId),
@@ -2393,80 +2512,72 @@ export function installMessageHandlers() {
             break;
           }
           case 'deployStatus:getCoverageLineView': {
-            const { orgId, asyncId, classOrTriggerId, className, uncoveredLines: uncoveredLinesHint } = message;
+            const {
+              orgId,
+              sourceOrgId,
+              asyncId,
+              classOrTriggerId,
+              className,
+              uncoveredLines: uncoveredLinesHint,
+              deploymentDate
+            } = message;
             if (!classOrTriggerId) {
               reply({ ok: false, error: 'Missing classOrTriggerId' });
               break;
             }
             const saved = await loadSavedOrgs();
-            const org = saved[orgId];
-            if (!org) {
+            const coverageOrg = saved[orgId];
+            if (!coverageOrg) {
               reply({ ok: false, error: 'Org not saved' });
               break;
             }
-            const sid = await resolveSidForOrg(org);
-            if (!sid) {
+            const coverageSid = await resolveSidForOrg(coverageOrg);
+            if (!coverageSid) {
               reply({ ok: false, reason: 'NO_SID' });
               break;
             }
             try {
-              const tid = escapeSoqlLiteral(String(classOrTriggerId));
+              const sourceOrg = saved[sourceOrgId || orgId];
+              if (!sourceOrg) {
+                reply({ ok: false, error: 'Source org not saved' });
+                break;
+              }
+              const sourceSid = await resolveSidForOrg(sourceOrg);
+              if (!sourceSid) {
+                reply({ ok: false, reason: 'SOURCE_NO_SID' });
+                break;
+              }
+              const source = await fetchDeployCoverageSource(sourceOrg, sourceSid, className);
+              if (!source?.body) {
+                reply({ ok: false, reason: 'SOURCE_NOT_FOUND' });
+                break;
+              }
               let soap = null;
               if (asyncId) {
-                soap = await checkDeployStatus(org.instanceUrl, sid, org.apiVersion, asyncId);
+                soap = await checkDeployStatus(
+                  coverageOrg.instanceUrl,
+                  coverageSid,
+                  coverageOrg.apiVersion,
+                  asyncId
+                );
               }
               let coveredLines = [];
               let uncoveredLines = (Array.isArray(uncoveredLinesHint) ? uncoveredLinesHint : [])
                 .map((n) => Number(n))
                 .filter((n) => Number.isFinite(n) && n >= 1);
 
-              let body = '';
-              let name = className ? String(className) : '';
-              try {
-                const clsRows = await restQuery(
-                  org.instanceUrl,
-                  sid,
-                  org.apiVersion,
-                  `SELECT Name, Body FROM ApexClass WHERE Id = '${tid}' LIMIT 1`
-                );
-                const row = clsRows?.[0];
-                if (row) {
-                  body = row.Body || '';
-                  if (!name) name = row.Name || '';
-                }
-              } catch {
-                /* trigger */
-              }
-              if (!body) {
-                try {
-                  const trRows = await restQuery(
-                    org.instanceUrl,
-                    sid,
-                    org.apiVersion,
-                    `SELECT Name, Body FROM ApexTrigger WHERE Id = '${tid}' LIMIT 1`
-                  );
-                  const row = trRows?.[0];
-                  if (row) {
-                    body = row.Body || '';
-                    if (!name) name = row.Name || '';
-                  }
-                } catch {
-                  /* sin cuerpo */
-                }
-              }
-              if (!body) {
-                reply({ ok: false, error: 'NO_CLASS_BODY' });
-                break;
-              }
+              const body = source.body;
+              const name = source.name || (className ? String(className) : '');
 
               const lineSets = await resolveDeployCoverageLineSets({
-                instanceUrl: org.instanceUrl,
-                sid,
-                apiVersion: org.apiVersion,
+                instanceUrl: coverageOrg.instanceUrl,
+                sid: coverageSid,
+                apiVersion: coverageOrg.apiVersion,
                 classOrTriggerId,
                 runTestResult: soap?.runTestResult,
                 uncoveredLinesHint: uncoveredLines,
-                body
+                body,
+                useDeployResultOnly: true
               });
               coveredLines = lineSets.coveredLines;
               uncoveredLines = lineSets.uncoveredLines;
@@ -2476,7 +2587,12 @@ export function installMessageHandlers() {
                 name,
                 body,
                 coveredLines,
-                uncoveredLines
+                uncoveredLines,
+                sourceLastModifiedDate: source.lastModifiedDate || '',
+                sourceChangedAfterDeployment:
+                  Number.isFinite(Date.parse(String(source.lastModifiedDate || ''))) &&
+                  Number.isFinite(Date.parse(String(deploymentDate || ''))) &&
+                  Date.parse(String(source.lastModifiedDate)) > Date.parse(String(deploymentDate))
               });
             } catch (e) {
               replyHandlerError(reply, e);
@@ -4346,106 +4462,14 @@ export function installMessageHandlers() {
                 const n = Number(minCoveragePercentMsg);
                 if (Number.isFinite(n)) minPct = Math.min(100, Math.max(0, n));
               }
-              const coverageMinFraction = Math.min(1, Math.max(0, minPct / 100));
-              const esc = escapeSoqlLiteral(jobId);
-              const trSoql = `SELECT ApexClassId FROM ApexTestResult WHERE AsyncApexJobId = '${esc}'`;
-              let testClassRows = [];
-              try {
-                testClassRows = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, trSoql);
-              } catch {
-                testClassRows = [];
-              }
-              const testClassIds = [
-                ...new Set((testClassRows || []).map((r) => r.ApexClassId).filter(Boolean).map(String))
-              ];
-              if (!testClassIds.length) {
-                reply({ ok: true, classes: [], note: 'NO_TEST_RESULTS' });
-                break;
-              }
-              /** Misma lógica que Developer Console: unir Coverage JSON de todas las filas del run. */
-              const allCov = [];
-              const covChunkSize = 20;
-              for (let i = 0; i < testClassIds.length; i += covChunkSize) {
-                const chunk = testClassIds.slice(i, i + covChunkSize);
-                const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
-                const covSoql = `SELECT ApexClassOrTriggerId, Coverage FROM ApexCodeCoverage WHERE ApexTestClassId IN (${inList})`;
-                try {
-                  const part = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, covSoql);
-                  allCov.push(...(part || []));
-                } catch {
-                  /* chunk omitido */
-                }
-              }
-              const byTarget = new Map();
-              for (const row of allCov) {
-                const tid = row.ApexClassOrTriggerId;
-                if (!tid) continue;
-                if (!byTarget.has(tid)) byTarget.set(tid, { covered: new Set(), uncovered: new Set() });
-                const ag = byTarget.get(tid);
-                mergeApexCoverageJsonField(row.Coverage, ag.covered, ag.uncovered);
-              }
-              const overThreshold = [];
-              for (const [classOrTriggerId, ag] of byTarget) {
-                for (const ln of ag.covered) ag.uncovered.delete(ln);
-                const nCovered = ag.covered.size;
-                const nUncovered = ag.uncovered.size;
-                const total = nCovered + nUncovered;
-                if (total <= 0) continue;
-                const pct = nCovered / total;
-                if (pct >= coverageMinFraction) {
-                  overThreshold.push({ id: classOrTriggerId, percent: pct, covered: nCovered, total });
-                }
-              }
-              overThreshold.sort((a, b) => b.percent - a.percent);
-              const ids = overThreshold.map((x) => x.id);
-              const nameById = new Map();
-              const chunkSize = 40;
-              for (let i = 0; i < ids.length; i += chunkSize) {
-                const chunk = ids.slice(i, i + chunkSize);
-                const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
-                try {
-                  const cls = await toolingQuery(
-                    org.instanceUrl,
-                    sid,
-                    org.apiVersion,
-                    `SELECT Id, Name FROM ApexClass WHERE Id IN (${inList})`
-                  );
-                  for (const r of cls || []) {
-                    if (!r?.Id) continue;
-                    nameById.set(r.Id, r.Name);
-                    if (String(r.Id).length >= 15) nameById.set(String(r.Id).slice(0, 15), r.Name);
-                  }
-                } catch {
-                  /* ignore */
-                }
-                try {
-                  const trg = await toolingQuery(
-                    org.instanceUrl,
-                    sid,
-                    org.apiVersion,
-                    `SELECT Id, Name FROM ApexTrigger WHERE Id IN (${inList})`
-                  );
-                  for (const r of trg || []) {
-                    if (!r?.Id) continue;
-                    nameById.set(r.Id, r.Name);
-                    if (String(r.Id).length >= 15) nameById.set(String(r.Id).slice(0, 15), r.Name);
-                  }
-                } catch {
-                  /* ignore */
-                }
-              }
-              const resolveName = (id) => {
-                const s = String(id || '');
-                return nameById.get(s) || (s.length >= 15 ? nameById.get(s.slice(0, 15)) : null) || s;
-              };
-              const classes = overThreshold.map((row) => ({
-                id: row.id,
-                name: resolveName(row.id),
-                percent: row.percent,
-                covered: row.covered,
-                total: row.total
-              }));
-              reply({ ok: true, classes });
+              const coverage = await fetchApexTestRunCoverageSummary({
+                instanceUrl: org.instanceUrl,
+                sid,
+                apiVersion: org.apiVersion,
+                jobId,
+                minCoveragePercent: minPct
+              });
+              reply({ ok: true, ...coverage });
             } catch (e) {
               replyHandlerError(reply, e);
             }
@@ -4638,43 +4662,18 @@ export function installMessageHandlers() {
               break;
             }
             try {
-              const escJob = escapeSoqlLiteral(jobId);
               const tid = escapeSoqlLiteral(String(classOrTriggerId));
-              let testClassRows = [];
-              try {
-                testClassRows = await toolingQueryAll(
-                  org.instanceUrl,
-                  sid,
-                  org.apiVersion,
-                  `SELECT ApexClassId FROM ApexTestResult WHERE AsyncApexJobId = '${escJob}'`
-                );
-              } catch {
-                testClassRows = [];
-              }
-              const testClassIds = [
-                ...new Set((testClassRows || []).map((r) => r.ApexClassId).filter(Boolean).map(String))
-              ];
-              if (!testClassIds.length) {
+              const coverageLines = await fetchApexTestCoverageLines({
+                instanceUrl: org.instanceUrl,
+                sid,
+                apiVersion: org.apiVersion,
+                jobId,
+                classOrTriggerId
+              });
+              if (coverageLines.note === 'NO_TEST_RESULTS') {
                 reply({ ok: false, error: 'NO_TEST_RESULTS' });
                 break;
               }
-              const covered = new Set();
-              const uncovered = new Set();
-              const chunkSize = 20;
-              for (let i = 0; i < testClassIds.length; i += chunkSize) {
-                const chunk = testClassIds.slice(i, i + chunkSize);
-                const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
-                const covSoql = `SELECT ApexTestClassId, TestMethodName, Coverage FROM ApexCodeCoverage WHERE ApexClassOrTriggerId = '${tid}' AND ApexTestClassId IN (${inList})`;
-                try {
-                  const part = await toolingQueryAll(org.instanceUrl, sid, org.apiVersion, covSoql);
-                  for (const row of part || []) {
-                    mergeApexCoverageJsonField(row.Coverage, covered, uncovered);
-                  }
-                } catch {
-                  /* chunk omitido */
-                }
-              }
-              for (const ln of covered) uncovered.delete(ln);
               let body = '';
               try {
                 const clsRows = await restQuery(
@@ -4704,8 +4703,8 @@ export function installMessageHandlers() {
                 ok: true,
                 body,
                 name: className != null ? String(className) : '',
-                coveredLines: [...covered].sort((a, b) => a - b),
-                uncoveredLines: [...uncovered].sort((a, b) => a - b)
+                coveredLines: coverageLines.coveredLines,
+                uncoveredLines: coverageLines.uncoveredLines
               });
             } catch (e) {
               replyHandlerError(reply, e);

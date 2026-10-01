@@ -35,6 +35,7 @@ import {
 
 const ANON_EDITOR_CACHE_KEY = 'sfoc_anon_apex_editor_text';
 const ANON_SAVED_SCRIPTS_KEY = 'sfoc_anon_apex_saved_scripts';
+const PALETTE_ANON_SCRIPTS_KEY = 'sfoc_setup_palette_anon_scripts';
 const anonWorkbench = new MonacoWorkbench({
   uriScheme: 'sfoc-anon',
   onContentChange: () => {
@@ -452,6 +453,11 @@ function readSavedScripts() {
 function writeSavedScripts(list) {
   try {
     localStorage.setItem(ANON_SAVED_SCRIPTS_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+    void chrome.storage.local.set({
+      [PALETTE_ANON_SCRIPTS_KEY]: (Array.isArray(list) ? list : []).map((script) => ({
+        id: String(script?.id || '').slice(0, 128), name: String(script?.name || 'script').slice(0, 160)
+      })).filter((script) => script.id)
+    });
   } catch {
     /* ignore */
   }
@@ -1097,6 +1103,8 @@ export function setupAnonymousApexPanel() {
   }
   setupCodeEditorSessionPersistence('AnonymousApex', persistSession);
   refreshSavedScriptsUi();
+  // Migra la biblioteca ya existente para que la paleta disponible en Salesforce la pueda buscar.
+  writeSavedScripts(readSavedScripts());
   syncSaveButtonLabel();
   bindRunShortcut('AnonymousApex', () => void runAnonymousApex(), { allowInMonaco: true });
 }

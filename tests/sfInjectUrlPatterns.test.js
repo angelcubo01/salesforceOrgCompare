@@ -13,10 +13,20 @@ import {
   normalizeApexLogId
 } from '../sfInject/content/matchers/debugLogPages.js';
 import {
+  SF_INJECT_GLOBAL_QUICK_LINKS_KEY,
   isSfInjectIntegrationEnabled,
   normalizeSfInjectConfig
 } from '../sfInject/lib/settings.js';
 import { SF_INJECT_INTEGRATION_IDS, SF_INJECT_SHIPPED } from '../sfInject/lib/registry.js';
+import {
+  QUICK_LINKS_SALESFORCE_HOST_SUFFIXES,
+  isQuickLinksSalesforcePage
+} from '../sfInject/content/matchers/quickLinksPages.js';
+import {
+  buildCustomQuickLinkUrl,
+  buildSfocQuickLinkUrl,
+  hasConfiguredQuickLinks
+} from '../sfInject/content/injectors/quickLinksTestButton.js';
 
 describe('isApexDebugLogsHomePage', () => {
   it('matches Lightning Setup Debug Logs home', () => {
@@ -160,6 +170,53 @@ describe('sfInject registry', () => {
     expect(SF_INJECT_INTEGRATION_IDS).toContain('debugLogOpenViewer');
     expect(SF_INJECT_INTEGRATION_IDS).toContain('debugLogsTableOrder');
     expect(SF_INJECT_INTEGRATION_IDS).toContain('userTraceFlagsEnhance');
+    expect(SF_INJECT_INTEGRATION_IDS).toContain('quickLinks');
+  });
+});
+
+describe('Quick links Salesforce matcher', () => {
+  it('matches every Salesforce UI URL, not only Custom Settings', () => {
+    expect(
+      isQuickLinksSalesforcePage(
+        'https://caixabankcc--intservic2.sandbox.my.salesforce-setup.com/lightning/setup/CustomSettings/home'
+      )
+    ).toBe(true);
+    expect(
+      isQuickLinksSalesforcePage('https://myorg.lightning.force.com/lightning/o/Account/list')
+    ).toBe(true);
+    expect(isQuickLinksSalesforcePage('https://myorg.my.salesforce.com/lightning/page/home')).toBe(true);
+    expect(QUICK_LINKS_SALESFORCE_HOST_SUFFIXES).toContain('.lightning.force.com');
+  });
+
+  it('rejects non-Salesforce hosts', () => {
+    expect(isQuickLinksSalesforcePage('https://example.com/lightning/o/Account/list')).toBe(false);
+  });
+});
+
+describe('Quick links injection guard', () => {
+  it('only permits the header button when the active org has links', () => {
+    expect(hasConfiguredQuickLinks({ quickLinks: [] })).toBe(false);
+    expect(hasConfiguredQuickLinks({})).toBe(false);
+    expect(hasConfiguredQuickLinks({ quickLinks: [{ id: 'support' }] })).toBe(true);
+  });
+
+  it('opens custom routes in the active Salesforce domain only', () => {
+    expect(buildCustomQuickLinkUrl('/lightning/o/Account/list', 'https://prod.lightning.force.com'))
+      .toBe('https://prod.lightning.force.com/lightning/o/Account/list');
+    expect(buildCustomQuickLinkUrl('https://example.com', 'https://prod.lightning.force.com')).toBe('');
+  });
+
+  it('builds SFOC tool links with the active org preselected', () => {
+    const originalChrome = globalThis.chrome;
+    globalThis.chrome = { runtime: { getURL: (path) => `chrome-extension://test/${path}` } };
+    try {
+      expect(buildSfocQuickLinkUrl('DeployStatus', '00D000000000001')).toBe(
+        'chrome-extension://test/code/code.html?nav=monitoring&op=DeployStatus&left=00D000000000001'
+      );
+    } finally {
+      if (originalChrome === undefined) delete globalThis.chrome;
+      else globalThis.chrome = originalChrome;
+    }
   });
 });
 
@@ -170,6 +227,8 @@ describe('sfInject settings', () => {
     expect(cfg.integrations.debugLogOpenViewer).toBe(false);
     expect(cfg.integrations.debugLogsTableOrder).toBe(false);
     expect(cfg.integrations.userTraceFlagsEnhance).toBe(false);
+    expect(cfg.integrations.quickLinks).toBe(false);
+    expect(cfg.quickLinks).toEqual({});
     expect(cfg.prefs.userTraceFlagsActiveOnly).toBe(false);
   });
 
@@ -190,25 +249,63 @@ describe('sfInject settings', () => {
     });
     expect(isSfInjectIntegrationEnabled(cfg, 'debugLogOpenViewer')).toBe(false);
   });
+
+  it('preserves relative quick links grouped by org and normalizes their display fields', () => {
+    const cfg = normalizeSfInjectConfig({
+      quickLinks: {
+        '00D000000000001': [{
+          id: 'support', type: 'custom', label: 'Soporte', url: '/lightning/page/support',
+          icon: 'bookmark', color: '#F9B642'
+        }]
+      }
+    });
+    expect(cfg.quickLinks['00D000000000001']).toEqual([{
+      id: 'support', type: 'custom', label: 'Soporte', toolId: '',
+      url: '/lightning/page/support', icon: 'bookmark', color: '#f9b642'
+    }]);
+  });
+
+  it('keeps the global template separate and rejects absolute custom URLs', () => {
+    const cfg = normalizeSfInjectConfig({
+      quickLinks: {
+        [SF_INJECT_GLOBAL_QUICK_LINKS_KEY]: [
+          { id: 'home', type: 'custom', label: 'Inicio', url: '/lightning/page/home' }
+        ],
+        '00D000000000001': [
+          { id: 'invalid', type: 'custom', label: 'Externo', url: 'https://example.test' }
+        ]
+      }
+    });
+    expect(cfg.quickLinks[SF_INJECT_GLOBAL_QUICK_LINKS_KEY].map((link) => link.id)).toEqual(['home']);
+    expect(cfg.quickLinks['00D000000000001'][0].url).toBe('');
+  });
+
+  it('keeps a single SFOC tool per environment', () => {
+    const cfg = normalizeSfInjectConfig({
+      quickLinks: {
+        '00D000000000001': [
+          { id: 'comparator-1', type: 'sfoc', toolId: 'comparator' },
+          { id: 'comparator-2', type: 'sfoc', toolId: 'comparator' },
+          { id: 'deployments', type: 'sfoc', toolId: 'deployments' }
+        ]
+      }
+    });
+    expect(cfg.quickLinks['00D000000000001'].map((link) => link.id)).toEqual([
+      'comparator-1', 'deployments'
+    ]);
+  });
 });
 
-describe('sfInject manifest privacy', () => {
+describe('sfInject manifest scope', () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..');
   const manifest = JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8'));
 
-  it('does not register content scripts on all Salesforce pages', () => {
+  it('registers content scripts globally, but only on Salesforce domains', () => {
     const matches = manifest.content_scripts?.flatMap((cs) => cs.matches || []) || [];
     expect(matches.length).toBeGreaterThan(0);
+    expect(matches).toContain('https://*.lightning.force.com/*');
     for (const m of matches) {
-      expect(
-          m.includes('ApexDebugLogs') ||
-          m.includes('listApexTraces.apexp') ||
-          m.includes('DeployStatus') ||
-          m.includes('monitorDeployment.apexp') ||
-          m.includes('monitorDeploymentsDetails.apexp')
-      ).toBe(true);
-      expect(m).not.toBe('https://*.salesforce.com/*');
-      expect(m).not.toBe('https://*.lightning.force.com/*');
+      expect(m).toMatch(/^https:\/\/\*\.(?:salesforce|my\.salesforce|force|lightning\.force|visual\.force|vf\.force|visualforce|cloudforce|salesforce-setup|my\.salesforce-setup)\.com\/\*$/);
     }
   });
 

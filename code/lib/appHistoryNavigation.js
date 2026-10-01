@@ -15,7 +15,6 @@ import { saveItemsToStorage } from '../core/persistence.js';
 import { renderSavedItems, syncListActiveHighlight } from '../ui/listUi.js';
 import { renderEditor } from '../editor/editorRender.js';
 import { applyFeatureControlsUi } from '../ui/featureControlsUi.js';
-import { ensureRightOrgDistinctFromLeft } from '../ui/orgs.js';
 
 let popstateHandlerBound = false;
 
@@ -30,9 +29,6 @@ export async function applyAppStateFromUrl(parsed) {
     await navigateToModeAndTool(parsed.navMode || 'home', op, { userInitiated: false });
 
     applyDeepLinkOrgs(parsed);
-    if (parsed.leftOrgId && !parsed.rightOrgId) {
-      ensureRightOrgDistinctFromLeft();
-    }
 
     if (parsed.itemType && parsed.itemKey && parsed.itemType !== 'PackageXml') {
       const { added } = resolveItemFromDeepLink(parsed, state, state.savedItems, { select: true });

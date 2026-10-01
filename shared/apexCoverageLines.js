@@ -143,24 +143,26 @@ export async function resolveDeployCoverageLineSets(opts) {
   let coveredLines = [];
   let uncoveredLines = normalizeLineNumbers(opts.uncoveredLinesHint);
 
-  const testClassIds = await resolveDeployTestClassIds(
-    opts.instanceUrl,
-    opts.sid,
-    opts.apiVersion,
-    opts.runTestResult
-  );
-
-  if (testClassIds.length) {
-    const scoped = await fetchToolingCoverageLines(
+  if (!opts.useDeployResultOnly) {
+    const testClassIds = await resolveDeployTestClassIds(
       opts.instanceUrl,
       opts.sid,
       opts.apiVersion,
-      classOrTriggerId,
-      testClassIds
+      opts.runTestResult
     );
-    if (scoped.coveredLines.length || scoped.uncoveredLines.length) {
-      coveredLines = scoped.coveredLines;
-      uncoveredLines = scoped.uncoveredLines;
+
+    if (testClassIds.length) {
+      const scoped = await fetchToolingCoverageLines(
+        opts.instanceUrl,
+        opts.sid,
+        opts.apiVersion,
+        classOrTriggerId,
+        testClassIds
+      );
+      if (scoped.coveredLines.length || scoped.uncoveredLines.length) {
+        coveredLines = scoped.coveredLines;
+        uncoveredLines = scoped.uncoveredLines;
+      }
     }
   }
 
@@ -171,7 +173,7 @@ export async function resolveDeployCoverageLineSets(opts) {
     uncoveredLines = normalizeLineNumbers(soapHit.uncoveredLines);
   }
 
-  if (!coveredLines.length) {
+  if (!coveredLines.length && !opts.useDeployResultOnly) {
     const all = await fetchAllToolingCoverageLines(
       opts.instanceUrl,
       opts.sid,

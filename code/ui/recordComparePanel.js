@@ -6,7 +6,7 @@ import { bg } from '../core/bridge.js';
 import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType, applyArtifactTypeUi } from './artifactTypeUi.js';
-import { updateOrgDropdownLayout, updateAuthIndicators, ensureRightOrgDistinctFromLeft } from './orgs.js';
+import { updateOrgDropdownLayout, updateAuthIndicators } from './orgs.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { isValidSalesforceRecordId } from '../../shared/fieldHistoryApi.js';
 import { handleToolError, handleToolResponseFailure } from '../../shared/reportToolError.js';
@@ -545,7 +545,6 @@ export async function refreshRecordComparePanel() {
     return;
   }
   if (isDualOrgMode()) {
-    ensureRightOrgDistinctFromLeft();
     const right = document.getElementById('rightOrg');
     if (right && state.rightOrgId) right.value = state.rightOrgId;
     if (!state.rightOrgId) {
@@ -565,7 +564,6 @@ export function setupRecordComparePanel() {
   compareToggle?.addEventListener('change', () => {
     state.recordCompareCompareMode = !!compareToggle.checked;
     if (state.recordCompareCompareMode) {
-      ensureRightOrgDistinctFromLeft();
       const right = document.getElementById('rightOrg');
       if (right && state.rightOrgId) right.value = state.rightOrgId;
     } else {

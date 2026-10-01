@@ -3,6 +3,8 @@
  */
 import { SF_INJECT_SHIPPED } from '../lib/registry.js';
 import { loadSfInjectSettings, saveSfInjectSettings } from '../lib/settings.js';
+import { openQuickLinksSettingsModal } from './quickLinksSettings.js';
+import { openSetupCommandPaletteSettingsModal } from './setupCommandPaletteSettings.js';
 
 /**
  * @param {(key: string) => string} translate
@@ -14,6 +16,8 @@ export function renderSfInjectSettingsPanel(translate) {
   container.replaceChildren();
 
   for (const item of SF_INJECT_SHIPPED) {
+    const row = document.createElement('div');
+    row.className = 'settings-sf-inject-integration-row';
     const label = document.createElement('label');
     label.className = 'settings-checkbox-row settings-checkbox-row--nested';
 
@@ -26,7 +30,25 @@ export function renderSfInjectSettingsPanel(translate) {
     title.textContent = translate(item.settingsLabelKey);
 
     label.append(input, title);
-    container.appendChild(label);
+    row.appendChild(label);
+
+    if (item.settingsConfigureLabelKey) {
+      const configureBtn = document.createElement('button');
+      const configureLabel = translate(item.settingsConfigureLabelKey);
+      configureBtn.type = 'button';
+      configureBtn.id = `settingsSfInjectConfigure_${item.id}`;
+      configureBtn.className = 'settings-sf-inject-configure';
+      configureBtn.textContent = `⚙ ${configureLabel}`;
+      configureBtn.setAttribute('aria-label', configureLabel);
+      configureBtn.title = configureLabel;
+      configureBtn.addEventListener('click', () => {
+        if (item.id === 'quickLinks') void openQuickLinksSettingsModal(translate);
+        if (item.id === 'setupCommandPalette') void openSetupCommandPaletteSettingsModal(translate);
+      });
+      row.appendChild(configureBtn);
+    }
+
+    container.appendChild(row);
 
     const hint = document.createElement('p');
     hint.className = 'settings-hint settings-hint--nested';

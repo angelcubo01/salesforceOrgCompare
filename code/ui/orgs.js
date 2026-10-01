@@ -143,7 +143,6 @@ function populateOrgSelects(orgs, aliases, groups) {
 
   orgSelectDefaultsApplied = true;
 
-  ensureRightOrgDistinctFromLeft();
   syncTelemetryUserFromOrgState();
   refreshOrgUserDropdowns();
 }
@@ -183,7 +182,6 @@ export function restorePausedRightOrgIfDualMode() {
   pausedRightOrgId = null;
   const right = document.getElementById('rightOrg');
   if (right) right.value = state.rightOrgId;
-  ensureRightOrgDistinctFromLeft();
   return true;
 }
 
@@ -253,19 +251,6 @@ export function setupOrgSelectorAutoSync() {
     select.addEventListener('focus', run);
     select.addEventListener('mousedown', run);
   }
-}
-
-/** Si izquierda y derecha son la misma org con ≥2 guardadas, asigna a la derecha otra distinta (p. ej. tras ?orgId=). */
-export function ensureRightOrgDistinctFromLeft() {
-  const orgs = state.orgsList || [];
-  const right = document.getElementById('rightOrg');
-  if (orgs.length < 2 || !state.leftOrgId || !state.rightOrgId) return;
-  if (String(state.leftOrgId) !== String(state.rightOrgId)) return;
-  const other = orgs.find((o) => String(o.id) !== String(state.leftOrgId));
-  if (!other) return;
-  state.rightOrgId = other.id;
-  if (right) right.value = state.rightOrgId;
-  updateAuthIndicators();
 }
 
 export function updateOrgDropdownLayout() {

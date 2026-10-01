@@ -7,11 +7,15 @@ import { debugLogsTableOrderIntegration } from './debugLogsTableOrder.js';
 import { userTraceFlagsEnhanceIntegration } from './userTraceFlagsEnhance.js';
 import { deployStatusInlineDetailsIntegration } from './deployStatusInlineDetails.js';
 import { deployStatusDetailSourceLinksIntegration } from './deployStatusDetailSourceLinks.js';
+import { quickLinksIntegration } from './quickLinksTestButton.js';
+import { setupCommandPaletteIntegration } from '../setupCommandPalette.js';
 
 export const SF_INJECT_CONTENT_INTEGRATIONS = [
   debugLogOpenViewerIntegration,
   debugLogsTableOrderIntegration,
   userTraceFlagsEnhanceIntegration,
   deployStatusInlineDetailsIntegration,
-  deployStatusDetailSourceLinksIntegration
+  deployStatusDetailSourceLinksIntegration,
+  quickLinksIntegration,
+  setupCommandPaletteIntegration
 ];

@@ -3,7 +3,15 @@
  * Añade aquí cada integración implementada (settings + content script).
  */
 
-/** @typedef {{ id: string, settingsLabelKey: string, settingsHintKey: string }} SfInjectShippedIntegration */
+/**
+ * @typedef {{
+ *   id: string,
+ *   settingsLabelKey: string,
+ *   settingsHintKey: string,
+ *   settingsConfigureLabelKey?: string,
+ *   settingsConfigureModalTitleKey?: string
+ * }} SfInjectShippedIntegration
+ */
 
 /** Integraciones actualmente disponibles en la extensión. */
 export const SF_INJECT_SHIPPED = /** @type {const} */ ([
@@ -31,6 +39,20 @@ export const SF_INJECT_SHIPPED = /** @type {const} */ ([
     id: 'deployStatusDetailSourceLinks',
     settingsLabelKey: 'settings.sfInjectDeployStatusDetailSourceLinks',
     settingsHintKey: 'settings.sfInjectDeployStatusDetailSourceLinksHint'
+  },
+  {
+    id: 'quickLinks',
+    settingsLabelKey: 'settings.sfInjectQuickLinks',
+    settingsHintKey: 'settings.sfInjectQuickLinksHint',
+    settingsConfigureLabelKey: 'settings.sfInjectQuickLinksConfigure',
+    settingsConfigureModalTitleKey: 'settings.sfInjectQuickLinksConfigureTitle'
+  },
+  {
+    id: 'setupCommandPalette',
+    settingsLabelKey: 'settings.sfInjectSetupCommandPalette',
+    settingsHintKey: 'settings.sfInjectSetupCommandPaletteHint',
+    settingsConfigureLabelKey: 'settings.sfInjectSetupCommandPaletteConfigure',
+    settingsConfigureModalTitleKey: 'settings.sfInjectSetupCommandPaletteConfigureTitle'
   }
 ]);
 

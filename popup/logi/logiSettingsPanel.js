@@ -312,7 +312,9 @@ function applyLogiConfig(config) {
   const section = document.getElementById('settingsLogi');
   if (!section) return;
   const visible = config.showLogiSettings === true && config.enabled === true;
-  section.hidden = !visible;
+  document.dispatchEvent(
+    new CustomEvent('sfoc:settings-logi-availability', { detail: { visible } })
+  );
   if (!visible) {
     const usageSection = document.getElementById('settingsLogiUsage');
     if (usageSection) usageSection.hidden = true;

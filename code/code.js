@@ -13,8 +13,7 @@ import {
   loadSavedOrgs,
   setupOrgSelectorAutoSync,
   updateOrgDropdownLayout,
-  updateAuthIndicators,
-  ensureRightOrgDistinctFromLeft
+  updateAuthIndicators
 } from './ui/orgs.js';
 import { initOrgUserDropdowns } from './ui/orgUserDropdown.js';
 import { renderSavedItems, setupCompareListToolbar } from './ui/listUi.js';
@@ -34,6 +33,7 @@ import {
 } from './setup/setupListeners.js';
 import { setupSearch, setOnAfterArtifactTypeChange } from './ui/searchSetup.js';
 import { setupQuickOpen } from './ui/quickOpen.js';
+import { addBundleFiles, addSelected } from './flows/addItems.js';
 import {
   initializeAppNavigation,
   setupAppModeTabHandlers,
@@ -65,7 +65,7 @@ import {
   refreshDependencyExplorerPanel
 } from './ui/dependencyExplorerPanel.js';
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
-import { setupAnonymousApexPanel, refreshAnonymousApexPanel } from './ui/anonymousApexPanel.js';
+import { setupAnonymousApexPanel, refreshAnonymousApexPanel, openAnonymousApexSavedScript } from './ui/anonymousApexPanel.js';
 import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
 import {
   setupEnvironmentStatusPanel,
@@ -199,6 +199,18 @@ async function init() {
 
   const typeSelect = document.getElementById('typeSelect');
   let urlDeepLink = parseCompareDeepLink(window.location.search);
+  // Estos parámetros son efímeros: la inicialización de navegación reescribe la URL
+  // antes de que el comparador esté preparado para cargar el fichero.
+  const startupParams = new URLSearchParams(window.location.search);
+  const paletteBundleType = startupParams.get('paletteBundleType');
+  const paletteBundleName = startupParams.get('paletteBundleName');
+  const paletteBundleId = startupParams.get('paletteBundleId');
+  const paletteBundleRequest = (
+    startupParams.get('paletteBundle') === '1' &&
+    (paletteBundleType === 'LWC' || paletteBundleType === 'Aura') &&
+    paletteBundleName
+  );
+  const shouldOpenPaletteItem = startupParams.get('paletteOpen') === '1';
   if (urlDeepLink.itemType === 'PackageXml') {
     state.selectedItem = null;
     urlDeepLink = { ...urlDeepLink, itemType: null, itemKey: null, fileName: null, descriptor: null };
@@ -280,13 +292,10 @@ async function init() {
   applyArtifactTypeUi();
 
   applyDeepLinkOrgs(urlDeepLink);
-  if (urlDeepLink.leftOrgId && !urlDeepLink.rightOrgId) {
-    ensureRightOrgDistinctFromLeft();
-  }
 
   renderSavedItems();
 
-  if (urlDeepLink.itemType && urlDeepLink.itemKey && urlDeepLink.itemType !== 'PackageXml') {
+  if (!shouldOpenPaletteItem && urlDeepLink.itemType && urlDeepLink.itemKey && urlDeepLink.itemType !== 'PackageXml') {
     setTimeout(() => applyDeepLinkItemHint(urlDeepLink), 80);
   }
   
@@ -303,6 +312,8 @@ async function init() {
   setupMetadataTypeComparePanel();
   setupApexTestsPanel();
   setupAnonymousApexPanel();
+  const savedScriptId = new URLSearchParams(window.location.search).get('savedScript');
+  if (savedScriptId) void openAnonymousApexSavedScript(savedScriptId);
   setupOrgLimitsPanel();
   setupEnvironmentStatusPanel();
   setupDeployStatusPanel();
@@ -332,7 +343,21 @@ async function init() {
       detail: { source: 'tool-handlers-ready' }
     }));
   }
-  renderEditor();
+  if (paletteBundleRequest) {
+    void addBundleFiles(paletteBundleType, {
+      id: paletteBundleId || paletteBundleName,
+      developerName: paletteBundleName
+    });
+  } else if (shouldOpenPaletteItem && urlDeepLink.itemType && urlDeepLink.itemKey) {
+    addSelected({
+      type: urlDeepLink.itemType,
+      key: urlDeepLink.itemKey,
+      fileName: urlDeepLink.fileName || undefined,
+      descriptor: urlDeepLink.descriptor || { name: urlDeepLink.itemKey }
+    });
+  } else {
+    renderEditor();
+  }
   refreshGeneratePackageXmlTypes();
   // Cada panel decide internamente si es el activo. Esperar sus promesas evita
   // enseñar una aplicación a medio hidratar, sin bloquear por fallos aislados

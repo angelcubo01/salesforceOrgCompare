@@ -570,10 +570,6 @@
             Siguiente →
           </button>
         </div>
-        <div id="fileViewerLoadingBar" class="file-viewer-loading-bar hidden" aria-live="polite" aria-busy="true">
-          <span class="file-viewer-loading-spinner" aria-hidden="true"></span>
-          <span class="file-viewer-loading-text" data-i18n="code.loadingFile">Cargando fichero…</span>
-        </div>
         <div id="monacoContainer" class="monaco-container ph-no-capture">
           <div id="noOrgMessage" class="no-org-message hidden">
           <div class="no-org-content">
@@ -581,6 +577,10 @@
             <p data-i18n="code.selectOrgHint">Elige una organización de Salesforce en los desplegables superiores para ver y comparar código.</p>
             <p class="no-org-instructions" data-i18n="code.selectOrgInstructions">Si aún no has conectado ninguna org, ve a una pestaña de Salesforce y pulsa el botón de la extensión para añadirla.</p>
           </div>
+          </div>
+          <div id="fileViewerLoadingBar" class="file-viewer-loading-bar hidden" aria-live="polite" aria-busy="true">
+            <span class="file-viewer-loading-spinner" aria-hidden="true"></span>
+            <span class="file-viewer-loading-text" data-i18n="code.loadingFile">Cargando fichero…</span>
           </div>
         </div>
         </div>
@@ -768,6 +768,14 @@
                 <p id="apexTestsHubStatus" class="apex-tests-hub-status hidden" role="status"></p>
               </div>
               <div class="apex-tests-hub-header-actions">
+                <button
+                  type="button"
+                  id="apexTestsRefreshRunsBtn"
+                  class="apex-tests-open-runner-btn apex-tests-refresh-runs-btn"
+                  data-i18n="apexTests.refresh"
+                >
+                  Actualizar
+                </button>
                 <button
                   type="button"
                   id="apexTestsClearRunsBtn"
@@ -2563,6 +2571,27 @@
                 </div>
               </div>
 
+              <details id="deployStatusExecutedTestsSection" class="deploy-status-executed-tests hidden">
+                <summary class="deploy-status-executed-tests-summary">
+                  <span data-i18n="deployStatus.sectionExecutedTests">Tests ejecutados</span>
+                  <span id="deployStatusExecutedTestsMeta" class="deploy-status-executed-tests-meta"></span>
+                </summary>
+                <div class="deploy-status-table-wrap">
+                  <table class="deploy-status-table">
+                    <thead>
+                      <tr>
+                        <th data-i18n="deployStatus.colClass">Clase</th>
+                        <th data-i18n="deployStatus.colMethod">Método</th>
+                        <th data-i18n="deployStatus.coverageColOutcome">Resultado</th>
+                        <th data-i18n="deployStatus.colTime">Tiempo</th>
+                        <th data-i18n="deployStatus.colDetails">Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody id="deployStatusExecutedTestsTbody"></tbody>
+                  </table>
+                </div>
+              </details>
+
               <div id="deployStatusCoverageWarningsSection" class="deploy-status-detail-errors-block hidden">
                 <h4 class="deploy-status-detail-section-title" data-i18n="deployStatus.sectionCoverageWarnings">Fallos de cobertura</h4>
                 <div class="deploy-status-table-wrap">
@@ -2648,6 +2677,10 @@
                   </button>
                 </header>
                 <div id="deployStatusCoverageModalBody" class="apex-tests-coverage-modal-body"></div>
+                <div id="deployStatusCoverageViewerLoading" class="deploy-status-coverage-viewer-loading hidden" role="status" aria-live="polite">
+                  <span class="deploy-status-coverage-viewer-spinner" aria-hidden="true"></span>
+                  <span data-i18n="deployStatus.coveragePreparingViewer">Cargando código del entorno origen…</span>
+                </div>
               </div>
             </div>
 

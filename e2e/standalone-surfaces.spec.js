@@ -196,6 +196,13 @@ test('ajustes: formulario, temas, responsive y WCAG A/AA', async ({
   await page.waitForTimeout(250);
   await expect(page.locator('#settings-general-heading')).toBeVisible();
   await expect(page.locator('.settings-brand-logo')).toBeVisible();
+  await page.locator('#settingsTabSalesforceIntegration').click();
+  await expect(page.locator('#settingsSfInject_quickLinks')).toBeVisible();
+  await page.locator('#settingsSfInjectConfigure_quickLinks').click();
+  await expect(page.locator('[role="dialog"]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[role="dialog"]')).toBeHidden();
+  await page.locator('#settingsTabGeneral').click();
   expect(await page.locator('#settingsLang, #settingsUiTheme, #settingsMonacoTheme').evaluateAll((controls) => controls.map((control) => ({
     disabled: control.disabled,
     backgroundColor: getComputedStyle(control).backgroundColor

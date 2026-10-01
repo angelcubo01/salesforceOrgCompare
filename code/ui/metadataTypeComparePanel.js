@@ -27,7 +27,6 @@ import { renderEditor } from '../editor/editorRender.js';
 import { renderSavedItems, clearBundleCollapsedForKey, syncListActiveHighlight } from './listUi.js';
 import { ensureModeForTool } from './appModeNav.js';
 import { handleArtifactTypeSelectChange } from './searchSetup.js';
-import { ensureRightOrgDistinctFromLeft } from './orgs.js';
 import {
   beginMetadataTypeCompareUiSession,
   cancelMetadataTypeCompareUi,
@@ -177,7 +176,6 @@ async function switchToComparatorWithItem(item) {
   state.selectedItem = item;
   await ensureModeForTool('Comparator');
   handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
-  ensureRightOrgDistinctFromLeft();
   renderSavedItems(true);
   syncListActiveHighlight();
   await renderEditor();

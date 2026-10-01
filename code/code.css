@@ -2611,17 +2611,20 @@ body.artifact-apex-tests #editorContainer.editor {
   color: #e2e8f0;
 }
 .apex-tests-status-chip {
+  --apex-tests-status-color: var(--sfoc-text-muted);
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  color: var(--apex-tests-status-color);
   font-weight: 600;
   line-height: 1.2;
 }
 .apex-tests-status-progress {
   font-size: 10px;
   font-weight: 500;
-  color: #94a3b8;
+  color: currentColor;
+  opacity: 0.9;
   width: 100%;
 }
 .apex-tests-detail-filter-bar {
@@ -2929,22 +2932,28 @@ body.artifact-apex-tests #editorContainer.editor {
   display: block;
 }
 .apex-tests-status-completed {
-  color: #34d399;
+  --apex-tests-status-color: var(--sfoc-success);
+  color: var(--sfoc-success) !important;
 }
 .apex-tests-status-processing {
-  color: #60a5fa;
+  --apex-tests-status-color: var(--sfoc-info);
+  color: var(--sfoc-info) !important;
 }
 .apex-tests-status-queued {
-  color: #fbbf24;
+  --apex-tests-status-color: var(--sfoc-warn);
+  color: var(--sfoc-warn) !important;
 }
 .apex-tests-status-failed {
-  color: #f87171;
+  --apex-tests-status-color: var(--sfoc-danger);
+  color: var(--sfoc-danger) !important;
 }
 .apex-tests-status-aborted {
-  color: #fb7185;
+  --apex-tests-status-color: var(--sfoc-danger);
+  color: var(--sfoc-danger) !important;
 }
 .apex-tests-status-unknown {
-  color: #cbd5e1;
+  --apex-tests-status-color: var(--sfoc-text-muted);
+  color: var(--sfoc-text-muted) !important;
 }
 .apex-tests-runs-class-sub {
   margin-top: 4px;
@@ -3441,6 +3450,24 @@ body.artifact-apex-tests #editorContainer.editor {
 }
 .apex-tests-open-runner-btn:hover {
   filter: brightness(1.06);
+}
+.apex-tests-refresh-runs-btn.is-loading {
+  cursor: progress;
+  opacity: 0.8;
+}
+.apex-tests-refresh-runs-btn.is-loading::after {
+  content: '';
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-left: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: apex-tests-refresh-spin 0.7s linear infinite;
+}
+@keyframes apex-tests-refresh-spin {
+  to { transform: rotate(360deg); }
 }
 .apex-tests-runner-toolbar {
   flex-shrink: 0;
@@ -4973,20 +5000,23 @@ body.artifact-apex-tests #editorContainer.editor {
   box-shadow: none !important;
 }
 
-/* Indicador situado antes del visor de Monaco. */
+/* Capa de carga sobre Monaco: no debe alterar la altura disponible del editor. */
 .file-viewer-loading-bar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 10;
   display: flex;
-  flex-shrink: 0;
   align-items: center;
   justify-content: center;
   gap: 10px;
   padding: 8px 14px;
-  background: linear-gradient(180deg, rgba(15, 15, 18, 0.92) 0%, rgba(20, 20, 24, 0.97) 100%);
+  background: linear-gradient(180deg, rgba(15, 15, 18, 0.78) 0%, rgba(20, 20, 24, 0.86) 100%);
   border-bottom: 1px solid #333;
   font-size: 12px;
   color: #b0b8c4;
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
 }
 .file-viewer-loading-bar.hidden {
   display: none !important;
@@ -7774,6 +7804,53 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   margin-bottom: 20px;
 }
 
+.deploy-status-executed-tests {
+  margin: 0 0 20px;
+  border: 1px solid rgba(96, 165, 250, 0.38);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.deploy-status-executed-tests-summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #dbeafe;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.deploy-status-executed-tests-meta {
+  color: #94a3b8;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.deploy-status-executed-tests .deploy-status-table-wrap {
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.deploy-status-test-outcome {
+  display: inline-flex;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.deploy-status-test-outcome.is-success {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.16);
+}
+
+.deploy-status-test-outcome.is-failure {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.16);
+}
+
 .deploy-status-components-block {
   margin-top: 4px;
 }
@@ -8418,7 +8495,67 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 }
 
 .deploy-status-coverage-modal-panel {
+  position: relative;
   max-width: min(920px, 96vw);
+}
+
+.deploy-status-coverage-viewer-loading {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border: 1px solid rgba(96, 165, 250, 0.7);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.deploy-status-coverage-viewer-loading.hidden {
+  display: none;
+}
+
+.deploy-status-coverage-source-picker {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: #cbd5e1;
+  font-size: 0.8rem;
+}
+
+.deploy-status-coverage-source-picker select {
+  max-width: 260px;
+  min-height: 31px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 6px;
+  padding: 3px 26px 3px 7px;
+  color: inherit;
+  background: rgba(15, 23, 42, 0.68);
+}
+
+.deploy-status-coverage-source-picker select:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.deploy-status-coverage-viewer-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: deploy-status-coverage-spin 0.7s linear infinite;
+}
+
+@keyframes deploy-status-coverage-spin {
+  to { transform: rotate(360deg); }
 }
 
 .deploy-status-coverage-subtitle {

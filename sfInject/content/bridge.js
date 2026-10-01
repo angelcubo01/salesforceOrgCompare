@@ -4,7 +4,13 @@
 
 /** @param {object} message */
 export function sfInjectSend(message) {
-  return chrome.runtime.sendMessage(message);
+  const unavailable = { ok: false, reason: 'EXTENSION_CONTEXT_INVALIDATED' };
+  try {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.id) return Promise.resolve(unavailable);
+    return Promise.resolve(chrome.runtime.sendMessage(message)).catch(() => unavailable);
+  } catch {
+    return Promise.resolve(unavailable);
+  }
 }
 
 /** @returns {Promise<{ ok: boolean, settings?: object, lang?: string, reason?: string }>} */

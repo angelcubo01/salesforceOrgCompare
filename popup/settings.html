@@ -20,7 +20,38 @@
       </header>
 
       <main class="settings-main">
-        <section class="settings-card" aria-labelledby="settings-general-heading">
+        <nav class="settings-tabs" role="tablist" aria-label="Secciones de ajustes" data-i18n-aria-label="settings.tabsLabel">
+          <button
+            type="button"
+            class="settings-tab is-active"
+            id="settingsTabGeneral"
+            role="tab"
+            aria-selected="true"
+            data-settings-tab="general"
+            data-i18n="settings.tabGeneral"
+          >General</button>
+          <button
+            type="button"
+            class="settings-tab"
+            id="settingsTabLogi"
+            role="tab"
+            aria-selected="false"
+            data-settings-tab="logi"
+            data-i18n="settings.tabLogi"
+            hidden
+          >Logi</button>
+          <button
+            type="button"
+            class="settings-tab"
+            id="settingsTabSalesforceIntegration"
+            role="tab"
+            aria-selected="false"
+            data-settings-tab="salesforce-integration"
+            data-i18n="settings.tabSalesforceIntegration"
+          >Salesforce UI Integration</button>
+        </nav>
+
+        <section class="settings-card" aria-labelledby="settings-general-heading" data-settings-tab-content="general">
           <h2 id="settings-general-heading" class="settings-card-title" data-i18n="settings.sectionGeneral">
             General
           </h2>
@@ -90,7 +121,7 @@
           <p id="settingsGeneralTraceStatus" class="settings-status" role="status"></p>
         </section>
 
-        <section class="settings-card" id="settingsSfInject" aria-labelledby="settings-sfinject-heading">
+        <section class="settings-card" id="settingsSfInject" aria-labelledby="settings-sfinject-heading" data-settings-tab-content="salesforce-integration" hidden>
           <h2 id="settings-sfinject-heading" class="settings-card-title settings-card-title--with-badge">
             <span data-i18n="settings.sectionSfInject">Salesforce UI Integration</span>
             <span class="settings-beta-badge" data-i18n="settings.sfInjectBeta">Beta</span>
@@ -111,7 +142,7 @@
           <p id="settingsSfInjectStatus" class="settings-status" role="status"></p>
         </section>
 
-        <section class="settings-card" id="settingsLogi" hidden aria-labelledby="settings-logi-heading">
+        <section class="settings-card" id="settingsLogi" hidden aria-labelledby="settings-logi-heading" data-settings-tab-content="logi">
           <h2 id="settings-logi-heading" class="settings-card-title" data-i18n="settings.logi.sectionTitle">Logi · IA</h2>
           <p class="settings-hint settings-hint--nomargin" data-i18n="settings.logi.lead"></p>
           <label class="settings-label" for="settingsLogiLanguage" data-i18n="settings.logi.language"></label>
@@ -145,7 +176,7 @@
           <p id="settingsLogiStatus" class="settings-status" role="status"></p>
         </section>
 
-        <section class="settings-card" aria-labelledby="settings-orgs-heading">
+        <section class="settings-card" aria-labelledby="settings-orgs-heading" data-settings-tab-content="general">
           <h2 id="settings-orgs-heading" class="settings-card-title" data-i18n="settings.sectionBackup">
             Copia de seguridad
           </h2>
@@ -169,7 +200,7 @@
           <p id="settingsOrgsStatus" class="settings-status" role="status"></p>
         </section>
 
-        <details class="settings-advanced" id="settingsAdvanced">
+        <details class="settings-advanced" id="settingsAdvanced" data-settings-tab-content="general">
           <summary class="settings-advanced-summary">
             <span data-i18n="settings.advancedSummary">Avanzado · límites técnicos</span>
           </summary>
@@ -188,7 +219,7 @@
           </div>
         </details>
 
-        <section class="settings-card" aria-labelledby="settings-about-heading">
+        <section class="settings-card" aria-labelledby="settings-about-heading" data-settings-tab-content="general">
           <h2 id="settings-about-heading" class="settings-card-title" data-i18n="settings.sectionAbout">
             Acerca de
           </h2>

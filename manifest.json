@@ -53,31 +53,36 @@
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; worker-src 'self'; style-src 'self' 'unsafe-inline';"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/icon-32.png", "icons/icon-512.png"],
+      "matches": [
+        "https://*.salesforce.com/*",
+        "https://*.my.salesforce.com/*",
+        "https://*.force.com/*",
+        "https://*.lightning.force.com/*",
+        "https://*.visual.force.com/*",
+        "https://*.vf.force.com/*",
+        "https://*.visualforce.com/*",
+        "https://*.cloudforce.com/*",
+        "https://*.salesforce-setup.com/*",
+        "https://*.my.salesforce-setup.com/*"
+      ]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [
-        "https://*.lightning.force.com/lightning/setup/ApexDebugLogs/*",
-        "https://*.sandbox.lightning.force.com/lightning/setup/ApexDebugLogs/*",
-        "https://*.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
-        "https://*.my.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
-        "https://*.sandbox.my.salesforce-setup.com/lightning/setup/ApexDebugLogs/*",
-        "https://*.my.salesforce.com/setup/ui/listApexTraces.apexp*",
-        "https://*.sandbox.my.salesforce.com/setup/ui/listApexTraces.apexp*",
-        "https://*.salesforce.com/setup/ui/listApexTraces.apexp*",
-        "https://*.my.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
-        "https://*.sandbox.my.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
-        "https://*.salesforce-setup.com/setup/ui/listApexTraces.apexp*",
-        "https://*.lightning.force.com/lightning/setup/DeployStatus/*",
-        "https://*.salesforce-setup.com/lightning/setup/DeployStatus/*",
-        "https://*.my.salesforce-setup.com/lightning/setup/DeployStatus/*",
-        "https://*.my.salesforce.com/changemgmt/monitorDeployment.apexp*",
-        "https://*.salesforce.com/changemgmt/monitorDeployment.apexp*",
-        "https://*.my.salesforce-setup.com/changemgmt/monitorDeployment.apexp*",
-        "https://*.salesforce-setup.com/changemgmt/monitorDeployment.apexp*"
-        ,"https://*.my.salesforce.com/changemgmt/monitorDeploymentsDetails.apexp*"
-        ,"https://*.salesforce.com/changemgmt/monitorDeploymentsDetails.apexp*"
-        ,"https://*.my.salesforce-setup.com/changemgmt/monitorDeploymentsDetails.apexp*"
-        ,"https://*.salesforce-setup.com/changemgmt/monitorDeploymentsDetails.apexp*"
+        "https://*.salesforce.com/*",
+        "https://*.my.salesforce.com/*",
+        "https://*.force.com/*",
+        "https://*.lightning.force.com/*",
+        "https://*.visual.force.com/*",
+        "https://*.vf.force.com/*",
+        "https://*.visualforce.com/*",
+        "https://*.cloudforce.com/*",
+        "https://*.salesforce-setup.com/*",
+        "https://*.my.salesforce-setup.com/*"
       ],
       "js": ["sfInject/content/bundle.js"],
       "css": ["sfInject/content/styles.css"],

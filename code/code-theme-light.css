@@ -562,7 +562,7 @@ html[data-ui-theme="light"] .editor {
 }
 
 html[data-ui-theme="light"] .file-viewer-loading-bar {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.98) 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(241, 245, 249, 0.9) 100%);
   border-bottom: 1px solid #cbd5e1;
   color: var(--sfoc-light-text-muted);
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08);
@@ -2506,6 +2506,41 @@ html[data-ui-theme="light"] .deploy-status-stack-pre {
 
 html[data-ui-theme="light"] .deploy-status-source-picker {
   color: #475569;
+}
+
+html[data-ui-theme="light"] .deploy-status-coverage-viewer-loading {
+  color: #1d4ed8;
+  background: rgba(255, 255, 255, 0.96);
+  border-color: #93c5fd;
+}
+
+html[data-ui-theme="light"] .deploy-status-coverage-source-picker {
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .deploy-status-coverage-source-picker select {
+  color: #0f172a;
+  border-color: #94a3b8;
+  background: #ffffff;
+}
+
+html[data-ui-theme="light"] .deploy-status-executed-tests {
+  border-color: #bfdbfe;
+  background: #f8fafc;
+}
+
+html[data-ui-theme="light"] .deploy-status-executed-tests-summary {
+  color: #1e3a8a;
+}
+
+html[data-ui-theme="light"] .deploy-status-test-outcome.is-success {
+  color: #166534;
+  background: #dcfce7;
+}
+
+html[data-ui-theme="light"] .deploy-status-test-outcome.is-failure {
+  color: #b91c1c;
+  background: #fee2e2;
 }
 
 html[data-ui-theme="light"] .deploy-status-source-org-select {

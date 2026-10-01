@@ -62,7 +62,21 @@ describe('inventario y sistema visual global', () => {
     }
   });
 
-  it('no referencia scripts, estilos, fuentes o imágenes remotas desde HTML', () => {
+  it('presents Apex Quality states with distinct semantic tones', () => {
+    const css = readFileSync(join(root, 'code', 'code.css'), 'utf8');
+    const workbenchCss = readFileSync(join(root, 'code', 'workbench', 'workbench-refresh.css'), 'utf8');
+    expect(css).toContain('.apex-tests-status-chip');
+    expect(css).toContain('color: var(--apex-tests-status-color)');
+    expect(css).toMatch(/\.apex-tests-status-completed\s*\{\s*--apex-tests-status-color: var\(--sfoc-success\)/);
+    expect(css).toMatch(/\.apex-tests-status-failed\s*\{\s*--apex-tests-status-color: var\(--sfoc-danger\)/);
+    expect(css).toContain('color: var(--sfoc-danger) !important;');
+    expect(css).toMatch(/\.apex-tests-status-processing\s*\{\s*--apex-tests-status-color: var\(--sfoc-info\)/);
+    expect(css).toMatch(/\.apex-tests-status-queued\s*\{\s*--apex-tests-status-color: var\(--sfoc-warn\)/);
+    expect(workbenchCss).toMatch(/\.apex-tests-status-chip\.apex-tests-status-failed,[\s\S]*?color: var\(--sfoc-color-danger\);/);
+    expect(workbenchCss).toContain('.apex-tests-status-label');
+  });
+
+  it('does not reference remote resources from HTML', () => {
     for (const file of expectedHtml) {
       const html = readFileSync(join(root, file), 'utf8');
       const resources = [...html.matchAll(/<(?:link|script|img)\b[^>]+(?:href|src)=["']([^"']+)["']/gi)]

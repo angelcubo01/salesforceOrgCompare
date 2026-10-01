@@ -115,7 +115,7 @@ describe('workspaceRegistry', () => {
     }
     expect(getWorkspaceById('comparator')?.tabs[0].actions).toEqual([]);
     expect(getWorkspaceById('apex-quality')?.tabs[0].actions.map(({ id }) => id)).toEqual([
-      'apex-run', 'apex-select-run', 'apex-profiles', 'apex-runner-settings', 'apex-clear-runs'
+      'apex-run', 'apex-select-run', 'apex-refresh', 'apex-profiles', 'apex-runner-settings', 'apex-clear-runs'
     ]);
     expect(getWorkspaceById('diagnostics')?.tabs[0].actions.map(({ id }) => id)).toEqual([
       'logs-refresh', 'logs-view-traces', 'logs-analyze-local', 'logs-delete-all'

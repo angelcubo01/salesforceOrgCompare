@@ -118,6 +118,7 @@ async function main() {
   const backBtn = document.getElementById('apexCovViewerBack');
   const helpBtn = document.getElementById('apexCovViewerHelp');
   const titleEl = document.getElementById('apexCovViewerTitle');
+  const sourceNoticeEl = document.getElementById('apexCovViewerSourceNotice');
   const singleWrap = document.getElementById('apexCovSingleWrap');
   const singleMount = document.getElementById('apexCovViewerMount');
   const splitRoot = document.getElementById('apexCovSplitRoot');
@@ -241,11 +242,17 @@ async function main() {
     return;
   }
 
-  const title = (payload && payload.title) || t('docTitle.apexCoverage');
+  const baseTitle = (payload && payload.title) || t('docTitle.apexCoverage');
+  const sourceLabel = payload?.sourceLabel ? String(payload.sourceLabel) : '';
+  const title = sourceLabel ? `${baseTitle} · ${sourceLabel}` : baseTitle;
   const content = (payload && payload.body) != null ? String(payload.body) : '';
   const coveredLines = payload?.coveredLines;
   const uncoveredLines = payload?.uncoveredLines;
   if (titleEl) titleEl.textContent = title;
+  if (sourceNoticeEl && payload?.sourceNotice) {
+    sourceNoticeEl.textContent = String(payload.sourceNotice);
+    sourceNoticeEl.hidden = false;
+  }
   void renderConnectedUserBadge(
     document.getElementById('apexCovViewerUser'),
     payload?.orgId

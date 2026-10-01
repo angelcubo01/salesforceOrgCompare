@@ -69,6 +69,7 @@ const action = ({
 export const WORKBENCH_HEADER_ACTIONS = Object.freeze({
   apexRun: action({ id: 'apex-run', labelKey: 'apexTests.runButton', icon: ACTION_ICONS.run, targetId: 'apexTestsRunBtn', variant: 'primary', risk: 'write', priority: 1, allowOverflow: false, visibleWhen: 'source-context' }),
   apexSelectRun: action({ id: 'apex-select-run', labelKey: 'apexTests.openRunner', icon: ACTION_ICONS.run, targetId: 'apexTestsOpenRunnerBtn', variant: 'primary', priority: 1, allowOverflow: false, visibleWhen: 'source-context' }),
+  apexRefresh: action({ id: 'apex-refresh', labelKey: 'apexTests.refresh', icon: ACTION_ICONS.refresh, targetId: 'apexTestsRefreshRunsBtn', priority: 20, visibleWhen: 'source-context' }),
   apexClearRuns: action({ id: 'apex-clear-runs', labelKey: 'apexTests.runsClearHistory', icon: ACTION_ICONS.delete, targetId: 'apexTestsClearRunsBtn', variant: 'destructive', risk: 'destructive', priority: 90, visibleWhen: 'source-context' }),
   apexProfiles: action({ id: 'apex-profiles', labelKey: 'apexTests.profilesBtn', icon: 'file-code', targetId: 'apexTestsProfilesBtn', priority: 70, visibleWhen: 'source-context' }),
   apexRunnerSettings: action({ id: 'apex-runner-settings', labelKey: 'apexTests.runnerSettingsBtn', icon: ACTION_ICONS.settings, targetId: 'apexTestsRunnerSettingsBtn', priority: 80, visibleWhen: 'source-context' }),
@@ -148,6 +149,7 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     tabs: [tab('main', 'workbench.tab.tests', 'ApexTests', 'development', 'apexTestsPanel', 'single', 'write', [
       WORKBENCH_HEADER_ACTIONS.apexRun,
       WORKBENCH_HEADER_ACTIONS.apexSelectRun,
+      WORKBENCH_HEADER_ACTIONS.apexRefresh,
       WORKBENCH_HEADER_ACTIONS.apexProfiles,
       WORKBENCH_HEADER_ACTIONS.apexRunnerSettings,
       WORKBENCH_HEADER_ACTIONS.apexClearRuns

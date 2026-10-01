@@ -48,6 +48,7 @@ let cancelInFlight = false;
 let summaryBootstrapped = false;
 let lastDeployPanelOrgId = '';
 let selectedDeploySourceOrgId = '';
+let selectedDeployCoverageSourceOrgId = '';
 /** @type {Map<string, { state: 'loading'|'ready'|'error', detail?: Record<string, unknown>, error?: string }>} */
 const inlineFailedDeployDetails = new Map();
 /** @type {Map<string, { coverageWarningCount: number }>} */
@@ -59,6 +60,7 @@ const DEPLOY_DETAIL_SCROLL_ANCHOR_IDS = [
   'deployStatusGlobalError',
   'deployStatusFailuresSection',
   'deployStatusTestFailuresSection',
+  'deployStatusExecutedTestsSection',
   'deployStatusCoverageWarningsSection',
   'deployStatusSlowTestsSection',
   'deployStatusComponentsSection'
@@ -601,6 +603,7 @@ function resetDeployStatusPanelToHome() {
   [
     'deployStatusFailuresSection',
     'deployStatusTestFailuresSection',
+    'deployStatusExecutedTestsSection',
     'deployStatusCoverageWarningsSection',
     'deployStatusSlowTestsSection',
     'deployStatusComponentsSection'
@@ -861,6 +864,21 @@ function ensureDeploySourceOrgSelection(orgs = activeDeploySourceOrgs()) {
 
 function sourceOrgLabel(org) {
   return String(org?.label || org?.displayName || org?.instanceUrl || org?.id || '');
+}
+
+function ensureDeployCoverageSourceOrgSelection(orgs = activeDeploySourceOrgs()) {
+  const preferred = selectedDeployCoverageSourceOrgId || state.rightOrgId || state.leftOrgId || '';
+  selectedDeployCoverageSourceOrgId = orgs.some((org) => org.id === preferred) ? preferred : '';
+  return selectedDeployCoverageSourceOrgId;
+}
+
+function renderDeployCoverageSourcePicker() {
+  const orgs = activeDeploySourceOrgs();
+  ensureDeployCoverageSourceOrgSelection(orgs);
+  const options = !orgs.length
+    ? `<option value="">${escapeHtml(t('deployStatus.sourceOrgEmpty'))}</option>`
+    : `${selectedDeployCoverageSourceOrgId ? '' : `<option value="">${escapeHtml(t('deployStatus.sourceOrgChoose'))}</option>`}${orgs.map((org) => `<option value="${escapeHtml(org.id)}"${org.id === selectedDeployCoverageSourceOrgId ? ' selected' : ''}>${escapeHtml(sourceOrgLabel(org))}</option>`).join('')}`;
+  return `<label class="deploy-status-coverage-source-picker"><span>${escapeHtml(t('deployStatus.coverageSourceOrgLabel'))}</span><select data-deploy-coverage-source-org ${orgs.length ? '' : 'disabled'}>${options}</select></label>`;
 }
 
 function refreshDeploySourceOrgPicker() {
@@ -1389,27 +1407,98 @@ function closeDeployCoverageModal() {
   const modal = document.getElementById('deployStatusCoverageModal');
   if (!modal) return;
   unmountSfocOverlay(modal);
+  setDeployCoverageViewerLoading(false);
   const body = document.getElementById('deployStatusCoverageModalBody');
   if (body) body.innerHTML = '';
 }
 
-async function openDeployCoverageLineViewer(orgId, asyncId, classOrTriggerId, classLabel, uncoveredLines) {
+function setDeployCoverageViewerLoading(loading) {
+  document.getElementById('deployStatusCoverageViewerLoading')?.classList.toggle('hidden', !loading);
+}
+
+function renderExecutedTestsSection(soap) {
+  const section = document.getElementById('deployStatusExecutedTestsSection');
+  const tbody = document.getElementById('deployStatusExecutedTestsTbody');
+  const meta = document.getElementById('deployStatusExecutedTestsMeta');
+  if (!section || !tbody) return;
+
+  const result = soap?.runTestResult;
+  const successes = Array.isArray(result?.successes) ? result.successes : [];
+  const failures = Array.isArray(result?.failures) ? result.failures : [];
+  const rows = [
+    ...successes.map((test) => ({ ...test, outcome: 'success' })),
+    ...failures.map((test) => ({ ...test, outcome: 'failure' }))
+  ];
+  section.classList.toggle('hidden', !rows.length);
+  tbody.innerHTML = '';
+  if (!rows.length) return;
+
+  const reportedTotal = Number(result?.numTestsRun);
+  const executed = Number.isFinite(reportedTotal) && reportedTotal > 0 ? reportedTotal : rows.length;
+  const time = String(result?.totalTime || '').trim();
+  if (meta) {
+    meta.textContent = time
+      ? t('deployStatus.executedTestsMetaWithTime', { count: executed, time })
+      : t('deployStatus.executedTestsMeta', { count: executed });
+  }
+
+  for (const [index, test] of rows.entries()) {
+    const className = decodeDeployText(test.className);
+    const methodName = decodeDeployText(test.methodName);
+    const message = decodeDeployText(test.message);
+    const stackTrace = decodeDeployText(test.stackTrace);
+    const classFrame = parseApexStackTraceFrames(stackTrace).find((frame) => frame.className === className);
+    const initialLine = classFrame?.initialLine;
+    const passed = test.outcome === 'success';
+    const detail = passed
+      ? '—'
+      : `${message ? `<div>${escapeHtml(message)}</div>` : ''}${stackTrace ? renderStackTraceCell(stackTrace, className, `executed:${className}:${methodName}:${index}`) : ''}` || '—';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="deploy-status-mono">${sourceLinkHtml(className, initialLine)}</td>
+      <td>${className && methodName ? sourceLinkHtml(className, initialLine, methodName) : escapeHtml(methodName)}</td>
+      <td><span class="deploy-status-test-outcome ${passed ? 'is-success' : 'is-failure'}">${escapeHtml(t(passed ? 'deployStatus.testPassed' : 'deployStatus.testFailed'))}</span></td>
+      <td>${escapeHtml(test.time ? `${test.time} ms` : '—')}</td>
+      <td>${detail}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function openDeployCoverageLineViewer(orgId, sourceOrgId, asyncId, classOrTriggerId, classLabel, uncoveredLines, deploymentDate) {
+  setDeployCoverageViewerLoading(true);
+  try {
+  if (!sourceOrgId) {
+    showToast(t('deployStatus.sourceOrgRequired'), 'warn');
+    return;
+  }
   const res = await bg({
     type: 'deployStatus:getCoverageLineView',
     orgId,
+    sourceOrgId,
     asyncId,
     classOrTriggerId,
     className: classLabel || '',
-    uncoveredLines: uncoveredLines || []
+    uncoveredLines: uncoveredLines || [],
+    deploymentDate: deploymentDate || ''
   });
   if (!res?.ok) {
     showToast(
-      res?.reason === 'NO_SID' ? t('deployStatus.noSession') : res?.error || t('deployStatus.coverageLinesError'),
+      res?.reason === 'NO_SID' || res?.reason === 'SOURCE_NO_SID'
+        ? t('deployStatus.noSession')
+        : res?.reason === 'SOURCE_NOT_FOUND'
+          ? t('deployStatus.coverageSourceNotFound')
+            : res?.error || t('deployStatus.coverageLinesError'),
       'warn'
     );
     return;
   }
   const key = randomStagingId('sfoc_cv_');
+  const selectedSourceOrg = (state.orgsList || []).find((item) => String(item.id) === String(sourceOrgId));
+  const selectedSourceOrgLabel = sourceOrgLabel(selectedSourceOrg);
+  const sourceNotice = res.sourceChangedAfterDeployment
+    ? t('deployStatus.coverageSourceModifiedAfter')
+    : '';
   try {
     await chrome.storage.local.set({
       [key]: {
@@ -1417,7 +1506,9 @@ async function openDeployCoverageLineViewer(orgId, asyncId, classOrTriggerId, cl
         body: res.body != null ? String(res.body) : '',
         coveredLines: Array.isArray(res.coveredLines) ? res.coveredLines : [],
         uncoveredLines: Array.isArray(res.uncoveredLines) ? res.uncoveredLines : [],
-        orgId
+        orgId: sourceOrgId,
+        sourceLabel: selectedSourceOrgLabel,
+        sourceNotice
       }
     });
   } catch {
@@ -1426,15 +1517,22 @@ async function openDeployCoverageLineViewer(orgId, asyncId, classOrTriggerId, cl
   }
   const url = chrome.runtime.getURL(`code/apex-coverage-viewer.html?k=${encodeURIComponent(key)}`);
   window.open(url, '_blank');
+  } finally {
+    setDeployCoverageViewerLoading(false);
+  }
 }
 
-function renderDeployCoverageModalBody(soap, asyncId) {
+function renderDeployCoverageModalBody(soap, asyncId, coverageOrgId, deploymentDate) {
   const body = document.getElementById('deployStatusCoverageModalBody');
   if (!body) return;
 
   const classes = buildDeployCoverageRows(soap?.runTestResult?.codeCoverage, 0);
 
   body.innerHTML = '';
+
+  const sourcePicker = document.createElement('div');
+  sourcePicker.innerHTML = renderDeployCoverageSourcePicker();
+  body.appendChild(sourcePicker);
 
   if (!classes.length) {
     const empty = document.createElement('p');
@@ -1465,7 +1563,6 @@ function renderDeployCoverageModalBody(soap, asyncId) {
     <th scope="col" class="apex-tests-coverage-th-editor">${escapeHtml(t('deployStatus.coverageColEditor'))}</th>
   </tr></thead>`;
   const tb = document.createElement('tbody');
-  const orgId = state.leftOrgId;
   for (const row of classes) {
     const rtr = document.createElement('tr');
     const c1 = document.createElement('td');
@@ -1484,7 +1581,15 @@ function renderDeployCoverageModalBody(soap, asyncId) {
     btnEd.textContent = t('deployStatus.coverageOpenEditor');
     btnEd.addEventListener('click', (e) => {
       e.stopPropagation();
-      void openDeployCoverageLineViewer(orgId, asyncId, row.id, row.name || '', row.uncoveredLines);
+      void openDeployCoverageLineViewer(
+        coverageOrgId,
+        selectedDeployCoverageSourceOrgId,
+        asyncId,
+        row.id,
+        row.name || '',
+        row.uncoveredLines,
+        deploymentDate
+      );
     });
     c4.appendChild(btnEd);
     rtr.appendChild(c1);
@@ -1551,7 +1656,12 @@ async function openDeployCoverageModal() {
     return;
   }
 
-  renderDeployCoverageModalBody(viewSoap, asyncId);
+  renderDeployCoverageModalBody(
+    viewSoap,
+    asyncId,
+    state.leftOrgId,
+    row?.completedDate || row?.startDate || row?.createdDate || ''
+  );
 }
 
 function renderDetailView(data) {
@@ -1593,6 +1703,7 @@ function renderDetailView(data) {
     renderGlobalError(row, rawSoap);
     renderFailuresSection(rawSoap);
     renderTestFailuresSection(rawSoap);
+    renderExecutedTestsSection(rawSoap);
     renderCoverageWarningsSection(rawSoap);
     renderSlowTestsSection(rawSoap);
     renderComponentsSection(rawSoap);
@@ -1602,6 +1713,7 @@ function renderDetailView(data) {
     [
       'deployStatusFailuresSection',
       'deployStatusTestFailuresSection',
+      'deployStatusExecutedTestsSection',
       'deployStatusCoverageWarningsSection',
       'deployStatusSlowTestsSection',
       'deployStatusComponentsSection'
@@ -1785,6 +1897,9 @@ export async function refreshDeployStatusPanel() {
 
   const orgChanged = lastDeployPanelOrgId !== '' && lastDeployPanelOrgId !== state.leftOrgId;
   if (orgChanged) {
+    // Al cambiar el Source Org de Deployments, el selector de código vuelve a
+    // ese mismo entorno. Una elección manual se conserva mientras no cambie.
+    selectedDeploySourceOrgId = state.leftOrgId || '';
     resetDeployStatusPanelToHome();
   }
   lastDeployPanelOrgId = state.leftOrgId;
@@ -1853,6 +1968,12 @@ export function setupDeployStatusPanel() {
   document.getElementById('deployStatusCoverageModal')?.addEventListener('click', (ev) => {
     const target = /** @type {HTMLElement} */ (ev.target);
     if (target.closest('[data-deploy-coverage-close]')) closeDeployCoverageModal();
+  });
+
+  document.getElementById('deployStatusCoverageModal')?.addEventListener('change', (ev) => {
+    const target = /** @type {HTMLElement} */ (ev.target);
+    if (!target.matches('[data-deploy-coverage-source-org]')) return;
+    selectedDeployCoverageSourceOrgId = /** @type {HTMLSelectElement} */ (target).value || '';
   });
 
   document.getElementById('deployStatusComponentsSearch')?.addEventListener('input', (ev) => {

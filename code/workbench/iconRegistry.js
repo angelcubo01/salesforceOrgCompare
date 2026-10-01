@@ -93,12 +93,19 @@ export const ACTION_ICONS = Object.freeze({
   more: 'dots'
 });
 
+/** Iconos genéricos disponibles para accesos directos configurados por el usuario. */
+export const QUICK_LINK_ICONS = Object.freeze([
+  'link', 'bookmark', 'star', 'home', 'settings', 'terminal-2', 'database', 'package',
+  'activity', 'shield-lock', 'help-circle', 'file-code'
+]);
+
 export const USED_ICON_NAMES = Object.freeze(
   [...new Set([
     ...Object.values(CATEGORY_ICONS),
     ...Object.values(TOOL_ICONS),
     ...Object.values(STATE_ICONS),
-    ...Object.values(ACTION_ICONS)
+    ...Object.values(ACTION_ICONS),
+    ...QUICK_LINK_ICONS
   ])].sort()
 );
 

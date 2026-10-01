@@ -3,6 +3,7 @@ import { bg } from '../core/bridge.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { t } from '../../shared/i18n.js';
 import { showToast } from './toast.js';
+import { sanitizeUiError } from '../../shared/sanitizeUiError.js';
 import {
   confirmSfocOrgAction,
   confirmSfocToolAction,
@@ -1039,7 +1040,9 @@ async function reloadMethodsForSelection() {
   }
   if (!res.ok) {
     const msg =
-      res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.loadMethodsError');
+      res.reason === 'NO_SID'
+        ? t('toast.noSession')
+        : sanitizeUiError(res.error) || t('apexTests.loadMethodsError');
     void logApexTestFailureUsage(state.leftOrgId, 'load_methods', {
       reason: res.reason || '',
       error: msg
@@ -1236,7 +1239,9 @@ async function runApexTestsWithBody(body) {
   if (runBtn) runBtn.disabled = false;
   if (!res.ok) {
     const msg =
-      res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.runError');
+      res.reason === 'NO_SID'
+        ? t('toast.noSession')
+        : sanitizeUiError(res.error) || t('apexTests.runError');
     void logApexTestFailureUsage(state.leftOrgId, 'run', {
       reason: res.reason || '',
       error: msg
@@ -1256,7 +1261,7 @@ async function runApexTestsWithBody(body) {
     runStatus.textContent = id ? t('apexTests.runStarted', { id }) : t('apexTests.runOk');
   }
   if (id) {
-    showToast(t('apexTests.runStarted', { id }), 'success');
+    showToast(t('apexTests.runStarted', { id }), 'info');
   } else {
     showToast(t('apexTests.runOkNoId'), 'warn');
   }
@@ -1303,6 +1308,20 @@ export function setupApexTestsPanel() {
   openRunner?.addEventListener('click', () => {
     openApexTestsRunnerView();
     void refreshApexTestsPanel();
+  });
+  document.getElementById('apexTestsRefreshRunsBtn')?.addEventListener('click', async (event) => {
+    const btn = /** @type {HTMLButtonElement} */ (event.currentTarget);
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.classList.add('is-loading');
+    btn.setAttribute('aria-busy', 'true');
+    try {
+      await tickApexTestsHubRuns();
+    } finally {
+      btn.disabled = false;
+      btn.classList.remove('is-loading');
+      btn.removeAttribute('aria-busy');
+    }
   });
   const backHub = document.getElementById('apexTestsBackToHubBtn');
   backHub?.addEventListener('click', () => {

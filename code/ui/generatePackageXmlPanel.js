@@ -6,7 +6,6 @@ import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
 import { ensureModeForTool } from './appModeNav.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { applyArtifactTypeUi } from './artifactTypeUi.js';
-import { ensureRightOrgDistinctFromLeft } from './orgs.js';
 import { handleArtifactTypeSelectChange } from './searchSetup.js';
 import { syncListActiveHighlight } from './listUi.js';
 import { t } from '../../shared/i18n.js';
@@ -394,7 +393,6 @@ export function setupGeneratePackageXmlPanel() {
 
         await ensureModeForTool('Comparator');
         handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
-        ensureRightOrgDistinctFromLeft();
 
         const item =
           state.savedItems.find((s) => s.type === 'PackageXml' && s.key === key) || packageItem;

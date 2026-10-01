@@ -15,6 +15,271 @@
   --sfoc-inject-shadow: 0 4px 16px rgba(24, 24, 24, 0.2);
 }
 
+/* Paleta global de Setup: aislada para convivir con Lightning, Console y Visualforce. */
+.sfoc-setup-palette { position: fixed; z-index: 2147483647; inset: 0; display: none; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; }
+.sfoc-setup-palette.is-open { display: block; }
+.sfoc-setup-palette-backdrop { position: absolute; inset: 0; background: rgba(3, 45, 96, .42); }
+.sfoc-setup-palette-dialog { position: relative; width: min(46rem, calc(100vw - 10rem)); max-height: min(40rem, calc(100vh - 3rem)); margin: 14vh auto; overflow: visible; transform: translateX(4.23rem); border: 1px solid #5eb4ff; border-radius: .65rem; background: #fff; color: #181818; box-shadow: 0 1.25rem 3rem rgba(3, 45, 96, .35); }
+.sfoc-setup-palette-search-row { position: relative; display: block; border-bottom: 1px solid #c9c9c9; background: #fff; }
+.sfoc-setup-palette-app-icon { position: absolute; z-index: 1; top: -1.88rem; right: calc(100% + .75rem); width: 7.7rem; height: 7.7rem; object-fit: contain; }
+.sfoc-setup-palette-input { display: block; width: 100%; box-sizing: border-box; padding: 1rem 1.1rem; border: 0; outline: 0; color: #181818; background: #fff; font: 600 1rem/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; }
+.sfoc-setup-palette-input:focus { box-shadow: inset 0 0 0 2px #0176d3; }
+.sfoc-setup-palette-results { max-height: min(31rem, calc(100vh - 13rem)); overflow: auto; padding: .4rem; background: #fff; }
+.sfoc-setup-palette-option { display: flex; align-items: stretch; width: 100%; border-radius: .3rem; color: #181818; background: transparent; }
+.sfoc-setup-palette-option:hover, .sfoc-setup-palette-option.is-active { background: #eaf5fe; outline: 0; }
+.sfoc-setup-palette-option-main { display: grid; grid-template-columns: 1.3rem minmax(0, 1fr); align-items: center; column-gap: .55rem; flex: 1 1 auto; min-width: 0; padding: .55rem .7rem; border: 0; color: inherit; background: transparent; text-align: left; cursor: pointer; }
+.sfoc-setup-palette-option-main:focus-visible, .sfoc-setup-palette-open-new-tab:focus-visible { outline: 2px solid #0176d3; outline-offset: -2px; }
+.sfoc-setup-palette-option-content { display: grid; min-width: 0; gap: .12rem; }
+.sfoc-setup-palette-result-icon { width: 1.2rem; height: 1.2rem; fill: none; stroke: #0b5cab; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.sfoc-setup-palette-option-group { color: #0b5cab; font-size: .68rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.sfoc-setup-palette-option strong { font-size: .83rem; line-height: 1.25; }
+.sfoc-setup-palette-open-new-tab { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 2.35rem; margin: .18rem; padding: 0; border: 0; border-radius: .28rem; color: #0b5cab; background: transparent; cursor: pointer; }
+.sfoc-setup-palette-open-new-tab:hover { color: #fff; background: #0b5cab; }
+.sfoc-setup-palette-open-new-tab svg { width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.9; }
+.sfoc-setup-palette-hint, .sfoc-setup-palette-empty { margin: 0; padding: .65rem 1.1rem; border-top: 1px solid #e5e5e5; color: #5c5c5c; background: #f8fafc; font-size: .72rem; }
+.sfoc-setup-palette-empty { border: 0; background: transparent; }
+.sfoc-setup-palette-loading { display: flex; align-items: center; gap: .5rem; margin: 0; padding: .65rem .7rem; color: #0b5cab; font-size: .76rem; font-weight: 600; }
+.sfoc-setup-palette-spinner { width: .9rem; height: .9rem; box-sizing: border-box; border: 2px solid #b9dcf5; border-top-color: #0176d3; border-radius: 50%; animation: sfoc-setup-palette-spin .75s linear infinite; }
+@keyframes sfoc-setup-palette-spin { to { transform: rotate(360deg); } }
+
+/* Quick links: acción de marca junto al bloque derecho del header Lightning. */
+.sfoc-quick-links-test-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 0.5rem;
+}
+
+.sfoc-quick-links-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.875rem !important;
+  height: 1.875rem;
+  box-sizing: border-box;
+  padding: 0 1rem 0 0.65rem !important;
+  border: 1px solid #5eb4ff !important;
+  border-radius: 0.3rem;
+  color: #f3f6fb !important;
+  background: #163a5f !important;
+  font: 700 0.75rem/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 3px rgba(3, 45, 96, 0.44);
+  cursor: pointer;
+}
+
+.sfoc-quick-links-button:hover {
+  border-color: #f3f6fb !important;
+  color: #fff !important;
+  background: #0b5cab !important;
+  box-shadow: 0 2px 5px rgba(3, 45, 96, 0.52);
+}
+
+.sfoc-quick-links-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.sfoc-quick-links-button-logo {
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 1px;
+  border-radius: 0.2rem;
+  background: #f3f6fb;
+  object-fit: contain;
+}
+
+.sfoc-quick-links-button-label {
+  color: #f3f6fb !important;
+  white-space: nowrap;
+}
+
+.sfoc-quick-links-menu {
+  position: absolute;
+  z-index: 2147483646;
+  top: 100%;
+  right: 0;
+  display: grid;
+  min-width: 17rem;
+  max-width: min(22rem, calc(100vw - 1rem));
+  margin: 0;
+  padding: 0.4rem;
+  border: 1px solid #2d7ebc;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #163a5f;
+  box-shadow: 0 0.75rem 1.75rem rgba(2, 45, 84, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-0.25rem);
+  transition: opacity 120ms ease, transform 120ms ease;
+  visibility: hidden;
+}
+
+.sfoc-quick-links-test-item:hover .sfoc-quick-links-menu,
+.sfoc-quick-links-test-item:focus-within .sfoc-quick-links-menu,
+.sfoc-quick-links-test-item.is-open .sfoc-quick-links-menu {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.sfoc-quick-links-menu-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0.45rem 0.45rem;
+  border-bottom: 1px solid #c4d8eb;
+  color: #163a5f;
+  background: #f5f9fd;
+  font: 700 0.72rem/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+
+.sfoc-quick-links-menu-heading-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.sfoc-quick-links-menu-heading-org {
+  overflow: hidden;
+  color: #0b5cab;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sfoc-quick-links-menu-configure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #0b5cab;
+  cursor: pointer;
+}
+
+.sfoc-quick-links-menu-configure:hover,
+.sfoc-quick-links-menu-configure:focus-visible {
+  color: #fff;
+  background: #0b5cab;
+  outline: none;
+}
+
+.sfoc-quick-links-menu-configure .sfoc-quick-links-menu-icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: currentColor;
+}
+
+.sfoc-quick-links-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 0;
+  border-radius: 0.3rem;
+}
+
+.sfoc-quick-links-menu-row:hover,
+.sfoc-quick-links-menu-row:focus-within {
+  background: #e9f4ff;
+}
+
+.sfoc-quick-links-menu-option {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.45rem;
+  border-radius: 0.3rem;
+  color: #163a5f !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  text-decoration: none !important;
+}
+
+.sfoc-quick-links-menu-option:focus-visible {
+  color: #163a5f !important;
+  outline: none;
+}
+
+.sfoc-quick-links-menu-icon {
+  display: block;
+  flex: 0 0 auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0.12rem;
+  border: 1px solid color-mix(in srgb, var(--quick-link-color, #5eb4ff) 82%, #fff);
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--quick-link-color, #0b5cab) 55%, #1d4268);
+  color: #fff;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.sfoc-quick-links-menu-text {
+  display: block;
+  min-width: 0;
+  gap: 0.08rem;
+}
+
+.sfoc-quick-links-menu-text strong {
+  overflow: hidden;
+  color: inherit !important;
+  font-size: 0.75rem;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sfoc-quick-links-menu-open-new-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin-right: 0.12rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: #2e5c84;
+  cursor: pointer;
+}
+
+.sfoc-quick-links-menu-open-new-tab:hover,
+.sfoc-quick-links-menu-open-new-tab:focus-visible {
+  color: #fff;
+  background: #0b5cab;
+  outline: none;
+}
+
+.sfoc-quick-links-menu-open-new-tab .sfoc-quick-links-menu-icon {
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: currentColor;
+}
+
+
 /* Deployment Status: capa compacta, alineada con SLDS y Classic/Visualforce. */
 .sfoc-deploy-inline-toggle {
   display: inline-flex;

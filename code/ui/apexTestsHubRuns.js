@@ -27,7 +27,11 @@ import {
   APEX_TEST_JOBS_TTL_MS,
   pruneExpiredStoredJobs
 } from '../../shared/apexTestRunJobPrune.js';
-import { apexTestRunHasFailures } from '../../shared/apexTestRunStatus.js';
+import {
+  apexTestRunHasFailures,
+  getApexTestRunOutcomeSummary,
+  isApexTestTerminalJobStatus
+} from '../../shared/apexTestRunStatus.js';
 import { sfApexIdKey, apexRunMatchesStoredJobId } from '../../shared/apexTestJobIdMatch.js';
 import {
   confirmSfocOrgAction,
@@ -485,7 +489,7 @@ export async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
         ? t('toast.noSession')
         : String(res.error) === 'NOT_FOUND'
           ? t('apexTests.viewTestNotFound')
-          : res.error || t('apexTests.viewTestError');
+          : sanitizeUiError(res.error) || t('apexTests.viewTestError');
     showToast(msg, 'error');
     return;
   }
@@ -677,7 +681,7 @@ async function openCoverageLineViewer(orgId, jobId, classOrTriggerId, classLabel
         ? t('toast.noSession')
         : res.error === 'NO_TEST_RESULTS'
           ? t('apexTests.coverageLinesNoTests')
-          : res.error || t('apexTests.coverageLinesError'),
+          : sanitizeUiError(res.error) || t('apexTests.coverageLinesError'),
       'warn'
     );
     return;
@@ -777,7 +781,9 @@ async function rerunFailedMethodsFromJob(rowOrgId, jobId, storedJob) {
   const res = await bg({ type: 'apexTests:run', orgId: rowOrgId, runBody });
   if (!res.ok) {
     showToast(
-      res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.runError'),
+      res.reason === 'NO_SID'
+        ? t('toast.noSession')
+        : sanitizeUiError(res.error) || t('apexTests.runError'),
       'error'
     );
     return;
@@ -786,7 +792,7 @@ async function rerunFailedMethodsFromJob(rowOrgId, jobId, storedJob) {
   void logApexTestRunUsage(rowOrgId, runBody);
   if (id) {
     await rememberApexTestRunJob(rowOrgId, id, envLabel, runBody, res.traceFlagId);
-    showToast(t('apexTests.rerunFailuresStarted', { id }), 'success');
+    showToast(t('apexTests.rerunFailuresStarted', { id }), 'info');
     void tickApexTestsHubRuns();
   } else {
     showToast(t('apexTests.runOkNoId'), 'warn');
@@ -837,7 +843,9 @@ async function rerunStoredApexJob(rowOrgId, storedJob) {
   const res = await bg({ type: 'apexTests:run', orgId: rowOrgId, runBody: rb });
   if (!res.ok) {
     showToast(
-      res.reason === 'NO_SID' ? t('toast.noSession') : res.error || t('apexTests.runError'),
+      res.reason === 'NO_SID'
+        ? t('toast.noSession')
+        : sanitizeUiError(res.error) || t('apexTests.runError'),
       'error'
     );
     return;
@@ -846,7 +854,7 @@ async function rerunStoredApexJob(rowOrgId, storedJob) {
   void logApexTestRunUsage(rowOrgId, rb);
   if (id) {
     await rememberApexTestRunJob(rowOrgId, id, envLabelForRemember, rb, res.traceFlagId);
-    showToast(t('apexTests.rerunStarted', { id }), 'success');
+    showToast(t('apexTests.rerunStarted', { id }), 'info');
     void tickApexTestsHubRuns();
   } else {
     showToast(t('apexTests.runOkNoId'), 'warn');
@@ -959,7 +967,7 @@ async function openTestRunLogTab(orgId, job, displayJobId, opts = {}) {
               ? t('apexTests.logNoJobUser')
               : String(res.error) === 'NO_JOB_START'
                 ? t('apexTests.logNoJobStart')
-                : res.error || t('apexTests.logOpenError');
+                : sanitizeUiError(res.error) || t('apexTests.logOpenError');
       showToast(msg, 'warn');
       return;
     }
@@ -1293,7 +1301,7 @@ async function enrichStoredJobsWithEnvLabels(list) {
   });
 }
 
-function formatOutcomeSummary(counts) {
+function formatLegacyOutcomeSummary(counts) {
   if (!counts || typeof counts !== 'object') return '—';
   const parts = [];
   const order = ['Pass', 'Fail', 'CompileFail', 'Skip'];
@@ -1305,6 +1313,18 @@ function formatOutcomeSummary(counts) {
     if (v) parts.push(`${k}: ${v}`);
   }
   return parts.length ? parts.join(' · ') : '—';
+}
+
+function formatOutcomeSummary(counts) {
+  const summary = getApexTestRunOutcomeSummary(counts);
+  if (!summary.known) return '—';
+  const parts = [
+    t('apexTests.resultPassedOfTotal', { passed: summary.passed, total: summary.total })
+  ];
+  const failed = summary.failed + summary.compileFailed;
+  if (failed) parts.push(t('apexTests.resultFailures', { count: failed }));
+  if (summary.skipped) parts.push(t('apexTests.resultSkipped', { count: summary.skipped }));
+  return parts.join(' · ');
 }
 
 function formatApexJobStatus(status) {
@@ -1441,6 +1461,7 @@ function jobProgressLabel(job) {
   return '';
 }
 
+/** Nodo semántico del estado, usado tanto en las ejecuciones propias como en la cola. */
 function buildApexJobStatusNode(status, outcomeCounts, job) {
   const meta = apexJobStatusVisual(status, outcomeCounts, job);
   const wrap = document.createElement('span');
@@ -1507,7 +1528,7 @@ async function openApexMethodFromRunRow(orgId, row) {
         ? t('toast.noSession')
         : String(res?.error) === 'NOT_FOUND'
           ? t('apexTests.viewTestNotFound')
-          : res?.error || t('apexTests.viewTestError'),
+          : sanitizeUiError(res?.error) || t('apexTests.viewTestError'),
       'warn'
     );
     return;
@@ -1533,7 +1554,7 @@ async function loadFailures(orgId, jobId, opts = {}) {
       error:
         res.reason === 'NO_SID'
           ? t('toast.noSession')
-          : res.error || t('apexTests.runsLoadFailuresError')
+          : sanitizeUiError(res.error) || t('apexTests.runsLoadFailuresError')
     };
     if (useCache) failuresCache.set(ck, err);
     return err;
@@ -1554,7 +1575,7 @@ async function loadRunMethods(orgId, jobId, opts = {}) {
       error:
         res.reason === 'NO_SID'
           ? t('toast.noSession')
-          : res.error || t('apexTests.runsLoadMethodsError')
+          : sanitizeUiError(res.error) || t('apexTests.runsLoadMethodsError')
     };
     if (useCache) methodsCache.set(ck, err);
     return err;
@@ -2026,13 +2047,14 @@ async function refreshExpandedJobStatusInPlace() {
   if (run.missing || run.pollFailure || !run.job) return;
   const nextStatus = String(run.job.Status || '');
   const prevStatus = String(mainRow.dataset.jobStatus || '');
-  if (nextStatus === prevStatus) return;
+  const nextSummary = formatOutcomeSummary(run.outcomeCounts);
+  const prevSummary = mainRow.querySelector('.apex-tests-runs-td-summary')?.textContent || '';
+  if (nextStatus === prevStatus && nextSummary === prevSummary) return;
 
   mainRow.dataset.jobStatus = nextStatus;
   mainRow.dataset.canonicalJobId = String(run.job.Id || run.canonicalJobId || parsed.jobId);
-  const prevLc = prevStatus.trim().toLowerCase();
-  const nowTerminal = ['completed', 'failed', 'aborted', 'error'].includes(nextStatus);
-  if (nowTerminal && !['completed', 'failed', 'aborted', 'error'].includes(prevLc)) {
+  const nowTerminal = isApexTestTerminalJobStatus(nextStatus);
+  if (nowTerminal && (!isApexTestTerminalJobStatus(prevStatus) || nextSummary !== prevSummary)) {
     clearRunDetailCaches(parsed.orgId, mainRow.dataset.canonicalJobId || parsed.jobId);
     void refreshExpandedMethodsInPlace();
   }
@@ -2042,10 +2064,10 @@ async function refreshExpandedJobStatusInPlace() {
   if (tdStatus) renderRunStatusCell(tdStatus, run, null);
   const tdTests = mainRow.querySelector('.apex-tests-runs-td-summary');
   if (tdTests) {
-    tdTests.textContent = run.missing || run.pollFailure ? '—' : formatOutcomeSummary(run.outcomeCounts);
+    tdTests.textContent = run.missing || run.pollFailure ? '—' : nextSummary;
   }
 
-  const isTerminal = ['Completed', 'Failed', 'Aborted', 'Error'].includes(nextStatus);
+  const isTerminal = isApexTestTerminalJobStatus(nextStatus);
   const stLc = nextStatus.trim().toLowerCase();
   const canAbort = ['queued', 'processing', 'preparing', 'holding'].includes(stLc);
   const btnMore = mainRow.querySelector('.apex-tests-runs-more-btn');
@@ -2124,7 +2146,7 @@ function maybeNotifyTestRunCompletions(enriched, pollsByOrgId) {
     if (status == null || run.missing || run.pollFailure) continue;
     if (!isApexAsyncJobInFlightStatus(prev)) continue;
     if (isApexAsyncJobInFlightStatus(status)) continue;
-    if (!['Completed', 'Failed', 'Aborted', 'Error'].includes(status)) continue;
+    if (!isApexTestTerminalJobStatus(status)) continue;
 
     const envLabel =
       j.displayEnv != null && String(j.displayEnv).trim()
@@ -2585,6 +2607,25 @@ function formatOtherRunsJobDetail(j) {
   return [j.extstatus, dateFmt, classNames].filter(Boolean).join(' · ') || '—';
 }
 
+/** El servlet de la cola publica `pasados / total` incluso cuando ApexTestResult todavía no es consultable. */
+function outcomeCountsForOtherRun(j) {
+  const current = getApexTestRunOutcomeSummary(j?.outcomeCounts);
+  if (current.known && current.total > 0) return j.outcomeCounts;
+  const raw = [
+    j?.extstatus,
+    ...(Array.isArray(j?.queueRows) ? j.queueRows.map((row) => row?.extstatus) : [])
+  ];
+  for (const value of raw) {
+    const match = String(value || '').match(/(\d+)\s*\/\s*(\d+)/);
+    if (!match) continue;
+    const passed = Number(match[1]);
+    const total = Number(match[2]);
+    if (!Number.isFinite(passed) || !Number.isFinite(total) || passed < 0 || total < passed) continue;
+    return { Pass: passed, Fail: total - passed };
+  }
+  return j?.outcomeCounts || null;
+}
+
 function renderRunStatusCell(tdStatus, run, runBody) {
   tdStatus.textContent = '';
   tdStatus.classList.remove('apex-tests-runs-missing');
@@ -2680,21 +2721,23 @@ function syncOtherRunsTbody(tbody, jobs, orgId, storedJobs = []) {
     tr.cells[1].title = String(j.launchedBy || '').trim() || '';
     tr.cells[2].textContent = '';
     const jobMeta = {
+      Status: j.status,
       NumberOfErrors: j.numberOfErrors,
       ExtendedStatus: j.extstatus
     };
+    const outcomeCounts = outcomeCountsForOtherRun(j);
     const classNames = otherRunsJobClassNameList(j);
     if (classNames.length) {
       const s1 = document.createElement('span');
       s1.className = 'apex-tests-runs-status-main';
-      s1.appendChild(buildApexJobStatusNode(j.status, j.outcomeCounts, jobMeta));
+      s1.appendChild(buildApexJobStatusNode(j.status, outcomeCounts, jobMeta));
       tr.cells[2].appendChild(s1);
       const sub = document.createElement('div');
       sub.className = 'apex-tests-runs-class-sub';
       sub.textContent = classNames.join(', ');
       tr.cells[2].appendChild(sub);
     } else {
-      tr.cells[2].replaceChildren(buildApexJobStatusNode(j.status, j.outcomeCounts, jobMeta));
+      tr.cells[2].replaceChildren(buildApexJobStatusNode(j.status, outcomeCounts, jobMeta));
     }
     tr.cells[3].textContent = formatOtherRunsJobDetail(j);
     const watchBtn = tr.querySelector('.apex-tests-other-watch-btn, .apex-tests-other-unwatch-btn');
@@ -2808,7 +2851,7 @@ function applyOtherOrgSectionState(section, label, res, orgId, storedJobs = []) 
       errP.textContent =
         res.reason === 'NO_SID'
           ? t('toast.noSession')
-          : res.error || t('apexTests.otherRunsLoadError');
+          : sanitizeUiError(res.error) || t('apexTests.otherRunsLoadError');
     }
     if (emptyP) emptyP.hidden = true;
     if (tableWrap) tableWrap.hidden = true;
@@ -3000,7 +3043,7 @@ async function renderHubRunsTable(opts = {}) {
     errEl.textContent =
       first?.reason === 'NO_SID'
         ? t('toast.noSession')
-        : first?.error || t('apexTests.runsPollError');
+        : sanitizeUiError(first?.error) || t('apexTests.runsPollError');
     errEl.classList.remove('hidden');
   } else if (pollValues.some((p) => !p.ok) && errEl) {
     errEl.textContent = t('apexTests.runsPartialPollError');
@@ -3048,7 +3091,7 @@ async function renderHubRunsTable(opts = {}) {
       tr.dataset.jobId = jobId;
       tr.dataset.orgId = rowOrgId;
       const terminal =
-        run.job && ['Completed', 'Failed', 'Aborted', 'Error'].includes(run.job.Status);
+        run.job && isApexTestTerminalJobStatus(run.job.Status);
       tr.dataset.jobStatus = String(run.job?.Status || '');
       tr.dataset.canonicalJobId = String(run.job?.Id || run.canonicalJobId || jobId);
       const expandable = !!(poll?.ok && !run.missing && !run.pollFailure && run.job);
@@ -3269,7 +3312,7 @@ async function renderHubRunsTable(opts = {}) {
               ? t('apexTests.runsAbortNoQueueItems')
               : abortRes?.reason === 'NO_ABORTABLE_QUEUE_ITEMS'
                 ? t('apexTests.runsAbortNoAbortableItems')
-                : abortRes?.error || t('apexTests.runsAbortError');
+                : sanitizeUiError(abortRes?.error) || t('apexTests.runsAbortError');
         showToast(msg, 'error');
         btnAbort.disabled = !canAbortJob;
       }
@@ -3307,7 +3350,7 @@ async function renderHubRunsTable(opts = {}) {
         const poll = pollsByOrgId[parsed.orgId];
         const run = pickRunForStoredJob(poll, parsed.jobId);
         const term =
-          run.job && ['Completed', 'Failed', 'Aborted', 'Error'].includes(run.job.Status);
+        run.job && isApexTestTerminalJobStatus(run.job.Status);
         void reopenHubRunDetailAfterRefresh(
           reopenKey,
           {
@@ -3336,8 +3379,6 @@ async function renderHubRunsTable(opts = {}) {
   }
 }
 
-const TERMINAL_JOB = new Set(['Completed', 'Failed', 'Aborted', 'Error']);
-
 function shouldStopPollingAfterRuns(runs, storedJobs = []) {
   if (!runs.length) return false;
   const hasWatchedInFlight = storedJobs.some((j, idx) => {
@@ -3360,9 +3401,8 @@ function shouldStopPollingAfterRuns(runs, storedJobs = []) {
     return consecutiveAllMissingPolls >= MAX_POLLS_ALL_MISSING;
   }
   consecutiveAllMissingPolls = 0;
-  return relevant.every((r) => {
-    if (r.missing) return false;
-    const st = r.job?.Status;
-    return st && TERMINAL_JOB.has(st);
-  });
+  for (const run of relevant) {
+    if (run.missing || !isApexTestTerminalJobStatus(run.job?.Status)) return false;
+  }
+  return true;
 }

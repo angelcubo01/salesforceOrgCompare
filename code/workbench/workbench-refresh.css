@@ -470,8 +470,8 @@ body[data-ui-mode="v2"] .workbench-context-title:focus-visible {
 /* Cabecera contextual */
 body[data-ui-mode="v2"] .workbench-context-header {
   /* El calendario se ancla en el cuerpo con una capa inferior. La cabecera
-     debe conservarse por delante igual que el selector de entorno. */
-  z-index: var(--sfoc-z-app-chrome);
+     y sus ayudas deben quedar por delante del selector de entorno. */
+  z-index: calc(var(--sfoc-z-app-submenu) + 1);
   min-height: 60px;
   border-bottom-color: var(--workbench-border);
   background: var(--workbench-header-bg);
@@ -1637,6 +1637,20 @@ body[data-ui-mode="v2"] .setup-audit-title {
 body[data-ui-mode="v2"] .sfoc-panel-subtitle,
 body[data-ui-mode="v2"] [class*="-status"],
 body[data-ui-mode="v2"] [class*="-updated"] { color: var(--sfoc-text-muted); }
+
+/* Los textos internos del estado de Apex Quality también contienen "-status"
+   en su clase. Esta excepción recupera su tono semántico tras la regla genérica. */
+body[data-ui-mode="v2"] .apex-tests-status-chip.apex-tests-status-completed { color: var(--sfoc-color-success); }
+body[data-ui-mode="v2"] .apex-tests-status-chip.apex-tests-status-processing { color: var(--sfoc-color-info); }
+body[data-ui-mode="v2"] .apex-tests-status-chip.apex-tests-status-queued { color: var(--sfoc-color-warning); }
+body[data-ui-mode="v2"] .apex-tests-status-chip.apex-tests-status-failed,
+body[data-ui-mode="v2"] .apex-tests-status-chip.apex-tests-status-aborted { color: var(--sfoc-color-danger); }
+body[data-ui-mode="v2"] .apex-tests-status-chip.apex-tests-status-unknown { color: var(--sfoc-color-text-secondary); }
+body[data-ui-mode="v2"] .apex-tests-status-chip :is(
+  .apex-tests-status-icon,
+  .apex-tests-status-label,
+  .apex-tests-status-progress
+) { color: inherit; }
 
 body[data-ui-mode="v2"] .sfoc-tool-panel input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
 body[data-ui-mode="v2"] .sfoc-tool-panel select,

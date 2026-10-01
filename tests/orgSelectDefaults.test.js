@@ -18,4 +18,9 @@ describe('org select defaults', () => {
     expect(pickRightOrgSelection('org-c', orgs, true)).toBe('org-c');
     expect(pickLeftOrgSelection('org-b', orgs, true)).toBe('org-b');
   });
+
+  it('permite conservar la misma organización en ambos lados', () => {
+    expect(pickLeftOrgSelection('org-b', orgs, true)).toBe('org-b');
+    expect(pickRightOrgSelection('org-b', orgs, true)).toBe('org-b');
+  });
 });

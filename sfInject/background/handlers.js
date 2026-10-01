@@ -5,7 +5,8 @@ import {
   extendUserDebugTraceFlag,
   fetchApexLogBody,
   queryApexLogsInWindow,
-  queryUserDebugTraceFlags
+  queryUserDebugTraceFlags,
+  searchIndex
 } from '../../shared/salesforceApi.js';
 import { fetchDeployDetail } from '../../shared/deployStatusApi.js';
 import { fetchApexClassSource } from '../../shared/apexClassSource.js';
@@ -25,6 +26,19 @@ import { buildOrgFromActiveTab, checkOrgAuthStatus, getOrderedSavedOrgs, loadSav
 import { instanceUrlFromLocationUrl } from '../lib/instanceUrl.js';
 import { isApexDebugLogsInjectPage, normalizeApexLogId } from '../content/matchers/debugLogPages.js';
 import { isDeployStatusDetailInjectPage, isDeployStatusInjectPage } from '../content/matchers/deployStatusPages.js';
+import { isQuickLinksSalesforcePage } from '../content/matchers/quickLinksPages.js';
+import { buildSfocQuickLinkUrl } from '../lib/quickLinkNavigation.js';
+const COMMAND_PALETTE_FILE_TYPE_LABELS = Object.freeze({
+  ApexClass: 'Apex Class',
+  ApexTrigger: 'Apex Trigger',
+  ApexPage: 'Visualforce Page',
+  ApexComponent: 'Visualforce Component',
+  LWC: 'Lightning Web Component',
+  Aura: 'Aura Component',
+  PermissionSet: 'Permission Set',
+  Profile: 'Profile',
+  FlexiPage: 'Lightning Page'
+});
 
 function sanitizeLogFileName(logId) {
   return String(logId || 'log')
@@ -65,6 +79,63 @@ export function isDeployStatusPageSender(sender) {
 function isDeployStatusDetailPageSender(sender) {
   const candidates = [sender?.url, sender?.tab?.url].filter((u) => typeof u === 'string' && u.length > 0);
   return candidates.some((u) => isDeployStatusDetailInjectPage(u));
+}
+
+/** Content script de Quick links en cualquier página Salesforce. */
+function isQuickLinksPageSender(sender) {
+  const candidates = [sender?.url, sender?.tab?.url].filter((u) => typeof u === 'string' && u.length > 0);
+  return candidates.some((u) => isQuickLinksSalesforcePage(u));
+}
+
+/** La paleta se muestra en el mismo alcance global Salesforce que Quick links. */
+function isSetupCommandPalettePageSender(sender) {
+  return isQuickLinksPageSender(sender);
+}
+
+function commandPaletteMetadataEntries(raw) {
+  const out = [];
+  const seen = new Set();
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const type = String(item?.artifactType || item?.type || '').trim();
+    const typeLabel = COMMAND_PALETTE_FILE_TYPE_LABELS[type];
+    const bundle = type === 'LWC' || type === 'Aura';
+    const key = String(bundle ? item?.developerName : item?.name || '').trim().slice(0, 512);
+    if (!typeLabel || !key) continue;
+    const unique = `${type}:${key}`;
+    if (seen.has(unique)) continue;
+    seen.add(unique);
+    out.push({
+      type, key, typeLabel, label: key,
+      ...(bundle ? { bundle: true, bundleId: String(item?.id || '').trim().slice(0, 128) } : {})
+    });
+  }
+  return out;
+}
+
+function commandPaletteScriptEntries(raw) {
+  const seen = new Set();
+  return (Array.isArray(raw) ? raw : []).flatMap((script) => {
+    const id = String(script?.id || '').trim().slice(0, 128);
+    const name = String(script?.name || '').trim().slice(0, 160);
+    if (!id || seen.has(id)) return [];
+    seen.add(id);
+    return [{ id, name: name || 'script' }];
+  }).slice(0, 100);
+}
+
+async function openInSenderTab(sender, url, openInNewTab = false) {
+  if (openInNewTab) {
+    const options = { url, active: true };
+    if (sender?.tab?.id != null) {
+      options.openerTabId = sender.tab.id;
+      if (sender.tab.index != null) options.index = sender.tab.index + 1;
+    }
+    await chrome.tabs.create(options);
+  } else if (sender?.tab?.id != null) {
+    await chrome.tabs.update(sender.tab.id, { url });
+  } else {
+    await chrome.tabs.create({ url, active: true });
+  }
 }
 
 /** @param {unknown} value */
@@ -208,10 +279,158 @@ export async function handleSfInjectMessage(message, sender) {
       }
     }
     case 'sfInject:resolveActiveOrg': {
-      if (!isExtensionUiSender(sender) && !isDebugLogsPageSender(sender) && !isDeployStatusPageSender(sender)) {
+      if (
+        !isExtensionUiSender(sender) &&
+        !isDebugLogsPageSender(sender) &&
+        !isDeployStatusPageSender(sender) &&
+        !isQuickLinksPageSender(sender)
+      ) {
         return { ok: false, reason: 'FORBIDDEN' };
       }
       return resolveSavedOrgForInstance(message.instanceUrl, sender?.tab?.id);
+    }
+    case 'sfInject:openQuickLink': {
+      if (!isQuickLinksPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      const orgId = typeof message.orgId === 'string' ? message.orgId : '';
+      const openInNewTab = message.openInNewTab === true;
+      const linkId = typeof message.linkId === 'string' ? message.linkId : '';
+      const toolId = typeof message.toolId === 'string' ? message.toolId : '';
+      if (!orgId || !linkId || !toolId) return { ok: false, reason: 'INVALID_QUICK_LINK' };
+      await loadSfInjectSettings();
+      const settings = getSfInjectSettingsSnapshot();
+      if (!isSfInjectIntegrationEnabled(settings, 'quickLinks')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const resolved = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+      if (!resolved.ok || resolved.orgId !== orgId) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      const configured = Array.isArray(settings.quickLinks?.[orgId]) && settings.quickLinks[orgId].some((link) => (
+        link.id === linkId && link.type === 'sfoc' && link.toolId === toolId
+      ));
+      if (!configured) return { ok: false, reason: 'QUICK_LINK_NOT_CONFIGURED' };
+      const url = buildSfocQuickLinkUrl(toolId, orgId);
+      if (!url) return { ok: false, reason: 'INVALID_QUICK_LINK' };
+      if (!openInNewTab && sender?.tab?.id != null) {
+        await chrome.tabs.update(sender.tab.id, { url });
+        return { ok: true, opened: true };
+      }
+      const tabOpts = { url, active: true };
+      if (sender?.tab?.id != null) {
+        tabOpts.openerTabId = sender.tab.id;
+        if (sender.tab.index != null) tabOpts.index = sender.tab.index + 1;
+      }
+      await chrome.tabs.create(tabOpts);
+      return { ok: true, opened: true };
+    }
+    case 'sfInject:openQuickLinksSettings': {
+      if (!isQuickLinksPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      const orgId = typeof message.orgId === 'string' ? message.orgId : '';
+      const resolved = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+      if (!orgId || !resolved.ok || resolved.orgId !== orgId) {
+        return { ok: false, reason: 'ORG_NOT_SAVED' };
+      }
+      const url = new URL(chrome.runtime.getURL('popup/settings.html'));
+      url.searchParams.set('quickLinks', '1');
+      url.searchParams.set('orgId', orgId);
+      const tabOpts = { url: url.href, active: true };
+      if (sender?.tab?.id != null) {
+        tabOpts.openerTabId = sender.tab.id;
+        if (sender.tab.index != null) tabOpts.index = sender.tab.index + 1;
+      }
+      await chrome.tabs.create(tabOpts);
+      return { ok: true, opened: true };
+    }
+    case 'sfInject:getSetupCommandPaletteFiles': {
+      if (!isSetupCommandPalettePageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'setupCommandPalette')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const resolved = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+      if (!resolved.ok || resolved.orgId !== message.orgId) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      const local = await chrome.storage.local.get('sfoc_setup_palette_anon_scripts');
+      return {
+        ok: true,
+        scripts: commandPaletteScriptEntries(local.sfoc_setup_palette_anon_scripts)
+      };
+    }
+    case 'sfInject:searchSetupCommandPaletteFiles': {
+      if (!isSetupCommandPalettePageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'setupCommandPalette')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const resolved = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+      if (!resolved.ok || resolved.orgId !== message.orgId) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      const query = String(message.query || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 64);
+      if (!query) return { ok: true, files: [] };
+      const sid = await resolveSidForOrg(resolved.org);
+      if (!sid) return { ok: false, reason: 'NO_SID' };
+      const types = Object.keys(COMMAND_PALETTE_FILE_TYPE_LABELS);
+      const batches = await Promise.allSettled(
+        types.map((type) => searchIndex(resolved.org.instanceUrl, sid, resolved.org.apiVersion, type, query))
+      );
+      const files = commandPaletteMetadataEntries(
+        batches.flatMap((batch) => batch.status === 'fulfilled' && Array.isArray(batch.value) ? batch.value : [])
+      );
+      return { ok: true, files };
+    }
+    case 'sfInject:openSetupCommandPaletteTarget': {
+      if (!isSetupCommandPalettePageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'setupCommandPalette')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      const orgId = typeof message.orgId === 'string' ? message.orgId : '';
+      const openInNewTab = message.openInNewTab === true;
+      const resolved = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+      if (!orgId || !resolved.ok || resolved.orgId !== orgId) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      if (message.target === 'tool') {
+        const url = buildSfocQuickLinkUrl(String(message.toolId || ''), orgId);
+        if (!url) return { ok: false, reason: 'INVALID_TOOL' };
+        await openInSenderTab(sender, url, openInNewTab);
+        return { ok: true, opened: true };
+      }
+      if (message.target === 'file') {
+        const type = String(message.itemType || '').trim();
+        const key = String(message.itemKey || '').trim().replace(/[\u0000-\u001F\u007F]/g, '').slice(0, 512);
+        if (!COMMAND_PALETTE_FILE_TYPE_LABELS[type] || !key) return { ok: false, reason: 'FILE_NOT_FOUND' };
+        const item = {
+          type,
+          key,
+          bundle: type === 'LWC' || type === 'Aura',
+          bundleId: String(message.bundleId || '').trim().slice(0, 128)
+        };
+        const url = new URL(chrome.runtime.getURL('code/code.html'));
+        url.searchParams.set('left', orgId);
+        url.searchParams.set('nav', 'comparator');
+        if (item.bundle) {
+          url.searchParams.set('op', item.type);
+          url.searchParams.set('paletteBundle', '1');
+          url.searchParams.set('paletteBundleType', item.type);
+          url.searchParams.set('paletteBundleName', item.key);
+          if (item.bundleId) url.searchParams.set('paletteBundleId', item.bundleId);
+        } else {
+          url.searchParams.set('type', item.type);
+          url.searchParams.set('key', item.key);
+          url.searchParams.set('paletteOpen', '1');
+        }
+        await openInSenderTab(sender, url.href, openInNewTab);
+        return { ok: true, opened: true };
+      }
+      if (message.target === 'script') {
+        const scriptId = String(message.scriptId || '').trim().slice(0, 128);
+        const local = await chrome.storage.local.get('sfoc_setup_palette_anon_scripts');
+        const script = commandPaletteScriptEntries(local.sfoc_setup_palette_anon_scripts).find((entry) => entry.id === scriptId);
+        if (!script) return { ok: false, reason: 'SCRIPT_NOT_FOUND' };
+        const url = new URL(chrome.runtime.getURL('code/code.html'));
+        url.searchParams.set('left', orgId);
+        url.searchParams.set('nav', 'development');
+        url.searchParams.set('op', 'AnonymousApex');
+        url.searchParams.set('savedScript', script.id);
+        await openInSenderTab(sender, url.href, openInNewTab);
+        return { ok: true, opened: true };
+      }
+      return { ok: false, reason: 'INVALID_TARGET' };
     }
     case 'sfInject:getDeployStatusDetail': {
       // El SOAP de detalle queda ligado exclusivamente al listado de despliegues de la pestaña.

@@ -124,8 +124,12 @@ async function bootstrap() {
   const lang = bootstrapRes.lang === 'en' ? 'en' : 'es';
   const ctx = {
     orgId: orgRes?.ok && orgRes.orgId ? orgRes.orgId : '',
+    orgLabel: String(orgRes?.org?.label || orgRes?.org?.displayName || orgRes?.org?.instanceUrl || ''),
     lang,
     prefs: settings.prefs || {},
+    quickLinks: Array.isArray(settings.quickLinks?.[orgRes?.orgId])
+      ? settings.quickLinks[orgRes.orgId]
+      : [],
     onError: (msg) => showInjectToast(msg, true)
   };
 
@@ -144,6 +148,11 @@ async function bootstrap() {
     }
 
     if (!ctx.orgId && integration.requiresSavedOrg !== false) {
+      teardownIntegration(integration.id);
+      continue;
+    }
+
+    if (integration.requiresQuickLinks && !ctx.quickLinks.length) {
       teardownIntegration(integration.id);
       continue;
     }
