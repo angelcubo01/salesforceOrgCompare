@@ -2280,6 +2280,12 @@
             </div>
             <p id="permissionDiffStatus" class="permission-diff-status" role="status"></p>
             <div id="permissionDiffQueryGrid" class="permission-diff-query-grid" data-i18n-aria-label="permDiff.queryOptions">
+              <div class="permission-diff-query-tabs" role="tablist" data-i18n-aria-label="permDiff.queryOptions">
+                <button id="permissionDiffTabContainer" type="button" class="permission-diff-query-tab" role="tab" aria-controls="permissionDiffContainerBlock" data-permission-diff-tab="container" data-i18n="permDiff.tabContainer">Por perfil o permission set</button>
+                <button id="permissionDiffTabResource" type="button" class="permission-diff-query-tab" role="tab" aria-controls="permissionDiffResourceBlock" data-permission-diff-tab="resource" data-i18n="permDiff.tabResource">Por objeto o campo</button>
+                <button id="permissionDiffTabCustomPermission" type="button" class="permission-diff-query-tab" role="tab" aria-controls="permissionDiffCustomPermBlock" data-permission-diff-tab="customPermission" data-i18n="permDiff.tabCustomPermission">Por permiso personalizado</button>
+                <button id="permissionDiffTabUser" type="button" class="permission-diff-query-tab" role="tab" aria-controls="permissionDiffUserBlock" data-permission-diff-tab="user" data-i18n="permDiff.tabUser">Por usuario</button>
+              </div>
               <section id="permissionDiffContainerBlock" class="permission-diff-query-card">
                 <div class="permission-diff-query-card-head">
                   <h3 data-i18n="permDiff.queryContainerTitle">Perfil o permission set</h3>
@@ -2319,7 +2325,26 @@
               </div>
                 </div>
               </section>
+              <section id="permissionDiffUserBlock" class="permission-diff-query-card permission-diff-user-card" role="tabpanel" aria-labelledby="permissionDiffTabUser">
+                <div class="permission-diff-query-card-head">
+                  <h3 data-i18n="permDiff.queryUserTitle">Usuario</h3>
+                  <p data-i18n="permDiff.queryUserHint">Consulta la suma de permisos de su perfil, permission sets y grupos.</p>
+                </div>
+                <div class="permission-diff-user-inputs">
+                  <div class="permission-diff-field permission-diff-name-field">
+                    <label for="permissionDiffUserLeftInput" class="permission-diff-field-label" data-i18n="permDiff.userLeft">Usuario</label>
+                    <input id="permissionDiffUserLeftInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.userNamePh" placeholder="Nombre o usuario" autocomplete="off" spellcheck="false" />
+                    <div id="permissionDiffUserLeftSuggestions" class="permission-diff-suggestions" hidden></div>
+                  </div>
+                  <div id="permissionDiffUserRightField" class="permission-diff-field permission-diff-name-field hidden">
+                    <label for="permissionDiffUserRightInput" class="permission-diff-field-label" data-i18n="permDiff.userRight">Usuario (organización derecha)</label>
+                    <input id="permissionDiffUserRightInput" type="search" class="permission-diff-input" data-i18n-placeholder="permDiff.userNamePh" placeholder="Nombre o usuario" autocomplete="off" spellcheck="false" />
+                    <div id="permissionDiffUserRightSuggestions" class="permission-diff-suggestions" hidden></div>
+                  </div>
+                </div>
+              </section>
             </div>
+            <div id="permissionDiffUserAssignments" class="permission-diff-user-assignments hidden"></div>
             <div class="permission-diff-filters permission-diff-filters-shared hidden">
               <div class="permission-diff-field">
                 <label for="permissionDiffFilter" class="permission-diff-field-label" data-i18n="permDiff.filter">Buscar</label>

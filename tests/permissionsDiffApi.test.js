@@ -10,8 +10,10 @@ vi.mock('../shared/salesforceApi.js', () => ({
 import { restQuery, restQueryAll } from '../shared/salesforceApi.js';
 import {
   fetchPermissionContainerData,
+  fetchPermissionUserData,
   resolveParentContainers,
-  resolvePermissionContainer
+  resolvePermissionContainer,
+  searchPermissionUsers
 } from '../shared/permissionsDiffApi.js';
 
 describe('permissionsDiffApi', () => {
@@ -112,5 +114,66 @@ describe('permissionsDiffApi', () => {
       containerType: 'Profile',
       name: 'CC_Usuario'
     });
+  });
+
+  it('busca usuarios activos por nombre o username', async () => {
+    restQuery.mockResolvedValueOnce([{
+      Id: '005000000000001',
+      Name: 'Agente Contact Center',
+      Username: 'agente@example.com',
+      Profile: { Name: 'CC Agente' }
+    }]);
+
+    const users = await searchPermissionUsers('https://example.my.salesforce.com', 'sid', '63.0', 'agente');
+
+    expect(users).toEqual([{
+      id: '005000000000001',
+      name: 'Agente Contact Center',
+      username: 'agente@example.com',
+      profileName: 'CC Agente'
+    }]);
+    expect(restQuery).toHaveBeenCalledWith(
+      'https://example.my.salesforce.com',
+      'sid',
+      '63.0',
+      expect.stringContaining('FROM User')
+    );
+  });
+
+  it('suma perfil y permission sets directos en los permisos efectivos de un usuario', async () => {
+    restQuery
+      .mockResolvedValueOnce([{
+        Id: '005000000000001',
+        Name: 'Agente Contact Center',
+        Username: 'agente@example.com',
+        ProfileId: '00e000000000001',
+        Profile: { Name: 'CC Agente' }
+      }])
+      .mockResolvedValueOnce([{ Id: '0PS000000000001' }]);
+    restQueryAll
+      .mockResolvedValueOnce([{
+        PermissionSetId: '0PS000000000002',
+        PermissionSet: { Name: 'CC_Casos', Label: 'CC Casos', IsOwnedByProfile: false }
+      }])
+      .mockResolvedValueOnce([{ ParentId: '0PS000000000002', SobjectType: 'Case', PermissionsRead: true }])
+      .mockResolvedValueOnce([{ ParentId: '0PS000000000002', SobjectType: 'Case', Field: 'Case.Subject', PermissionsRead: true }])
+      .mockResolvedValueOnce([]);
+
+    const result = await fetchPermissionUserData(
+      'https://example.my.salesforce.com',
+      'sid',
+      '63.0',
+      '005000000000001'
+    );
+
+    expect(result.assignments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'Profile', name: 'CC Agente' }),
+      expect.objectContaining({ type: 'PermissionSet', name: 'CC Casos' })
+    ]));
+    expect(result.objectPermissions).toEqual([expect.objectContaining({ SobjectType: 'Case', PermissionsRead: true })]);
+    expect(result.fieldPermissions).toEqual([expect.objectContaining({ Field: 'Case.Subject', PermissionsRead: true })]);
+    expect(result.objectPermissions[0].sources).toEqual([
+      expect.objectContaining({ type: 'PermissionSet', name: 'CC Casos', PermissionsRead: true })
+    ]);
   });
 });

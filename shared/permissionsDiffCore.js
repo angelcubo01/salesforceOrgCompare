@@ -22,7 +22,7 @@ export function normalizeObjectPermission(row) {
   for (const f of OBJECT_PERMISSION_BOOL_FIELDS) {
     out[f] = !!row?.[f];
   }
-  return { key, ...out };
+  return { key, ...out, sources: normalizePermissionSources(row, OBJECT_PERMISSION_BOOL_FIELDS) };
 }
 
 /**
@@ -37,7 +37,7 @@ export function normalizeFieldPermission(row) {
   for (const f of FIELD_PERMISSION_BOOL_FIELDS) {
     flags[f] = !!row?.[f];
   }
-  return { key, SobjectType: sobject, Field: field, ...flags };
+  return { key, SobjectType: sobject, Field: field, ...flags, sources: normalizePermissionSources(row, FIELD_PERMISSION_BOOL_FIELDS) };
 }
 
 /**
@@ -48,7 +48,15 @@ export function normalizeSetupEntityAccess(row) {
   const id = String(row?.SetupEntityId || '').trim();
   const name = String(row?.SetupEntityName || '').trim();
   const key = `${type}:${id}`;
-  return { key, SetupEntityType: type, SetupEntityId: id, SetupEntityName: name };
+  return { key, SetupEntityType: type, SetupEntityId: id, SetupEntityName: name, sources: normalizePermissionSources(row, []) };
+}
+
+function normalizePermissionSources(row, fields) {
+  return (Array.isArray(row?.sources) ? row.sources : []).map((source) => ({
+    type: String(source?.type || '').trim(),
+    name: String(source?.name || '').trim(),
+    ...Object.fromEntries(fields.map((field) => [field, !!source?.[field]]))
+  })).filter((source) => source.type && source.name);
 }
 
 /**
@@ -178,9 +186,57 @@ export function diffSetupEntityAccess(left, right) {
  * @param {{ objectPermissions?: unknown[], fieldPermissions?: unknown[], setupEntityAccess?: unknown[] }} payload
  */
 export function buildPermissionDiffBundle(payload) {
-  const objectPermissions = (payload.objectPermissions || []).map(normalizeObjectPermission);
-  const fieldPermissions = (payload.fieldPermissions || []).map(normalizeFieldPermission);
-  const setupEntityAccess = (payload.setupEntityAccess || []).map(normalizeSetupEntityAccess);
+  // Un mismo permiso puede proceder de perfil, varios permission sets o PSG.
+  // Al construir un bundle efectivo se conserva una única fila por recurso y
+  // se combinan los flags con OR para no perder una concesión previa.
+  const mergeBooleanRows = (rows, normalize, fields) => {
+    const byKey = new Map();
+    for (const raw of rows || []) {
+      const normalized = normalize(raw);
+      if (!normalized.key) continue;
+      const current = byKey.get(normalized.key);
+      if (!current) {
+        byKey.set(normalized.key, normalized);
+        continue;
+      }
+      for (const field of fields) current[field] = !!current[field] || !!normalized[field];
+      const sources = new Map((current.sources || []).map((source) => [`${source.type}:${source.name}`, source]));
+      for (const source of normalized.sources || []) {
+        const sourceKey = `${source.type}:${source.name}`;
+        const currentSource = sources.get(sourceKey);
+        if (!currentSource) {
+          sources.set(sourceKey, source);
+          continue;
+        }
+        for (const field of fields) currentSource[field] = !!currentSource[field] || !!source[field];
+      }
+      current.sources = [...sources.values()];
+    }
+    return [...byKey.values()];
+  };
+  const objectPermissions = mergeBooleanRows(
+    payload.objectPermissions,
+    normalizeObjectPermission,
+    OBJECT_PERMISSION_BOOL_FIELDS
+  );
+  const fieldPermissions = mergeBooleanRows(
+    payload.fieldPermissions,
+    normalizeFieldPermission,
+    FIELD_PERMISSION_BOOL_FIELDS
+  );
+  const setupByKey = new Map();
+  for (const raw of payload.setupEntityAccess || []) {
+    const normalized = normalizeSetupEntityAccess(raw);
+    if (normalized.key && !setupByKey.has(normalized.key)) {
+      setupByKey.set(normalized.key, normalized);
+    } else if (normalized.key) {
+      const current = setupByKey.get(normalized.key);
+      const sources = new Map((current.sources || []).map((source) => [`${source.type}:${source.name}`, source]));
+      for (const source of normalized.sources || []) sources.set(`${source.type}:${source.name}`, source);
+      current.sources = [...sources.values()];
+    }
+  }
+  const setupEntityAccess = [...setupByKey.values()];
   return { objectPermissions, fieldPermissions, setupEntityAccess };
 }
 

@@ -122,7 +122,7 @@ export const helpOnboardingEs = {
   'help.tool.PermissionDiff.lead':
     'Consulta qué puede hacer un perfil o permission set, o quién tiene acceso a un objeto o campo.',
   'help.tool.PermissionDiff.body1':
-    'Elige directamente el bloque que quieras analizar: perfil/permission set, objeto/campo o custom permission.',
+    'Elige la pestaña que quieras analizar: perfil/permission set, objeto/campo, custom permission o usuario.',
   'help.tool.PermissionDiff.body2':
     'Escribe el nombre y pulsa Consultar. Los resultados se obtienen en vivo del entorno.',
   'help.tool.PermissionDiff.body3':
@@ -401,7 +401,7 @@ export const helpOnboardingEs = {
   'onboarding.tool.PermissionDiff.lead':
     'Consulta qué puede hacer un perfil o permission set, o quién tiene acceso a un objeto.',
   'onboarding.tool.PermissionDiff.step1':
-    'Elige directamente el bloque que quieras analizar: perfil/permission set, objeto/campo o custom permission.',
+    'Elige la pestaña que quieras analizar: perfil/permission set, objeto/campo, custom permission o usuario.',
   'onboarding.tool.PermissionDiff.step2':
     'Escribe el nombre y pulsa Consultar para ver los resultados del entorno.',
   'onboarding.tool.PermissionDiff.step3':
@@ -660,7 +660,7 @@ export const helpOnboardingEn = {
   'help.tool.PermissionDiff.lead':
     'See what a profile or permission set can do, or who has access to an object or field.',
   'help.tool.PermissionDiff.body1':
-    'Choose the analysis block directly: profile/permission set, object/field, or custom permission.',
+    'Choose the analysis tab: profile/permission set, object/field, custom permission, or user.',
   'help.tool.PermissionDiff.body2':
     'Type the name and press Query. Results are fetched live from the org.',
   'help.tool.PermissionDiff.body3':
@@ -939,7 +939,7 @@ export const helpOnboardingEn = {
   'onboarding.tool.PermissionDiff.lead':
     'See what a profile or permission set can do, or who has access to an object.',
   'onboarding.tool.PermissionDiff.step1':
-    'Choose the analysis block directly: profile/permission set, object/field, or custom permission.',
+    'Choose the analysis tab: profile/permission set, object/field, custom permission, or user.',
   'onboarding.tool.PermissionDiff.step2':
     'Type the name and press Query to see results from the org.',
   'onboarding.tool.PermissionDiff.step3':

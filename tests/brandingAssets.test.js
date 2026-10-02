@@ -35,6 +35,7 @@ describe('identidad visual', () => {
       'code/apex-log-viewer.html',
       'code/apex-source-viewer.html',
       'code/apex-coverage-viewer.html',
+      'code/health-monitor.html',
       'popup/popup.html',
       'popup/settings.html'
     ]) {

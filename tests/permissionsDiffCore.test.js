@@ -71,6 +71,35 @@ describe('permissionsDiffCore', () => {
     expect(cmp.objectPermissions.summary.diff).toBe(1);
   });
 
+  it('combina permisos coincidentes de varias asignaciones al construir un bundle efectivo', () => {
+    const bundle = buildPermissionDiffBundle({
+      objectPermissions: [
+        {
+          SobjectType: 'Case',
+          PermissionsRead: true,
+          sources: [{ type: 'PermissionSet', name: 'Lectura', PermissionsRead: true }]
+        },
+        {
+          SobjectType: 'Case',
+          PermissionsEdit: true,
+          sources: [{ type: 'PermissionSet', name: 'Edición', PermissionsEdit: true }]
+        }
+      ],
+      fieldPermissions: [],
+      setupEntityAccess: []
+    });
+    expect(bundle.objectPermissions).toHaveLength(1);
+    expect(bundle.objectPermissions[0]).toMatchObject({
+      SobjectType: 'Case',
+      PermissionsRead: true,
+      PermissionsEdit: true
+    });
+    expect(bundle.objectPermissions[0].sources).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'Lectura', PermissionsRead: true }),
+      expect.objectContaining({ name: 'Edición', PermissionsEdit: true })
+    ]));
+  });
+
   it('parseResourceInput splits field api name', () => {
     const p = parseResourceInput('Account.Name', 'field');
     expect(p.objectApiName).toBe('Account');

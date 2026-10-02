@@ -29,7 +29,7 @@ import {
   renderCustomPermTable
 } from './permissionDiffCustomPermUi.js';
 
-/** @type {'container'|'resource'|'customPermission'} */
+/** @type {'container'|'resource'|'customPermission'|'user'} */
 let queryDirection = 'container';
 /** @type {'object'|'field'} */
 let resourceType = 'object';
@@ -41,11 +41,16 @@ const MIN_SUGGEST_LEN = 2;
 let committedContainer = null;
 /** @type {{ resourceType: 'object'|'field', name: string }|null} */
 let committedResource = null;
+/** @type {{ id: string, name: string, username: string, profileName?: string }|null} */
+let committedUserLeft = null;
+/** @type {{ id: string, name: string, username: string, profileName?: string }|null} */
+let committedUserRight = null;
 
 let searchTimer = null;
 let suggestGeneration = 0;
 
 function getActiveSuggestionsEl() {
+  if (isUserMode()) return els().userLeftSuggestions;
   if (isCustomPermMode()) return els().customPermSuggestions;
   if (isResourceMode()) return els().resourceSuggestions;
   return els().suggestions;
@@ -83,6 +88,13 @@ function els() {
     customPermBlock: document.getElementById('permissionDiffCustomPermBlock'),
     customPermInput: document.getElementById('permissionDiffCustomPermInput'),
     customPermSuggestions: document.getElementById('permissionDiffCustomPermSuggestions'),
+    userBlock: document.getElementById('permissionDiffUserBlock'),
+    userLeftInput: document.getElementById('permissionDiffUserLeftInput'),
+    userLeftSuggestions: document.getElementById('permissionDiffUserLeftSuggestions'),
+    userRightField: document.getElementById('permissionDiffUserRightField'),
+    userRightInput: document.getElementById('permissionDiffUserRightInput'),
+    userRightSuggestions: document.getElementById('permissionDiffUserRightSuggestions'),
+    userAssignments: document.getElementById('permissionDiffUserAssignments'),
     genericResults: document.getElementById('permissionDiffGenericResults')
   };
 }
@@ -93,6 +105,10 @@ function isResourceMode() {
 
 function isCustomPermMode() {
   return queryDirection === 'customPermission';
+}
+
+function isUserMode() {
+  return queryDirection === 'user';
 }
 
 function getCustomPermInput() {
@@ -117,6 +133,19 @@ function getResourceType() {
   return getResourceInput().includes('.') ? 'field' : 'object';
 }
 
+function getUserInput(side) {
+  return String((side === 'right' ? els().userRightInput : els().userLeftInput)?.value || '').trim();
+}
+
+function userCommitActive(side) {
+  const committed = side === 'right' ? committedUserRight : committedUserLeft;
+  return !!committed && getUserInput(side) === committed.name;
+}
+
+function usersCommitActive() {
+  return userCommitActive('left') && (!state.permissionDiffCompareMode || userCommitActive('right'));
+}
+
 function getContainerFilter() {
   return 'all';
 }
@@ -130,7 +159,7 @@ function setStatus(text, tone = '') {
 }
 
 function hideSuggestions() {
-  const { suggestions, resourceSuggestions, customPermSuggestions } = els();
+  const { suggestions, resourceSuggestions, customPermSuggestions, userLeftSuggestions, userRightSuggestions } = els();
   if (suggestions) {
     suggestions.innerHTML = '';
     suggestions.hidden = true;
@@ -143,12 +172,18 @@ function hideSuggestions() {
     customPermSuggestions.innerHTML = '';
     customPermSuggestions.hidden = true;
   }
+  for (const list of [userLeftSuggestions, userRightSuggestions]) {
+    if (!list) continue;
+    list.innerHTML = '';
+    list.hidden = true;
+  }
 }
 
 function setResultsVisible(visible) {
-  const { genericResults, summary } = els();
+  const { genericResults, summary, userAssignments } = els();
   genericResults?.classList.toggle('hidden', !visible);
   summary?.classList.toggle('hidden', !visible);
+  userAssignments?.classList.toggle('hidden', !visible || !isUserMode());
   document.querySelector('.permission-diff-filters-shared')?.classList.toggle('hidden', !visible);
 }
 
@@ -189,6 +224,14 @@ function invalidateResourceCommit() {
   }
 }
 
+function invalidateUserCommit(side) {
+  if (userCommitActive(side)) return;
+  if (side === 'right') committedUserRight = null;
+  else committedUserLeft = null;
+  clearResults();
+  setResultsVisible(false);
+}
+
 function renderSuggestionsList(listEl, items, onPick) {
   if (!listEl) return;
   listEl.innerHTML = '';
@@ -219,7 +262,20 @@ function renderSuggestionsList(listEl, items, onPick) {
     const name = document.createElement('span');
     name.className = 'permission-diff-suggestion-text';
     name.textContent = it.name || '';
-    row.appendChild(name);
+    const username = String(it.username || '').trim();
+    if (username) {
+      row.classList.add('is-user');
+      const userText = document.createElement('span');
+      userText.className = 'permission-diff-suggestion-user-text';
+      userText.append(name);
+      const usernameEl = document.createElement('span');
+      usernameEl.className = 'permission-diff-suggestion-username';
+      usernameEl.textContent = username;
+      userText.append(usernameEl);
+      row.appendChild(userText);
+    } else {
+      row.appendChild(name);
+    }
     if (kind) {
       const badge = document.createElement('span');
       badge.className = 'permission-diff-suggestion-kind';
@@ -279,9 +335,59 @@ function pickResource(item) {
   void runLoad();
 }
 
+function pickUser(side, item) {
+  queryDirection = 'user';
+  const user = {
+    id: String(item?.id || ''),
+    name: String(item?.name || ''),
+    username: String(item?.username || ''),
+    profileName: String(item?.profileName || '')
+  };
+  if (!user.id || !user.name) {
+    setStatus(t('permDiff.pickUserFromList'), 'error');
+    return;
+  }
+  const input = side === 'right' ? els().userRightInput : els().userLeftInput;
+  if (input) input.value = user.name;
+  if (side === 'right') committedUserRight = user;
+  else committedUserLeft = user;
+  hideSuggestions();
+  if (!state.permissionDiffCompareMode || usersCommitActive()) void runLoad();
+  else setStatus(t('permDiff.pickRightUser'));
+}
+
+async function runUserSearchSuggestions(side) {
+  const orgId = side === 'right' ? state.rightOrgId : state.leftOrgId;
+  const list = side === 'right' ? els().userRightSuggestions : els().userLeftSuggestions;
+  const query = getUserInput(side);
+  if (!orgId || query.length < MIN_SUGGEST_LEN) {
+    if (list) {
+      list.innerHTML = '';
+      list.hidden = true;
+    }
+    return;
+  }
+  const gen = ++suggestGeneration;
+  renderSuggestionsLoading(list);
+  try {
+    const res = await bg({ type: 'permissionsDiff:searchUser', orgId, queryText: query });
+    if (gen !== suggestGeneration) return;
+    renderSuggestionsList(list, res?.ok ? res.items || [] : [], (item) => pickUser(side, item));
+  } catch {
+    if (gen !== suggestGeneration) return;
+    if (list) {
+      list.innerHTML = '';
+      list.hidden = true;
+    }
+  }
+}
+
 function hasActiveResults() {
   if (isCustomPermMode()) {
     return customPermCommitActive(getCustomPermInput()) && hasCustomPermResults();
+  }
+  if (isUserMode()) {
+    return usersCommitActive() && !!(lastUserCompare || lastUserSingle);
   }
   if (isResourceMode()) {
     return resourceCommitActive() && !!(lastAccessCompare || lastAccessSingle);
@@ -290,12 +396,20 @@ function hasActiveResults() {
 }
 
 function syncDirectionUi() {
-  const { containerBlock, resourceBlock, customPermBlock, diffOnly } = els();
+  const { containerBlock, resourceBlock, customPermBlock, userBlock, userRightField, diffOnly } = els();
   const resource = isResourceMode();
   const customPerm = isCustomPermMode();
-  containerBlock?.classList.toggle('is-active', !resource && !customPerm);
+  const user = isUserMode();
+  containerBlock?.classList.toggle('is-active', !resource && !customPerm && !user);
   resourceBlock?.classList.toggle('is-active', resource);
   customPermBlock?.classList.toggle('is-active', customPerm);
+  userBlock?.classList.toggle('is-active', user);
+  userRightField?.classList.toggle('hidden', !state.permissionDiffCompareMode);
+  for (const tab of document.querySelectorAll('[data-permission-diff-tab]')) {
+    const active = tab.dataset.permissionDiffTab === queryDirection;
+    tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+  }
   document.body.classList.toggle('permission-diff-query-resource', resource || customPerm);
   document.body.classList.toggle('permission-diff-query-custom-perm', customPerm);
   setResultsVisible(hasActiveResults());
@@ -565,6 +679,10 @@ let lastSingle = null;
 let lastAccessCompare = null;
 /** @type {ReturnType<typeof buildAccessByResourceBundle>|null} */
 let lastAccessSingle = null;
+/** @type {{ bundle: ReturnType<typeof buildPermissionDiffBundle>, user: Record<string, unknown>, assignments: Record<string, unknown>[] }|null} */
+let lastUserSingle = null;
+/** @type {{ bundle: ReturnType<typeof comparePermissionBundles>, left: Record<string, unknown>, right: Record<string, unknown> }|null} */
+let lastUserCompare = null;
 
 function renderSummary() {
   const { summary } = els();
@@ -596,6 +714,30 @@ function renderSummary() {
     return;
   }
 
+  if (isUserMode()) {
+    if (!summary) return;
+    if (state.permissionDiffCompareMode && lastUserCompare) {
+      const total = ['object', 'field', 'setup'].reduce((sum, section) => {
+        const current = lastUserCompare?.bundle?.[sectionToBundleKey(section)]?.summary;
+        return {
+          same: sum.same + (current?.same ?? 0),
+          diff: sum.diff + (current?.diff ?? 0),
+          leftOnly: sum.leftOnly + (current?.leftOnly ?? 0),
+          rightOnly: sum.rightOnly + (current?.rightOnly ?? 0),
+          total: sum.total + (current?.total ?? 0)
+        };
+      }, { same: 0, diff: 0, leftOnly: 0, rightOnly: 0, total: 0 });
+      summary.textContent = t('permDiff.summaryUserCompare', total);
+      return;
+    }
+    const count = ['object', 'field', 'setup'].reduce(
+      (total, section) => total + (lastUserSingle?.bundle?.[sectionToBundleKey(section)]?.length ?? 0),
+      0
+    );
+    summary.textContent = lastUserSingle ? t('permDiff.summaryUserSingle', { count }) : '';
+    return;
+  }
+
   if (!summary) return;
   if (state.permissionDiffCompareMode && lastCompare) {
     const total = ['object', 'field', 'setup'].reduce((sum, section) => {
@@ -616,6 +758,137 @@ function renderSummary() {
     0
   );
   summary.textContent = lastSingle ? t('permDiff.summarySingle', { count }) : '';
+}
+
+function formatUserAssignmentType(type) {
+  const key = `permDiff.assignmentType.${type}`;
+  const value = t(key);
+  return value === key ? String(type || '') : value;
+}
+
+function renderUserAssignments() {
+  const { userAssignments } = els();
+  if (!userAssignments) return;
+  const compare = !!state.permissionDiffCompareMode && !!lastUserCompare;
+  const data = compare
+    ? [lastUserCompare?.left, lastUserCompare?.right]
+    : [lastUserSingle];
+  if (!data.every(Boolean)) {
+    userAssignments.innerHTML = '';
+    userAssignments.classList.add('hidden');
+    return;
+  }
+  const assignments = new Map();
+  data.forEach((item, index) => {
+    for (const assignment of item.assignments || []) {
+      const key = `${assignment.type}:${String(assignment.name || '').toLocaleLowerCase()}`;
+      if (!assignments.has(key)) assignments.set(key, { type: assignment.type, name: assignment.name, present: [false, false] });
+      assignments.get(key).present[index] = true;
+    }
+  });
+  const rows = [...assignments.values()].sort((a, b) =>
+    `${a.type}:${a.name}`.localeCompare(`${b.type}:${b.name}`)
+  );
+  const userName = (index) => data[index]?.user?.name || data[index]?.user?.username || '';
+  const stateCell = (present) => `<span class="permission-diff-assignment-state ${present ? 'is-present' : 'is-absent'}">${escapeHtml(t(present ? 'permDiff.yes' : 'permDiff.no'))}</span>`;
+  const tableRows = rows.length ? rows.map((assignment) => `
+    <tr>
+      <td class="perm-diff-col-key">${escapeHtml(assignment.name)}</td>
+      <td>${escapeHtml(formatUserAssignmentType(assignment.type))}</td>
+      <td>${stateCell(assignment.present[0])}</td>
+      ${compare ? `<td>${stateCell(assignment.present[1])}</td>` : ''}
+    </tr>`).join('') : `
+    <tr><td colspan="${compare ? 4 : 3}" class="permission-diff-empty">${escapeHtml(t('permDiff.noAssignments'))}</td></tr>`;
+  userAssignments.innerHTML = `
+    <details class="permission-diff-user-assignment-details">
+      <summary>${escapeHtml(t('permDiff.userAssignments'))} <span>${rows.length}</span></summary>
+      <div class="permission-diff-user-assignment-table-wrap">
+        <table class="permission-diff-table permission-diff-user-assignment-table">
+          <thead><tr>
+            <th scope="col">${escapeHtml(t('permDiff.colAssignment'))}</th>
+            <th scope="col">${escapeHtml(t('permDiff.colContainerType'))}</th>
+            <th scope="col">${escapeHtml(userName(0))}</th>
+            ${compare ? `<th scope="col">${escapeHtml(userName(1))}</th>` : ''}
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </details>`;
+  userAssignments.classList.remove('hidden');
+}
+
+function renderUserPermissionSources(rec, section, userLabel) {
+  const sources = Array.isArray(rec?.sources) ? rec.sources : [];
+  const rows = sources.map((source) => `
+    <tr>
+      <td>${escapeHtml(source.name)}</td>
+      <td>${escapeHtml(formatUserAssignmentType(source.type))}</td>
+      <td class="perm-diff-flags-cell">${formatRowValue(source, section)}</td>
+    </tr>`).join('') || `
+    <tr><td colspan="3" class="permission-diff-empty">${escapeHtml(t('permDiff.noPermissionSource'))}</td></tr>`;
+  return `
+    <section class="permission-diff-permission-source-panel">
+      <p>${escapeHtml(userLabel)}</p>
+      <table class="permission-diff-permission-source-table">
+        <thead><tr>
+          <th scope="col">${escapeHtml(t('permDiff.colAssignment'))}</th>
+          <th scope="col">${escapeHtml(t('permDiff.colContainerType'))}</th>
+          <th scope="col">${escapeHtml(t('permDiff.colPermissions'))}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </section>`;
+}
+
+function renderUserPermissionDetails(left, right, section, compare) {
+  const leftUser = compare ? lastUserCompare?.left?.user : lastUserSingle?.user;
+  const rightUser = lastUserCompare?.right?.user;
+  const label = (user, fallback) => user?.name || user?.username || fallback;
+  const panels = [renderUserPermissionSources(left, section, label(leftUser, t('permDiff.colLeft')))];
+  if (compare) panels.push(renderUserPermissionSources(right, section, label(rightUser, t('permDiff.colRight'))));
+  return `<div class="permission-diff-permission-sources">${panels.join('')}</div>`;
+}
+
+function renderUserTable() {
+  const { tbody, empty, filter: filterEl } = els();
+  if (!tbody || !empty) return;
+  const filter = String(filterEl?.value || '').trim();
+  tbody.innerHTML = '';
+  let count = 0;
+  const compare = !!state.permissionDiffCompareMode && !!lastUserCompare;
+  const bundles = compare ? lastUserCompare?.bundle : lastUserSingle?.bundle;
+  for (const section of ['object', 'field', 'setup']) {
+    const data = bundles?.[sectionToBundleKey(section)];
+    const rows = compare ? data?.rows || [] : data || [];
+    for (const row of rows) {
+      if (compare && showDiffOnly && row.status === 'same') continue;
+      if (section === 'setup' ? !setupMatchesFilter(row, filter) : !matchesFilter(row.key, filter)) continue;
+      const tr = document.createElement('tr');
+      if (compare) tr.className = statusRowClass(row.status);
+      const left = compare ? row.left : row;
+      const right = compare ? row.right : null;
+      const keyCell = section === 'setup'
+        ? escapeHtml(compare ? setupRowDisplay(row) : setupEntityDisplay(row))
+        : escapeHtml(row.key);
+      const expandableKey = `<details class="permission-diff-permission-row-details">
+        <summary>${keyCell}</summary>
+        ${renderUserPermissionDetails(left, right, section, compare)}
+      </details>`;
+      tr.innerHTML = compare ? `
+        <td class="perm-diff-col-category">${escapeHtml(sectionLabel(section))}</td>
+        <td class="perm-diff-col-key">${expandableKey}</td>
+        <td>${statusLabel(row.status)}</td>
+        <td class="perm-diff-flags-cell">${formatRowValue(left, section)}</td>
+        <td class="perm-diff-flags-cell">${formatRowValue(right, section)}</td>` : `
+        <td class="perm-diff-col-category">${escapeHtml(sectionLabel(section))}</td>
+        <td class="perm-diff-col-key">${expandableKey}</td>
+        <td class="perm-diff-flags-cell">${formatRowValue(left, section)}</td>`;
+      tbody.appendChild(tr);
+      count += 1;
+    }
+  }
+  empty.hidden = count > 0;
+  if (!count) empty.textContent = t('permDiff.empty');
 }
 
 function renderResourceTable() {
@@ -740,6 +1013,11 @@ function repaint() {
     renderCustomPermTable(tbody, empty, String(filter?.value || '').trim(), showDiffOnly);
     return;
   }
+  if (isUserMode()) {
+    renderUserAssignments();
+    renderUserTable();
+    return;
+  }
   if (isResourceMode()) renderResourceTable();
   else renderContainerTable();
 }
@@ -773,11 +1051,31 @@ async function fetchAccessBundle(orgId, rt, resourceInput, containerFilter) {
   return buildAccessByResourceBundle({ grants: res.grants || [] });
 }
 
+async function fetchUserBundle(orgId, userId) {
+  const res = await bg({ type: 'permissionsDiff:fetchByUser', orgId, userId });
+  if (!res?.ok) {
+    const msg = res?.reason === 'NO_SID' ? t('toast.noSession') : res?.error || t('permDiff.fetchError');
+    throw new Error(msg);
+  }
+  return {
+    user: res.user || {},
+    assignments: res.assignments || [],
+    bundle: buildPermissionDiffBundle(res)
+  };
+}
+
 function clearResults() {
   lastCompare = null;
   lastSingle = null;
   lastAccessCompare = null;
   lastAccessSingle = null;
+  lastUserCompare = null;
+  lastUserSingle = null;
+  const { userAssignments } = els();
+  if (userAssignments) {
+    userAssignments.innerHTML = '';
+    userAssignments.classList.add('hidden');
+  }
   clearCustomPermResults();
 }
 
@@ -788,6 +1086,44 @@ async function runLoad() {
   }
   if (state.permissionDiffCompareMode && !state.rightOrgId) {
     setStatus(t('permDiff.selectRightOrg'), 'error');
+    return;
+  }
+
+  if (isUserMode()) {
+    if (!usersCommitActive() || !committedUserLeft || (state.permissionDiffCompareMode && !committedUserRight)) return;
+    hideSuggestions();
+    showToastWithSpinner(t('permDiff.loading'));
+    setStatus(t('permDiff.loading'));
+    clearResults();
+    try {
+      if (state.permissionDiffCompareMode) {
+        const [left, right] = await Promise.all([
+          fetchUserBundle(state.leftOrgId, committedUserLeft.id),
+          fetchUserBundle(state.rightOrgId, committedUserRight.id)
+        ]);
+        lastUserCompare = { bundle: comparePermissionBundles(left.bundle, right.bundle), left, right };
+      } else {
+        lastUserSingle = await fetchUserBundle(state.leftOrgId, committedUserLeft.id);
+      }
+      setStatus('');
+      showToast(t('permDiff.loaded'), 'success');
+      const rowCount = state.permissionDiffCompareMode
+        ? ['object', 'field', 'setup'].reduce(
+          (total, section) => total + (lastUserCompare?.bundle?.[sectionToBundleKey(section)]?.summary?.total ?? 0), 0)
+        : ['object', 'field', 'setup'].reduce(
+          (total, section) => total + (lastUserSingle?.bundle?.[sectionToBundleKey(section)]?.length ?? 0), 0);
+      void logPermissionDiffQuery({ queryDirection: 'user', name: committedUserLeft.name, section: 'effectiveUser', rowCount });
+      setResultsVisible(true);
+      repaint();
+    } catch (e) {
+      void handleToolError(e, { artifact_type: 'PermissionDiff', phase: 'user_query' });
+      setResultsVisible(false);
+      setStatus(String(e?.message || e), 'error');
+      showToast(String(e?.message || e), 'error');
+      repaint();
+    } finally {
+      dismissSpinnerToast();
+    }
     return;
   }
 
@@ -944,6 +1280,8 @@ export async function refreshPermissionDiffPanel() {
   }
   if (isCustomPermMode()) {
     if (!getCustomPermInput()) setStatus('');
+  } else if (isUserMode()) {
+    if (!getUserInput('left') || (state.permissionDiffCompareMode && !getUserInput('right'))) setStatus('');
   } else if (isResourceMode() ? !getResourceInput() : !getContainerName()) {
     setStatus('');
   }
@@ -957,6 +1295,18 @@ export function setupPermissionDiffPanel() {
     filter,
     diffOnly
   } = els();
+
+  for (const tab of document.querySelectorAll('[data-permission-diff-tab]')) {
+    tab.addEventListener('click', () => {
+      const next = tab.dataset.permissionDiffTab;
+      if (!['container', 'resource', 'customPermission', 'user'].includes(next)) return;
+      queryDirection = next;
+      hideSuggestions();
+      setStatus('');
+      syncDirectionUi();
+      repaint();
+    });
+  }
 
   if (toggle) {
     toggle.checked = !!state.permissionDiffCompareMode;
@@ -1028,6 +1378,27 @@ export function setupPermissionDiffPanel() {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => void runSearchSuggestions(), SEARCH_DEBOUNCE_MS);
   });
+
+  const bindUserInput = (side) => {
+    const input = side === 'right' ? els().userRightInput : els().userLeftInput;
+    input?.addEventListener('input', () => {
+      queryDirection = 'user';
+      syncDirectionUi();
+      invalidateUserCommit(side);
+      const q = getUserInput(side);
+      if (!q.length) {
+        hideSuggestions();
+        setStatus('');
+        return;
+      }
+      setStatus(t('permDiff.pickUserFromList'));
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => void runUserSearchSuggestions(side), SEARCH_DEBOUNCE_MS);
+    });
+    bindSearchInput(input);
+  };
+  bindUserInput('left');
+  bindUserInput('right');
 
   filter?.addEventListener('input', () => repaint());
 

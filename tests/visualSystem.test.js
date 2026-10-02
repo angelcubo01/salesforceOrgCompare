@@ -9,6 +9,7 @@ const expectedHtml = [
   'code/apex-log-viewer.html',
   'code/apex-source-viewer.html',
   'code/code.html',
+  'code/health-monitor.html',
   'popup/popup.html',
   'popup/settings.html'
 ];

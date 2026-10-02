@@ -89,6 +89,7 @@ import {
   fetchTrustMaintenanceDetailForOrg,
   invalidateDescribeCacheForOrg
 } from './environmentStatus.js';
+import { fetchHealthMonitorContext, runHealthMonitorSection } from './healthMonitor.js';
 import { pollDeployStatus, fetchDeployDetail, cancelDeployRequest } from '../shared/deployStatusApi.js';
 import { fetchApexClassSource } from '../shared/apexClassSource.js';
 import { resolveDeployCoverageLineSets } from '../shared/apexCoverageLines.js';
@@ -224,6 +225,8 @@ import { formatMetadataApiVersion } from '../shared/metadataApiVersion.js';
 import {
   fetchPermissionContainerData,
   searchPermissionContainers,
+  searchPermissionUsers,
+  fetchPermissionUserData,
   fetchAccessByResource,
   searchPermissionResources,
   searchCustomPermissions,
@@ -1923,6 +1926,32 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'healthMonitor:context': {
+            const orgId = String(message.orgId || '');
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) { reply({ ok: false, error: 'Org not saved' }); break; }
+            try {
+              reply(await fetchHealthMonitorContext(org));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'healthMonitor:runSection': {
+            const orgId = String(message.orgId || '');
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) { reply({ ok: false, error: 'Org not saved' }); break; }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              reply(await runHealthMonitorSection(org, sid, String(message.sectionId || ''), String(message.locale || 'es')));
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
           case 'api:listVersions': {
             const { orgId } = message;
             const saved = await loadSavedOrgs();
@@ -2879,6 +2908,58 @@ export function installMessageHandlers() {
                 objectApiName
               );
               reply({ ok: true, items });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'permissionsDiff:searchUser': {
+            const { orgId, queryText } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const items = await searchPermissionUsers(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                queryText
+              );
+              reply({ ok: true, items });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'permissionsDiff:fetchByUser': {
+            const { orgId, userId } = message;
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const data = await fetchPermissionUserData(
+                org.instanceUrl,
+                sid,
+                org.apiVersion,
+                userId
+              );
+              reply({ ok: true, ...data });
             } catch (e) {
               replyHandlerError(reply, e);
             }

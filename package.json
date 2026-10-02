@@ -58,7 +58,9 @@
     "wrangler": "^4.110.0"
   },
   "dependencies": {
+    "dompurify": "^3.4.16",
     "driver.js": "1.8.0",
+    "jspdf": "^4.2.1",
     "vanilla-calendar-pro": "^3.3.2"
   }
 }

@@ -65,6 +65,16 @@ const FIELD_PERMISSIONS_SOQL = `SELECT SobjectType, Field, PermissionsRead, Perm
 
 const SETUP_ENTITY_SOQL = `SELECT SetupEntityType, SetupEntityId FROM SetupEntityAccess WHERE `;
 
+const USER_OBJECT_PERMISSIONS_SOQL = `SELECT ParentId, SobjectType,
+  PermissionsCreate, PermissionsRead, PermissionsEdit, PermissionsDelete,
+  PermissionsViewAllRecords, PermissionsModifyAllRecords
+  FROM ObjectPermissions WHERE `;
+
+const USER_FIELD_PERMISSIONS_SOQL = `SELECT ParentId, SobjectType, Field, PermissionsRead, PermissionsEdit
+  FROM FieldPermissions WHERE `;
+
+const USER_SETUP_ENTITY_SOQL = `SELECT ParentId, SetupEntityType, SetupEntityId FROM SetupEntityAccess WHERE `;
+
 /**
  * Consulta SOQL por tipo de entidad de setup para resolver Id → nombre legible.
  * @type {Record<string, { object: string, nameField: string, altNameField?: string }>}
@@ -413,6 +423,186 @@ export async function searchPermissionContainers(instanceUrl, sid, apiVersion, c
     name: r.Name,
     containerType: 'PermissionSet'
   }));
+}
+
+/** Busca usuarios activos por nombre o username para el análisis de acceso efectivo. */
+export async function searchPermissionUsers(instanceUrl, sid, apiVersion, queryText) {
+  const q = String(queryText || '').trim();
+  if (!q.length) return [];
+  const like = soqlLikePattern(q);
+  const rows =
+    (await restQuery(
+      instanceUrl,
+      sid,
+      apiVersion,
+      `SELECT Id, Name, Username, Profile.Name FROM User
+       WHERE IsActive = true AND (Name LIKE '${like}' OR Username LIKE '${like}')
+       ORDER BY Name LIMIT 40`
+    )) || [];
+  return rows.map((row) => ({
+    id: row.Id,
+    name: row.Name,
+    username: row.Username,
+    profileName: row.Profile?.Name || ''
+  }));
+}
+
+/**
+ * Devuelve los permisos efectivos de un usuario.
+ * Incluye su perfil, los permission sets asignados directamente y los miembros
+ * de los permission set groups asignados. Las asignaciones se mantienen para
+ * poder mostrarlas en UI, pero los permisos se devuelven ya unidos.
+ */
+export async function fetchPermissionUserData(instanceUrl, sid, apiVersion, userId) {
+  const id = String(userId || '').trim();
+  if (!id) throw new Error('User must be selected from the list');
+  const userRows =
+    (await restQuery(
+      instanceUrl,
+      sid,
+      apiVersion,
+      `SELECT Id, Name, Username, ProfileId, Profile.Name FROM User WHERE Id = '${escapeSoqlLiteral(id)}' LIMIT 1`
+    )) || [];
+  const user = userRows[0];
+  if (!user?.Id) throw new Error('User not found');
+
+  const assignments = [];
+  const permissionSetIds = new Set();
+  /** @type {Map<string, { type: string, name: string }[]>} */
+  const sourcesByPermissionSetId = new Map();
+  const addPermissionSetSource = (permissionSetId, source) => {
+    if (!permissionSetId || !source?.name) return;
+    permissionSetIds.add(permissionSetId);
+    if (!sourcesByPermissionSetId.has(permissionSetId)) sourcesByPermissionSetId.set(permissionSetId, []);
+    const sources = sourcesByPermissionSetId.get(permissionSetId);
+    if (!sources.some((item) => item.type === source.type && item.name === source.name)) sources.push(source);
+  };
+  if (user.ProfileId) {
+    const profileSets =
+      (await restQuery(
+        instanceUrl,
+        sid,
+        apiVersion,
+        `SELECT Id FROM PermissionSet WHERE IsOwnedByProfile = true AND ProfileId = '${escapeSoqlLiteral(user.ProfileId)}' LIMIT 1`
+    )) || [];
+    for (const profileSet of profileSets) {
+      addPermissionSetSource(profileSet.Id, { type: 'Profile', name: user.Profile?.Name || '' });
+    }
+    assignments.push({ type: 'Profile', name: user.Profile?.Name || '', id: user.ProfileId });
+  }
+
+  const psaRows =
+    (await restQueryAll(
+      instanceUrl,
+      sid,
+      apiVersion,
+      `SELECT PermissionSetId, PermissionSet.Name, PermissionSet.Label, PermissionSet.IsOwnedByProfile, PermissionSet.Type,
+        PermissionSetGroupId, PermissionSetGroup.DeveloperName, PermissionSetGroup.MasterLabel
+       FROM PermissionSetAssignment WHERE AssigneeId = '${escapeSoqlLiteral(user.Id)}'`
+    )) || [];
+
+  const groupIds = new Set();
+  for (const assignment of psaRows) {
+    if (assignment.PermissionSetGroupId) {
+      assignments.push({
+        type: 'PermissionSetGroup',
+        name: assignment.PermissionSetGroup?.MasterLabel || assignment.PermissionSetGroup?.DeveloperName || '',
+        id: assignment.PermissionSetGroupId
+      });
+      // Salesforce mantiene un PermissionSet calculado de tipo Group. Es el
+      // que refleja también los muting permission sets; sólo se descompone el
+      // grupo como compatibilidad si la API no lo devuelve.
+      if (assignment.PermissionSetId && assignment.PermissionSet?.Type === 'Group') {
+        addPermissionSetSource(assignment.PermissionSetId, {
+          type: 'PermissionSetGroup',
+          name: assignment.PermissionSetGroup?.MasterLabel || assignment.PermissionSetGroup?.DeveloperName || ''
+        });
+      } else {
+        groupIds.add(assignment.PermissionSetGroupId);
+      }
+      continue;
+    }
+    if (assignment.PermissionSetId && !assignment.PermissionSet?.IsOwnedByProfile) {
+      addPermissionSetSource(assignment.PermissionSetId, {
+        type: 'PermissionSet',
+        name: assignment.PermissionSet?.Label || assignment.PermissionSet?.Name || ''
+      });
+      assignments.push({
+        type: 'PermissionSet',
+        name: assignment.PermissionSet?.Label || assignment.PermissionSet?.Name || '',
+        id: assignment.PermissionSetId
+      });
+    }
+  }
+
+  if (groupIds.size) {
+    const groupSourceById = new Map(
+      psaRows
+        .filter((assignment) => assignment.PermissionSetGroupId)
+        .map((assignment) => [
+          assignment.PermissionSetGroupId,
+          {
+            type: 'PermissionSetGroup',
+            name: assignment.PermissionSetGroup?.MasterLabel || assignment.PermissionSetGroup?.DeveloperName || ''
+          }
+        ])
+    );
+    for (const chunk of chunkIds([...groupIds])) {
+      const groupList = chunk.map((groupId) => `'${escapeSoqlLiteral(groupId)}'`).join(',');
+      const components =
+        (await restQueryAll(
+          instanceUrl,
+          sid,
+          apiVersion,
+          `SELECT PermissionSetGroupId, PermissionSetId FROM PermissionSetGroupComponent WHERE PermissionSetGroupId IN (${groupList})`
+        )) || [];
+      for (const component of components) {
+        addPermissionSetSource(component.PermissionSetId, groupSourceById.get(component.PermissionSetGroupId));
+      }
+    }
+  }
+
+  const parentIds = [...permissionSetIds];
+  let objectPermissions = [];
+  let fieldPermissions = [];
+  let setupRows = [];
+  for (const chunk of chunkIds(parentIds)) {
+    const parentList = chunk.map((parentId) => `'${escapeSoqlLiteral(parentId)}'`).join(',');
+    const [objects, fields, setup] = await Promise.all([
+      restQueryAll(instanceUrl, sid, apiVersion, `${USER_OBJECT_PERMISSIONS_SOQL}ParentId IN (${parentList})`),
+      restQueryAll(instanceUrl, sid, apiVersion, `${USER_FIELD_PERMISSIONS_SOQL}ParentId IN (${parentList})`),
+      restQueryAll(instanceUrl, sid, apiVersion, `${USER_SETUP_ENTITY_SOQL}ParentId IN (${parentList})`)
+    ]);
+    objectPermissions = objectPermissions.concat(objects || []);
+    fieldPermissions = fieldPermissions.concat(fields || []);
+    setupRows = setupRows.concat(setup || []);
+  }
+
+  const withSources = (rows) => (rows || []).map((row) => ({
+    ...row,
+    sources: (sourcesByPermissionSetId.get(row.ParentId) || []).map((source) => ({
+      ...source,
+      PermissionsCreate: !!row.PermissionsCreate,
+      PermissionsRead: !!row.PermissionsRead,
+      PermissionsEdit: !!row.PermissionsEdit,
+      PermissionsDelete: !!row.PermissionsDelete,
+      PermissionsViewAllRecords: !!row.PermissionsViewAllRecords,
+      PermissionsModifyAllRecords: !!row.PermissionsModifyAllRecords
+    }))
+  }));
+  objectPermissions = withSources(objectPermissions);
+  fieldPermissions = withSources(fieldPermissions);
+  setupRows = withSources(setupRows);
+
+  const setupEntityAccess = await enrichSetupEntityAccessNames(instanceUrl, sid, apiVersion, setupRows);
+  const uniqueAssignments = [...new Map(assignments.filter((item) => item.name).map((item) => [`${item.type}:${item.id}`, item])).values()];
+  return {
+    user: { id: user.Id, name: user.Name, username: user.Username, profileName: user.Profile?.Name || '' },
+    assignments: uniqueAssignments,
+    objectPermissions,
+    fieldPermissions,
+    setupEntityAccess: setupEntityAccess || []
+  };
 }
 
 /**

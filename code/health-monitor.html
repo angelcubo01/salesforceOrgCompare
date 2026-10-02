@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es" data-sfoc-document="health-monitor">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Environment Analysis · Salesforce Org Compare</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="../icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="../icons/icon-16.png" />
+    <link rel="stylesheet" href="./health-monitor.css" />
+    <link rel="stylesheet" href="../shared/sfoc-design-system.css" />
+  </head>
+  <body>
+    <header class="hm-toolbar">
+      <button type="button" id="hmBack" class="hm-back">← <span id="hmBackText">Volver</span></button>
+      <img src="../icons/icon-32.png" width="28" height="28" alt="" aria-hidden="true" />
+      <div class="hm-title-wrap"><strong><span id="hmTitle">Environment Analysis</span><span class="hm-beta-badge">BETA</span></strong><span id="hmOrgLabel">Cargando entorno…</span></div>
+      <button type="button" id="hmRunAgain" class="hm-run-again" hidden>Reejecutar análisis</button>
+      <button type="button" id="hmExportPdf" class="hm-export-pdf" hidden>Generar documento PDF</button>
+    </header>
+    <main id="healthMonitorRoot" class="hm-page" aria-live="polite"></main>
+    <script src="../vendor/jspdf/jspdf.umd.min.js"></script>
+    <script type="module" src="./health-monitor.js"></script>
+  </body>
+</html>
