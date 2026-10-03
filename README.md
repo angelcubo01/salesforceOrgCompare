@@ -10,7 +10,7 @@
 
 [Website](https://salesforceorgcompare.com/) · [Privacy](PRIVACY.md) · Built for admins, developers, and release managers who live in multiple orgs every day.
 
-![Salesforce Org Compare — multi-org, browser session, no CLI](media/readme/hero-marketing.png)
+![Salesforce Org Compare — multi-org, browser session, no CLI](media/readme/hero-marketing-v2.png)
 
 ---
 

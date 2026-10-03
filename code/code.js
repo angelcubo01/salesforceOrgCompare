@@ -65,7 +65,12 @@ import {
   refreshDependencyExplorerPanel
 } from './ui/dependencyExplorerPanel.js';
 import { setupApexTestsPanel, refreshApexTestsPanel } from './ui/apexTestsPanel.js';
-import { setupAnonymousApexPanel, refreshAnonymousApexPanel, openAnonymousApexSavedScript } from './ui/anonymousApexPanel.js';
+import {
+  setupAnonymousApexPanel,
+  refreshAnonymousApexPanel,
+  openAnonymousApexInMonaco,
+  openAnonymousApexSavedScript
+} from './ui/anonymousApexPanel.js';
 import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
 import {
   setupEnvironmentStatusPanel,
@@ -312,8 +317,13 @@ async function init() {
   setupMetadataTypeComparePanel();
   setupApexTestsPanel();
   setupAnonymousApexPanel();
-  const savedScriptId = new URLSearchParams(window.location.search).get('savedScript');
-  if (savedScriptId) void openAnonymousApexSavedScript(savedScriptId);
+  const savedScriptId = startupParams.get('savedScript');
+  const openPaletteAnonymousApex = startupParams.get('paletteAnonymousApex') === '1';
+  if (savedScriptId) {
+    await openAnonymousApexSavedScript(savedScriptId);
+  } else if (openPaletteAnonymousApex) {
+    await openAnonymousApexInMonaco();
+  }
   setupOrgLimitsPanel();
   setupEnvironmentStatusPanel();
   setupDeployStatusPanel();

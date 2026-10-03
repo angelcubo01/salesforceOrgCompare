@@ -1,6 +1,6 @@
 import { listAllNavTools } from '../../code/ui/appModeNav.js';
 import { QUICK_LINK_ICONS, TOOL_ICONS, createIcon } from '../../code/workbench/iconRegistry.js';
-import { openSfocModal } from '../../code/ui/sfocModal.js';
+import { confirmSfocToolAction, openSfocModal } from '../../code/ui/sfocModal.js';
 import { bootstrapFeatureControls } from '../../shared/posthogFeatureControlsFlag.js';
 import {
   SF_INJECT_GLOBAL_QUICK_LINKS_KEY,
@@ -551,8 +551,23 @@ export async function openQuickLinksSettingsModal(translate, opts = {}) {
       });
       const remove = compactButton('×', translate('settings.sfInjectQuickLinksRemove'));
       remove.classList.add('settings-quick-links-icon-btn--danger');
-      remove.addEventListener('click', () => {
-        links.splice(index, 1);
+      remove.addEventListener('click', async () => {
+        if (selectedOrgId === SF_INJECT_GLOBAL_QUICK_LINKS_KEY) {
+          const confirmed = await confirmSfocToolAction(
+            translate('settings.sfInjectQuickLinksRemoveGlobalConfirm', { name: title.textContent || '' }),
+            translate('settings.sfInjectQuickLinksRemoveGlobalAction'),
+            { title: translate('settings.sfInjectQuickLinksRemoveGlobalTitle') }
+          );
+          if (!confirmed) return;
+          for (const linksInScope of Object.values(draft)) {
+            if (!Array.isArray(linksInScope)) continue;
+            for (let itemIndex = linksInScope.length - 1; itemIndex >= 0; itemIndex -= 1) {
+              if (linksInScope[itemIndex].id === link.id) linksInScope.splice(itemIndex, 1);
+            }
+          }
+        } else {
+          links.splice(index, 1);
+        }
         if (expandedLinkId === link.id) expandedLinkId = '';
         render();
       });

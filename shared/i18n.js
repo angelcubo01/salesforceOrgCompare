@@ -608,6 +608,10 @@ const translations = {
     'settings.sfInjectQuickLinksDrag': 'Arrastra para reordenar',
     'settings.sfInjectQuickLinksConfigureItem': 'Configurar enlace',
     'settings.sfInjectQuickLinksRemove': 'Eliminar enlace',
+    'settings.sfInjectQuickLinksRemoveGlobalTitle': 'Eliminar enlace global',
+    'settings.sfInjectQuickLinksRemoveGlobalConfirm':
+      'Eliminarás "{name}" de Global y de todos los entornos en los que se haya aplicado.',
+    'settings.sfInjectQuickLinksRemoveGlobalAction': 'Eliminar de todos',
     'settings.sfInjectQuickLinksName': 'Nombre',
     'settings.sfInjectQuickLinksTool': 'Herramienta SFOC',
     'settings.sfInjectQuickLinksUrl': 'URL',
@@ -3699,6 +3703,10 @@ const translations = {
     'settings.sfInjectQuickLinksDrag': 'Drag to reorder',
     'settings.sfInjectQuickLinksConfigureItem': 'Configure link',
     'settings.sfInjectQuickLinksRemove': 'Remove link',
+    'settings.sfInjectQuickLinksRemoveGlobalTitle': 'Remove global link',
+    'settings.sfInjectQuickLinksRemoveGlobalConfirm':
+      'You will remove "{name}" from Global and from every environment where it was applied.',
+    'settings.sfInjectQuickLinksRemoveGlobalAction': 'Remove from all',
     'settings.sfInjectQuickLinksName': 'Name',
     'settings.sfInjectQuickLinksTool': 'SFOC tool',
     'settings.sfInjectQuickLinksUrl': 'URL',

@@ -385,9 +385,19 @@ export async function handleSfInjectMessage(message, sender) {
       const resolved = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
       if (!orgId || !resolved.ok || resolved.orgId !== orgId) return { ok: false, reason: 'ORG_NOT_SAVED' };
       if (message.target === 'tool') {
-        const url = buildSfocQuickLinkUrl(String(message.toolId || ''), orgId);
+        const toolId = String(message.toolId || '');
+        const url = buildSfocQuickLinkUrl(toolId, orgId);
         if (!url) return { ok: false, reason: 'INVALID_TOOL' };
-        await openInSenderTab(sender, url, openInNewTab);
+        // Anonymous Apex necesita montar Monaco explícitamente cuando viene de
+        // la paleta, sin depender de la restauración asíncrona de la sesión.
+        const targetUrl = toolId === 'AnonymousApex'
+          ? (() => {
+              const next = new URL(url);
+              next.searchParams.set('paletteAnonymousApex', '1');
+              return next.href;
+            })()
+          : url;
+        await openInSenderTab(sender, targetUrl, openInNewTab);
         return { ok: true, opened: true };
       }
       if (message.target === 'file') {

@@ -5,6 +5,7 @@ import {
   buildCustomQuickLinkUrl,
   buildSfocQuickLinkUrl
 } from '../../lib/quickLinkNavigation.js';
+import { SFOC_QUICK_LINK_ICON_PATHS, resolveQuickLinkIcon } from '../../lib/quickLinkIcons.js';
 
 export { buildCustomQuickLinkUrl, buildSfocQuickLinkUrl } from '../../lib/quickLinkNavigation.js';
 
@@ -50,7 +51,8 @@ function createQuickLinkIcon(doc, iconName, color) {
   icon.setAttribute('aria-hidden', 'true');
   icon.style.setProperty('--quick-link-color', validQuickLinkColor(color));
   const safeIcon = String(iconName || 'link').replace(/[^a-z0-9-]/gi, '') || 'link';
-  for (const pathData of INLINE_ICON_PATHS[safeIcon] || INLINE_ICON_PATHS.link) {
+  const paths = SFOC_QUICK_LINK_ICON_PATHS[safeIcon] || INLINE_ICON_PATHS[safeIcon] || INLINE_ICON_PATHS.link;
+  for (const pathData of paths) {
     const path = doc.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', pathData);
     icon.appendChild(path);
@@ -124,7 +126,7 @@ function createQuickLinksMenu(doc, links, ctx) {
       });
     }
     option.setAttribute('role', 'menuitem');
-    option.appendChild(createQuickLinkIcon(doc, link.icon, link.color));
+    option.appendChild(createQuickLinkIcon(doc, resolveQuickLinkIcon(link), link.color));
     const text = doc.createElement('span');
     text.className = 'sfoc-quick-links-menu-text';
     const label = doc.createElement('strong');

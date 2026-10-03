@@ -1010,6 +1010,24 @@ export async function openAnonymousApexSavedScript(scriptId) {
   return true;
 }
 
+/** Garantiza que Anonymous Apex queda cargado y con foco en Monaco. */
+export async function openAnonymousApexInMonaco() {
+  const editor = await ensureEditor();
+  if (!editor) return false;
+
+  renderDocTabs();
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+  try {
+    editor.layout();
+    editor.focus();
+  } catch {
+    /* ignore */
+  }
+  return true;
+}
+
 export async function refreshAnonymousApexPanel() {
   const orgStatus = document.getElementById('anonymousApexOrgStatus');
   const toggle = document.getElementById('anonymousApexCompareToggle');

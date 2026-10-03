@@ -27,6 +27,7 @@ import {
   buildSfocQuickLinkUrl,
   hasConfiguredQuickLinks
 } from '../sfInject/content/injectors/quickLinksTestButton.js';
+import { SFOC_QUICK_LINK_ICON_PATHS, resolveQuickLinkIcon } from '../sfInject/lib/quickLinkIcons.js';
 
 describe('isApexDebugLogsHomePage', () => {
   it('matches Lightning Setup Debug Logs home', () => {
@@ -217,6 +218,16 @@ describe('Quick links injection guard', () => {
       if (originalChrome === undefined) delete globalThis.chrome;
       else globalThis.chrome = originalChrome;
     }
+  });
+
+  it('uses the SFOC tool icon in the Salesforce menu, including legacy links', () => {
+    for (const [toolId, expectedIcon] of Object.entries({
+      DeployStatus: 'rocket', DebugLogBrowser: 'file-search', AnonymousApex: 'terminal-2'
+    })) {
+      const icon = resolveQuickLinkIcon({ type: 'sfoc', toolId, icon: 'link' });
+      expect(icon).toBe(expectedIcon);
+    }
+    expect(SFOC_QUICK_LINK_ICON_PATHS['file-search']).toBeTruthy();
   });
 });
 
