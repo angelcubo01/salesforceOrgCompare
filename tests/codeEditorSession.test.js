@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   codeEditorSessionOrgMismatch,
   commitTabContentAsSaved,
+  createTabId,
   ensureUniqueEditorTabIds,
   hasBundleTabLocalSave,
   hasTabLocalSave,
@@ -15,6 +16,14 @@ import {
 import * as extensionSettings from '../shared/extensionSettings.js';
 
 describe('codeEditorSession', () => {
+  it('crea ids de pestaña únicos con el prefijo solicitado', () => {
+    const first = createTabId('apex');
+    const second = createTabId('apex');
+    expect(first).toMatch(/^apex_[a-f0-9]+$/i);
+    expect(second).toMatch(/^apex_[a-f0-9]+$/i);
+    expect(first).not.toBe(second);
+  });
+
   it('isTabContentDirty detecta cambios respecto al baseline', () => {
     expect(isTabContentDirty('a', 'a')).toBe(false);
     expect(isTabContentDirty('b', 'a')).toBe(true);

@@ -1,6 +1,7 @@
 /** @typedef {'QuickEdit' | 'LightningQuickEdit' | 'AnonymousApex'} CodeEditorTool */
 
 import { getCodeEditorPersistenceEnabled, getCodeEditorMaxTabs } from '../../shared/extensionSettings.js';
+import { randomStagingId } from '../../shared/randomId.js';
 
 export const CODE_EDITOR_SESSION_KEYS = Object.freeze({
   QuickEdit: 'sfocQuickEditSession',
@@ -31,7 +32,7 @@ export const MAX_CODE_EDITOR_TABS = 15;
  * @returns {string}
  */
 export function createTabId(prefix = 'tab') {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  return randomStagingId(`${prefix}_`);
 }
 
 /**
