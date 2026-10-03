@@ -10,7 +10,7 @@ The extension communicates **only between your browser and Salesforce** for org 
 
 **Exception — Logi AI advisor (optional, Beta):** When you use the Apex log AI advisor, log excerpts and chat messages you send are transmitted to **OpenRouter** (directly with your own API key, or via our Cloudflare Worker proxy for free-tier models). Beta access may require membership in a PostHog cohort identified by your installation ID (Settings → About). You can request access from [salesforceorgcompare.com/solicitar-acceso-logi](https://salesforceorgcompare.com/solicitar-acceso-logi/).
 
-**Coming soon — Salesforce UI integration:** Optional content scripts may inject SFOC actions into Salesforce Setup/Lightning pages (local DOM only; opt-in in Settings; saved orgs only). See the full privacy policy for planned details.
+**Salesforce UI Integration (optional, Beta):** When you enable individual integrations in Settings, content scripts can add local SFOC controls to compatible Salesforce Setup and Lightning pages. They inspect only the URL and DOM needed to locate the supported table, row ID, Apex class reference, Setup path, or a configured Quick Link. The integration requires an opt-in master switch and individual capability toggles. Actions that access Salesforce data require a saved org and an active Salesforce session; the deployment source-link UI may be shown before a target org is selected. Page content is not sent to third parties by this feature.
 
 ## Session authentication
 
@@ -26,6 +26,7 @@ The following may be stored in `chrome.storage.local` on your device:
 - UI settings (theme, language, layout)
 - Locally cached metadata and comparison state
 - Extension configuration (export/import supported from settings)
+- Salesforce UI Integration settings, including enabled capabilities, Trace Flag filter preference, Setup Command Palette shortcut, and optional Quick Links
 - Optional BYOK OpenRouter API keys for Logi (if you configure them)
 
 Short-lived JWT session tokens for the Logi proxy may be stored in `chrome.storage.session` (cleared when the browser session ends). Legacy shared proxy tokens are no longer stored in the extension.
@@ -53,8 +54,8 @@ Session replay may be enabled remotely via PostHog feature flags for a subset of
 | Permission | Why |
 |------------|-----|
 | `cookies` | Read Salesforce session for API calls |
-| `storage` | Save org list, preferences, and local cache |
-| `tabs` | Detect the active Salesforce org from the current tab |
+| `storage` | Save org list, preferences, local cache, and optional UI-integration settings |
+| `tabs` | Detect the active Salesforce org from the current tab and open SFOC viewers from optional UI integrations |
 | `alarms` | Background refresh and scheduled tasks |
 | `notifications` | Optional status notifications |
 

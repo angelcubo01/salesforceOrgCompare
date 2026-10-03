@@ -24,7 +24,7 @@ The product’s differentiator is that it reuses an existing Salesforce browser 
 
 ## Operating Context
 
-The product is used in Chrome while the user is already signed into Salesforce. Users save orgs with aliases and groups, compare them inside the extension app, and can optionally integrate with Salesforce Setup pages for direct navigation into debug log workflows. The extension stores local preferences and saved org data in browser storage and supports optional telemetry and AI-assisted features.
+The product is used in Chrome while the user is already signed into Salesforce. Users save orgs with aliases and groups, compare them inside the extension app, and can optionally extend compatible Salesforce Setup and Lightning pages with SFOC actions. The opt-in UI integration supports Debug Logs, User Trace Flags, deployment diagnostics and source navigation, Quick Links, and a Setup Command Palette. The extension stores local preferences and saved org data in browser storage and supports optional telemetry and AI-assisted features.
 
 ## Capabilities and Constraints
 
@@ -32,7 +32,8 @@ Confirmed capabilities include:
 
 - Compare metadata and code across saved Salesforce orgs
 - Inspect Apex tests, coverage, logs, source, and related developer workflows
-- Open log and setup-related workflows from Salesforce Setup pages when UI integration is enabled
+- Open native Setup Debug Logs in SFOC; improve User Trace Flags; inspect failed deployments inline and navigate to Apex source from supported deployment pages when UI integration is enabled
+- Open configured SFOC tools or same-org paths from Lightning Quick Links, and search Setup pages, saved scripts, configured links, and SFOC tools through the Setup Command Palette
 - Export comparison results to HTML and persist compared items locally between sessions
 - Offer optional AI-assisted log analysis through Logi, which is opt-in and can use either a secure proxy or a user-provided OpenRouter key
 
@@ -41,6 +42,7 @@ Confirmed constraints include:
 - The product depends on the user’s existing Salesforce browser session and relevant Salesforce domain access
 - The extension is designed for Chrome/Chromium and uses Manifest V3
 - Some advanced features are optional and may require user opt-in or additional configuration
+- UI integrations are individually opt-in; operations against Salesforce data require an active browser session and, except for DOM-only affordances, a saved org
 - The product is a third-party tool and is not affiliated with or endorsed by Salesforce
 
 ## Brand Commitments

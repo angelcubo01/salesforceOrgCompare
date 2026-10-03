@@ -56,11 +56,41 @@ Access is invite-only during beta — [request access](https://salesforceorgcomp
 
 ![Debug flow: Apex log → parse & analyze → Logi](media/readme/flow-debug-logi.png)
 
-### Open logs from Salesforce Setup
+### Salesforce UI Integration ![Beta](https://img.shields.io/badge/Beta-0176d3)
 
-Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFOC. Opt-in in Settings; only for saved orgs with an active session.
+Bring SFOC into the Salesforce pages where you work. Enable the master switch and the capabilities you want in **Settings → Salesforce UI Integration**. Each capability is opt-in; actions that use Salesforce data require a saved org and an active Salesforce session. The deployment-source links can still be displayed before you select a saved target org.
+
+#### Debug Logs, ready for analysis
+
+Open a native Setup Debug Log in the SFOC Apex Log Viewer with one click. On the same page, place Debug Logs above User Trace Flags to reduce scrolling.
 
 ![Setup Debug Logs → Open in SFOC](media/readme/flow-sf-inject.png)
+
+#### Keep User Trace Flags useful
+
+Show the active and recently expired traces that matter, and extend or reactivate an eligible trace without leaving Setup.
+
+![Salesforce User Trace Flags → SFOC enhancements](media/readme/flow-sf-trace-flags.png)
+
+#### Understand failed deployments where they happen
+
+Expand failed deployments for inline component and test errors. From the status page or the deployment-detail page, choose a saved org and Ctrl/Cmd-click an Apex reference to open its source in SFOC.
+
+![Salesforce Deployment Status → SFOC diagnostics](media/readme/flow-sf-deployments.png)
+
+#### From deployment error to Apex source
+
+On the deployment-detail page, select a saved org and Ctrl/Cmd-click a component, test, or stack-trace reference to open the relevant class directly in SFOC.
+
+![Salesforce Deployment detail → SFOC Apex source](media/readme/flow-sf-deployment-source.png)
+
+#### Your SFOC tools from any Lightning page
+
+Add personal Quick Links in the global Lightning header for SFOC tools or same-org custom paths. Use the configurable Setup Command Palette shortcut (default `Ctrl+K`) to search Setup pages, configured links, saved scripts, and SFOC tools.
+
+![Salesforce Lightning → SFOC Quick Links](media/readme/flow-sf-quick-links.png)
+
+![Salesforce Setup → SFOC Command Palette](media/readme/flow-sf-setup-palette.png)
 
 > **Trademark notice:** Salesforce Org Compare is a third-party tool and is not affiliated with or endorsed by Salesforce, Inc.
 
@@ -78,6 +108,7 @@ Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFO
 **Technical**
 
 - [Security and Privacy](#security-and-privacy)
+- [Technical Architecture](#technical-architecture)
 - [Installation](#installation)
 - [Troubleshooting](#troubleshooting)
 - [Contributions](#contributions)
@@ -99,29 +130,36 @@ Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFO
 - Support for Apex, LWC, Aura, Visualforce, Permission Sets, Profiles, FlexiPages, and more
 - Persist compared items locally between sessions
 
+### Workbench & productivity
+
+- Optional Workbench navigation with Home, favorites, recent tools, contextual actions, and guided onboarding
+- Command palette to jump to tools, metadata, and saved scripts with `Ctrl/Cmd+K`
+- Saved SOQL/SOSL queries, Anonymous Apex scripts, Apex test profiles, and pinned work items
+- Backup and restore for orgs, preferences, favorites, saved work, queries, scripts, and test profiles
+
 ### Development
 
 | Tool | Description |
 |------|-------------|
-| **Apex Tests** | Run and manage Apex test jobs |
-| **Apex Coverage Compare** | Compare code coverage between orgs |
-| **Quick Edit** | Edit and deploy Apex classes |
-| **Lightning Quick Edit** | Deploy Lightning bundles |
-| **Anonymous Apex** | Execute anonymous Apex |
-| **Query Explorer** | Build and run SOQL queries |
+| **Apex Tests** | Run tests, manage jobs and reuse named test profiles |
+| **Apex Coverage Compare** | Compare coverage between orgs and inspect covered lines |
+| **Quick Edit** | Retrieve, edit, validate, and deploy Apex or Visualforce source |
+| **Lightning Quick Edit** | Retrieve, edit, validate, and deploy LWC and Aura bundles |
+| **Anonymous Apex** | Execute and keep reusable Anonymous Apex scripts |
+| **Query Explorer** | Build, run, save, and share SOQL or SOSL queries |
 | **REST Explorer** | Interact with Salesforce REST APIs |
-| **Debug Log Browser** | Browse and filter debug logs |
+| **Debug Log Browser** | Browse logs, manage traces, and open detailed analysis |
 | **Event Monitor** | Subscribe to Platform Events in real time |
 
 ### Analysis
 
 | Tool | Description |
 |------|-------------|
-| **Field Dependency** | Explore field dependencies |
-| **Dependency Explorer** | Analyze metadata dependencies |
+| **Field Dependency** | Explore dependent-picklist relationships |
+| **Dependency Explorer** | Analyze metadata dependencies and their graph |
 | **Permission Diff** | Compare permission sets and profiles |
 | **Object Describe** | Inspect object and field metadata |
-| **Data Workbench** | Import, export, and edit records |
+| **Data Workbench** | Create and edit records, plus import CSV data |
 | **Custom Settings Compare** | Diff custom settings across orgs |
 | **Custom Metadata Compare** | Diff custom metadata types |
 | **Record Compare** | Compare individual records |
@@ -130,8 +168,8 @@ Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFO
 
 | Tool | Description |
 |------|-------------|
-| **Environment Status** | Trust status and instance health |
-| **Org Limits** | View org limits and usage |
+| **Environment Status** | Review Trust status, instance health, and environment signals |
+| **Org Limits** | Review org limits, consumption, and warning thresholds |
 | **Deploy Status** | Track metadata deployments |
 | **Bulk Job Monitor** | Monitor bulk API jobs |
 | **Setup Audit Trail** | Review setup change history |
@@ -153,18 +191,19 @@ Optional **Salesforce UI Integration**: one click from Setup Debug Logs into SFO
 
 ### Salesforce UI Integration (`sfInject`)
 
-- Opt-in in Settings → Salesforce UI Integration
-- **Open in SFOC** on Apex Debug Logs (Lightning Setup and Classic list)
-- Reorder Debug Logs table above User Trace Flags (with pagination)
-- **Deployment Status → Inline error details** for failed deployments only; opt-in, supports multiple expanded rows, and Ctrl+click opens Apex classes in SFOC.
-- **Deployment detail → Open Apex classes** adds an org selector and Ctrl+click/Cmd+click source links for Component Errors, Test Errors, and Apex stack-trace frames.
+- **Debug Logs:** Open each native Setup log in the Apex Log Viewer and optionally place Debug Logs above User Trace Flags.
+- **User Trace Flags:** Filter to relevant active/recently expired traces and extend or reactivate eligible user traces.
+- **Deployments:** Expand errors inline; select an org and Ctrl/Cmd-click Apex references in status or deployment-detail errors to open source in SFOC.
+- **Quick Links:** Add a global Lightning-header menu for SFOC tools and same-org custom URLs.
+- **Setup Command Palette:** Use a configurable shortcut (default `Ctrl+K`) to search Setup, Quick Links, saved scripts, and SFOC tools.
+
 
 ### Popup & Settings
 
 - Manage saved orgs (aliases, groups, drag-and-drop ordering)
 - Detect the org from the active browser tab
-- Light / dark appearance (Settings + toolbar toggle)
-- Language (EN/ES), telemetry opt-out, export/import settings
+- Optional Workbench navigation, light/dark appearance, and theme controls
+- Language (EN/ES), telemetry opt-out, and export/import settings
 - Favorites and recent tools in the main app
 
 ---
@@ -178,12 +217,24 @@ The Salesforce Org Compare extension communicates **directly between your browse
 - Preferences, saved org aliases, and locally cached metadata are stored in `chrome.storage.local` on your device.
 - Optional usage telemetry is sent to PostHog (EU region) and can be disabled in extension settings. Telemetry does not include Salesforce record data.
 - Logi (when enabled and used) sends log excerpts / chat to an LLM via a secure proxy or your own OpenRouter key — only when you invoke Logi.
-- Salesforce UI Integration is opt-in and runs as local DOM enhancement on matching Setup pages for saved orgs.
+- Salesforce UI Integration is opt-in and runs as a local DOM enhancement on matching Lightning and Setup pages. Data actions require a saved org and active session; DOM-only actions and deployment source links follow their own documented constraints.
 - The extension requires cookie access for Salesforce domains to obtain the session token used by the Salesforce UI.
 
 For a full summary, see [PRIVACY.md](PRIVACY.md). The complete privacy policy is available at [salesforceorgcompare.com/privacy-policy](https://salesforceorgcompare.com/privacy-policy).
 
 To validate this description, inspect the source code or monitor network traffic in your browser DevTools.
+
+---
+
+## Technical Architecture
+
+- **Chrome Manifest V3:** `background.js` is the service-worker entry point; the popup, settings, main application, and standalone viewers are local extension pages.
+- **Salesforce access:** The extension reuses the active browser session and calls Salesforce REST, Tooling, and Metadata APIs with the logged-in user's permissions. Saved orgs carry their selected API version; the current default is API `63.0`.
+- **Local state:** Preferences, saved orgs, cached comparison state, saved queries/scripts, and UI-integration configuration live in Chrome storage. Session credentials are read at runtime and are not persisted there.
+- **Salesforce UI Integration:** `sfInject/content/bundle.js` is a generated content-script bundle. Its host checks URL, frame, user settings, and org/session requirements before mounting individual injectors. It uses namespaced DOM and styles, observes Lightning re-renders, and removes controls when they are disabled or no longer applicable.
+- **Offline-friendly UI:** Monaco Editor, icons, and other browser assets are packaged with the extension; the product UI does not need remote fonts, scripts, styles, or icon requests.
+
+For the detailed capability and runtime matrix, see [docs/SF_UI_INTEGRATIONS.md](docs/SF_UI_INTEGRATIONS.md).
 
 ---
 
@@ -208,7 +259,7 @@ Visit **[salesforceorgcompare.com](https://salesforceorgcompare.com/)** for the 
 - **Extension not detecting your org** — Make sure you are logged into Salesforce in the same browser profile and refresh the Salesforce tab.
 - **Org not found after enabling My Domain** — Restart your browser or clear the old `sid` cookie for the previous Salesforce domain.
 - **Missing icons when loading unpacked** — Ensure the `icons/` folder with `icon-16.png`, `icon-32.png`, `icon-48.png`, and `icon-128.png` is present (required by `manifest.json`).
-- **Salesforce UI Integration not visible** — Enable it in Settings, confirm the org is saved, and open a supported Apex Debug Logs Setup URL.
+- **Salesforce UI Integration not visible** — Enable the master switch and the relevant capability in Settings, confirm that the org is saved, and refresh a supported Lightning or Setup page. Quick Links also needs at least one configured link.
 
 ---
 
@@ -261,9 +312,10 @@ Copy `shared/telemetryConfig.example.js` to `shared/telemetryConfig.js` and fill
 
 ```bash
 npm test
+npm run test:e2e          # Playwright extension tests
 ```
 
-Uses Vitest. Tests live under `tests/`.
+Unit tests use Vitest and live under `tests/`; end-to-end coverage uses Playwright under `e2e/`.
 
 ---
 
