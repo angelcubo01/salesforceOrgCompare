@@ -1,6 +1,20 @@
 /** @param {unknown} value */
 function stripHtmlTags(value) {
-  return String(value ?? '').replace(/<[^>]*>/g, '');
+  const input = String(value ?? '');
+  let output = '';
+  let insideTag = false;
+  for (const character of input) {
+    if (character === '<') {
+      insideTag = true;
+      continue;
+    }
+    if (character === '>' && insideTag) {
+      insideTag = false;
+      continue;
+    }
+    if (!insideTag) output += character;
+  }
+  return output;
 }
 
 /**

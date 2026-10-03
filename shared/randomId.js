@@ -3,9 +3,12 @@
  * @param {string} [prefix]
  */
 export function randomStagingId(prefix = '') {
+  if (typeof crypto === 'undefined') {
+    throw new Error('La Web Crypto API no está disponible para crear el identificador temporal.');
+  }
   const uuid =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
-      : `${Date.now()}_${Math.random().toString(36).slice(2, 16)}`;
+      : Array.from(crypto.getRandomValues(new Uint32Array(4)), (part) => part.toString(16).padStart(8, '0')).join('');
   return `${prefix}${uuid.replace(/-/g, '')}`;
 }

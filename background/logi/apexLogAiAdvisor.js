@@ -516,26 +516,30 @@ export async function handleLogiAdvisorChat(message, hooks = {}) {
       const toolName = tc?.function?.name || 'org_query';
       if (toolName === 'get_apex_source') {
         const apexType = args.type === 'ApexTrigger' ? 'ApexTrigger' : 'ApexClass';
-        const apexName = String(args.name || '').replace(/'/g, "\\'");
-        pendingOrgQuery = {
-          toolCallId: tc.id,
-          toolName,
-          variant: 'tooling-soql',
-          queryText: `SELECT Id, Name, Body FROM ${apexType} WHERE Name = '${apexName}' LIMIT 1`,
-          reason: String(args.reason || ''),
-          apexName: String(args.name || ''),
-          apexType
-        };
+        const apexName = String(args.name || '').trim();
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(apexName)) {
+          pendingOrgQuery = {
+            toolCallId: tc.id,
+            toolName,
+            variant: 'tooling-soql',
+            queryText: `SELECT Id, Name, Body FROM ${apexType} WHERE Name = '${apexName}' LIMIT 1`,
+            reason: String(args.reason || ''),
+            apexName,
+            apexType
+          };
+        }
       } else if (toolName === 'get_flow_metadata') {
-        const flowName = String(args.name || '').replace(/'/g, "\\'");
-        pendingOrgQuery = {
-          toolCallId: tc.id,
-          toolName,
-          variant: 'tooling-soql',
-          queryText: `SELECT Id, DeveloperName, MasterLabel, ActiveVersionId, Description FROM FlowDefinition WHERE DeveloperName = '${flowName}' LIMIT 1`,
-          reason: String(args.reason || ''),
-          flowName: String(args.name || '')
-        };
+        const flowName = String(args.name || '').trim();
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(flowName)) {
+          pendingOrgQuery = {
+            toolCallId: tc.id,
+            toolName,
+            variant: 'tooling-soql',
+            queryText: `SELECT Id, DeveloperName, MasterLabel, ActiveVersionId, Description FROM FlowDefinition WHERE DeveloperName = '${flowName}' LIMIT 1`,
+            reason: String(args.reason || ''),
+            flowName
+          };
+        }
       } else if (toolName === 'describe_sobject_fields') {
         pendingOrgQuery = {
           toolCallId: tc.id,

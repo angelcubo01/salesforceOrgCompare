@@ -2561,7 +2561,7 @@ function isVisibleAssistantContent(content) {
   if (!raw) return false;
   const html = formatAssistantHtml(raw, null);
   if (!html.trim()) return false;
-  const text = stripInvisibleChars(html.replace(/<[^>]+>/g, '')).trim();
+  const text = stripInvisibleChars(raw.replace(/[\s`*_#>|-]/g, '')).trim();
   return text.length > 0 || /<(?:pre|hr|h[1-4]|ul|ol|table)\b/i.test(html);
 }
 

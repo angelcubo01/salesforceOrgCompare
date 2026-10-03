@@ -36,7 +36,6 @@ function formatMetricTitle(metricKey) {
     .replace(/\bCdp\b/g, 'CDP')
     .replace(/\bAi\b/g, 'AI')
     .replace(/\bId\b/g, 'ID')
-    .replace(/\bOData\b/g, 'OData')
     .trim();
   return tokenized || metricKey;
 }

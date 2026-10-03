@@ -110,6 +110,12 @@ describe('renderLogiMarkdown entities and identifiers', () => {
     expect(html).not.toContain('&amp;quot;');
   });
 
+  it('decodifica entidades en una sola pasada', () => {
+    const html = renderLogiMarkdown('&amp;lt;script&amp;gt;');
+    expect(html).toContain('&amp;lt;script&amp;gt;');
+    expect(html).not.toContain('<script>');
+  });
+
   it('does not italicize Apex names with underscores', () => {
     const html = renderLogiMarkdown(
       'Trigger CCEmailMessageBI_TRHan.validarDestinatariosCorreo and CCEmailMessageBI_TRHan_validarDestinatariosCorreo'

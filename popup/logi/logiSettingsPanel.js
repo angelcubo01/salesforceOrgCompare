@@ -116,21 +116,42 @@ function renderPreferredModelsList() {
     row.setAttribute('role', 'listitem');
     row.dataset.modelId = id;
     const price = priceLabelForModel(id);
-    row.innerHTML = `
-      <span class="settings-logi-model-rank" aria-hidden="true">${index + 1}</span>
-      <span class="settings-logi-model-main">
-        <span class="settings-logi-model-name">${formatLogiModelLabel(id)}</span>
-        ${
-          price
-            ? `<span class="settings-logi-model-price" title="${t('settings.logi.modelPriceTitle')}">${price}</span>`
-            : ''
-        }
-      </span>
-      <span class="settings-logi-model-actions">
-        <button type="button" class="settings-logi-model-btn" data-act="up" data-index="${index}" aria-label="${t('settings.logi.byokModelUp')}" ${index === 0 ? 'disabled' : ''}>↑</button>
-        <button type="button" class="settings-logi-model-btn" data-act="down" data-index="${index}" aria-label="${t('settings.logi.byokModelDown')}" ${index >= preferredModels.length - 1 ? 'disabled' : ''}>↓</button>
-        <button type="button" class="settings-logi-model-btn settings-logi-model-btn--danger" data-act="remove" data-index="${index}" aria-label="${t('settings.logi.byokModelRemove')}">×</button>
-      </span>`;
+    const rank = document.createElement('span');
+    rank.className = 'settings-logi-model-rank';
+    rank.setAttribute('aria-hidden', 'true');
+    rank.textContent = String(index + 1);
+
+    const main = document.createElement('span');
+    main.className = 'settings-logi-model-main';
+    const name = document.createElement('span');
+    name.className = 'settings-logi-model-name';
+    name.textContent = formatLogiModelLabel(id);
+    main.appendChild(name);
+    if (price) {
+      const priceEl = document.createElement('span');
+      priceEl.className = 'settings-logi-model-price';
+      priceEl.title = t('settings.logi.modelPriceTitle');
+      priceEl.textContent = price;
+      main.appendChild(priceEl);
+    }
+
+    const actions = document.createElement('span');
+    actions.className = 'settings-logi-model-actions';
+    const addAction = (action, label, symbol, disabled = false, danger = false) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `settings-logi-model-btn${danger ? ' settings-logi-model-btn--danger' : ''}`;
+      button.dataset.act = action;
+      button.dataset.index = String(index);
+      button.setAttribute('aria-label', label);
+      button.disabled = disabled;
+      button.textContent = symbol;
+      actions.appendChild(button);
+    };
+    addAction('up', t('settings.logi.byokModelUp'), '↑', index === 0);
+    addAction('down', t('settings.logi.byokModelDown'), '↓', index >= preferredModels.length - 1);
+    addAction('remove', t('settings.logi.byokModelRemove'), '×', false, true);
+    row.append(rank, main, actions);
     list.appendChild(row);
   });
   if (!preferredModels.length) {

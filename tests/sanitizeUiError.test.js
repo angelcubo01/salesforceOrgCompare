@@ -6,6 +6,10 @@ describe('sanitizeUiError', () => {
     expect(sanitizeUiError('<b>Error</b> INVALID_SESSION')).toBe('Error INVALID_SESSION');
   });
 
+  it('descarta una etiqueta sin terminar sin interpretar HTML', () => {
+    expect(sanitizeUiError('Error <script alert(1)')).toBe('Error');
+  });
+
   it('trunca mensajes largos', () => {
     const long = 'x'.repeat(400);
     expect(sanitizeUiError(long, { maxLength: 50 }).length).toBe(50);

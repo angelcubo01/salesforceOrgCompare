@@ -38,7 +38,7 @@ function escapeSoqlLiteral(value) {
 
 function sanitizeSearchPrefix(prefix) {
   const s = String(prefix == null ? '' : prefix).slice(0, 64);
-  return s.replace(/'/g, "\\'");
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 async function restFetchWithSid(instanceUrl, sid, path, init = {}) {

@@ -6,7 +6,7 @@ import {
 } from './deployCoverage.js';
 
 function escapeSoqlLiteral(value) {
-  return String(value || '').replace(/'/g, "\\'");
+  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 function normalizeLineNumbers(lines) {

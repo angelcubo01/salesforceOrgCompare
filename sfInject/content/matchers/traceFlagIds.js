@@ -13,12 +13,6 @@ const TRACE_FLAG_ID_RE = /7tf[a-zA-Z0-9]{12,15}/i;
 export function decodeSalesforceHref(raw) {
   let s = String(raw || '');
   if (!s) return '';
-  s = s
-    .replace(/&amp;/g, '&')
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/g, '"')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>');
   for (let i = 0; i < 4; i += 1) {
     if (!/%[0-9a-fA-F]{2}/.test(s)) break;
     try {
@@ -29,7 +23,10 @@ export function decodeSalesforceHref(raw) {
       break;
     }
   }
-  return s;
+  const entities = { amp: '&', '#39': "'", quot: '"', lt: '<', gt: '>' };
+  return s.replace(/&(amp|#39|quot|lt|gt);/gi, (match, name) => {
+    return entities[String(name).toLowerCase()] ?? match;
+  });
 }
 
 /**

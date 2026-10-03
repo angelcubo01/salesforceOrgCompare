@@ -190,7 +190,9 @@ export function findApexMethodDeclarations(source, className = '') {
 }
 
 function simpleType(raw) {
-  const type = String(raw || '').replace(/<.*>/g, '').trim();
+  const rawType = String(raw || '').trim();
+  const genericStart = rawType.indexOf('<');
+  const type = (genericStart >= 0 ? rawType.slice(0, genericStart) : rawType).trim();
   const match = type.match(/[A-Za-z_][A-Za-z0-9_]*$/);
   return match ? match[0] : '';
 }

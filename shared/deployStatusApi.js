@@ -269,7 +269,7 @@ export async function fetchDeployHistory(instanceUrl, sid, apiVersion, opts = {}
 }
 
 async function fetchDeployRowById(instanceUrl, sid, apiVersion, asyncId) {
-  const safeId = String(asyncId || '').replace(/'/g, "\\'");
+  const safeId = String(asyncId || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const soql = `SELECT ${DEPLOY_FIELDS} FROM DeployRequest WHERE Id = '${safeId}' LIMIT 1`;
   const page = await toolingSoqlQueryPage(instanceUrl, sid, apiVersion, soql);
   const rec = page.records?.[0];

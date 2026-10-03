@@ -47,11 +47,23 @@ function renderBatches(batches) {
   }
   for (const b of batches) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="bulk-job-mono">${escapeHtml(batchLabel(b))}</td>
-      <td>${escapeHtml(b.state)}</td>
-      <td>${escapeHtml(String(b.numberRecordsProcessed))}</td>
-      <td><button type="button" class="query-explorer-secondary-btn" data-batch-result="${escapeHtml(b.id)}">${escapeHtml(t('bulkJob.downloadResult'))}</button></td>`;
+    const appendTextCell = (value, className = '') => {
+      const cell = document.createElement('td');
+      if (className) cell.className = className;
+      cell.textContent = String(value ?? '');
+      tr.appendChild(cell);
+    };
+    appendTextCell(batchLabel(b), 'bulk-job-mono');
+    appendTextCell(b.state);
+    appendTextCell(b.numberRecordsProcessed);
+    const actionCell = document.createElement('td');
+    const downloadButton = document.createElement('button');
+    downloadButton.type = 'button';
+    downloadButton.className = 'query-explorer-secondary-btn';
+    downloadButton.dataset.batchResult = String(b.id ?? '');
+    downloadButton.textContent = t('bulkJob.downloadResult');
+    actionCell.appendChild(downloadButton);
+    tr.appendChild(actionCell);
     tbody.appendChild(tr);
   }
 }

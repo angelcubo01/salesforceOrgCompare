@@ -132,11 +132,24 @@ function renderEvents() {
     const ts = new Date(ev.receivedAt).toLocaleTimeString();
     const payload = JSON.stringify(ev.data, null, 0);
     const short = payload.length > 120 ? `${payload.slice(0, 120)}…` : payload;
-    tr.innerHTML = `
-      <td>${escapeHtml(ts)}</td>
-      <td class="event-monitor-mono">${escapeHtml(String(ev.replayId ?? '—'))}</td>
-      <td class="event-monitor-mono" title="${escapeHtml(payload)}">${escapeHtml(short)}</td>
-      <td><button type="button" class="query-explorer-secondary-btn" data-copy-event="${escapeHtml(payload)}">${escapeHtml(t('eventMonitor.copy'))}</button></td>`;
+    const appendTextCell = (value, className = '', title = '') => {
+      const cell = document.createElement('td');
+      if (className) cell.className = className;
+      if (title) cell.title = title;
+      cell.textContent = String(value ?? '');
+      tr.appendChild(cell);
+    };
+    appendTextCell(ts);
+    appendTextCell(ev.replayId ?? '—', 'event-monitor-mono');
+    appendTextCell(short, 'event-monitor-mono', payload);
+    const actionCell = document.createElement('td');
+    const copyButton = document.createElement('button');
+    copyButton.type = 'button';
+    copyButton.className = 'query-explorer-secondary-btn';
+    copyButton.dataset.copyEvent = payload;
+    copyButton.textContent = t('eventMonitor.copy');
+    actionCell.appendChild(copyButton);
+    tr.appendChild(actionCell);
     tbody.appendChild(tr);
   }
   const countEl = document.getElementById('eventMonitorEventCount');

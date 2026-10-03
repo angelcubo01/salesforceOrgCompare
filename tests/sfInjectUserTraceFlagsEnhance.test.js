@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeTraceFlagId } from '../sfInject/content/matchers/traceFlagIds.js';
+import { decodeSalesforceHref, normalizeTraceFlagId } from '../sfInject/content/matchers/traceFlagIds.js';
 import {
   detectClassicDateOrder,
   formatClassicDateTime,
@@ -135,6 +135,11 @@ describe('normalizeTraceFlagId', () => {
     const href =
       "javascript:srcSelf(%27%2Fsetup%2Fui%2FlistApexTraces.apexp%3FdelTraceFlag%3D7tfbd000000GEv3AAG%27)";
     expect(normalizeTraceFlagId(href)).toBe('7tfbd000000GEv3');
+  });
+
+  it('decodifica entidades HTML una única vez después de la URL', () => {
+    expect(decodeSalesforceHref('x%26amp%3By')).toBe('x&y');
+    expect(decodeSalesforceHref('x%26amp%3Blt%3B')).toBe('x&lt;');
   });
 });
 

@@ -362,13 +362,17 @@ export function buildLogiSetupUrl(instanceUrl, kind, apiName) {
  * @returns {string}
  */
 function decodeCommonHtmlEntities(text) {
-  return String(text ?? '')
-    .replace(/&amp;/gi, '&')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#0*39;/g, "'")
-    .replace(/&apos;/gi, "'")
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>');
+  const entities = {
+    amp: '&',
+    quot: '"',
+    '#39': "'",
+    apos: "'",
+    lt: '<',
+    gt: '>'
+  };
+  return String(text ?? '').replace(/&(amp|quot|#0*39|apos|lt|gt);/gi, (match, name) => {
+    return entities[String(name).toLowerCase()] ?? match;
+  });
 }
 
 /**
