@@ -56,6 +56,8 @@ services/*
 
 #github
 .github/*
+!.github/workflows/
+!.github/workflows/**
 
 # Scripts (herramientas locales, no publicados en el repo)
 scripts/*
