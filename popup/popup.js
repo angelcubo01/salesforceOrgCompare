@@ -44,6 +44,38 @@ let __hasRenderedSavedList = false;
 let __dragRowEl = null;
 const AUTH_STATUS_SNAPSHOT_KEY = 'sfocPopupAuthStatusSnapshot';
 const AUTH_STATUS_SNAPSHOT_MAX_AGE_MS = 10 * 60 * 1000;
+const SAVED_ORGS_SESSION_SNAPSHOT_KEY = 'sfocPopupSavedOrgsSessionSnapshot';
+
+function normalizeSavedOrgs(orgs) {
+  if (!Array.isArray(orgs)) return [];
+  return orgs.filter((org) => (
+    org
+    && typeof org === 'object'
+    && typeof org.id === 'string'
+    && typeof org.instanceUrl === 'string'
+  ));
+}
+
+async function loadSavedOrgsSessionSnapshot() {
+  try {
+    const raw = await chrome.storage.session.get(SAVED_ORGS_SESSION_SNAPSHOT_KEY);
+    const snapshot = raw?.[SAVED_ORGS_SESSION_SNAPSHOT_KEY];
+    if (!snapshot || !Array.isArray(snapshot.orgs)) return null;
+    return normalizeSavedOrgs(snapshot.orgs);
+  } catch {
+    return null;
+  }
+}
+
+async function saveSavedOrgsSessionSnapshot(orgs) {
+  try {
+    await chrome.storage.session.set({
+      [SAVED_ORGS_SESSION_SNAPSHOT_KEY]: { orgs: normalizeSavedOrgs(orgs) }
+    });
+  } catch {
+    /* El popup sigue operativo si el almacenamiento de sesión no está disponible. */
+  }
+}
 
 function normalizeAuthStatuses(statuses) {
   if (!statuses || typeof statuses !== 'object') return {};
@@ -458,6 +490,7 @@ async function refreshSaved() {
   ]);
   const hasSavedList = Boolean(res?.ok);
   const orgs = hasSavedList ? (res.orgs || []) : (window.__lastOrgs || []);
+  if (hasSavedList) void saveSavedOrgsSessionSnapshot(orgs);
   // Pintar el último resultado conocido evita el estado gris entre la carga
   // de la lista local y la comprobación actual contra Salesforce.
   const isInitialRender = !__hasRenderedSavedList;
@@ -527,6 +560,16 @@ async function refresh() {
   const savedOrgs = await refreshSaved();
   await refreshDetected(savedOrgs);
   return savedOrgs;
+}
+
+async function restoreSavedListFromSession() {
+  const cachedOrgs = await loadSavedOrgsSessionSnapshot();
+  if (cachedOrgs === null) return false;
+  await loadOrgExtras();
+  renderSaved(cachedOrgs);
+  window.__savedOrgIds = new Set(cachedOrgs.map((org) => org.id));
+  window.__savedOrgs = cachedOrgs;
+  return true;
 }
 
 async function loadOnboardingPrefs() {
@@ -687,6 +730,9 @@ document.getElementById('openSettingsBtn')?.addEventListener('click', async () =
   setupPopupHelp();
   setupPopupWelcome();
   await ensurePopupUiModeV2();
+  // El popup se destruye al cerrarse. Restauramos el último listado durante
+  // la sesión del navegador y refrescamos el origen de datos sin bloquear la UI.
+  await restoreSavedListFromSession();
   // Mostrar los entornos no depende de telemetría ni de feature flags. Ambas
   // operaciones pueden requerir red, por lo que se ejecutan sin retrasar la UI.
   const savedOrgs = await refresh();
