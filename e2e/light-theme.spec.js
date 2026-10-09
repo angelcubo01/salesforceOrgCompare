@@ -14,7 +14,7 @@ const TOOL_ROUTES = [
   ['development', 'QuickEdit', 'quickEditPanel'],
   ['development', 'LightningQuickEdit', 'lightningQuickEditPanel'],
   ['development', 'AnonymousApex', 'anonymousApexPanel'],
-  ['development', 'QueryExplorer', 'queryExplorerPanel'],
+  ['monitoring', 'QueryExplorer', 'queryExplorerPanel'],
   ['development', 'RestExplorer', 'restExplorerPanel'],
   ['development', 'DebugLogBrowser', 'debugLogBrowserPanel'],
   ['development', 'EventMonitor', 'eventMonitorPanel'],
@@ -25,7 +25,7 @@ const TOOL_ROUTES = [
   ['analysis', 'CustomMetadataCompare', 'customMetadataComparePanel'],
   ['analysis', 'RecordCompare', 'recordComparePanel'],
   ['analysis', 'ObjectDescribe', 'objectDescribePanel'],
-  ['analysis', 'DataWorkbench', 'dataWorkbenchPanel'],
+  ['development', 'DataWorkbench', 'dataWorkbenchPanel'],
   ['monitoring', 'EnvironmentStatus', 'environmentStatusPanel'],
   ['monitoring', 'OrgLimits', 'orgLimitsPanel'],
   ['monitoring', 'DeployStatus', 'deployStatusPanel'],
@@ -253,7 +253,7 @@ test('comparador, formulario, tabla y editor cumplen WCAG A/AA completo', async 
   const page = await openExtensionPage(context, extensionId, 'code/code.html');
   const representatives = [
     ['comparator', 'Comparator', 'standardComparePanel'],
-    ['development', 'QueryExplorer', 'queryExplorerPanel'],
+    ['monitoring', 'QueryExplorer', 'queryExplorerPanel'],
     ['analysis', 'ObjectDescribe', 'objectDescribePanel'],
     ['development', 'QuickEdit', 'quickEditPanel']
   ];

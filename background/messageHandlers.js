@@ -109,6 +109,28 @@ import {
 const DEPLOY_PACKAGE_ARCHIVES_STORAGE_KEY = 'deployPackageArchives';
 const DEPLOY_PACKAGE_ARCHIVE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_DEPLOY_PACKAGE_ARCHIVES = 3;
+const queryExplorerAbortControllers = new Map();
+const cancelledQueryExplorerRuns = new Set();
+
+function queryExplorerRunKey(runId, orgId) {
+  return `${String(runId || '')}:${String(orgId || '')}`;
+}
+
+function abortQueryExplorerRun(runId) {
+  if (runId) {
+    cancelledQueryExplorerRuns.add(String(runId));
+    setTimeout(() => cancelledQueryExplorerRuns.delete(String(runId)), 60000);
+  }
+  const prefix = `${String(runId || '')}:`;
+  let aborted = 0;
+  for (const [key, controller] of queryExplorerAbortControllers) {
+    if (!runId || !key.startsWith(prefix)) continue;
+    controller.abort();
+    queryExplorerAbortControllers.delete(key);
+    aborted += 1;
+  }
+  return aborted;
+}
 
 function deployPackageArchiveKey(orgId, asyncId) {
   return `${String(orgId || '')}:${String(asyncId || '')}`;
@@ -196,10 +218,11 @@ async function fetchDeployCoverageSource(org, sid, className) {
 }
 
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
-function queryExplorerCatchErrorPayload(e) {
-  const error = sanitizeUiError(e?.message || e);
+function queryExplorerCatchErrorPayload(e, { preserveFullError = false } = {}) {
+  const error = sanitizeUiError(e?.message || e, preserveFullError ? { maxLength: Infinity } : undefined);
   /** @type {{ ok: false, error: string, errorCode?: string }} */
   const out = { ok: false, error };
+  if (preserveFullError) out.preserveFullError = true;
   if (e && typeof e === 'object' && e.salesforceErrorCode) {
     const c = String(e.salesforceErrorCode).trim();
     if (c) out.errorCode = c;
@@ -613,7 +636,13 @@ export function installMessageHandlers() {
         payload.error != null &&
         payload.error !== ''
       ) {
-        rawRespond({ ...payload, error: sanitizeUiError(payload.error) });
+        const preserveFullError = payload.preserveFullError === true;
+        const response = { ...payload };
+        delete response.preserveFullError;
+        rawRespond({
+          ...response,
+          error: sanitizeUiError(payload.error, preserveFullError ? { maxLength: Infinity } : undefined)
+        });
       } else {
         rawRespond(payload);
       }
@@ -2202,7 +2231,7 @@ export function installMessageHandlers() {
               reply(blocked);
               break;
             }
-            const { orgId, operation, objectApiName, records, externalIdField, batchSize } = message;
+            const { orgId, operation, objectApiName, records, externalIdField, batchSize, threads } = message;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
@@ -2225,22 +2254,36 @@ export function installMessageHandlers() {
               const soapHeaders = getSoapHeadersForOrg(map, String(orgId || ''));
               const list = Array.isArray(records) ? records : [];
               const size = Math.max(1, Math.min(200, Number(batchSize) || 200));
-              /** @type {Array<{ success: boolean, id?: string, errors?: string[] }>} */
-              const allResults = [];
+              const chunks = [];
               for (let i = 0; i < list.length; i += size) {
-                const chunk = list.slice(i, i + size);
-                const chunkResults = await executeSoapImportBatch({
-                  instanceUrl: org.instanceUrl,
-                  sid,
-                  apiVersion: org.apiVersion,
-                  operation: String(operation || 'insert'),
-                  objectApiName: String(objectApiName || ''),
-                  records: chunk,
-                  externalIdField: externalIdField ? String(externalIdField) : 'Id',
-                  soapHeaders
-                });
-                allResults.push(...chunkResults);
+                chunks.push(list.slice(i, i + size));
               }
+              const workerCount = Math.min(
+                chunks.length,
+                Math.max(1, Math.min(6, Number(threads) || 6))
+              );
+              /** @type {Array<{ success: boolean, id?: string, errors?: string[] }>} */
+              const chunkResults = new Array(chunks.length);
+              let nextChunk = 0;
+              const processChunks = async () => {
+                while (nextChunk < chunks.length) {
+                  const chunkIndex = nextChunk++;
+                  chunkResults[chunkIndex] = await executeSoapImportBatch({
+                    instanceUrl: org.instanceUrl,
+                    sid,
+                    apiVersion: org.apiVersion,
+                    operation: String(operation || 'insert'),
+                    objectApiName: String(objectApiName || ''),
+                    records: chunks[chunkIndex],
+                    externalIdField: externalIdField ? String(externalIdField) : 'Id',
+                    soapHeaders
+                  });
+                }
+              };
+              if (workerCount) {
+                await Promise.all(Array.from({ length: workerCount }, processChunks));
+              }
+              const allResults = chunkResults.flat();
               await recordLocalAudit({
                 action: 'dml_execute',
                 orgId: String(orgId),
@@ -3093,8 +3136,15 @@ export function installMessageHandlers() {
             }
             break;
           }
+          case 'queryExplorer:cancel': {
+            const runId = String(message.runId || '');
+            reply({ ok: true, aborted: runId ? abortQueryExplorerRun(runId) : 0 });
+            break;
+          }
           case 'queryExplorer:run': {
-            const { orgId, variant, queryText, pagePath } = message;
+            const { orgId, variant, queryText, pagePath, runId } = message;
+            const runKey = runId ? queryExplorerRunKey(runId, orgId) : '';
+            let abortController = null;
             const saved = await loadSavedOrgs();
             const org = saved[orgId];
             if (!org) {
@@ -3112,10 +3162,22 @@ export function installMessageHandlers() {
               reply({ ok: false, error: 'Empty query' });
               break;
             }
+            if (runId && cancelledQueryExplorerRuns.has(String(runId))) {
+              reply({ ok: false, cancelled: true });
+              break;
+            }
+            abortController = runKey ? queryExplorerAbortControllers.get(runKey) : null;
+            if (runKey && !abortController) {
+              abortController = new AbortController();
+              queryExplorerAbortControllers.set(runKey, abortController);
+            }
             try {
               const pathOrQ = cont || q;
               if (variant === 'rest-soql') {
-                const r = await restSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
+                const r = await restSoqlQueryPage(
+                  org.instanceUrl, sid, org.apiVersion, pathOrQ,
+                  abortController ? { signal: abortController.signal } : {}
+                );
                 reply({
                   ok: true,
                   records: r.records,
@@ -3123,8 +3185,12 @@ export function installMessageHandlers() {
                   done: r.done,
                   nextPath: r.nextPath
                 });
+                if (runKey && r.done) queryExplorerAbortControllers.delete(runKey);
               } else if (variant === 'tooling-soql') {
-                const r = await toolingSoqlQueryPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
+                const r = await toolingSoqlQueryPage(
+                  org.instanceUrl, sid, org.apiVersion, pathOrQ,
+                  abortController ? { signal: abortController.signal } : {}
+                );
                 reply({
                   ok: true,
                   records: r.records,
@@ -3132,8 +3198,12 @@ export function installMessageHandlers() {
                   done: r.done,
                   nextPath: r.nextPath
                 });
+                if (runKey && r.done) queryExplorerAbortControllers.delete(runKey);
               } else if (variant === 'rest-sosl') {
-                const r = await restSoslSearchPage(org.instanceUrl, sid, org.apiVersion, pathOrQ);
+                const r = await restSoslSearchPage(
+                  org.instanceUrl, sid, org.apiVersion, pathOrQ,
+                  abortController ? { signal: abortController.signal } : {}
+                );
                 reply({
                   ok: true,
                   records: r.records,
@@ -3141,11 +3211,15 @@ export function installMessageHandlers() {
                   done: r.done,
                   nextPath: r.nextPath
                 });
+                if (runKey && r.done) queryExplorerAbortControllers.delete(runKey);
               } else {
+                if (runKey) queryExplorerAbortControllers.delete(runKey);
                 reply({ ok: false, error: 'Invalid variant' });
               }
             } catch (e) {
-              reply(queryExplorerCatchErrorPayload(e));
+              if (runKey) queryExplorerAbortControllers.delete(runKey);
+              if (e?.name === 'AbortError') reply({ ok: false, cancelled: true });
+              else reply(queryExplorerCatchErrorPayload(e, { preserveFullError: true }));
             }
             break;
           }

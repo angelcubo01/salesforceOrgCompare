@@ -305,7 +305,7 @@ const legacyRoutes = [
   ['analysis', 'CustomMetadataCompare', 'data-compare', 'custom-metadata', 'customMetadataComparePanel'],
   ['analysis', 'RecordCompare', 'data-compare', 'records', 'recordComparePanel'],
   ['analysis', 'ObjectDescribe', 'object-describe', 'main', 'objectDescribePanel'],
-  ['analysis', 'DataWorkbench', 'data-workbench', 'main', 'dataWorkbenchPanel'],
+  ['development', 'DataWorkbench', 'data-workbench', 'main', 'dataWorkbenchPanel'],
   ['monitoring', 'EnvironmentStatus', 'org-environments', 'main', 'environmentStatusPanel'],
   ['monitoring', 'OrgLimits', 'org-limits', 'main', 'orgLimitsPanel'],
   ['monitoring', 'DeployStatus', 'deploy-status', 'main', 'deployStatusPanel'],

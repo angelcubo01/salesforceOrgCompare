@@ -71,6 +71,7 @@
       }
     </style>
     <link rel="stylesheet" href="../vendor/monaco-editor/min/vs/editor/editor.main.css" />
+    <link rel="stylesheet" href="../vendor/tabulator/tabulator.min.css" />
     <link rel="stylesheet" href="./code.css" />
     <link rel="stylesheet" href="./code-theme-light.css" />
     <link rel="stylesheet" href="./workbench/workbench.css" />
@@ -1615,106 +1616,85 @@
           <div class="org-limits-panel-inner data-workbench-panel-inner">
             <div class="org-limits-head">
               <div>
-                <h2 class="org-limits-title" data-i18n="dataWorkbench.title">Editor e importación de datos</h2>
-                <p class="sfoc-panel-subtitle" data-i18n="dataWorkbench.subtitle">Edita registros en la org e importa datos masivos (CSV, Excel, JSON)</p>
+                <h2 class="org-limits-title" data-i18n="dataWorkbench.title">Data import</h2>
+                <p class="sfoc-panel-subtitle" data-i18n="dataWorkbench.subtitle">Importa datos masivos en la org desde CSV, Excel o JSON.</p>
               </div>
             </div>
-            <p id="dataWorkbenchStatus" class="org-limits-status" role="status"></p>
-            <div class="data-workbench-tabs sfoc-tool-tabs" role="tablist">
-              <button type="button" class="data-workbench-tab sfoc-tool-tab active" data-dw-tab="recordEditor" role="tab" aria-selected="true" data-i18n="dataWorkbench.tabRecordEditor">Editor de registro</button>
-              <button type="button" class="data-workbench-tab sfoc-tool-tab" data-dw-tab="import" role="tab" aria-selected="false" data-i18n="dataWorkbench.tabImport">Importación masiva</button>
-            </div>
-            <div class="data-workbench-toolbar sfoc-tool-controls">
-              <div class="sfoc-tool-field sfoc-tool-field--wide">
-                <label class="sfoc-tool-label" for="dataWorkbenchObjectSearch" data-i18n="dataWorkbench.search">Buscar</label>
-                <input id="dataWorkbenchObjectSearch" type="search" class="sfoc-query-input" data-i18n-placeholder="dataWorkbench.searchPlaceholder" placeholder="Filtrar objetos…" autocomplete="off" />
-              </div>
-            </div>
-            <div id="dataWorkbenchTabRecordEditor" class="data-workbench-tab-panel">
-              <div class="data-workbench-controls sfoc-tool-controls">
-                <div class="sfoc-tool-field">
-                  <label class="sfoc-tool-label" for="dataWorkbenchObjectSelect" data-i18n="dataWorkbench.object">Objeto</label>
-                  <select id="dataWorkbenchObjectSelect" class="sfoc-query-select"><option value="" data-i18n="dataWorkbench.selectObject">— Selecciona objeto —</option></select>
-                </div>
-                <div class="sfoc-tool-field">
-                  <label class="sfoc-tool-label" for="dataWorkbenchRecordIdInput" data-i18n="dataWorkbench.recordId">Record Id</label>
-                  <input id="dataWorkbenchRecordIdInput" type="text" class="sfoc-query-input" placeholder="001…" spellcheck="false" autocomplete="off" />
-                </div>
-                <button type="button" id="dataWorkbenchLoadRecordBtn" class="org-limits-refresh-btn" data-i18n="dataWorkbench.loadRecord">Cargar</button>
-                <button type="button" id="dataWorkbenchOpenInSfBtn" class="query-explorer-secondary-btn" data-i18n="dataWorkbench.openInSf">Abrir en Salesforce</button>
-              </div>
-              <div class="data-workbench-actions data-workbench-actions--editor" role="toolbar" aria-label="Record actions">
-                <div class="data-workbench-actions-group">
-                  <button type="button" id="dataWorkbenchSaveBtn" class="org-limits-refresh-btn hidden" data-i18n="dataWorkbench.save">Guardar</button>
-                  <button type="button" id="dataWorkbenchCancelEditBtn" class="query-explorer-secondary-btn hidden" data-i18n="dataWorkbench.cancel">Cancelar</button>
-                  <button type="button" id="dataWorkbenchCreateBtn" class="query-explorer-secondary-btn" data-i18n="dataWorkbench.create">Crear registro</button>
-                </div>
-                <div class="data-workbench-actions-group data-workbench-actions-group--danger">
-                  <button type="button" id="dataWorkbenchDeleteBtn" class="query-explorer-secondary-btn data-workbench-danger-btn" data-i18n="dataWorkbench.delete">Eliminar</button>
-                  <button type="button" id="dataWorkbenchUndeleteBtn" class="query-explorer-secondary-btn" data-i18n="dataWorkbench.undelete">Restaurar</button>
-                  <button type="button" id="dataWorkbenchPurgeBtn" class="query-explorer-secondary-btn data-workbench-danger-btn" data-i18n="dataWorkbench.purge">Purgar</button>
-                </div>
-              </div>
-              <div class="data-workbench-table-wrap record-editor-table-wrap">
-                <table class="record-editor-table data-workbench-table">
-                  <thead>
-                    <tr>
-                      <th data-i18n="recordEditor.colLabel">Etiqueta</th>
-                      <th data-i18n="recordEditor.colApi">API</th>
-                      <th data-i18n="recordEditor.colType">Tipo</th>
-                      <th data-i18n="recordEditor.colValue">Valor</th>
-                    </tr>
-                  </thead>
-                  <tbody id="dataWorkbenchRecordEditorTbody"></tbody>
-                </table>
-              </div>
-            </div>
-            <div id="dataWorkbenchTabImport" class="data-workbench-tab-panel hidden">
-              <div class="data-workbench-controls sfoc-tool-controls">
+            <div id="dataWorkbenchTabImport" class="data-workbench-tab-panel">
+              <div class="data-import-layout">
+                <section class="data-import-card data-import-config-card" aria-labelledby="dataImportConfigTitle">
+                  <div class="data-import-card-header">
+                    <h3 id="dataImportConfigTitle" class="data-import-card-title" data-i18n="dataImport.configure">Configurar importación</h3>
+                  </div>
+                  <div class="data-workbench-controls sfoc-tool-controls">
                 <div class="sfoc-tool-field">
                   <label class="sfoc-tool-label" for="dataWorkbenchImportObjectSelect" data-i18n="dataWorkbench.object">Objeto</label>
-                  <select id="dataWorkbenchImportObjectSelect" class="sfoc-query-select"><option value="" data-i18n="dataWorkbench.selectObject">— Selecciona objeto —</option></select>
+                  <div class="data-workbench-autocomplete">
+                    <input id="dataWorkbenchImportObjectSelect" type="search" class="sfoc-query-input" data-i18n-placeholder="dataWorkbench.selectObject" placeholder="— Selecciona objeto —" autocomplete="off" aria-autocomplete="list" aria-expanded="false" />
+                    <div id="dataWorkbenchImportObjectResults" class="sfoc-autocomplete-panel data-workbench-autocomplete-results" role="listbox" hidden></div>
+                  </div>
                 </div>
                 <div class="sfoc-tool-field">
                   <label class="sfoc-tool-label" for="dataWorkbenchImportOperation" data-i18n="dataWorkbench.operation">Operación</label>
                   <select id="dataWorkbenchImportOperation" class="sfoc-query-select">
-                    <option value="insert" data-i18n="dataWorkbench.insert">Insertar</option>
-                    <option value="update" data-i18n="dataWorkbench.update">Actualizar</option>
-                    <option value="delete" data-i18n="dataWorkbench.delete">Eliminar</option>
-                    <option value="upsert" data-i18n="dataWorkbench.upsert">Upsert</option>
-                    <option value="undelete" data-i18n="dataWorkbench.undelete">Restaurar</option>
+                    <option value="insert">INSERT</option>
+                    <option value="update">UPDATE</option>
+                    <option value="delete">DELETE</option>
+                    <option value="upsert">UPSERT</option>
+                    <option value="undelete">UNDELETE</option>
                   </select>
                 </div>
                 <div class="sfoc-tool-field">
-                  <label class="sfoc-tool-label" for="dataWorkbenchImportExternalId" data-i18n="dataImport.externalId">External Id</label>
-                  <input id="dataWorkbenchImportExternalId" type="text" class="sfoc-query-input" value="Id" spellcheck="false" autocomplete="off" />
+                  <label class="sfoc-tool-label" for="dataWorkbenchImportThreads" data-i18n="dataImport.threads">Hilos</label>
+                  <select id="dataWorkbenchImportThreads" class="sfoc-query-select">
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6" selected>6</option>
+                  </select>
                 </div>
                 <div class="sfoc-tool-field">
                   <label class="sfoc-tool-label" for="dataWorkbenchImportBatchSize" data-i18n="dataImport.batchSize">Tamaño lote</label>
                   <input id="dataWorkbenchImportBatchSize" type="number" class="sfoc-query-input" value="200" min="1" max="200" />
                 </div>
-              </div>
-              <div class="sfoc-tool-field sfoc-tool-field--wide">
-                <label class="sfoc-tool-label" for="dataWorkbenchImportPaste" data-i18n="dataImport.paste">Pegar datos (CSV, Excel o JSON)</label>
-                <textarea id="dataWorkbenchImportPaste" class="sfoc-tool-textarea data-import-paste" rows="6" spellcheck="false"></textarea>
-              </div>
-              <div class="data-import-actions" role="toolbar" aria-label="Import actions">
-                <div class="data-import-actions-group">
-                  <input id="dataWorkbenchImportFile" type="file" class="data-import-file-input" accept=".csv,text/csv,.json,application/json" hidden />
-                  <button type="button" id="dataWorkbenchImportFileBtn" class="query-explorer-secondary-btn data-import-file-btn" data-i18n="dataImport.chooseFile">Elegir archivo</button>
-                  <span id="dataWorkbenchImportFileName" class="data-import-file-name" data-i18n="dataImport.noFile">Sin archivo seleccionado</span>
-                  <button type="button" id="dataWorkbenchImportParseBtn" class="query-explorer-secondary-btn" data-i18n="dataImport.parse">Analizar datos</button>
+                  </div>
+                  <div class="sfoc-tool-field sfoc-tool-field--wide data-import-paste-field">
+                    <label class="sfoc-tool-label" for="dataWorkbenchImportPaste" data-i18n="dataImport.paste">Pegar datos (CSV, Excel o JSON)</label>
+                    <textarea id="dataWorkbenchImportPaste" class="sfoc-tool-textarea data-import-paste" rows="3" spellcheck="false"></textarea>
+                  </div>
+                  <div class="data-import-config-actions">
+                    <input id="dataWorkbenchImportFile" type="file" class="data-import-file-input" accept=".csv,text/csv,.json,application/json,text/json,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12" hidden />
+                    <button type="button" id="dataWorkbenchImportFileBtn" class="query-explorer-secondary-btn data-import-file-btn" data-i18n="dataImport.chooseAndParse">Elegir y analizar archivo</button>
+                    <button type="button" id="dataWorkbenchImportRunBtn" class="sfoc-btn sfoc-btn--primary org-limits-refresh-btn data-import-run-btn">
+                      <svg class="sfoc-icon data-import-run-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-player-play"></use></svg>
+                      <span data-i18n="dataImport.run">Run</span>
+                    </button>
+                  </div>
+                </section>
+                <section class="data-import-card data-import-mapping-card" aria-labelledby="dataImportMappingTitle">
+                  <div class="data-import-card-header">
+                    <h3 id="dataImportMappingTitle" class="data-import-card-title" data-i18n="dataImport.fieldMapping">Asignación de campos</h3>
+                    <button type="button" id="dataWorkbenchImportSkipAllBtn" class="query-explorer-secondary-btn data-workbench-csv-map-skip-all" data-i18n="dataImport.skipAll">Omitir todos</button>
+                  </div>
+                  <div id="dataWorkbenchCsvMapping" class="data-workbench-csv-mapping"></div>
+                </section>
+              <section class="data-import-card data-import-results-card" aria-labelledby="dataImportResultsTitle">
+                <div class="data-import-result-card-header">
+                  <div>
+                    <h3 id="dataImportResultsTitle" class="data-import-card-title" data-i18n="dataImport.importResults">Resultado de importación</h3>
+                    <span id="dataWorkbenchImportFilterSummary" class="data-import-grid-hint" aria-live="polite"></span>
+                  </div>
+                  <button type="button" id="dataWorkbenchImportDeleteRowsBtn" class="sfoc-btn sfoc-btn--danger data-import-delete-rows-btn">
+                    <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-trash"></use></svg>
+                    <span data-i18n="dataImport.deleteRows">Delete rows</span>
+                  </button>
                 </div>
-                <button type="button" id="dataWorkbenchImportRunBtn" class="org-limits-refresh-btn data-import-run-btn" data-i18n="dataImport.run">Ejecutar importación</button>
-              </div>
-              <div id="dataWorkbenchCsvMapping" class="data-workbench-csv-mapping"></div>
-              <div class="data-workbench-table-wrap data-import-preview-wrap">
-                <table class="data-import-results-table data-import-preview-table">
-                  <thead id="dataWorkbenchImportResultsThead">
-                    <tr></tr>
-                  </thead>
-                  <tbody id="dataWorkbenchImportResultsTbody"></tbody>
-                </table>
+                <div class="data-workbench-table-wrap data-import-preview-wrap data-import-tabulator-wrap">
+                  <div id="dataWorkbenchImportTableMount" class="data-import-tabulator query-explorer-table-scroll ph-no-capture" aria-live="polite"></div>
+                </div>
+              </section>
               </div>
             </div>
           </div>
@@ -1827,24 +1807,6 @@
                 >
                   Consultas guardadas
                 </button>
-                <button
-                  type="button"
-                  id="queryExplorerCopyLinkBtn"
-                  class="anonymous-apex-small-btn"
-                  data-i18n="queryExplorer.copyLink"
-                  data-i18n-title="queryExplorer.copyLinkTitle"
-                >
-                  Copiar enlace
-                </button>
-                <button
-                  type="button"
-                  id="queryExplorerQuickSaveBtn"
-                  class="anonymous-apex-small-btn"
-                  data-i18n="queryExplorer.saveCurrentQuery"
-                  data-i18n-title="queryExplorer.saveCurrentQueryTitle"
-                >
-                  Guardar
-                </button>
                 <label
                   class="org-limits-compare-toggle"
                   for="queryExplorerCompareToggle"
@@ -1857,50 +1819,39 @@
               </div>
             </div>
             <p id="queryExplorerStatus" class="org-limits-status" role="status"></p>
-            <div class="query-explorer-controls">
-              <div class="query-explorer-controls-row">
-                <label class="query-explorer-field">
+            <section class="query-explorer-card query-explorer-editor-card" aria-labelledby="queryExplorerEditorSectionTitle">
+              <div class="query-explorer-card-header">
+                <h3 id="queryExplorerEditorSectionTitle" class="query-explorer-card-title" data-i18n="queryExplorer.exportQuery">Consulta de exportación</h3>
+                <div class="query-explorer-controls-row query-explorer-card-controls">
+                <label class="query-explorer-field query-explorer-field--inline">
                   <span class="query-explorer-field-label" data-i18n="queryExplorer.apiLabel">API</span>
                   <select id="queryExplorerApiSelect" class="query-explorer-select" aria-describedby="queryExplorerStatus">
-                    <option value="rest" data-i18n="queryExplorer.apiRest">REST (estándar)</option>
-                    <option value="tooling" data-i18n="queryExplorer.apiTooling">Tooling</option>
+                    <option value="rest" data-i18n="queryExplorer.apiRest">Standard API</option>
+                    <option value="tooling" data-i18n="queryExplorer.apiTooling">Tooling API</option>
                   </select>
                 </label>
-                <label class="query-explorer-field">
+                <label class="query-explorer-field query-explorer-field--inline">
                   <span class="query-explorer-field-label" data-i18n="queryExplorer.languageLabel">Lenguaje</span>
                   <select id="queryExplorerLangSelect" class="query-explorer-select">
                     <option value="soql" data-i18n="queryExplorer.langSoql">SOQL</option>
                     <option value="sosl" data-i18n="queryExplorer.langSosl">SOSL</option>
                   </select>
                 </label>
-              </div>
-              <details class="query-explorer-builder" id="queryExplorerBuilder">
-                <summary data-i18n="queryExplorer.builderTitle">Builder SOQL</summary>
-                <div class="query-explorer-builder-body">
-                  <label class="query-explorer-field">
-                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderObject">Objeto</span>
-                    <input id="queryExplorerBuilderObject" type="text" class="sfoc-query-input" placeholder="Account" autocomplete="off" spellcheck="false" />
-                  </label>
-                  <label class="query-explorer-field">
-                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderFields">Campos</span>
-                    <input id="queryExplorerBuilderFields" type="text" class="sfoc-query-input" placeholder="Id, Name" autocomplete="off" spellcheck="false" />
-                  </label>
-                  <label class="query-explorer-field query-explorer-builder-where">
-                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderWhere">WHERE</span>
-                    <input id="queryExplorerBuilderWhere" type="text" class="sfoc-query-input" placeholder="Industry = 'Banking'" autocomplete="off" spellcheck="false" />
-                  </label>
-                  <label class="query-explorer-field">
-                    <span class="query-explorer-field-label" data-i18n="queryExplorer.builderLimit">LIMIT</span>
-                    <input id="queryExplorerBuilderLimit" type="number" class="sfoc-query-input query-explorer-builder-limit" min="1" placeholder="200" />
-                  </label>
-                  <button type="button" id="queryExplorerBuilderApplyBtn" class="query-explorer-secondary-btn" data-i18n="queryExplorer.builderApply">
-                    Aplicar al editor
-                  </button>
+                <label id="queryExplorerCompareMatchFieldWrap" class="query-explorer-field query-explorer-field--inline query-explorer-compare-match hidden" for="queryExplorerCompareMatchField">
+                  <span class="query-explorer-field-label" data-i18n="queryExplorer.compareMatchLabel">Emparejar por</span>
+                  <select id="queryExplorerCompareMatchField" class="query-explorer-select">
+                    <option value="auto" data-i18n="queryExplorer.compareMatchAuto">Automático</option>
+                    <option value="__row_order" data-i18n="queryExplorer.compareMatchRowOrder">Orden de filas</option>
+                  </select>
+                </label>
+                <span class="query-explorer-toolbar-spacer"></span>
+                <button type="button" id="queryExplorerRunBtn" class="sfoc-btn sfoc-btn--primary org-limits-refresh-btn query-explorer-run-btn">
+                  <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-player-play"></use></svg>
+                  <span data-i18n="queryExplorer.run">Run</span>
+                </button>
                 </div>
-              </details>
-              <label class="query-explorer-query-label" for="queryExplorerEditorMount">
-                <span class="query-explorer-field-label" data-i18n="queryExplorer.queryLabel">Consulta</span>
-              </label>
+              </div>
+              <div class="query-explorer-controls">
               <div class="query-explorer-editor-wrap">
                 <div
                   id="queryExplorerEditorMount"
@@ -1917,61 +1868,72 @@
                   data-i18n-aria-label="queryExplorer.resizeEditor"
                 ></div>
               </div>
-              <div class="query-explorer-run-row">
-                <button type="button" id="queryExplorerRunBtn" class="sfoc-btn sfoc-btn--primary org-limits-refresh-btn" data-i18n="queryExplorer.run">
-                  Ejecutar
-                </button>
               </div>
-            </div>
-            <div id="queryExplorerSingleWrap" class="query-explorer-single-wrap">
-              <div class="query-explorer-result-toolbar">
-                <button type="button" id="queryExplorerSinglePrev" class="query-explorer-icon-btn" disabled data-i18n-aria-label="code.ariaQueryPrev">←</button>
+            </section>
+            <section id="queryExplorerSingleWrap" class="query-explorer-single-wrap query-explorer-card query-explorer-result-card" aria-labelledby="queryExplorerResultSectionTitle">
+              <div class="query-explorer-result-card-header">
+                <h3 id="queryExplorerResultSectionTitle" class="query-explorer-card-title" data-i18n="queryExplorer.exportResults">Resultados de exportación</h3>
                 <span id="queryExplorerSingleMeta" class="query-explorer-page-meta"></span>
-                <button type="button" id="queryExplorerSingleNext" class="query-explorer-icon-btn" disabled data-i18n-aria-label="code.ariaQueryNext">→</button>
                 <span class="query-explorer-toolbar-spacer"></span>
+                <div class="query-explorer-result-toolbar">
+                <button type="button" id="queryExplorerSendToImportBtn" class="sfoc-btn sfoc-btn--primary query-explorer-prepare-import-btn">
+                  <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-database-cog"></use></svg>
+                  <span data-i18n="queryExplorer.sendToImport">Preparar importación</span>
+                </button>
                 <button type="button" id="queryExplorerSingleCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">
                   CSV
                 </button>
                 <button type="button" id="queryExplorerSingleJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">
                   JSON
                 </button>
+                <button type="button" id="queryExplorerSingleCopyCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.copyCsv">
+                  Copiar CSV
+                </button>
+                <button type="button" id="queryExplorerSingleCopyExcel" class="query-explorer-secondary-btn" data-i18n="queryExplorer.copyExcel">
+                  Copiar Excel
+                </button>
+                </div>
               </div>
               <div id="queryExplorerSingleTableMount" class="query-explorer-table-scroll ph-no-capture"></div>
-            </div>
+            </section>
             <div id="queryExplorerCompareWrap" class="query-explorer-compare-wrap hidden">
               <div class="query-explorer-split">
-                <div class="query-explorer-split-pane" data-side="left">
-                  <h3 id="queryExplorerCompareLeftTitle" class="query-explorer-pane-title"></h3>
-                  <div class="query-explorer-result-toolbar">
-                    <button type="button" id="queryExplorerLeftPrev" class="query-explorer-icon-btn" disabled>←</button>
+                <section class="query-explorer-split-pane query-explorer-card query-explorer-result-card" data-side="left" aria-labelledby="queryExplorerCompareLeftTitle">
+                  <div class="query-explorer-result-card-header">
+                    <h3 id="queryExplorerCompareLeftTitle" class="query-explorer-card-title"></h3>
                     <span id="queryExplorerLeftMeta" class="query-explorer-page-meta"></span>
-                    <button type="button" id="queryExplorerLeftNext" class="query-explorer-icon-btn" disabled>→</button>
                     <span class="query-explorer-toolbar-spacer"></span>
-                    <button type="button" id="queryExplorerLeftCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">
-                      CSV
-                    </button>
-                    <button type="button" id="queryExplorerLeftJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">
-                      JSON
-                    </button>
+                    <div class="query-explorer-result-toolbar">
+                      <button type="button" id="queryExplorerLeftSendToImportBtn" class="sfoc-btn sfoc-btn--primary query-explorer-prepare-import-btn">
+                        <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-database-cog"></use></svg>
+                        <span data-i18n="queryExplorer.sendToImport">Preparar importación</span>
+                      </button>
+                      <button type="button" id="queryExplorerLeftCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">CSV</button>
+                      <button type="button" id="queryExplorerLeftJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">JSON</button>
+                      <button type="button" id="queryExplorerLeftCopyCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.copyCsv">Copiar CSV</button>
+                      <button type="button" id="queryExplorerLeftCopyExcel" class="query-explorer-secondary-btn" data-i18n="queryExplorer.copyExcel">Copiar Excel</button>
+                    </div>
                   </div>
                   <div id="queryExplorerLeftTableMount" class="query-explorer-table-scroll ph-no-capture"></div>
-                </div>
-                <div class="query-explorer-split-pane" data-side="right">
-                  <h3 id="queryExplorerCompareRightTitle" class="query-explorer-pane-title"></h3>
-                  <div class="query-explorer-result-toolbar">
-                    <button type="button" id="queryExplorerRightPrev" class="query-explorer-icon-btn" disabled>←</button>
+                </section>
+                <section class="query-explorer-split-pane query-explorer-card query-explorer-result-card" data-side="right" aria-labelledby="queryExplorerCompareRightTitle">
+                  <div class="query-explorer-result-card-header">
+                    <h3 id="queryExplorerCompareRightTitle" class="query-explorer-card-title"></h3>
                     <span id="queryExplorerRightMeta" class="query-explorer-page-meta"></span>
-                    <button type="button" id="queryExplorerRightNext" class="query-explorer-icon-btn" disabled>→</button>
                     <span class="query-explorer-toolbar-spacer"></span>
-                    <button type="button" id="queryExplorerRightCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">
-                      CSV
-                    </button>
-                    <button type="button" id="queryExplorerRightJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">
-                      JSON
-                    </button>
+                    <div class="query-explorer-result-toolbar">
+                      <button type="button" id="queryExplorerRightSendToImportBtn" class="sfoc-btn sfoc-btn--primary query-explorer-prepare-import-btn">
+                        <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-database-cog"></use></svg>
+                        <span data-i18n="queryExplorer.sendToImport">Preparar importación</span>
+                      </button>
+                      <button type="button" id="queryExplorerRightCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportCsv">CSV</button>
+                      <button type="button" id="queryExplorerRightJson" class="query-explorer-secondary-btn" data-i18n="queryExplorer.exportJson">JSON</button>
+                      <button type="button" id="queryExplorerRightCopyCsv" class="query-explorer-secondary-btn" data-i18n="queryExplorer.copyCsv">Copiar CSV</button>
+                      <button type="button" id="queryExplorerRightCopyExcel" class="query-explorer-secondary-btn" data-i18n="queryExplorer.copyExcel">Copiar Excel</button>
+                    </div>
                   </div>
                   <div id="queryExplorerRightTableMount" class="query-explorer-table-scroll ph-no-capture"></div>
-                </div>
+                </section>
               </div>
             </div>
             <div
@@ -1989,23 +1951,34 @@
                 <h3 id="queryExplorerSavedQueriesModalTitle" data-i18n="queryExplorer.savedQueriesModalTitle">
                   Consultas guardadas
                 </h3>
-                <div class="anonymous-apex-scripts-modal-save-row">
-                  <input
-                    type="text"
-                    id="queryExplorerQueryNameInput"
-                    class="anonymous-apex-script-name-input sfoc-query-input"
-                    data-i18n-placeholder="queryExplorer.queryNamePlaceholder"
-                    placeholder="Nombre…"
-                    maxlength="80"
-                  />
-                  <button
-                    type="button"
-                    id="queryExplorerSaveNamedQueryBtn"
-                    class="anonymous-apex-small-btn"
-                    data-i18n="queryExplorer.saveNamedQuery"
-                  >
-                    Guardar
-                  </button>
+                <p class="query-explorer-saved-modal-lead" data-i18n="queryExplorer.savedQueriesLead">
+                  Guarda, carga y organiza tus consultas desde un único sitio.
+                </p>
+                <div class="query-explorer-saved-query-form">
+                  <label class="query-explorer-saved-query-label" for="queryExplorerQueryNameInput" data-i18n="queryExplorer.queryNameLabel">Nombre</label>
+                  <div class="anonymous-apex-scripts-modal-save-row">
+                    <input
+                      type="text"
+                      id="queryExplorerQueryNameInput"
+                      class="anonymous-apex-script-name-input sfoc-query-input"
+                      data-i18n-placeholder="queryExplorer.queryNamePlaceholder"
+                      placeholder="Nombre…"
+                      maxlength="80"
+                    />
+                    <button
+                      type="button"
+                      id="queryExplorerSaveNamedQueryBtn"
+                      class="sfoc-btn sfoc-btn--primary query-explorer-saved-primary-btn"
+                      data-i18n="queryExplorer.saveNamedQuery"
+                    >
+                      Guardar
+                    </button>
+                    <button type="button" id="queryExplorerNewSavedQueryBtn" class="anonymous-apex-small-btn" data-i18n="queryExplorer.newSavedQuery">Nueva</button>
+                  </div>
+                </div>
+                <div class="query-explorer-saved-library-heading">
+                  <span data-i18n="queryExplorer.savedQueriesLibrary">Biblioteca</span>
+                  <input id="queryExplorerSavedQueriesSearch" type="search" class="sfoc-query-input" data-i18n-placeholder="queryExplorer.searchSavedQueries" placeholder="Buscar consultas…" autocomplete="off" />
                 </div>
                 <div
                   id="queryExplorerSavedQueriesList"
@@ -3615,6 +3588,7 @@
     <script src="../vendor/jsdiff/diff.min.js"></script>
     <script src="../vendor/monaco-editor/min/vs/loader.js"></script>
     <script src="./editor/monaco-amd-config.js"></script>
+    <script src="../vendor/read-excel-file/read-excel-file.min.js"></script>
     <script type="module" src="./code.js"></script>
   </body>
   </html>

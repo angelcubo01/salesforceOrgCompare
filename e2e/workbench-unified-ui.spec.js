@@ -106,7 +106,7 @@ test('los iconos del Workbench permanecen internos y visibles durante navegació
   for (const route of [
     ['code-studio', 'apex-vf'], ['code-studio', 'lwc-aura'],
     ['data-compare', 'custom-settings'], ['data-compare', 'custom-metadata'], ['data-compare', 'records'],
-    ['data-workbench', 'record-editor'], ['data-workbench', 'bulk-import'], ['query-explorer', 'main']
+    ['data-workbench', 'main'], ['query-explorer', 'main']
   ]) {
     await navigateWorkspace(page, route[0], route[1]);
     expect(await sample(), `${route.join('/')}: iconos visibles`).toEqual([]);

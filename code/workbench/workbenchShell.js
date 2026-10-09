@@ -501,13 +501,14 @@ function actionState(action) {
   const disabled = action.state?.disabled === 'source'
     ? !source || source.disabled || source.getAttribute('aria-disabled') === 'true'
     : false;
-  const loading = action.state?.loading === 'source' && !!source && (
+  const sourceBusy = action.state?.loading === 'source' && !!source && (
     source.getAttribute('aria-busy') === 'true' ||
     source.dataset.loading === 'true' ||
     source.dataset.busy === 'true' ||
     source.classList.contains('is-loading') ||
     source.classList.contains('loading')
   );
+  const loading = sourceBusy && source.dataset.allowWhileBusy !== 'true';
   const visible = action.visibleWhen === 'source-context' ? sourceContextVisible(source) : true;
   return { source, disabled, loading, visible };
 }
@@ -558,6 +559,13 @@ function createHeaderAction(action, { menuItem = false } = {}) {
   let inferredLoadingTimer = 0;
   const sync = () => {
     const current = actionState(action);
+    const currentLabel = current.source?.dataset?.i18n
+      ? t(current.source.dataset.i18n)
+      : label;
+    const currentVariant = current.source?.dataset?.workbenchVariant || action.variant;
+    for (const variant of ['primary', 'secondary', 'destructive']) {
+      button.classList.toggle(`workbench-header-action--${variant}`, currentVariant === variant);
+    }
     if (inferredLoading && !current.disabled && !current.loading) {
       inferredLoading = false;
       window.clearTimeout(inferredLoadingTimer);
@@ -569,13 +577,14 @@ function createHeaderAction(action, { menuItem = false } = {}) {
     button.classList.toggle('is-loading', loading);
     button.setAttribute('aria-disabled', button.disabled ? 'true' : 'false');
     button.setAttribute('aria-busy', loading ? 'true' : 'false');
+    labelEl.textContent = currentLabel;
     const reason = loading
-      ? t('workbench.action.loading', { action: label })
+      ? t('workbench.action.loading', { action: currentLabel })
       : current.disabled
         ? t(action.disabledReasonKey || 'workbench.action.unavailable')
-        : label;
+        : currentLabel;
     button.title = reason;
-    button.setAttribute('aria-label', label);
+    button.setAttribute('aria-label', currentLabel);
   };
   sync();
   headerStateSyncers.push(sync);

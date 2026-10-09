@@ -25,11 +25,12 @@ export const APP_NAV_DEVELOPMENT_TOOLS = Object.freeze([
   'QuickEdit',
   'LightningQuickEdit',
   'AnonymousApex',
-  'QueryExplorer',
   'RestExplorer',
   'DebugLogBrowser',
   'ApexCoverageCompare',
-  'EventMonitor'
+  'EventMonitor',
+  'QueryExplorer',
+  'DataWorkbench'
 ]);
 
 /** Modo «Análisis»: dependencias, permisos y comparación de datos entre orgs. */
@@ -40,8 +41,7 @@ export const APP_NAV_ANALYSIS_TOOLS = Object.freeze([
   'CustomSettingsCompare',
   'CustomMetadataCompare',
   'RecordCompare',
-  'ObjectDescribe',
-  'DataWorkbench'
+  'ObjectDescribe'
 ]);
 
 /** Modo «Límites y auditoría»: salud del entorno e historiales. */

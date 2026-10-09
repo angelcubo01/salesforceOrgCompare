@@ -141,12 +141,12 @@ async function throwWithSalesforceRestError(label, res) {
  * @param {string} soqlOrRelativePath consulta SOQL o path que empiece por `/services/data/...`
  * @returns {{ records: any[], totalSize?: number, done: boolean, nextPath: string | null }}
  */
-export async function restSoqlQueryPage(instanceUrl, sid, apiVersion, soqlOrRelativePath) {
+export async function restSoqlQueryPage(instanceUrl, sid, apiVersion, soqlOrRelativePath, init = {}) {
   const path =
     soqlOrRelativePath && String(soqlOrRelativePath).startsWith('/')
       ? String(soqlOrRelativePath)
       : `/services/data/v${apiVersion}/query?q=${encodeURIComponent(String(soqlOrRelativePath))}`;
-  const res = await restFetchWithSid(instanceUrl, sid, path);
+  const res = await restFetchWithSid(instanceUrl, sid, path, init);
   if (!res.ok) {
     await throwWithSalesforceRestError('REST query', res);
   }
@@ -164,12 +164,12 @@ export async function restSoqlQueryPage(instanceUrl, sid, apiVersion, soqlOrRela
 /**
  * Una página de SOQL vía Tooling (`/tooling/query` o continuación).
  */
-export async function toolingSoqlQueryPage(instanceUrl, sid, apiVersion, soqlOrRelativePath) {
+export async function toolingSoqlQueryPage(instanceUrl, sid, apiVersion, soqlOrRelativePath, init = {}) {
   const path =
     soqlOrRelativePath && String(soqlOrRelativePath).startsWith('/')
       ? String(soqlOrRelativePath)
       : `/services/data/v${apiVersion}/tooling/query?q=${encodeURIComponent(String(soqlOrRelativePath))}`;
-  const res = await restFetchWithSid(instanceUrl, sid, path);
+  const res = await restFetchWithSid(instanceUrl, sid, path, init);
   if (!res.ok) {
     await throwWithSalesforceRestError('Tooling query', res);
   }
@@ -203,12 +203,12 @@ function normalizeSoslSearchRow(rec) {
 /**
  * Una petición SOSL vía REST (`/search` o continuación).
  */
-export async function restSoslSearchPage(instanceUrl, sid, apiVersion, soslOrRelativePath) {
+export async function restSoslSearchPage(instanceUrl, sid, apiVersion, soslOrRelativePath, init = {}) {
   const path =
     soslOrRelativePath && String(soslOrRelativePath).startsWith('/')
       ? String(soslOrRelativePath)
       : `/services/data/v${apiVersion}/search?q=${encodeURIComponent(String(soslOrRelativePath))}`;
-  const res = await restFetchWithSid(instanceUrl, sid, path);
+  const res = await restFetchWithSid(instanceUrl, sid, path, init);
   if (!res.ok) {
     await throwWithSalesforceRestError('REST search (SOSL)', res);
   }

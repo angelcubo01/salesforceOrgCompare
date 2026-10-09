@@ -12,6 +12,19 @@ function isCustomMetadataType(apiName) {
   return String(apiName || '').trim().toLowerCase().endsWith('__mdt');
 }
 
+// EntityParticle incluye atributos internos de Tooling API (por ejemplo,
+// ManageableState o MasterLabelNorm) que no son campos consultables en los
+// registros Custom Metadata. Solo se pueden seleccionar las claves estables y
+// los campos personalizados reales del tipo.
+const CUSTOM_METADATA_STANDARD_QUERY_FIELDS = new Set(['DeveloperName', 'MasterLabel']);
+
+function isQueryableCustomMetadataField(particle) {
+  const name = String(particle?.QualifiedApiName || '').trim();
+  return CUSTOM_METADATA_STANDARD_QUERY_FIELDS.has(name) ||
+    particle?.IsCustom === true ||
+    name.endsWith('__c');
+}
+
 /**
  * Los tipos Custom Metadata admiten SOQL, pero no exponen el recurso REST
  * `/sobjects/{type}/describe`. EntityParticle es la fuente de Tooling API
@@ -19,13 +32,14 @@ function isCustomMetadataType(apiName) {
  */
 async function describeCustomMetadataType(instanceUrl, sid, apiVersion, apiName) {
   const soql =
-    'SELECT QualifiedApiName, DataType, IsCalculated ' +
+    'SELECT QualifiedApiName, DataType, IsCalculated, IsCustom ' +
     `FROM EntityParticle WHERE EntityDefinition.QualifiedApiName = '${escapeSoqlLiteral(apiName)}' ` +
     'ORDER BY QualifiedApiName';
   const particles = await toolingQueryAll(instanceUrl, sid, apiVersion, soql);
 
   return {
     fields: (particles || [])
+      .filter(isQueryableCustomMetadataField)
       .map((particle) => ({
         name: String(particle?.QualifiedApiName || '').trim(),
         type: String(particle?.DataType || '').trim().toLowerCase(),

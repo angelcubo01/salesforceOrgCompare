@@ -3162,6 +3162,9 @@ html[data-ui-theme="light"] .env-status-detail-section {
 html[data-ui-theme="light"] .env-status-summary-card strong,
 html[data-ui-theme="light"] .env-status-tabpanel h4,
 html[data-ui-theme="light"] .env-status-detail-section-title { color: var(--sfoc-light-text); }
+html[data-ui-theme="light"] .env-status-summary-card span {
+  color: var(--sfoc-light-text-muted);
+}
 html[data-ui-theme="light"] .env-status-tab,
 html[data-ui-theme="light"] .env-status-inline-btn { color: var(--sfoc-light-text-muted); border-color: var(--sfoc-light-border); }
 html[data-ui-theme="light"] .env-status-tab.is-active,
@@ -3257,6 +3260,10 @@ html[data-ui-theme="light"] .permission-diff-query-card:focus-within {
 html[data-ui-theme="light"] .permission-diff-query-card-head h3,
 html[data-ui-theme="light"] .permission-diff-result-section-head h3 {
   color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme="light"] .permission-diff-query-card-head p {
+  color: var(--sfoc-light-text-muted);
 }
 
 html[data-ui-theme="light"] .permission-diff-table-wrap {

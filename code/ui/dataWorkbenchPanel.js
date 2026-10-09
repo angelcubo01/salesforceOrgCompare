@@ -1,6 +1,12 @@
 import { state } from '../core/state.js';
 import { bg } from '../core/bridge.js';
 import { t } from '../../shared/i18n.js';
+import { consumeStagedImportData } from '../../shared/dataTransfer.js';
+import {
+  applyTabulatorTheme,
+  disposeTabulatorTheme,
+  styleTabulatorRow
+} from './tabulatorTheme.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { handleToolError } from '../../shared/reportToolError.js';
@@ -9,15 +15,17 @@ import { filterSobjects, resolveObjectApiNameFromId } from '../../shared/objectD
 import { parseFieldsFromForm, buildRecordPayload } from '../../shared/dataWorkbenchApi.js';
 import {
   autoMapColumns,
-  parseImportData
+  parseImportData,
+  validateExcelImportRows,
+  validateImportFileContent
 } from '../../shared/dataWorkbenchCsv.js';
 import { buildRecordEditorRows, buildUpdatePayloadFromRows } from '../../shared/recordEditorModel.js';
 import { buildRecordViewUrl } from '../../shared/idActionsApi.js';
 import { logToolUsage } from './toolUsageLog.js';
-import { confirmSfocOrgAction } from './sfocModal.js';
+import { confirmSfocOrgAction, confirmSfocToolAction } from './sfocModal.js';
 
-/** @type {'recordEditor' | 'import'} */
-let activeTab = 'recordEditor';
+/** @type {'import'} */
+let activeTab = 'import';
 /** @type {Array<Record<string, unknown>>} */
 let globalSobjects = [];
 /** @type {Record<string, unknown> | null} */
@@ -39,8 +47,33 @@ let parsedImport = null;
 /** @type {Array<{ status: string, detail: string } | null>} */
 let importRowStatuses = [];
 let importRunComplete = false;
-const IMPORT_PREVIEW_MAX_ROWS = 500;
+let importTable = null;
+let importTableRenderVersion = 0;
+let importTableSource = null;
+let importTableColumnSignature = '';
+let importDescribe = null;
+let importWritableFieldNames = new Set();
+let importPasteParseTimer = 0;
+let tabulatorPromise = null;
 let loadInFlight = false;
+const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+const IMPORT_FILE_MIME_TYPES = {
+  csv: new Set(['text/csv', 'application/csv', 'application/vnd.ms-excel', 'text/plain']),
+  json: new Set(['application/json', 'text/json', 'application/ld+json']),
+  excel: new Set([
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel.sheet.macroenabled.12',
+    'application/octet-stream'
+  ])
+};
+
+function loadTabulator() {
+  if (!tabulatorPromise) {
+    tabulatorPromise = import('../../vendor/tabulator/tabulator_esm.min.js')
+      .then(({ TabulatorFull }) => TabulatorFull);
+  }
+  return tabulatorPromise;
+}
 
 function escapeHtml(v) {
   return String(v ?? '')
@@ -59,35 +92,56 @@ function setStatus(msg) {
   if (el) el.textContent = msg || '';
 }
 
-function setActiveTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll('[data-dw-tab]').forEach((btn) => {
-    const id = btn.getAttribute('data-dw-tab');
-    btn.classList.toggle('active', id === tab);
-    btn.setAttribute('aria-selected', id === tab ? 'true' : 'false');
-  });
-  document.getElementById('dataWorkbenchTabRecordEditor')?.classList.toggle('hidden', tab !== 'recordEditor');
-  document.getElementById('dataWorkbenchTabImport')?.classList.toggle('hidden', tab !== 'import');
+function setActiveTab() {
+  activeTab = 'import';
+  document.getElementById('dataWorkbenchTabImport')?.classList.remove('hidden');
 }
 
-export function setDataWorkbenchView(view) {
-  setActiveTab(view === 'bulk-import' ? 'import' : 'recordEditor');
+export function setDataWorkbenchView() {
+  setActiveTab();
 }
 
-function populateObjectSelect(selectId, sobjects) {
-  const sel = document.getElementById(selectId);
-  if (!sel) return;
-  const search = document.getElementById('dataWorkbenchObjectSearch')?.value || '';
-  const filtered = filterSobjects(sobjects, search, '').slice(0, 500);
-  const prev = sel.value;
-  sel.innerHTML = `<option value="">${escapeHtml(t('dataWorkbench.selectObject'))}</option>`;
-  for (const s of filtered) {
-    const opt = document.createElement('option');
-    opt.value = String(s.name || '');
-    opt.textContent = `${s.label || s.name} (${s.name})`;
-    sel.appendChild(opt);
+function hideAutocomplete(input, panel) {
+  if (panel) {
+    panel.hidden = true;
+    panel.innerHTML = '';
   }
-  if (prev && filtered.some((s) => s.name === prev)) sel.value = prev;
+  input?.setAttribute('aria-expanded', 'false');
+}
+
+function renderObjectPickerResults(input, panel) {
+  if (!input || !panel) return;
+  const matches = filterSobjects(globalSobjects, input.value, '').slice(0, 40);
+  if (!matches.length) {
+    hideAutocomplete(input, panel);
+    return;
+  }
+  panel.innerHTML = matches.map((sobject) => {
+    const name = String(sobject.name || '');
+    const label = String(sobject.label || name);
+    return `<button type="button" class="item data-workbench-autocomplete-item" role="option" data-object-api-name="${escapeHtml(name)}">
+      <span class="data-workbench-autocomplete-title">${escapeHtml(name)}</span>
+      <span class="data-workbench-autocomplete-subtitle">${escapeHtml(`${label} (${name})`)}</span>
+    </button>`;
+  }).join('');
+  panel.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+}
+
+function bindObjectPicker(inputId, panelId, onSelect) {
+  const input = /** @type {HTMLInputElement | null} */ (document.getElementById(inputId));
+  const panel = document.getElementById(panelId);
+  if (!input || !panel) return;
+  input.addEventListener('input', () => renderObjectPickerResults(input, panel));
+  input.addEventListener('focus', () => renderObjectPickerResults(input, panel));
+  input.addEventListener('blur', () => setTimeout(() => hideAutocomplete(input, panel), 120));
+  panel.addEventListener('click', (event) => {
+    const option = /** @type {HTMLElement} */ (event.target).closest('[data-object-api-name]');
+    if (!option) return;
+    input.value = option.dataset.objectApiName || '';
+    hideAutocomplete(input, panel);
+    onSelect?.();
+  });
 }
 
 async function loadGlobal() {
@@ -107,8 +161,6 @@ async function loadGlobal() {
       throw new Error(res?.error || t('dataWorkbench.loadFailed'));
     }
     globalSobjects = Array.isArray(res.sobjects) ? res.sobjects : [];
-    populateObjectSelect('dataWorkbenchObjectSelect', globalSobjects);
-    populateObjectSelect('dataWorkbenchImportObjectSelect', globalSobjects);
     setStatus(t('dataWorkbench.objectsLoaded', { count: globalSobjects.length }));
   } catch (e) {
     void handleToolError(e, { artifact_type: 'DataWorkbench', phase: 'describe_global' });
@@ -500,18 +552,85 @@ function renderCsvMapping(csv, describe) {
     wrap.innerHTML = '';
     return;
   }
-  const fields = Array.isArray(describe?.fields) ? describe.fields : [];
+  const operation = document.getElementById('dataWorkbenchImportOperation')?.value || 'insert';
+  const fields = importMappableFields(describe, operation)
+    .sort((a, b) => String(a.label || a.name).localeCompare(String(b.label || b.name)));
+  importWritableFieldNames = new Set(fields.map((field) => String(field.name)));
   const auto = autoMapColumns(csv.headers, fields);
   wrap.innerHTML = csv.headers
     .map((h) => {
       const mapped = auto[h] || '';
-      const grey = mapped ? '' : 'data-import-unmapped';
-      return `<label class="data-workbench-csv-map-row ${grey}">
+      const unmapped = mapped ? '' : 'data-import-unmapped';
+      return `<div class="data-workbench-csv-map-row ${unmapped}">
         <span class="data-workbench-csv-col">${escapeHtml(h)}</span>
-        <input type="text" class="sfoc-query-input data-workbench-csv-map-input" data-csv-col="${escapeHtml(h)}" value="${escapeHtml(mapped)}" placeholder="${escapeHtml(t('dataWorkbench.sfFieldPlaceholder'))}" />
-      </label>`;
+        <div class="data-workbench-csv-map-control">
+          <div class="data-workbench-autocomplete data-workbench-csv-map-autocomplete">
+            <input type="search" class="sfoc-query-input data-workbench-csv-map-input" data-csv-col="${escapeHtml(h)}" value="${escapeHtml(mapped)}" placeholder="${escapeHtml(t('dataWorkbench.sfFieldPlaceholder'))}" autocomplete="off" aria-autocomplete="list" aria-expanded="false" />
+            <div class="sfoc-autocomplete-panel data-workbench-autocomplete-results" role="listbox" hidden></div>
+          </div>
+          <button type="button" class="query-explorer-secondary-btn data-workbench-csv-map-skip" data-skip-csv-col="${escapeHtml(h)}" title="${escapeHtml(t('dataImport.skipColumn'))}">${escapeHtml(t('dataImport.skip'))}</button>
+        </div>
+      </div>`;
     })
     .join('');
+  syncImportTableHeaders();
+}
+
+function isImportMappingValue(value) {
+  const fieldName = String(value || '').trim();
+  return fieldName === '_' || importWritableFieldNames.has(fieldName);
+}
+
+function updateImportMappingRow(input) {
+  const row = input?.closest('.data-workbench-csv-map-row');
+  row?.classList.toggle('data-import-unmapped', !isImportMappingValue(input?.value));
+  syncImportTableHeaders();
+}
+
+function renderImportFieldResults(input, panel) {
+  if (!input || !panel) return;
+  const needle = input.value.trim().toLowerCase();
+  const fields = importMappableFields(
+    importDescribe,
+    document.getElementById('dataWorkbenchImportOperation')?.value || 'insert'
+  ).filter((field) => {
+    const name = String(field.name || '').toLowerCase();
+    const label = String(field.label || '').toLowerCase();
+    return !needle || name.includes(needle) || label.includes(needle);
+  }).slice(0, 40);
+  if (!fields.length) {
+    hideAutocomplete(input, panel);
+    return;
+  }
+  panel.innerHTML = fields.map((field) => {
+    const name = String(field.name || '');
+    const label = String(field.label || name);
+    return `<button type="button" class="item data-workbench-autocomplete-item" role="option" data-sf-field="${escapeHtml(name)}">
+      <span class="data-workbench-autocomplete-title">${escapeHtml(name)}</span>
+      <span class="data-workbench-autocomplete-subtitle">${escapeHtml(label)}</span>
+    </button>`;
+  }).join('');
+  panel.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+}
+
+function importOperationRequiresId(operation) {
+  return ['update', 'upsert', 'delete', 'undelete'].includes(String(operation || '').toLowerCase());
+}
+
+function importMappableFields(describe, operation) {
+  const normalizedOperation = String(operation || 'insert').toLowerCase();
+  const fields = Array.isArray(describe?.fields) ? describe.fields : [];
+  if (normalizedOperation === 'delete' || normalizedOperation === 'undelete') {
+    return fields.filter((field) => field?.name === 'Id');
+  }
+  return fields.filter((field) => {
+    if (field?.name === 'Id') return importOperationRequiresId(normalizedOperation);
+    if (field?.calculated) return false;
+    return normalizedOperation === 'insert'
+      ? !!field?.createable
+      : !!field?.createable || !!field?.updateable;
+  });
 }
 
 function collectCsvColumnMap() {
@@ -521,24 +640,25 @@ function collectCsvColumnMap() {
     const input = /** @type {HTMLInputElement} */ (el);
     const col = input.dataset.csvCol || '';
     const sf = input.value.trim();
-    if (col && sf) map[col] = sf;
+    if (col && sf && sf !== '_' && importWritableFieldNames.has(sf)) map[col] = sf;
   });
   return map;
 }
 
-function buildImportRecordsFromParsed(columnMap) {
+function buildImportRecordsFromParsed(columnMap, includedRowIndexes = null) {
   /** @type {Record<string, string>[]} */
   const records = [];
   /** @type {number[]} */
   const rowIndexes = [];
   if (!parsedImport?.rows?.length) return { records, rowIndexes };
   for (let idx = 0; idx < parsedImport.rows.length; idx++) {
+    if (includedRowIndexes && !includedRowIndexes.has(idx)) continue;
     const row = parsedImport.rows[idx];
     /** @type {Record<string, string>} */
     const rec = {};
     parsedImport.headers.forEach((header, i) => {
       const sfField = columnMap[header];
-      if (!sfField) return;
+      if (!sfField || sfField === '_') return;
       rec[sfField] = row[i] != null ? String(row[i]) : '';
     });
     if (Object.keys(rec).length > 0) {
@@ -549,81 +669,402 @@ function buildImportRecordsFromParsed(columnMap) {
   return { records, rowIndexes };
 }
 
+function importColumnWidth(title, minWidth = 120) {
+  return Math.max(minWidth, Math.min(280, Math.ceil(String(title).length * 7.5) + 34));
+}
+
+function importColumnTitle(header) {
+  const mappingInput = [...document.querySelectorAll('.data-workbench-csv-map-input')]
+    .find((input) => input.dataset.csvCol === header);
+  return mappingInput?.value.trim() || header;
+}
+
+function syncImportTableHeaders() {
+  if (!importTable || importTable.destroyed || !parsedImport?.headers?.length) return;
+  parsedImport.headers.forEach((header, columnIndex) => {
+    const title = importColumnTitle(header);
+    const columnElement = importTable.getColumn?.(`__sfocColumn${columnIndex}`)?.getElement?.();
+    const titleElement = columnElement?.querySelector('.tabulator-col-title');
+    if (titleElement) titleElement.textContent = title;
+  });
+}
+
+function captureImportTableState(table) {
+  if (!table || table.__sfocBuilt !== true || importTableSource !== parsedImport) return null;
+  const holder = table.getElement?.()?.querySelector('.tabulator-tableholder');
+  return {
+    scrollTop: holder?.scrollTop || 0,
+    scrollLeft: holder?.scrollLeft || 0,
+    filters: (table.getHeaderFilters?.() || []).map(({ field, value }) => ({ field, value })),
+    sorters: (table.getSorters?.() || []).map(({ field, dir }) => ({ field, dir })),
+    selectedRows: (table.getSelectedData?.() || [])
+      .map((row) => Number(row.__sfocRowIndex))
+      .filter(Number.isInteger)
+  };
+}
+
+function restoreImportTableState(table, savedState, availableFields) {
+  if (!savedState) return;
+  savedState.filters.forEach(({ field, value }) => {
+    if (availableFields.has(field)) table.setHeaderFilterValue?.(field, value);
+  });
+  const validSorters = savedState.sorters.filter(({ field }) => availableFields.has(field));
+  if (validSorters.length) table.setSort?.(validSorters);
+  if (savedState.selectedRows.length) table.selectRow?.(savedState.selectedRows);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (table !== importTable || table.destroyed) return;
+    const holder = table.getElement?.()?.querySelector('.tabulator-tableholder');
+    if (!holder) return;
+    holder.scrollTop = Math.min(savedState.scrollTop, Math.max(0, holder.scrollHeight - holder.clientHeight));
+    holder.scrollLeft = Math.min(savedState.scrollLeft, Math.max(0, holder.scrollWidth - holder.clientWidth));
+  }));
+}
+
+function updateImportFilterSummary(table = importTable) {
+  const summary = document.getElementById('dataWorkbenchImportFilterSummary');
+  if (!summary) return;
+  const filters = (table?.getHeaderFilters?.() || [])
+    .filter(({ value }) => String(value ?? '').trim());
+  if (!filters.length) {
+    summary.textContent = '';
+    return;
+  }
+  const fields = filters.map(({ field, value }) => {
+    const match = /^__sfocColumn(\d+)$/.exec(String(field || ''));
+    const header = match ? parsedImport?.headers?.[Number(match[1])] : field;
+    return `${header}: ${String(value).trim()}`;
+  });
+  const activeRows = table?.getData?.('active');
+  const totalRows = table?.getData?.('all');
+  summary.textContent = t('dataImport.filteringMetrics', {
+    filtered: String(Array.isArray(activeRows) ? activeRows.length : 0),
+    total: String(Array.isArray(totalRows) ? totalRows.length : 0),
+    fields: fields.join(', ')
+  });
+}
+
+function updateImportColumnRows(field, rowIndexes, value) {
+  const match = /^__sfocColumn(\d+)$/.exec(String(field || ''));
+  if (!match || !parsedImport?.rows?.length) return;
+  const columnIndex = Number(match[1]);
+  const uniqueRowIndexes = [...new Set(rowIndexes)]
+    .filter((rowIndex) => Number.isInteger(rowIndex) && parsedImport.rows[rowIndex]);
+  if (!uniqueRowIndexes.length) return;
+
+  const nextValue = String(value ?? '');
+  uniqueRowIndexes.forEach((rowIndex) => {
+    parsedImport.rows[rowIndex][columnIndex] = nextValue;
+  });
+  importRunComplete = false;
+  importRowStatuses = [];
+
+  const updates = uniqueRowIndexes.map((rowIndex) => ({
+    __sfocRowIndex: rowIndex,
+    [field]: nextValue
+  }));
+  void Promise.resolve(importTable?.updateData?.(updates))
+    .then(() => importTable?.refreshFilter?.())
+    .catch(() => {});
+}
+
+function getImportFillRowIndexes(sourceRowIndex, targetRowIndex) {
+  const visibleRowIndexes = (importTable?.getRows?.('active') || [])
+    .map((row) => Number(row.getData?.().__sfocRowIndex))
+    .filter(Number.isInteger);
+  const sourcePosition = visibleRowIndexes.indexOf(sourceRowIndex);
+  const targetPosition = visibleRowIndexes.indexOf(targetRowIndex);
+  if (sourcePosition < 0 || targetPosition < 0) return [sourceRowIndex];
+  const start = Math.min(sourcePosition, targetPosition);
+  const end = Math.max(sourcePosition, targetPosition);
+  return visibleRowIndexes.slice(start, end + 1);
+}
+
+function getImportFillTarget(field, clientX, clientY) {
+  const target = document.elementFromPoint(clientX, clientY);
+  const cellElement = target instanceof Element ? target.closest('.tabulator-cell') : null;
+  if (!cellElement || cellElement.getAttribute('tabulator-field') !== field) return null;
+  const rowElement = cellElement.closest('.tabulator-row');
+  const row = (importTable?.getRows?.('active') || [])
+    .find((candidate) => candidate.getElement?.() === rowElement);
+  const rowIndex = Number(row?.getData?.().__sfocRowIndex);
+  return Number.isInteger(rowIndex) ? { rowIndex, cellElement } : null;
+}
+
+function startImportFillGesture(cell, value, pointerEvent, commit) {
+  const field = cell.getField();
+  const sourceRowIndex = Number(cell.getRow().getData().__sfocRowIndex);
+  if (!Number.isInteger(sourceRowIndex)) return;
+  let target = { rowIndex: sourceRowIndex, cellElement: cell.getElement?.() };
+  let highlightedCell = null;
+
+  const clearHighlight = () => {
+    highlightedCell?.classList.remove('data-import-fill-target');
+    highlightedCell = null;
+  };
+  const selectTarget = (event) => {
+    const nextTarget = getImportFillTarget(field, event.clientX, event.clientY);
+    if (!nextTarget) return;
+    target = nextTarget;
+    if (highlightedCell === nextTarget.cellElement) return;
+    clearHighlight();
+    highlightedCell = nextTarget.cellElement;
+    highlightedCell.classList.add('data-import-fill-target');
+  };
+  const stop = (event) => {
+    selectTarget(event);
+    document.removeEventListener('pointermove', selectTarget);
+    document.removeEventListener('pointerup', stop);
+    document.removeEventListener('pointercancel', cancel);
+    clearHighlight();
+    if (target.rowIndex === sourceRowIndex) return;
+    const rowIndexes = getImportFillRowIndexes(sourceRowIndex, target.rowIndex);
+    commit();
+    requestAnimationFrame(() => updateImportColumnRows(field, rowIndexes, value));
+  };
+  const cancel = () => {
+    document.removeEventListener('pointermove', selectTarget);
+    document.removeEventListener('pointerup', stop);
+    document.removeEventListener('pointercancel', cancel);
+    clearHighlight();
+  };
+
+  pointerEvent.preventDefault();
+  pointerEvent.stopPropagation();
+  document.addEventListener('pointermove', selectTarget);
+  document.addEventListener('pointerup', stop);
+  document.addEventListener('pointercancel', cancel);
+}
+
+function importCellEditor(cell, onRendered, success, cancel) {
+  const editor = document.createElement('div');
+  editor.className = 'data-import-cell-editor';
+  const input = document.createElement('input');
+  input.className = 'data-import-cell-editor-input';
+  input.type = 'text';
+  input.value = String(cell.getValue() ?? '');
+  input.setAttribute('aria-label', cell.getColumn().getDefinition().title || cell.getField());
+  const fillHandle = document.createElement('button');
+  fillHandle.type = 'button';
+  fillHandle.className = 'data-import-fill-handle';
+  fillHandle.tabIndex = -1;
+  fillHandle.setAttribute('aria-label', t('dataImport.fillHandle'));
+  fillHandle.title = t('dataImport.fillHandle');
+  editor.append(input, fillHandle);
+
+  let committed = false;
+  const commit = () => {
+    if (committed) return;
+    committed = true;
+    success(input.value);
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commit();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancel();
+    }
+  });
+  fillHandle.addEventListener('pointerdown', (event) => {
+    startImportFillGesture(cell, input.value, event, commit);
+  });
+  fillHandle.addEventListener('dblclick', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const rowIndexes = parsedImport?.rows?.map((_, rowIndex) => rowIndex) || [];
+    commit();
+    requestAnimationFrame(() => updateImportColumnRows(cell.getField(), rowIndexes, input.value));
+  });
+  onRendered(() => input.focus({ preventScroll: true }));
+  return editor;
+}
+
+function syncEditedImportCell(cell) {
+  const match = /^__sfocColumn(\d+)$/.exec(cell.getField());
+  const rowIndex = Number(cell.getRow().getData().__sfocRowIndex);
+  if (!match || !Number.isInteger(rowIndex) || !parsedImport?.rows?.[rowIndex]) return;
+  parsedImport.rows[rowIndex][Number(match[1])] = String(cell.getValue() ?? '');
+  importRunComplete = false;
+  importRowStatuses = [];
+  importTable?.refreshFilter?.();
+}
+
+function syncImportTableEdits(table = importTable) {
+  if (!parsedImport?.rows?.length) return;
+  const tableRows = table?.getData?.('all');
+  if (!Array.isArray(tableRows)) return;
+  tableRows.forEach((row) => {
+    const rowIndex = Number(row?.__sfocRowIndex);
+    if (!Number.isInteger(rowIndex) || !parsedImport.rows[rowIndex]) return;
+    parsedImport.headers.forEach((_, columnIndex) => {
+      parsedImport.rows[rowIndex][columnIndex] = String(row[`__sfocColumn${columnIndex}`] ?? '');
+    });
+  });
+}
+
+function activeImportRowIndexes() {
+  const activeRows = importTable?.getData?.('active');
+  if (!Array.isArray(activeRows)) return null;
+  return new Set(
+    activeRows
+      .map((row) => Number(row?.__sfocRowIndex))
+      .filter(Number.isInteger)
+  );
+}
+
 function renderImportTable() {
-  const thead = document.getElementById('dataWorkbenchImportResultsThead');
-  const tbody = document.getElementById('dataWorkbenchImportResultsTbody');
-  if (!tbody) return;
+  const mount = document.getElementById('dataWorkbenchImportTableMount');
+  if (!mount) return;
 
   const headers = parsedImport?.headers || [];
   const rows = parsedImport?.rows || [];
-  const showStatus = importRunComplete && importRowStatuses.some((s) => s != null);
-  const colCount = Math.max(headers.length + (showStatus ? 1 : 0), 1);
-
-  const headerRow = thead?.querySelector('tr');
-  if (headerRow) {
-    headerRow.innerHTML = '';
-    for (const h of headers) {
-      const th = document.createElement('th');
-      th.textContent = h;
-      headerRow.appendChild(th);
-    }
-    if (showStatus) {
-      const th = document.createElement('th');
-      th.textContent = t('dataImport.colStatus');
-      headerRow.appendChild(th);
-    }
-  }
-
-  tbody.innerHTML = '';
-  if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="${colCount}" class="data-workbench-empty">${escapeHtml(t('dataImport.noResults'))}</td></tr>`;
+  const showStatus = importRunComplete && importRowStatuses.some((status) => status != null);
+  if (!headers.length) {
+    disposeTabulatorTheme(importTable);
+    importTable?.destroy();
+    importTable = null;
+    importTableSource = null;
+    importTableColumnSignature = '';
+    ++importTableRenderVersion;
+    mount.innerHTML = `<p class="data-workbench-empty">${escapeHtml(t('dataImport.noResults'))}</p>`;
+    updateImportFilterSummary(null);
     return;
   }
 
-  const visibleRows = rows.slice(0, IMPORT_PREVIEW_MAX_ROWS);
-  visibleRows.forEach((row, i) => {
-    const tr = document.createElement('tr');
-    const status = importRowStatuses[i];
-    if (showStatus && status) {
-      if (status.status === 'Succeeded') tr.classList.add('data-import-status-ok');
-      else if (status.status === 'Failed') tr.classList.add('data-import-status-fail');
-    }
-    for (let c = 0; c < headers.length; c++) {
-      const td = document.createElement('td');
-      td.textContent = row[c] != null ? String(row[c]) : '';
-      tr.appendChild(td);
-    }
-    if (showStatus) {
-      const td = document.createElement('td');
-      if (status) {
-        td.textContent =
-          status.status === 'Failed' && status.detail
-            ? `${status.status}: ${status.detail}`
-            : status.status === 'Succeeded' && status.detail
-              ? `${status.status} (${status.detail})`
-              : status.status;
-      }
-      tr.appendChild(td);
-    }
-    tbody.appendChild(tr);
+  const data = rows.map((row, rowIndex) => {
+    const item = { __sfocRowIndex: rowIndex };
+    headers.forEach((_, columnIndex) => {
+      item[`__sfocColumn${columnIndex}`] = row[columnIndex] != null ? String(row[columnIndex]) : '';
+    });
+    const status = importRowStatuses[rowIndex];
+    item.__sfocStatus = status
+      ? (status.status === 'Failed' && status.detail
+        ? `${status.status}: ${status.detail}`
+        : status.status === 'Succeeded' && status.detail
+          ? `${status.status} (${status.detail})`
+          : status.status)
+      : '';
+    return item;
   });
-
-  if (rows.length > IMPORT_PREVIEW_MAX_ROWS) {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td colspan="${colCount}" class="data-workbench-empty">${escapeHtml(
-      t('dataImport.previewTruncated', { shown: IMPORT_PREVIEW_MAX_ROWS, total: rows.length })
-    )}</td>`;
-    tbody.appendChild(tr);
+  const columns = headers.map((header, columnIndex) => {
+    const field = `__sfocColumn${columnIndex}`;
+    return {
+      title: importColumnTitle(header),
+      field,
+      editor: importCellEditor,
+      headerFilter: 'input',
+      width: importColumnWidth(header),
+      minWidth: 120,
+      formatter: (cell) => escapeHtml(cell.getValue())
+    };
+  });
+  if (showStatus) {
+    columns.push({
+      title: t('dataImport.colStatus'),
+      field: '__sfocStatus',
+      headerSort: true,
+      width: importColumnWidth(t('dataImport.colStatus'), 180),
+      minWidth: 180,
+      formatter: (cell) => escapeHtml(cell.getValue())
+    });
   }
+  const columnSignature = `${headers.join('\u001f')}|status:${showStatus ? 1 : 0}`;
+  if (
+    importTable
+    && !importTable.destroyed
+    && importTable.__sfocBuilt === true
+    && importTableSource === parsedImport
+    && importTableColumnSignature === columnSignature
+  ) {
+    const currentTable = importTable;
+    void Promise.resolve(currentTable.replaceData(data)).then(() => {
+      if (currentTable === importTable && !currentTable.destroyed) {
+        applyTabulatorTheme(currentTable);
+        updateImportFilterSummary(currentTable);
+      }
+    }).catch(() => {});
+    return;
+  }
+
+  const savedState = captureImportTableState(importTable);
+  disposeTabulatorTheme(importTable);
+  importTable?.destroy();
+  importTable = null;
+  importTableSource = null;
+  importTableColumnSignature = '';
+  const renderVersion = ++importTableRenderVersion;
+  mount.innerHTML = '';
+
+  void loadTabulator().then((Tabulator) => {
+    if (!mount.isConnected || renderVersion !== importTableRenderVersion) return;
+    const table = new Tabulator(mount, {
+      data,
+      layout: 'fitDataStretch',
+      height: 'min(52vh, 560px)',
+      index: '__sfocRowIndex',
+      nestedFieldSeparator: false,
+      placeholder: t('dataImport.noResults'),
+      renderVertical: 'virtual',
+      renderHorizontal: 'virtual',
+      renderVerticalBuffer: 560,
+      rowHeight: 28,
+      headerFilterLiveFilterDelay: 250,
+      editTriggerEvent: 'dblclick',
+      selectableRows: true,
+      selectableRowsPersistence: false,
+      columns,
+      rowFormatter: styleTabulatorRow
+    });
+    // Tabulator difiere `_create`; una instancia antigua no debe reconstruir el
+    // mount si entretanto se ha cargado otro fichero.
+    if (typeof table._create === 'function') {
+      const createTable = table._create;
+      table._create = function createCurrentImportTableOnly() {
+        if (
+          this.destroyed
+          || !mount.isConnected
+          || renderVersion !== importTableRenderVersion
+          || importTable !== this
+        ) return;
+        return createTable.call(this);
+      };
+    }
+    importTable = table;
+    table.__sfocBuilt = false;
+    importTableSource = parsedImport;
+    importTableColumnSignature = columnSignature;
+    table.on('tableBuilt', () => {
+      if (table !== importTable || renderVersion !== importTableRenderVersion) return;
+      table.__sfocBuilt = true;
+      restoreImportTableState(table, savedState, new Set(columns.map(({ field }) => field)));
+      updateImportFilterSummary(table);
+    });
+    table.on('cellEdited', syncEditedImportCell);
+    table.on('dataFiltered', () => updateImportFilterSummary(table));
+    applyTabulatorTheme(table);
+  }).catch(() => {
+    if (renderVersion === importTableRenderVersion) {
+      importTable = null;
+      importTableSource = null;
+      importTableColumnSignature = '';
+      mount.textContent = t('dataImport.noResults');
+    }
+  });
 }
 
-async function parseImport() {
+async function parseImport({ silent = false, clearPaste = false } = {}) {
   const text = document.getElementById('dataWorkbenchImportPaste')?.value || '';
   if (!text.trim()) {
-    showToast(t('dataImport.pasteRequired'), 'warn');
+    if (!silent) showToast(t('dataImport.pasteRequired'), 'warn');
     return;
   }
-  parsedImport = parseImportData(text);
+  return loadParsedImport(parseImportData(text), { silent, clearPaste });
+}
+
+async function loadParsedImport(data, { silent = false, clearPaste = false } = {}) {
+  parsedImport = data;
   importRunComplete = false;
   importRowStatuses = [];
   const objectApiName = document.getElementById('dataWorkbenchImportObjectSelect')?.value || '';
@@ -646,9 +1087,114 @@ async function parseImport() {
       }
     }
   }
+  importDescribe = describe;
   renderCsvMapping(parsedImport, describe);
   renderImportTable();
-  setStatus(t('dataWorkbench.csvLoaded', { rows: parsedImport.rows.length }));
+  if (clearPaste) {
+    const paste = document.getElementById('dataWorkbenchImportPaste');
+    if (paste) paste.value = '';
+  }
+  if (!silent) setStatus(t('dataWorkbench.csvLoaded', { rows: parsedImport.rows.length }));
+}
+
+async function applyStagedImport() {
+  const staged = consumeStagedImportData();
+  if (!staged?.rows?.length || !staged?.headers?.length) return false;
+
+  const headers = staged.headers.map((header) => String(header || '').trim()).filter(Boolean);
+  if (!headers.length) return false;
+  parsedImport = {
+    format: 'query',
+    headers,
+    rows: staged.rows.map((row) => headers.map((header) => row?.[header] == null ? '' : String(row[header])))
+  };
+  importRunComplete = false;
+  importRowStatuses = [];
+  const select = /** @type {HTMLInputElement | null} */ (document.getElementById('dataWorkbenchImportObjectSelect'));
+  const objectApiName = String(staged.objectApiName || '');
+  if (select && objectApiName && globalSobjects.some((sobject) => sobject.name === objectApiName)) {
+    select.value = objectApiName;
+  }
+  const operation = /** @type {HTMLSelectElement | null} */ (document.getElementById('dataWorkbenchImportOperation'));
+  if (operation) operation.value = 'update';
+  let describe = null;
+  if (select?.value) {
+    try {
+      describe = await loadDescribe(select.value);
+    } catch {
+      describe = null;
+    }
+  }
+  importDescribe = describe;
+  setActiveTab('import');
+  renderCsvMapping(parsedImport, describe);
+  renderImportTable();
+  setStatus(t('dataImport.receivedFromQuery', { rows: parsedImport.rows.length }));
+  return true;
+}
+
+function addImportRow() {
+  if (!parsedImport?.headers?.length) {
+    showToast(t('dataImport.pasteRequired'), 'warn');
+    return;
+  }
+  parsedImport.rows.push(new Array(parsedImport.headers.length).fill(''));
+  importRunComplete = false;
+  importRowStatuses = [];
+  renderImportTable();
+}
+
+function getSelectedImportRowIndexes() {
+  const selected = importTable?.getSelectedData?.() || [];
+  return new Set(selected.map((row) => Number(row.__sfocRowIndex)).filter(Number.isInteger));
+}
+
+function getImportRowsToDelete() {
+  const allRowIndexes = new Set((parsedImport?.rows || []).map((_, rowIndex) => rowIndex));
+  const selectedRowIndexes = getSelectedImportRowIndexes();
+  const hasActiveFilters = (importTable?.getHeaderFilters?.() || [])
+    .some(({ value }) => String(value ?? '').trim());
+  const filteredRowIndexes = hasActiveFilters
+    ? new Set((importTable?.getData?.('active') || [])
+      .map((row) => Number(row?.__sfocRowIndex))
+      .filter(Number.isInteger))
+    : new Set();
+  const rowIndexes = new Set([...selectedRowIndexes, ...filteredRowIndexes]);
+
+  if (!selectedRowIndexes.size && !hasActiveFilters) {
+    return { rowIndexes: allRowIndexes, deletesAll: true };
+  }
+  return { rowIndexes, deletesAll: false };
+}
+
+function deleteImportRows(rowIndexes) {
+  if (!rowIndexes.size || !parsedImport?.rows) {
+    showToast(t('dataImport.noRowsSelected'), 'warn');
+    return;
+  }
+  parsedImport.rows = parsedImport.rows.filter((_, index) => !rowIndexes.has(index));
+  importRowStatuses = importRowStatuses.filter((_, index) => !rowIndexes.has(index));
+  importRunComplete = false;
+  renderImportTable();
+  setStatus(t('dataImport.rowsDeleted', { count: rowIndexes.size }));
+}
+
+async function confirmDeleteSelectedImportRows() {
+  if (!parsedImport?.rows?.length) {
+    showToast(t('dataImport.noRowsToDelete'), 'warn');
+    return;
+  }
+  const { rowIndexes, deletesAll } = getImportRowsToDelete();
+  if (!rowIndexes.size) {
+    showToast(t('dataImport.noRowsToDelete'), 'warn');
+    return;
+  }
+  if (!await confirmSfocToolAction(
+    t(deletesAll ? 'dataImport.confirmDeleteAllRows' : 'dataImport.confirmDeleteRows', { count: rowIndexes.size }),
+    t('dataImport.deleteRows'),
+    { title: t('dataImport.deleteRows'), variant: 'destructive', icon: 'trash' }
+  )) return;
+  deleteImportRows(rowIndexes);
 }
 
 function setImportFileName(name) {
@@ -666,20 +1212,95 @@ function setImportFileName(name) {
   }
 }
 
+function getImportFileFormat(file) {
+  const name = String(file?.name || '').trim().toLowerCase();
+  if (name.endsWith('.csv')) return 'csv';
+  if (name.endsWith('.json')) return 'json';
+  if (name.endsWith('.xlsx') || name.endsWith('.xlsm')) return 'excel';
+  return '';
+}
+
+function hasAllowedImportFileMimeType(file, format) {
+  const mimeType = String(file?.type || '').trim().toLowerCase();
+  return !mimeType || IMPORT_FILE_MIME_TYPES[format]?.has(mimeType);
+}
+
+function clearInvalidImportFile() {
+  setImportFileName('');
+  const input = /** @type {HTMLInputElement | null} */ (document.getElementById('dataWorkbenchImportFile'));
+  if (input) input.value = '';
+}
+
+async function loadExcelImportFile(file) {
+  const readXlsxFile = globalThis.readXlsxFile;
+  if (typeof readXlsxFile !== 'function') {
+    clearInvalidImportFile();
+    showToast(t('dataImport.fileInvalidContent'), 'error');
+    return;
+  }
+  try {
+    const sheets = await readXlsxFile(file, { parseNumber: (value) => value });
+    const validation = validateExcelImportRows(sheets?.[0]?.data);
+    if (!validation.ok) {
+      clearInvalidImportFile();
+      showToast(t('dataImport.fileInvalidContent'), 'warn');
+      return;
+    }
+    await loadParsedImport(validation.data, { silent: true, clearPaste: true });
+  } catch {
+    clearInvalidImportFile();
+    showToast(t('dataImport.fileInvalidContent'), 'warn');
+  }
+}
+
 function onImportFileSelected(file) {
   if (!file) {
     setImportFileName('');
     return;
   }
+  const format = getImportFileFormat(file);
+  if (!format) {
+    clearInvalidImportFile();
+    showToast(t('dataImport.fileTypeUnsupported'), 'warn');
+    return;
+  }
+  if (!file.size) {
+    clearInvalidImportFile();
+    showToast(t('dataImport.fileInvalidContent'), 'warn');
+    return;
+  }
+  if (file.size > MAX_IMPORT_FILE_BYTES) {
+    clearInvalidImportFile();
+    showToast(t('dataImport.fileTooLarge', { max: '10 MB' }), 'warn');
+    return;
+  }
+  if (!hasAllowedImportFileMimeType(file, format)) {
+    clearInvalidImportFile();
+    showToast(t('dataImport.fileMimeUnsupported'), 'warn');
+    return;
+  }
   setImportFileName(file.name);
+  if (format === 'excel') {
+    void loadExcelImportFile(file);
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
     const text = reader.result != null ? String(reader.result) : '';
+    const validation = validateImportFileContent(text, format);
+    if (!validation.ok) {
+      clearInvalidImportFile();
+      showToast(t('dataImport.fileInvalidContent'), 'warn');
+      return;
+    }
     const paste = document.getElementById('dataWorkbenchImportPaste');
-    if (paste) paste.value = text;
-    void parseImport();
+    if (paste) paste.value = text.replace(/^\uFEFF/, '');
+    void loadParsedImport(validation.data, { silent: true, clearPaste: true });
   };
-  reader.onerror = () => showToast(t('dataWorkbench.csvReadError'), 'error');
+  reader.onerror = () => {
+    clearInvalidImportFile();
+    showToast(t('dataWorkbench.csvReadError'), 'error');
+  };
   reader.readAsText(file, 'UTF-8');
 }
 
@@ -688,8 +1309,8 @@ async function runImport() {
   const orgId = getOrgId();
   const objectApiName = document.getElementById('dataWorkbenchImportObjectSelect')?.value || '';
   const operation = document.getElementById('dataWorkbenchImportOperation')?.value || 'insert';
-  const externalIdField = document.getElementById('dataWorkbenchImportExternalId')?.value?.trim() || 'Id';
-  const batchSize = Number(document.getElementById('dataWorkbenchImportBatchSize')?.value) || 200;
+  const threads = Math.max(1, Math.min(6, Number(document.getElementById('dataWorkbenchImportThreads')?.value) || 6));
+  const batchSize = Math.max(1, Math.min(200, Number(document.getElementById('dataWorkbenchImportBatchSize')?.value) || 200));
   if (!orgId || !objectApiName) {
     showToast(t('dataWorkbench.pickObject'), 'warn');
     return;
@@ -698,10 +1319,22 @@ async function runImport() {
     showToast(t('dataWorkbench.csvRequired'), 'warn');
     return;
   }
+  syncImportTableEdits();
   const columnMap = collectCsvColumnMap();
-  const { records, rowIndexes } = buildImportRecordsFromParsed(columnMap);
+  const pendingMappings = [...document.querySelectorAll('.data-workbench-csv-map-input')]
+    .filter((input) => !isImportMappingValue(input.value));
+  pendingMappings.forEach(updateImportMappingRow);
+  if (pendingMappings.length) {
+    showToast(t('dataImport.mappingRequired'), 'warn');
+    return;
+  }
+  const { records, rowIndexes } = buildImportRecordsFromParsed(columnMap, activeImportRowIndexes());
   if (!records.length) {
     showToast(t('dataWorkbench.csvNoMapped'), 'warn');
+    return;
+  }
+  if (importOperationRequiresId(operation) && records.some((record) => !String(record.Id || '').trim())) {
+    showToast(t('dataImport.idRequiredForOperation', { operation: operation.toUpperCase() }), 'warn');
     return;
   }
 
@@ -732,8 +1365,8 @@ async function runImport() {
       operation,
       objectApiName,
       records,
-      externalIdField,
-      batchSize
+      batchSize,
+      threads
     });
     if (!res?.ok) throw new Error(res?.error || t('dataWorkbench.dmlFailed'));
     const results = Array.isArray(res.results) ? res.results : [];
@@ -769,34 +1402,82 @@ function onRecordIdInput() {
   }
 }
 
+async function onImportObjectChange() {
+  const objectApiName = document.getElementById('dataWorkbenchImportObjectSelect')?.value?.trim() || '';
+  importDescribe = null;
+  if (objectApiName) {
+    try {
+      importDescribe = await loadDescribe(objectApiName);
+    } catch (e) {
+      showToast(String(e?.message || e), 'error');
+    }
+  }
+  renderCsvMapping(parsedImport, importDescribe);
+}
+
+function skipImportColumn(target) {
+  const row = target.closest('.data-workbench-csv-map-row');
+  const input = row?.querySelector('.data-workbench-csv-map-input');
+  if (!(input instanceof HTMLInputElement)) return;
+  input.value = '_';
+  updateImportMappingRow(input);
+  input.focus();
+}
+
+function skipAllImportColumns() {
+  document.querySelectorAll('.data-workbench-csv-map-input').forEach((input) => {
+    if (input.value.trim()) return;
+    input.value = '_';
+    updateImportMappingRow(input);
+  });
+}
+
 export function setupDataWorkbenchPanel() {
-  document.querySelectorAll('[data-dw-tab]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const tab = btn.getAttribute('data-dw-tab');
-      if (tab === 'recordEditor' || tab === 'import') setActiveTab(tab);
-    });
+  bindObjectPicker('dataWorkbenchImportObjectSelect', 'dataWorkbenchImportObjectResults', () => void onImportObjectChange());
+  document.getElementById('dataWorkbenchImportObjectSelect')?.addEventListener('change', () => void onImportObjectChange());
+  document.getElementById('dataWorkbenchImportOperation')?.addEventListener('change', () => {
+    renderCsvMapping(parsedImport, importDescribe);
   });
-  document.getElementById('dataWorkbenchObjectSearch')?.addEventListener('input', () => {
-    populateObjectSelect('dataWorkbenchObjectSelect', globalSobjects);
-    populateObjectSelect('dataWorkbenchImportObjectSelect', globalSobjects);
+  const mapping = document.getElementById('dataWorkbenchCsvMapping');
+  mapping?.addEventListener('input', (event) => {
+    const input = /** @type {HTMLInputElement} */ (event.target).closest('.data-workbench-csv-map-input');
+    if (!input) return;
+    updateImportMappingRow(input);
+    renderImportFieldResults(input, input.parentElement?.querySelector('.data-workbench-autocomplete-results'));
   });
-  document.getElementById('dataWorkbenchRecordIdInput')?.addEventListener('change', onRecordIdInput);
-  document.getElementById('dataWorkbenchLoadRecordBtn')?.addEventListener('click', () => void loadRecord());
-  document.getElementById('dataWorkbenchSaveBtn')?.addEventListener('click', () => void saveRecord());
-  document.getElementById('dataWorkbenchCancelEditBtn')?.addEventListener('click', cancelEdit);
-  document.getElementById('dataWorkbenchCreateBtn')?.addEventListener('click', () => void startCreate());
-  document.getElementById('dataWorkbenchRecordEditorTbody')?.addEventListener('click', (ev) => {
-    const btn = /** @type {HTMLElement} */ (ev.target).closest('[data-edit-field]');
-    if (!btn) return;
-    ev.preventDefault();
-    toggleFieldEdit(btn.getAttribute('data-edit-field') || '');
+  mapping?.addEventListener('focusin', (event) => {
+    const input = /** @type {HTMLInputElement} */ (event.target).closest('.data-workbench-csv-map-input');
+    if (input) renderImportFieldResults(input, input.parentElement?.querySelector('.data-workbench-autocomplete-results'));
   });
-  document.getElementById('dataWorkbenchDeleteBtn')?.addEventListener('click', () => void runRecordDml('delete'));
-  document.getElementById('dataWorkbenchUndeleteBtn')?.addEventListener('click', () => void runRecordDml('undelete'));
-  document.getElementById('dataWorkbenchPurgeBtn')?.addEventListener('click', () => void runRecordDml('purge'));
-  document.getElementById('dataWorkbenchOpenInSfBtn')?.addEventListener('click', () => void openRecordInSalesforce());
-  document.getElementById('dataWorkbenchImportParseBtn')?.addEventListener('click', () => void parseImport());
+  mapping?.addEventListener('focusout', (event) => {
+    const input = /** @type {HTMLInputElement} */ (event.target).closest('.data-workbench-csv-map-input');
+    const panel = input?.parentElement?.querySelector('.data-workbench-autocomplete-results');
+    if (input && panel) setTimeout(() => hideAutocomplete(input, panel), 120);
+  });
+  mapping?.addEventListener('click', (event) => {
+    const skip = /** @type {HTMLElement} */ (event.target).closest('[data-skip-csv-col]');
+    if (skip) {
+      skipImportColumn(skip);
+      return;
+    }
+    const option = /** @type {HTMLElement} */ (event.target).closest('[data-sf-field]');
+    if (!option) return;
+    const input = option.closest('.data-workbench-autocomplete')?.querySelector('.data-workbench-csv-map-input');
+    if (!(input instanceof HTMLInputElement)) return;
+    input.value = option.dataset.sfField || '';
+    updateImportMappingRow(input);
+    hideAutocomplete(input, option.closest('.data-workbench-autocomplete')?.querySelector('.data-workbench-autocomplete-results'));
+  });
+  document.getElementById('dataWorkbenchImportSkipAllBtn')?.addEventListener('click', skipAllImportColumns);
+  document.getElementById('dataWorkbenchImportPaste')?.addEventListener('input', () => {
+    if (importPasteParseTimer) clearTimeout(importPasteParseTimer);
+    importPasteParseTimer = window.setTimeout(() => {
+      importPasteParseTimer = 0;
+      void parseImport({ silent: true, clearPaste: true });
+    }, 350);
+  });
   document.getElementById('dataWorkbenchImportRunBtn')?.addEventListener('click', () => void runImport());
+  document.getElementById('dataWorkbenchImportDeleteRowsBtn')?.addEventListener('click', () => void confirmDeleteSelectedImportRows());
   document.getElementById('dataWorkbenchImportFileBtn')?.addEventListener('click', () => {
     document.getElementById('dataWorkbenchImportFile')?.click();
   });
@@ -804,21 +1485,11 @@ export function setupDataWorkbenchPanel() {
     const input = /** @type {HTMLInputElement} */ (e.target);
     onImportFileSelected(input.files?.[0] || null);
   });
-
-  document.addEventListener('keydown', (e) => {
-    if (getSelectedArtifactType() !== 'DataWorkbench') return;
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-      if (hasPendingEdits()) {
-        e.preventDefault();
-        void saveRecord();
-      }
-    }
-  });
 }
 
 export async function refreshDataWorkbenchPanel() {
   if (getSelectedArtifactType() !== 'DataWorkbench') return;
-  setDataWorkbenchView(document.body.dataset.workbenchTab);
+  setDataWorkbenchView();
   globalSobjects = [];
   lastDescribe = null;
   lastLayout = null;
@@ -827,14 +1498,15 @@ export async function refreshDataWorkbenchPanel() {
   editorMode = 'view';
   clearFieldEditingState();
   parsedImport = null;
+  importDescribe = null;
+  importWritableFieldNames = new Set();
   importRowStatuses = [];
   importRunComplete = false;
-  updateEditorActionButtons();
-  renderRecordEditorTable();
   renderCsvMapping(null, null);
   renderImportTable();
   setImportFileName('');
   const fileInput = document.getElementById('dataWorkbenchImportFile');
   if (fileInput) fileInput.value = '';
   await loadGlobal();
+  await applyStagedImport();
 }

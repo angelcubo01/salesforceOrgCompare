@@ -55,6 +55,23 @@ describe('visibilidad y acciones', () => {
     expect(isToolVisible(cfg, 'QuickEdit')).toBe(true);
   });
 
+  it('respeta la visibilidad de Data Workbench configurada por feature flag', () => {
+    const developmentCfg = parseFeatureControlsPayload({
+      modes: { monitoring: { hidden: true } },
+      tools: {
+        DataWorkbench: {
+          hidden: true,
+          message: { es: 'Oculto', en: 'Hidden', blocking: true }
+        }
+      }
+    });
+    expect(isModeVisible(developmentCfg, 'monitoring')).toBe(false);
+    expect(isToolVisible(developmentCfg, 'DataWorkbench')).toBe(false);
+    expect(getToolNotice(developmentCfg, 'DataWorkbench', 'en')).toMatchObject({
+      message: 'Hidden', blocking: true
+    });
+  });
+
   it('oculta tipo Profile', () => {
     expect(isMetadataTypeVisible(cfg, 'Profile')).toBe(false);
     expect(isMetadataTypeVisible(cfg, 'ApexClass')).toBe(true);

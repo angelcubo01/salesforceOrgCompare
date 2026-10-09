@@ -68,7 +68,7 @@ export const helpOnboardingEs = {
   'help.tool.AnonymousApex.body3':
     'Guarda scripts que uses a menudo en la biblioteca para reutilizarlos.',
 
-  'help.tool.QueryExplorer.title': 'Explorador de consultas',
+  'help.tool.QueryExplorer.title': 'Data export',
   'help.tool.QueryExplorer.lead':
     'Consulta registros del entorno, guarda consultas útiles y compara resultados entre entornos.',
   'help.tool.QueryExplorer.body1':
@@ -238,13 +238,13 @@ export const helpOnboardingEs = {
   'help.tool.ObjectDescribe.body3':
     'Útil antes de montar consultas SOQL, imports CSV o comparar estructuras entre entornos.',
 
-  'help.tool.DataWorkbench.title': 'Editor e importación de datos',
+  'help.tool.DataWorkbench.title': 'Data import',
   'help.tool.DataWorkbench.lead':
-    'Consulta y edita un registro concreto o importa datos masivos (CSV, Excel, JSON) vía SOAP.',
+    'Importa datos masivos (CSV, Excel o JSON) mediante SOAP.',
   'help.tool.DataWorkbench.body1':
-    'En Editor de registro: elige objeto, introduce el Record Id y pulsa Cargar. Usa el lápiz junto a cada campo para editar solo lo que necesites.',
+    'Elige el objeto y la operación que quieres ejecutar sobre los datos.',
   'help.tool.DataWorkbench.body2':
-    'En Importación masiva: pega o carga un fichero, revisa el mapeo de columnas y ejecuta insert, update, upsert o delete.',
+    'Pega o carga un fichero, revisa el mapeo de columnas y ejecuta insert, update, upsert o delete.',
   'help.tool.DataWorkbench.body3':
     'Las operaciones de escritura respetan el control de org de solo lectura y la política de DML de la extensión.',
 
@@ -354,7 +354,7 @@ export const helpOnboardingEs = {
   'onboarding.tool.AnonymousApex.step3':
     'Guarda scripts frecuentes y ábrelos desde la biblioteca. Abre el log en el visor si lo necesitas.',
 
-  'onboarding.tool.QueryExplorer.title': 'Explorador de consultas',
+  'onboarding.tool.QueryExplorer.title': 'Data export',
   'onboarding.tool.QueryExplorer.lead':
     'Consulta registros del entorno, guarda consultas útiles y compara resultados entre entornos.',
   'onboarding.tool.QueryExplorer.step1':
@@ -504,15 +504,15 @@ export const helpOnboardingEs = {
   'onboarding.tool.ObjectDescribe.step3':
     'Usa la API name y los flags para preparar consultas o imports.',
 
-  'onboarding.tool.DataWorkbench.title': 'Editor e importación de datos',
+  'onboarding.tool.DataWorkbench.title': 'Data import',
   'onboarding.tool.DataWorkbench.lead':
-    'Edita registros campo a campo o importa datos masivos desde CSV/JSON.',
+    'Importa datos masivos desde CSV, Excel o JSON.',
   'onboarding.tool.DataWorkbench.step1':
-    'Pestaña Editor: carga un registro por Id y activa el lápiz solo en los campos que quieras cambiar.',
+    'Elige el objeto y la operación de importación.',
   'onboarding.tool.DataWorkbench.step2':
-    'Pestaña Importación: pega datos, revisa columnas y mapeo a campos Salesforce.',
+    'Pega datos, revisa columnas y mapea cada una a un campo Salesforce.',
   'onboarding.tool.DataWorkbench.step3':
-    'Guardar o Ejecutar importación aplican DML en el entorno seleccionado.',
+    'Ejecutar importación aplica DML en el entorno seleccionado.',
 
   'onboarding.tool.RestExplorer.title': 'REST Explorer',
   'onboarding.tool.RestExplorer.lead':
@@ -606,7 +606,7 @@ export const helpOnboardingEn = {
   'help.tool.AnonymousApex.body3':
     'Save scripts you use often in the library for reuse.',
 
-  'help.tool.QueryExplorer.title': 'Query Explorer',
+  'help.tool.QueryExplorer.title': 'Data export',
   'help.tool.QueryExplorer.lead':
     'Query org records, save useful queries, and compare results across orgs.',
   'help.tool.QueryExplorer.body1':
@@ -776,13 +776,13 @@ export const helpOnboardingEn = {
   'help.tool.ObjectDescribe.body3':
     'Useful before building SOQL queries, CSV imports, or comparing structures across orgs.',
 
-  'help.tool.DataWorkbench.title': 'Record editor & import',
+  'help.tool.DataWorkbench.title': 'Data import',
   'help.tool.DataWorkbench.lead':
-    'View and edit a single record or bulk-import data (CSV, Excel, JSON) via SOAP.',
+    'Bulk-import data (CSV, Excel, or JSON) through SOAP.',
   'help.tool.DataWorkbench.body1':
-    'Record editor tab: pick object, enter Record Id, and press Load. Use the pencil next to each field to edit only what you need.',
+    'Pick the object and operation to apply to the imported data.',
   'help.tool.DataWorkbench.body2':
-    'Bulk import tab: paste or load a file, review column mapping, then run insert, update, upsert, or delete.',
+    'Paste or load a file, review column mapping, then run insert, update, upsert, or delete.',
   'help.tool.DataWorkbench.body3':
     'Write operations respect read-only org controls and the extension DML policy.',
 
@@ -892,7 +892,7 @@ export const helpOnboardingEn = {
   'onboarding.tool.AnonymousApex.step3':
     'Save frequent scripts in the library. Open the log in the viewer if needed.',
 
-  'onboarding.tool.QueryExplorer.title': 'Query Explorer',
+  'onboarding.tool.QueryExplorer.title': 'Data export',
   'onboarding.tool.QueryExplorer.lead':
     'Query org records, save useful queries, and compare results across orgs.',
   'onboarding.tool.QueryExplorer.step1':
@@ -1041,15 +1041,15 @@ export const helpOnboardingEn = {
   'onboarding.tool.ObjectDescribe.step3':
     'Use API names and flags to prepare queries or imports.',
 
-  'onboarding.tool.DataWorkbench.title': 'Record editor & import',
+  'onboarding.tool.DataWorkbench.title': 'Data import',
   'onboarding.tool.DataWorkbench.lead':
-    'Edit records field by field or bulk-import from CSV/JSON.',
+    'Bulk-import data from CSV, Excel, or JSON.',
   'onboarding.tool.DataWorkbench.step1':
-    'Editor tab: load a record by Id and use the pencil only on fields you want to change.',
+    'Pick the object and import operation.',
   'onboarding.tool.DataWorkbench.step2':
-    'Import tab: paste data, review columns, and map to Salesforce fields.',
+    'Paste data, review columns, and map each one to a Salesforce field.',
   'onboarding.tool.DataWorkbench.step3':
-    'Save or Run import applies DML in the selected org.',
+    'Run import applies DML in the selected org.',
 
   'onboarding.tool.RestExplorer.title': 'REST Explorer',
   'onboarding.tool.RestExplorer.lead':

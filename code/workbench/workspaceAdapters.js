@@ -14,15 +14,8 @@ const genericAdapter = Object.freeze({
 const adapters = new Map();
 
 const dataWorkbenchAdapter = Object.freeze({
-  async activate({ tabId } = {}) {
-    const activeView = tabId === 'bulk-import' ? 'import' : 'recordEditor';
-    document.querySelectorAll('[data-dw-tab]').forEach((button) => {
-      const isActive = button.getAttribute('data-dw-tab') === activeView;
-      button.classList.toggle('active', isActive);
-      button.setAttribute('aria-selected', isActive ? 'true' : 'false');
-    });
-    document.getElementById('dataWorkbenchTabRecordEditor')?.classList.toggle('hidden', activeView !== 'recordEditor');
-    document.getElementById('dataWorkbenchTabImport')?.classList.toggle('hidden', activeView !== 'import');
+  async activate() {
+    document.getElementById('dataWorkbenchTabImport')?.classList.remove('hidden');
   },
   async deactivate() {},
   getHeaderActions({ workspaceId, tabId } = {}) {

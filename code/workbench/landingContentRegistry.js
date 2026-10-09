@@ -36,7 +36,7 @@ export const MARKETING_CAPABILITIES = Object.freeze([
     labelKey: 'workbench.marketing.capability.development.label',
     titleKey: 'workbench.marketing.capability.development.title',
     descriptionKey: 'workbench.marketing.capability.development.description',
-    toolIds: Object.freeze(['QuickEdit', 'LightningQuickEdit', 'QueryExplorer', 'RestExplorer'])
+    toolIds: Object.freeze(['QuickEdit', 'LightningQuickEdit', 'RestExplorer', 'QueryExplorer', 'DataWorkbench'])
   }),
   Object.freeze({
     id: 'access',
@@ -58,7 +58,7 @@ export const MARKETING_CAPABILITIES = Object.freeze([
     descriptionKey: 'workbench.marketing.capability.operations.description',
     toolIds: Object.freeze([
       'DebugLogBrowser', 'EventMonitor', 'EnvironmentStatus', 'OrgLimits',
-      'DeployStatus', 'BulkJobMonitor', 'SetupAuditTrail', 'FieldHistory', 'DataWorkbench'
+      'DeployStatus', 'BulkJobMonitor', 'SetupAuditTrail', 'FieldHistory'
     ])
   }),
   Object.freeze({

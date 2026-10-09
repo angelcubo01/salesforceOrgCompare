@@ -5,9 +5,12 @@
   "description": "Chrome extension to compare Salesforce org metadata",
   "type": "module",
   "scripts": {
-    "prepare": "npm run vendor:driver && npm run vendor:calendar && node sfInject/bundle.mjs",
+    "prepare": "npm run vendor:driver && npm run vendor:calendar && npm run vendor:tabulator && npm run vendor:jspdf && npm run vendor:excel && node sfInject/bundle.mjs",
     "vendor:driver": "node sync-driver-vendor.mjs",
     "vendor:calendar": "node scripts/sync-vanilla-calendar-vendor.mjs",
+    "vendor:tabulator": "node scripts/sync-tabulator-vendor.mjs",
+    "vendor:jspdf": "node scripts/sync-jspdf-vendor.mjs",
+    "vendor:excel": "node scripts/sync-read-excel-file-vendor.mjs",
     "test": "vitest run",
     "build:sf-inject": "node sfInject/bundle.mjs",
     "pretest": "node tests/ensureTelemetryConfig.mjs",
@@ -61,6 +64,8 @@
     "dompurify": "^3.4.16",
     "driver.js": "1.8.0",
     "jspdf": "^4.2.1",
+    "read-excel-file": "9.3.12",
+    "tabulator-tables": "^6.6.1",
     "vanilla-calendar-pro": "^3.3.2"
   }
 }

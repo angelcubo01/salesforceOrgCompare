@@ -34,6 +34,8 @@ describe('setupRecordsCompareApi', () => {
       { QualifiedApiName: 'DeveloperName', DataType: 'text', IsCalculated: false },
       { QualifiedApiName: 'MasterLabel', DataType: 'text', IsCalculated: false },
       { QualifiedApiName: 'Enabled__c', DataType: 'checkbox', IsCalculated: false },
+      { QualifiedApiName: 'ManageableState', DataType: 'picklist', IsCalculated: false },
+      { QualifiedApiName: 'MasterLabelNorm', DataType: 'text', IsCalculated: false },
       { QualifiedApiName: 'CreatedDate', DataType: 'datetime', IsCalculated: false }
     ]);
     restQueryAll.mockResolvedValue([
@@ -52,7 +54,7 @@ describe('setupRecordsCompareApi', () => {
       'https://x.salesforce.com',
       'sid',
       '60',
-      expect.stringMatching(/FROM EntityParticle[\s\S]*Zuora_Default_Configuration__mdt/i)
+      expect.stringMatching(/SELECT QualifiedApiName, DataType, IsCalculated, IsCustom FROM EntityParticle[\s\S]*Zuora_Default_Configuration__mdt/i)
     );
     expect(restQueryAll).toHaveBeenCalledWith(
       'https://x.salesforce.com',
@@ -65,5 +67,6 @@ describe('setupRecordsCompareApi', () => {
       alignment: 'developerName',
       totalSize: 1
     });
+    expect(restQueryAll.mock.calls[0][3]).not.toMatch(/ManageableState|MasterLabelNorm|CreatedDate/);
   });
 });

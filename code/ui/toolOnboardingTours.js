@@ -65,7 +65,7 @@ export const TOOL_ONBOARDING_TOURS = Object.freeze({
     action: '#anonymousApexOpenScriptsModalBtn', result: '#anonymousApexExecStatus'
   }),
   QueryExplorer: standardTour('QueryExplorer', '#queryExplorerPanel', {
-    context: '#queryExplorerEditorMount', prepare: '#queryExplorerQuickSaveBtn',
+    context: '#queryExplorerEditorMount', prepare: '#queryExplorerOpenSavedModalBtn',
     action: '#queryExplorerRunBtn', result: '#queryExplorerSingleWrap'
   }),
   DebugLogBrowser: Object.freeze({
@@ -159,9 +159,8 @@ export const TOOL_ONBOARDING_TOURS = Object.freeze({
     action: '#objectDescribeSummary', result: '#objectDescribeFieldsTbody'
   }),
   DataWorkbench: standardTour('DataWorkbench', '#dataWorkbenchPanel', {
-    context: '#dataWorkbenchRecordIdInput',
-    prepare: '#dataWorkbenchTabImport', prepareInteraction: SAFE,
-    action: '#dataWorkbenchImportRunBtn', result: '#dataWorkbenchRecordEditorTbody'
+    context: '#dataWorkbenchImportObjectSelect', prepare: '#dataWorkbenchImportPaste', prepareInteraction: SAFE,
+    action: '#dataWorkbenchImportRunBtn', result: '#dataWorkbenchImportTableMount'
   }),
   RestExplorer: standardTour('RestExplorer', '#restExplorerPanel', {
     context: '#restExplorerUri', prepare: '#restExplorerBody',

@@ -19,12 +19,17 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     Object.freeze({
       id: 'inspect',
       i18nKey: 'code.toolGroup.devInspect',
-      tools: Object.freeze(['QueryExplorer', 'RestExplorer', 'DebugLogBrowser'])
+      tools: Object.freeze(['RestExplorer', 'DebugLogBrowser'])
     }),
     Object.freeze({
       id: 'streaming',
       i18nKey: 'code.toolGroup.streaming',
       tools: Object.freeze(['EventMonitor'])
+    }),
+    Object.freeze({
+      id: 'deployment',
+      i18nKey: 'code.toolGroup.deployment',
+      tools: Object.freeze(['QueryExplorer', 'DataWorkbench'])
     })
   ]),
   analysis: Object.freeze([
@@ -41,7 +46,7 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     Object.freeze({
       id: 'dataOps',
       i18nKey: 'code.toolGroup.dataOps',
-      tools: Object.freeze(['ObjectDescribe', 'DataWorkbench'])
+      tools: Object.freeze(['ObjectDescribe'])
     }),
     Object.freeze({
       id: 'dataCompare',
@@ -57,7 +62,12 @@ export const TOOL_NAV_GROUPS = Object.freeze({
     Object.freeze({
       id: 'orgHealth',
       i18nKey: 'code.toolGroup.monOrgHealth',
-      tools: Object.freeze(['EnvironmentStatus', 'OrgLimits', 'DeployStatus', 'BulkJobMonitor'])
+      tools: Object.freeze(['EnvironmentStatus', 'OrgLimits'])
+    }),
+    Object.freeze({
+      id: 'deployment',
+      i18nKey: 'code.toolGroup.deployment',
+      tools: Object.freeze(['DeployStatus', 'BulkJobMonitor'])
     }),
     Object.freeze({
       id: 'audit',

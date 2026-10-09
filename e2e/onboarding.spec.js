@@ -43,7 +43,7 @@ test('Query Explorer se muestra una vez, se puede repetir desde Ayuda y respeta 
   await waitForCodeBoot(page);
 
   await expect(page.locator('.driver-popover')).toBeVisible();
-  await expect(page.locator('.driver-popover-title')).toContainText('Explorador de consultas');
+  await expect(page.locator('.driver-popover-title')).toContainText('Data export');
   await expect(page.locator('.driver-active-element')).toHaveAttribute('data-onboarding-anchor', 'QueryExplorer.overview');
   await page.locator('.sfoc-driver-skip').click();
   await expect(page.locator('.driver-popover')).toHaveCount(0);
@@ -67,7 +67,7 @@ test('Query Explorer se muestra una vez, se puede repetir desde Ayuda y respeta 
   await page.locator('#workbenchHelpBtn').click();
   await expect(page.locator('#appHelpModalTourBtn')).toHaveText('Repeat tour');
   await page.locator('#appHelpModalTourBtn').click();
-  await expect(page.locator('.driver-popover-title')).toContainText('Query Explorer');
+  await expect(page.locator('.driver-popover-title')).toContainText('Data export');
   await expect(page.locator('.sfoc-driver-skip')).toHaveText('Skip tour');
   await page.keyboard.press('Escape');
   await expect(page.locator('.driver-popover')).toHaveCount(0);
@@ -104,7 +104,7 @@ test('el tour espera a que se cierre un popup de encuesta PostHog', async ({
 
   await page.locator('[data-posthog-survey-test="1"]').evaluate((host) => host.remove());
   await expect(page.locator('.driver-popover')).toBeVisible();
-  await expect(page.locator('.driver-popover-title')).toContainText('Explorador de consultas');
+  await expect(page.locator('.driver-popover-title')).toContainText('Data export');
 
   await page.evaluate(() => {
     const host = document.createElement('div');

@@ -6467,6 +6467,73 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   flex-wrap: wrap;
 }
 
+.query-explorer-saved-modal-lead {
+  margin: -2px 0 14px;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.query-explorer-saved-query-form {
+  padding: 10px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 9px;
+  background: rgba(14, 116, 144, 0.1);
+}
+
+.query-explorer-saved-query-label,
+.query-explorer-saved-library-heading > span {
+  display: block;
+  margin-bottom: 6px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.query-explorer-saved-primary-btn {
+  min-width: 86px;
+}
+
+.query-explorer-saved-library-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+}
+
+.query-explorer-saved-library-heading > span {
+  margin: 0;
+}
+
+.query-explorer-saved-library-heading .sfoc-query-input {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.query-explorer-saved-empty {
+  margin: 0;
+  padding: 18px 10px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+}
+
+#queryExplorerSavedQueriesList .anonymous-apex-script-item {
+  display: grid;
+  gap: 2px;
+}
+
+#queryExplorerSavedQueriesList .anonymous-apex-script-item strong {
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+#queryExplorerSavedQueriesList .anonymous-apex-script-item span {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
 .anonymous-apex-log-picker-backdrop {
   position: absolute;
   inset: 0;
@@ -8628,9 +8695,27 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 
 /* SOQL / SOSL Explorer */
 #queryExplorerStatus {
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-width: 100%;
+  display: none;
+}
+
+/* El panel existente bajo los selectores de entorno aporta el scroll vertical
+   de las tarjetas; la tabla conserva además su propio scroll. */
+.query-explorer-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-content: normal;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.query-explorer-panel-inner > .org-limits-head {
+  flex: 0 0 auto;
+}
+
+.query-explorer-editor-card,
+.query-explorer-result-card {
+  flex: 0 0 auto;
 }
 
 .query-explorer-panel-inner .query-explorer-controls {
@@ -8673,41 +8758,39 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   align-items: flex-end;
 }
 
-.query-explorer-builder {
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 8px;
-  padding: 8px 10px;
-  background: rgba(15, 23, 42, 0.45);
-}
-
-.query-explorer-builder summary {
-  cursor: pointer;
-  font-size: 0.8rem;
-  color: #94a3b8;
-  user-select: none;
-}
-
-.query-explorer-builder-body {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 14px;
-  align-items: flex-end;
-  margin-top: 10px;
-}
-
-.query-explorer-builder-where {
-  flex: 1 1 240px;
-}
-
-.query-explorer-builder-limit {
-  max-width: 120px;
-}
-
 .query-explorer-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 11rem;
+}
+
+.query-explorer-field--inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.query-explorer-compare-match {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.query-explorer-compare-match .query-explorer-select {
+  width: auto;
+  min-width: 0;
+}
+
+.query-explorer-field--inline .query-explorer-field-label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.query-explorer-field--inline .query-explorer-select {
+  min-width: 0;
 }
 
 .query-explorer-field-label,
@@ -8732,11 +8815,16 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
+  max-width: 100%;
   width: 100%;
+  overflow: hidden;
 }
 
 .query-explorer-editor-mount {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   min-height: 72px;
   flex-shrink: 0;
@@ -8854,9 +8942,44 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
 }
 
 .query-explorer-page-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 12px;
   color: #94a3b8;
   min-width: 8rem;
+}
+
+.query-explorer-prepare-import-btn {
+  gap: 6px;
+}
+
+.query-explorer-prepare-import-btn .sfoc-icon {
+  flex: 0 0 auto;
+}
+
+.query-explorer-run-btn {
+  gap: 6px;
+}
+
+.query-explorer-run-btn .sfoc-icon {
+  flex: 0 0 auto;
+}
+
+.query-explorer-page-meta.is-loading::before {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  box-sizing: border-box;
+  border: 2px solid rgba(148, 163, 184, 0.35);
+  border-top-color: var(--sfoc-accent, #38bdf8);
+  border-radius: 50%;
+  animation: query-explorer-spinner 0.7s linear infinite;
+  content: '';
+}
+
+.query-explorer-table-scroll.is-streaming {
+  border-top-color: var(--sfoc-accent, #38bdf8);
 }
 
 .query-explorer-table-scroll {
@@ -8864,8 +8987,10 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   min-width: 0;
   width: 100%;
   overflow-x: auto;
-  overflow-y: auto;
-  max-height: min(52vh, 560px);
+  /* Tabulator gestiona la altura y el scroll de filas. Este envoltorio solo
+     conserva el desplazamiento horizontal para muchas columnas. */
+  overflow-y: hidden;
+  max-height: none;
   border: 1px solid rgba(148, 163, 184, 0.25);
   border-radius: 8px;
   background: rgba(2, 6, 23, 0.35);
@@ -8907,6 +9032,51 @@ body.artifact-generate-package-xml:not(.artifact-generate-package-xml-compare) .
   font-size: 13px;
   color: #94a3b8;
   margin: 0;
+}
+
+.query-explorer-result-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 190px;
+  padding: 20px;
+  box-sizing: border-box;
+  text-align: center;
+  color: var(--sfoc-text-muted, #94a3b8);
+}
+
+.query-explorer-result-state p {
+  max-width: min(760px, 100%);
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.query-explorer-result-state--error {
+  color: #fca5a5;
+}
+
+.query-explorer-result-state--cancelled {
+  color: #fcd34d;
+}
+
+.query-explorer-result-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(148, 163, 184, 0.35);
+  border-top-color: var(--sfoc-accent, #38bdf8);
+  border-radius: 50%;
+  animation: query-explorer-spinner 0.7s linear infinite;
+}
+
+.query-explorer-cancel-btn {
+  min-width: 110px;
+}
+
+@keyframes query-explorer-spinner {
+  to { transform: rotate(360deg); }
 }
 
 .query-explorer-compare-wrap.hidden {
@@ -13369,6 +13539,119 @@ body[data-ui-mode="v2"][data-workbench-workspace="security-access"] #permissionD
   max-width: 100%;
 }
 
+/* Composición de datos inspirada en Data Export/Data Import: cada etapa queda
+   separada en una tarjeta, pero usa los tokens visuales propios de SFOC. */
+.query-explorer-card,
+.data-import-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid var(--sfoc-border, #334155);
+  border-radius: 10px;
+  background: var(--sfoc-bg-panel, #18212d);
+  box-shadow: 0 5px 16px rgba(2, 6, 23, 0.16);
+}
+
+.query-explorer-editor-card,
+.query-explorer-result-card,
+.data-import-card {
+  padding: 12px;
+}
+
+.query-explorer-editor-card {
+  overflow: hidden;
+}
+
+.query-explorer-card-header,
+.query-explorer-result-card-header,
+.data-import-card-header,
+.data-import-result-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+.query-explorer-card-title,
+.data-import-card-title {
+  margin: 0;
+  color: var(--sfoc-text, #f8fafc);
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.query-explorer-card-controls {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+}
+
+.query-explorer-editor-card .query-explorer-card-header {
+  justify-content: flex-start;
+  gap: 10px 16px;
+}
+
+.query-explorer-editor-card .query-explorer-card-controls {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  flex: 1 1 0;
+  width: 100%;
+  flex-wrap: nowrap;
+  justify-content: initial;
+  gap: 10px;
+}
+
+.query-explorer-editor-card #queryExplorerRunBtn {
+  grid-column: 5;
+  grid-row: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  align-self: center;
+}
+
+.query-explorer-card-controls .query-explorer-field {
+  min-width: 9.5rem;
+}
+
+.query-explorer-editor-card .query-explorer-controls {
+  margin-top: 12px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.query-explorer-editor-card .query-explorer-run-row {
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--sfoc-border, #334155) 70%, transparent);
+}
+
+.query-explorer-result-card-header {
+  align-items: center;
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sfoc-border, #334155) 70%, transparent);
+}
+
+.query-explorer-result-card .query-explorer-result-toolbar {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+.query-explorer-result-card-header .query-explorer-page-meta {
+  min-width: 0;
+}
+
+.query-explorer-result-card .query-explorer-table-scroll {
+  margin-top: 12px;
+}
+
 .object-describe-summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -13503,6 +13786,16 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
   min-height: 0;
 }
 
+/* La consulta aprovecha todo el ancho del workbench. El editor sigue
+   contenido por su propia tarjeta, por lo que crecer en vertical no cambia
+   el ancho del panel. */
+body[data-ui-mode="v2"].artifact-query-explorer .query-explorer-panel > .query-explorer-panel-inner {
+  max-width: none !important;
+  margin: 0 auto !important;
+  padding-top: 8px !important;
+  padding-bottom: 18px !important;
+}
+
 .data-workbench-tab-panel {
   display: flex;
   flex-direction: column;
@@ -13551,15 +13844,178 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
 
 .data-workbench-csv-mapping {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px 14px;
   width: 100%;
+}
+
+.data-import-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(300px, 0.85fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.data-import-layout > .data-import-actions,
+.data-import-layout > .data-import-results-card {
+  grid-column: 1 / -1;
+}
+
+.data-import-config-card,
+.data-import-mapping-card,
+.data-import-results-card {
+  min-width: 0;
+}
+
+.data-import-config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.data-import-config-card .data-workbench-controls {
+  gap: 10px 12px;
+}
+
+.data-import-config-card .sfoc-tool-field {
+  flex: 1 1 150px;
+}
+
+.data-import-paste-field {
+  max-width: none;
+  width: 100%;
+}
+
+.data-import-paste-field .data-import-paste {
+  height: calc(4.2em + 18px);
+  min-height: calc(4.2em + 18px);
+  max-height: calc(4.2em + 18px);
+  overflow-y: auto;
+  resize: none;
+}
+
+.data-import-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.data-import-mapping-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.data-import-mapping-card .data-workbench-csv-mapping {
+  max-height: 300px;
+  overflow: auto;
+  align-content: start;
+  padding-right: 3px;
+}
+
+.data-import-mapping-card:has(.data-workbench-autocomplete-results:not([hidden])) {
+  position: relative;
+  z-index: calc(var(--sfoc-z-tool-panel) + 1);
+}
+
+.data-import-mapping-card .data-workbench-csv-mapping:has(.data-workbench-autocomplete-results:not([hidden])) {
+  overflow: visible;
+}
+
+.data-import-results-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.data-import-results-card .data-import-preview-wrap {
+  margin-top: 0;
+}
+
+.data-import-result-card-header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sfoc-border, #334155) 70%, transparent);
+}
+
+.data-import-result-card-header > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.data-import-delete-rows-btn {
+  flex: 0 0 auto;
 }
 
 .data-workbench-csv-map-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.data-workbench-csv-map-control {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.data-workbench-autocomplete {
+  position: relative;
+  min-width: 0;
+  z-index: 0;
+}
+
+.data-workbench-autocomplete:focus-within {
+  z-index: calc(var(--sfoc-z-tool-panel) + 1);
+}
+
+.data-workbench-autocomplete-results.sfoc-autocomplete-panel:not([hidden]) {
+  display: block;
+  z-index: calc(var(--sfoc-z-tool-panel) + 2);
+}
+
+#dataWorkbenchObjectResults.data-workbench-autocomplete-results.sfoc-autocomplete-panel,
+#dataWorkbenchImportObjectResults.data-workbench-autocomplete-results.sfoc-autocomplete-panel {
+  right: auto;
+  width: min(420px, calc(100vw - 32px));
+  min-width: 100%;
+  max-width: none;
+}
+
+.data-workbench-autocomplete-item .data-workbench-autocomplete-title,
+.data-workbench-autocomplete-item .data-workbench-autocomplete-subtitle {
+  display: block;
+}
+
+.data-workbench-autocomplete-item .data-workbench-autocomplete-title {
+  font-weight: 650;
+}
+
+.data-workbench-autocomplete-item .data-workbench-autocomplete-subtitle {
+  margin-top: 2px;
+  color: var(--sfoc-query-placeholder, #94a3b8);
+  font-size: 0.78rem;
+}
+
+.data-workbench-autocomplete-item:hover .data-workbench-autocomplete-subtitle {
+  color: currentColor;
+}
+
+.data-workbench-csv-map-control .data-workbench-csv-map-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.data-workbench-csv-map-autocomplete {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.data-workbench-csv-map-autocomplete .data-workbench-csv-map-input {
+  width: 100%;
+}
+
+.data-workbench-csv-map-skip {
+  flex: 0 0 auto;
 }
 
 .data-workbench-csv-col {
@@ -13748,7 +14204,26 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
 }
 
 .data-import-unmapped .data-workbench-csv-col {
-  color: #64748b;
+  color: #f87171;
+}
+
+.data-import-unmapped .data-workbench-csv-map-input {
+  border-color: #ef4444;
+}
+
+.data-import-unmapped .data-workbench-csv-map-input:focus {
+  outline-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.18);
+}
+
+.data-import-unmapped .data-workbench-csv-map-skip {
+  border-color: #ef4444;
+  color: #f87171;
+}
+
+.data-import-unmapped .data-workbench-csv-map-skip:hover:not(:disabled) {
+  border-color: #f87171;
+  color: #fecaca;
 }
 
 .data-import-preview-wrap {
@@ -13789,6 +14264,12 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
   background: rgba(15, 23, 42, 0.45);
 }
 
+.data-import-layout > .data-import-actions {
+  background: var(--sfoc-bg-elevated, #233141);
+  border-color: var(--sfoc-border, #334155);
+  box-shadow: 0 3px 12px rgba(2, 6, 23, 0.1);
+}
+
 .data-import-actions-group,
 .data-workbench-actions-group {
   display: flex;
@@ -13816,8 +14297,21 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
 }
 
 .data-import-run-btn {
-  margin-left: auto;
-  min-width: 160px;
+  min-width: 92px;
+  gap: 6px;
+  border-color: var(--sfoc-accent);
+  background: var(--sfoc-accent);
+  color: #0f172a;
+}
+
+.data-import-run-btn:hover:not(:disabled) {
+  border-color: var(--sfoc-accent);
+  background: var(--sfoc-accent);
+  filter: brightness(1.08);
+}
+
+.data-import-run-icon {
+  flex: 0 0 auto;
 }
 
 .data-import-file-input {
@@ -13836,6 +14330,389 @@ body.artifact-query-explorer .query-explorer-panel.org-limits-panel {
   text-align: center;
   color: #64748b;
   padding: 12px;
+}
+
+/* Tabulator: resultados SOQL e importación editable. El tema se integra con el
+   shell para que la librería no introduzca superficies claras en modo oscuro. */
+.query-explorer-table-scroll .tabulator,
+.data-import-tabulator .tabulator {
+  border: 1px solid #334155 !important;
+  background: #0b1220 !important;
+  color: #e5edf9 !important;
+  font-family: inherit;
+  font-size: 0.78rem;
+}
+
+.query-explorer-table-scroll .tabulator .tabulator-tableholder,
+.data-import-tabulator .tabulator .tabulator-tableholder,
+.query-explorer-table-scroll .tabulator .tabulator-table,
+.data-import-tabulator .tabulator .tabulator-table {
+  background: #0b1220 !important;
+  color: #e5edf9 !important;
+}
+
+.query-explorer-table-scroll .tabulator-header,
+.data-import-tabulator .tabulator-header {
+  border-bottom: 1px solid #334155 !important;
+  background: #111c2e !important;
+  color: #e5edf9 !important;
+}
+
+.query-explorer-table-scroll .tabulator .tabulator-header .tabulator-col,
+.data-import-tabulator .tabulator .tabulator-header .tabulator-col {
+  background: #111c2e !important;
+  border-right-color: #334155 !important;
+  color: #e5edf9 !important;
+}
+
+.query-explorer-table-scroll .tabulator .tabulator-header .tabulator-col-title,
+.data-import-tabulator .tabulator .tabulator-header .tabulator-col-title,
+.query-explorer-table-scroll .tabulator .tabulator-header .tabulator-col-sorter,
+.data-import-tabulator .tabulator .tabulator-header .tabulator-col-sorter {
+  color: #e5edf9 !important;
+}
+
+.query-explorer-table-scroll .tabulator-col,
+.data-import-tabulator .tabulator-col,
+.query-explorer-table-scroll .tabulator-row .tabulator-cell,
+.data-import-tabulator .tabulator-row .tabulator-cell {
+  border-right-color: rgba(148, 163, 184, 0.12);
+}
+
+.query-explorer-table-scroll .tabulator-col-content,
+.data-import-tabulator .tabulator-col-content {
+  padding: 7px 10px;
+}
+
+.query-explorer-table-scroll .tabulator-row,
+.data-import-tabulator .tabulator-row {
+  background: transparent;
+  border-bottom-color: rgba(148, 163, 184, 0.12);
+  color: var(--sfoc-text, #e2e8f0);
+}
+
+.query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row,
+.data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row {
+  background: #0f1a2b !important;
+  color: #e5edf9 !important;
+}
+
+.query-explorer-table-scroll .tabulator-row.tabulator-row-even,
+.data-import-tabulator .tabulator-row.tabulator-row-even {
+  background: rgba(15, 23, 42, 0.2);
+}
+
+.query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even,
+.data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even {
+  background: #17263b !important;
+}
+
+.query-explorer-table-scroll .tabulator-row:hover,
+.data-import-tabulator .tabulator-row:hover,
+.query-explorer-table-scroll .tabulator-row.tabulator-selected,
+.data-import-tabulator .tabulator-row.tabulator-selected {
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row:hover,
+.data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row:hover,
+.query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected,
+.data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-selected {
+  background: #1d3a56 !important;
+}
+
+.query-explorer-table-scroll .tabulator-cell,
+.data-import-tabulator .tabulator-cell {
+  padding: 6px 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row .tabulator-cell,
+.data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row .tabulator-cell {
+  background: transparent !important;
+  border-right-color: #334155 !important;
+  color: #e5edf9 !important;
+}
+
+.query-explorer-table-scroll .tabulator-row,
+.data-import-tabulator .tabulator-row {
+  cursor: pointer;
+}
+
+.query-explorer-table-scroll .tabulator-col input,
+.data-import-tabulator .tabulator-col input {
+  width: 100%;
+  min-height: 26px;
+  margin-top: 5px;
+  border: 1px solid var(--sfoc-border, #475569);
+  border-radius: 4px;
+  background: #0b1220 !important;
+  color: #e5edf9 !important;
+  font: inherit;
+}
+
+/* El marcador se actualiza junto con el toggle de tema. Estas reglas evitan
+   que estilos internos de Tabulator recuperen colores claros al reciclar filas. */
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"],
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"] .tabulator-tableholder,
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"] .tabulator-table,
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"] .tabulator-placeholder,
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"] .tabulator-placeholder-contents {
+  background: #0b1220 !important;
+  color: #e5edf9 !important;
+  color-scheme: dark;
+}
+
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"] .tabulator-header,
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"] .tabulator-header .tabulator-col {
+  background: #111c2e !important;
+  border-color: #334155 !important;
+  color: #e5edf9 !important;
+}
+
+.query-explorer-table-scroll .tabulator[data-sfoc-theme="dark"] .tabulator-header input {
+  border-color: #475569 !important;
+  background: #0b1220 !important;
+  color: #f8fafc !important;
+  color-scheme: dark;
+}
+
+.data-import-grid-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.data-import-grid-hint {
+  color: var(--sfoc-text-muted, #94a3b8);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 860px) {
+  .data-import-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .data-import-mapping-card .data-workbench-csv-mapping {
+    max-height: 260px;
+  }
+
+  .query-explorer-card-header,
+  .query-explorer-result-card-header,
+  .data-import-result-card-header {
+    align-items: stretch;
+  }
+
+  .query-explorer-card-controls,
+  .query-explorer-result-card .query-explorer-result-toolbar {
+    justify-content: flex-start;
+    flex-basis: 100%;
+  }
+
+  .query-explorer-editor-card .query-explorer-card-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .query-explorer-editor-card #queryExplorerRunBtn {
+    grid-column: 1;
+    justify-self: start;
+  }
+}
+
+.data-import-tabulator-wrap {
+  /* El scroll pertenece exclusivamente a Tabulator, igual que en Query
+     Explorer. Evita dos barras y dos capas de virtualización compitiendo. */
+  max-height: none;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+}
+
+.data-import-tabulator .tabulator-cell.tabulator-editing {
+  border-color: #38bdf8;
+  background: #0f172a;
+  overflow: visible;
+}
+
+.data-import-cell-editor {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.data-import-cell-editor-input {
+  width: 100%;
+  height: 100%;
+  min-height: 28px;
+  box-sizing: border-box;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.data-import-fill-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  z-index: 4;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 2px solid #e0f2fe;
+  border-radius: 50%;
+  background: #0ea5e9;
+  cursor: ns-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.data-import-fill-handle:hover,
+.data-import-fill-handle:focus-visible {
+  background: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.32);
+}
+
+.data-import-tabulator .tabulator-cell.data-import-fill-target {
+  box-shadow: inset 0 0 0 2px #38bdf8;
+}
+
+html[data-ui-theme="light"] .data-import-fill-handle {
+  border-color: #fff;
+  background: #0284c7;
+}
+
+.query-explorer-table-scroll .tabulator-footer,
+.data-import-tabulator .tabulator-footer {
+  border-top-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.6);
+  color: #94a3b8;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator {
+  border-color: #94a3b8 !important;
+  background: #fff !important;
+  color: #1f2937 !important;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator-header,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator-header {
+  background: #e8eef6 !important;
+  color: #334155 !important;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-header .tabulator-col,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-header .tabulator-col {
+  background: #e8eef6 !important;
+  border-right-color: #cbd5e1 !important;
+  color: #334155 !important;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-header .tabulator-col-title,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-header .tabulator-col-title,
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-header .tabulator-col-sorter,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-header .tabulator-col-sorter {
+  color: #334155 !important;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator-row,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator-row {
+  color: #1f2937;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-tableholder,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-tableholder,
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-table,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-table,
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row {
+  background: #fff !important;
+  color: #1f2937 !important;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row.tabulator-row-even {
+  background: #f6f9fc !important;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-tableholder .tabulator-table .tabulator-row .tabulator-cell,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator .tabulator-tableholder .tabulator-table .tabulator-row .tabulator-cell {
+  border-right-color: #d7e0eb !important;
+  color: #1f2937 !important;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator-col input,
+html[data-ui-theme="light"] .data-import-tabulator .tabulator-col input {
+  border-color: #94a3b8 !important;
+  background: #fff !important;
+  color: #1f2937 !important;
+  color-scheme: light;
+}
+
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-placeholder,
+html[data-ui-theme="light"] .query-explorer-table-scroll .tabulator .tabulator-placeholder-contents {
+  background: #fff !important;
+  color: #475569 !important;
+  color-scheme: light;
+}
+
+/* El mount de Query Explorer ES el nodo raíz de Tabulator (no contiene otro
+   `.tabulator`). Se fuerza aquí el tema oscuro sobre ese mismo elemento. */
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator,
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-tableholder,
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-table,
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-placeholder,
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-placeholder-contents {
+  background: #0b1220 !important;
+  color: #e5edf9 !important;
+  color-scheme: dark;
+}
+
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-header,
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-header .tabulator-col {
+  border-color: #334155 !important;
+  background: #111c2e !important;
+  color: #f1f5f9 !important;
+}
+
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-header .tabulator-col-title,
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-header .tabulator-col-sorter {
+  color: #f1f5f9 !important;
+}
+
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-tableholder .tabulator-row {
+  border-bottom-color: #26364b !important;
+  background: #0f1a2b !important;
+  color: #f1f5f9 !important;
+}
+
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-tableholder .tabulator-row.tabulator-row-even {
+  background: #17263b !important;
+}
+
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-tableholder .tabulator-row:hover,
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-tableholder .tabulator-row.tabulator-selected {
+  background: #1d3a56 !important;
+}
+
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-tableholder .tabulator-row .tabulator-cell {
+  border-right-color: #334155 !important;
+  background: transparent !important;
+  color: #f1f5f9 !important;
+}
+
+html:not([data-ui-theme="light"]) .query-explorer-table-scroll.tabulator .tabulator-header input {
+  border-color: #475569 !important;
+  background: #0b1220 !important;
+  color: #f8fafc !important;
+  color-scheme: dark;
 }
 
 .deploy-status-lookup-input {

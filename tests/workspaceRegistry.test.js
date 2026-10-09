@@ -31,11 +31,12 @@ describe('workspaceRegistry', () => {
     expect(new Set(configured).size).toBe(configured.length);
     expect(new Set(configured)).toEqual(new Set(WORKBENCH_WORKSPACES.map(({ id }) => id)));
     expect(WORKBENCH_WORKSPACES.filter(({ tabs }) => tabs.length > 1).map(({ id }) => id)).toEqual([
-      'code-studio', 'data-compare', 'data-workbench'
+      'code-studio', 'data-compare'
     ]);
     expect(WORKBENCH_WORKSPACES.some(({ toolAliases }) => toolAliases?.length)).toBe(false);
     expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'development')?.workspaceIds).toEqual([
-      'apex-quality', 'apex-coverage', 'code-studio', 'anonymous-apex', 'query-explorer', 'rest-explorer'
+      'apex-quality', 'apex-coverage', 'code-studio', 'anonymous-apex', 'rest-explorer',
+      'query-explorer', 'data-workbench'
     ]);
     expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'monitoring')?.workspaceIds).toEqual([
       'diagnostics', 'event-monitor', 'org-environments', 'org-limits', 'deploy-status',
@@ -56,14 +57,12 @@ describe('workspaceRegistry', () => {
 
   it('separa el editor de registros y la importaciÃ³n masiva en vistas de Workbench', () => {
     const dataWorkbench = getWorkspaceById('data-workbench');
-    expect(dataWorkbench?.defaultTabId).toBe('record-editor');
-    expect(dataWorkbench?.tabs.map(({ id }) => id)).toEqual(['record-editor', 'bulk-import']);
-    expect(dataWorkbench?.tabs[0].actions.map(({ id }) => id)).toEqual([
-      'data-load-record', 'data-create-record'
-    ]);
-    expect(dataWorkbench?.tabs[1].actions.map(({ id }) => id)).toEqual(['data-import-run']);
+    expect(dataWorkbench?.categoryId).toBe('development');
+    expect(dataWorkbench?.defaultTabId).toBe('main');
+    expect(dataWorkbench?.tabs.map(({ id }) => id)).toEqual(['main']);
+    expect(dataWorkbench?.tabs[0].actions).toEqual([]);
     expect(LEGACY_TOOL_ROUTES.DataWorkbench).toEqual({
-      workspaceId: 'data-workbench', tabId: 'record-editor'
+      workspaceId: 'data-workbench', tabId: 'main'
     });
   });
 

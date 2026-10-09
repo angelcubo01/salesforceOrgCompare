@@ -216,7 +216,7 @@ test('genera comparación visual Classic y Workbench V2', async ({ extensionCont
   await v2.waitForTimeout(250);
   await v2.screenshot({ path: path.join(output, 'v2-comparator-light-1440.png') });
 
-  await navigate(v2, 'development', 'QueryExplorer', 'queryExplorerPanel');
+  await navigate(v2, 'monitoring', 'QueryExplorer', 'queryExplorerPanel');
   const builderToggle = v2.locator('#queryBuilderToggleBtn');
   if (await builderToggle.isVisible()) await builderToggle.click();
   await v2.screenshot({ path: path.join(output, 'v2-form-query-explorer-light-1440.png') });
