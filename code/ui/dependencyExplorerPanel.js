@@ -156,6 +156,9 @@ async function openMetadataSourceInViewer(orgId, ref) {
     const org = (state.orgsList || []).find((item) => String(item.id) === String(orgId));
     const ok = await openApexSourceViewerWithPayload(title, body, {
       downloadFileName: fileName,
+      resourceId: ref.id || '',
+      resourceName: ref.name || '',
+      resourceType: ref.type,
       orgId,
       orgLabel: org?.label || '',
       instanceUrl: org?.instanceUrl || ''

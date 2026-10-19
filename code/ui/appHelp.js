@@ -93,6 +93,8 @@ function collectOnboardingSteps(key, maxSteps = 4) {
     if (!text || text === stepKey) break;
     steps.push(text);
   }
+  const keyboardHint = t('onboarding.common.keyboardHint');
+  if (keyboardHint && keyboardHint !== 'onboarding.common.keyboardHint') steps.push(keyboardHint);
   return steps;
 }
 

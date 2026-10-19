@@ -4,6 +4,7 @@
  */
 import { SF_INJECT_INTEGRATION_IDS } from './registry.js';
 import { normalizeSetupCommandPaletteShortcut } from '../content/setupCommandPaletteUtils.js';
+import { normalizeRecordViewerShortcut } from '../content/recordViewerShortcutUtils.js';
 
 export const SF_INJECT_CONFIG_KEY = 'sfoc_sf_inject';
 /** Plantilla de enlaces que se puede copiar a todos los entornos desde Ajustes. */
@@ -18,7 +19,9 @@ export const DEFAULT_SF_INJECT_PREFS = {
   /** Filtro User Trace Flags: solo activas + caducadas ≤30 min. Default inactivo. */
   userTraceFlagsActiveOnly: false,
   /** Atajo configurable para abrir la paleta de Setup en Salesforce. */
-  setupCommandPaletteShortcut: 'Ctrl+K'
+  setupCommandPaletteShortcut: 'Ctrl+K',
+  /** Atajo configurable para View All Data & Editor. */
+  recordViewerShortcut: 'Ctrl+Shift+E'
 };
 
 const QUICK_LINK_TYPES = new Set(['sfoc', 'custom']);
@@ -108,6 +111,9 @@ export function normalizeSfInjectPrefs(raw) {
     }
     if (Object.prototype.hasOwnProperty.call(raw, 'setupCommandPaletteShortcut')) {
       next.setupCommandPaletteShortcut = normalizeSetupCommandPaletteShortcut(raw.setupCommandPaletteShortcut);
+    }
+    if (Object.prototype.hasOwnProperty.call(raw, 'recordViewerShortcut')) {
+      next.recordViewerShortcut = normalizeRecordViewerShortcut(raw.recordViewerShortcut);
     }
   }
   return next;

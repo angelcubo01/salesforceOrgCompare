@@ -1537,6 +1537,19 @@ function decorateLanding() {
   heroCopy.appendChild(actions);
   heroCopy.appendChild(createMarketingSearchButton('workbench-marketing-search--hero'));
 
+  const shortcuts = el('div', 'workbench-landing-shortcuts');
+  for (const [labelKey, shortcut] of [
+    ['workbench.shortcut.environmentPrimary', 'Alt+1'],
+    ['workbench.shortcut.environmentSecondary', 'Alt+2'],
+    ['workbench.shortcut.picklists', '↑↓ + Enter']
+  ]) {
+    const chip = el('span', 'workbench-shortcut-chip');
+    chip.appendChild(el('span', '', t(labelKey)));
+    chip.appendChild(el('kbd', '', shortcut));
+    shortcuts.appendChild(chip);
+  }
+  heroCopy.appendChild(shortcuts);
+
   const chips = el('div', 'workbench-marketing-chips');
   for (const [iconName, labelKey] of [
     ['building-factory-2', 'workbench.marketing.chip.environments'],

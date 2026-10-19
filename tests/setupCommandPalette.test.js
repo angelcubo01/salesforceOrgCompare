@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SETUP_PALETTE_PAGES } from '../sfInject/content/setupPaletteCatalog.js';
+import { getVisibleSetupPaletteToolIds } from '../sfInject/content/setupCommandPalette.js';
 import {
   DEFAULT_SETUP_COMMAND_PALETTE_SHORTCUT,
   filterSetupCommandPaletteEntries,
@@ -39,5 +40,24 @@ describe('Setup command palette', () => {
     });
     expect(cfg.integrations.setupCommandPalette).toBe(true);
     expect(cfg.prefs.setupCommandPaletteShortcut).toBe('Ctrl+Shift+P');
+  });
+
+  it('oculta las herramientas y scripts cuyo control de PostHog estÃ¡ inactivo', () => {
+    const visible = getVisibleSetupPaletteToolIds({
+      version: 1,
+      modes: { development: { hidden: true } },
+      tools: { QueryExplorer: { hidden: true } },
+      metadataTypes: {},
+      actions: {}
+    });
+
+    expect(visible).not.toContain('ApexTests');
+    expect(visible).not.toContain('AnonymousApex');
+    expect(visible).not.toContain('QueryExplorer');
+    expect(visible).toContain('OrgLimits');
+  });
+
+  it('no expone herramientas hasta que se haya hidratado su configuraciÃ³n remota', () => {
+    expect(getVisibleSetupPaletteToolIds(null)).toEqual([]);
   });
 });

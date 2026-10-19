@@ -8,6 +8,12 @@ describe('dataWorkbenchCsv', () => {
     expect(csv.rows).toHaveLength(2);
   });
 
+  it('detecta el separador del CSV exportado y conserva saltos de línea entre comillas', () => {
+    const csv = parseCsv('"Name";"Notes"\r\n"Acme";"línea 1\nlínea 2"');
+    expect(csv.headers).toEqual(['Name', 'Notes']);
+    expect(csv.rows).toEqual([['Acme', 'línea 1\nlínea 2']]);
+  });
+
   it('maps columns to Salesforce fields', () => {
     const rows = mapColumns(['Name'], [['X']], { Name: 'Name' });
     expect(rows[0].Name).toBe('X');
@@ -17,6 +23,7 @@ describe('dataWorkbenchCsv', () => {
     expect(detectImportFormat('[{"Id":"001"}]')).toBe('json');
     expect(detectImportFormat('A\tB\n1\t2')).toBe('excel');
     expect(detectImportFormat('A,B\n1,2')).toBe('csv');
+    expect(detectImportFormat('A;B\n1;2')).toBe('csv');
   });
 
   it('parseImportData parsea JSON', () => {

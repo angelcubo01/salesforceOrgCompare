@@ -24,7 +24,7 @@ function renderProfilingTable(section, rows, ctrl, t, onJump, tableWrap) {
   const visible = ctrl.slice(rows);
   const rowsHtml = visible
     .map(
-      (r) => `<tr data-line="${r.line || 0}" tabindex="0" role="button">
+      (r) => `<tr data-line="${r.line || 0}" data-apex-location="${escapeHtml(r.location)}" data-apex-line="${r.apexLine || 0}" tabindex="0" role="button">
           <td>${escapeHtml(r.location)}</td>
           <td>${r.apexLine || '—'}</td>
           <td>${r.executions}</td>

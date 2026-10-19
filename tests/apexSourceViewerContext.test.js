@@ -37,7 +37,21 @@ describe('openApexSourceViewerWithPayload', () => {
       instanceUrl: 'https://example.my.salesforce.com'
     }));
     expect(window.open).toHaveBeenCalledWith(
-      'chrome-extension://test/code/apex-source-viewer.html?staged=viewer-id',
+      'chrome-extension://test/code/apex-source-viewer.html?staged=viewer-id&orgId=00Dxx0000000001&sourceName=Servicio&sourceType=ApexClass',
+      '_blank'
+    );
+  });
+
+  it('prioriza el identificador de la clase en la URL compartible', async () => {
+    bgMock.mockResolvedValue({ ok: true, id: 'viewer-id' });
+    const { openApexSourceViewerWithPayload } = await import('../code/lib/openApexSourceViewer.js');
+
+    await openApexSourceViewerWithPayload('Servicio.cls', 'public class Servicio {}', {
+      orgId: '00Dxx0000000001', resourceId: '01pxx0000000001', resourceName: 'Servicio', initialLine: 18
+    });
+
+    expect(window.open).toHaveBeenCalledWith(
+      'chrome-extension://test/code/apex-source-viewer.html?staged=viewer-id&orgId=00Dxx0000000001&sourceId=01pxx0000000001&sourceType=ApexClass&line=18',
       '_blank'
     );
   });

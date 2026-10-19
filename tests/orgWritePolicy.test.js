@@ -7,14 +7,20 @@ import {
 } from '../shared/orgWritePolicy.js';
 
 describe('orgWritePolicy', () => {
-  it('allows anonymous apex in production', () => {
+  it('allows Data Workbench writes and Anonymous Apex in production', () => {
     expect(isProductionWriteAllowedAction('anonymous_apex_execute')).toBe(true);
-    expect(isProductionWriteAllowedAction('dml_execute')).toBe(false);
+    expect(isProductionWriteAllowedAction('bulk_import')).toBe(true);
+    expect(isProductionWriteAllowedAction('dml_execute')).toBe(true);
   });
 
   it('blocks deploy when org verified as production', () => {
     expect(shouldBlockProductionDeploy({ isSandbox: false }, false, false, 'rest_write')).toBe(true);
     expect(shouldBlockProductionDeploy({ isSandbox: false }, true, false, 'rest_write')).toBe(false);
+  });
+
+  it('does not block Data Workbench writes in production', () => {
+    expect(shouldBlockProductionDeploy({ isSandbox: false }, false, false, 'bulk_import')).toBe(false);
+    expect(shouldBlockProductionDeploy({ isSandbox: false }, false, false, 'dml_execute')).toBe(false);
   });
 
   it('does not block check-only deploy', () => {

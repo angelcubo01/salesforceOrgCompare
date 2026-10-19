@@ -166,7 +166,7 @@ function renderLeadContext(parsed, ctx, t, recordPillsHtml) {
   }
   if (ctx.entry) {
     rows.push(
-      `<div class="apex-log-summary-lead-row"><span class="apex-log-summary-lead-k">${escapeHtml(t('apexLogViewer.summary.entryPoint'))}</span><span class="apex-log-summary-lead-v">${escapeHtml(ctx.entry)}</span></div>`
+      `<div class="apex-log-summary-lead-row"><span class="apex-log-summary-lead-k">${escapeHtml(t('apexLogViewer.summary.entryPoint'))}</span><span class="apex-log-summary-lead-v" data-apex-location="${escapeHtml(ctx.entry)}">${escapeHtml(ctx.entry)}</span></div>`
     );
   }
   if (!rows.length && !recordPillsHtml) return '';
@@ -190,7 +190,7 @@ function renderStatusPanel(ctx, t, errorCtrl) {
     for (const err of visible) {
       const apexHint =
         err.apexClass && err.apexLine
-          ? `<span class="apex-log-summary-status-apex">${escapeHtml(err.apexClass)}:${err.apexLine}</span>`
+          ? `<span class="apex-log-summary-status-apex" data-apex-location="${escapeHtml(`Class.${err.apexClass}: line ${err.apexLine}`)}" data-apex-line="${err.apexLine}">${escapeHtml(err.apexClass)}:${err.apexLine}</span>`
           : '';
       items.push(
         `<div class="apex-log-summary-status apex-log-summary-status--error">

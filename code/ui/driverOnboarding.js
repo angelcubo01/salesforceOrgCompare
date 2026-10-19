@@ -76,6 +76,13 @@ function decoratePopover(popover, item, totalSteps) {
     note.appendChild(document.createTextNode(noteText));
     description.appendChild(note);
   }
+  if (item.id === 'overview') {
+    const keyboardNote = document.createElement('p');
+    keyboardNote.className = 'sfoc-driver-note is-keyboard';
+    keyboardNote.appendChild(createTourIcon('sliders'));
+    keyboardNote.appendChild(document.createTextNode(t('onboarding.common.keyboardHint')));
+    description.appendChild(keyboardNote);
+  }
 }
 
 async function resolveDriverFactory() {

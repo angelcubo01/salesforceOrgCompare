@@ -4276,6 +4276,54 @@ body.artifact-apex-tests #editorContainer.editor {
 .generate-pkg-xml-header .generate-pkg-label {
   margin-bottom: 0;
 }
+.generate-pkg-xml-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.generate-pkg-edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.generate-pkg-edit-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.generate-pkg-edit-switch {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: #1e293b;
+  border: 1px solid #475569;
+  position: relative;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+.generate-pkg-edit-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  transition: transform 0.2s ease;
+}
+.generate-pkg-edit-toggle input:checked + .generate-pkg-edit-switch {
+  background: #0ea5e9;
+  border-color: #0ea5e9;
+}
+.generate-pkg-edit-toggle input:checked + .generate-pkg-edit-switch::after {
+  transform: translateX(14px);
+}
+.generate-pkg-edit-label {
+  font-size: 12px;
+  color: #cbd5e1;
+  user-select: none;
+}
 .generate-pkg-download-icon-btn {
   display: flex;
   align-items: center;
@@ -4442,6 +4490,11 @@ body.artifact-apex-tests #editorContainer.editor {
   line-height: 1.45;
   resize: none;
   overflow: auto;
+}
+.generate-pkg-xml-output.is-editable {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.3);
+  resize: vertical;
 }
 .generate-pkg-retrieve-btn {
   padding: 8px 16px;
@@ -5638,6 +5691,21 @@ body.artifact-apex-tests #editorContainer.editor {
   .app-comparison-toggle__icon {
     animation: none !important;
   }
+}
+
+/* Estado activo compartido por los listbox/autocompletados navegados con teclado. */
+:where(
+  [role="option"],
+  [role="menuitem"],
+  .permission-diff-suggestion,
+  .data-workbench-autocomplete-item,
+  .field-history-suggestion-item,
+  .quick-open-item,
+  .item
+).sfoc-keyboard-active {
+  outline: 2px solid var(--sfoc-accent, #38bdf8);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--sfoc-accent, #38bdf8) 18%, transparent);
 }
 
 .app-toolbar-support-btn {
@@ -13944,6 +14012,55 @@ body[data-ui-mode="v2"].artifact-query-explorer .query-explorer-panel > .query-e
 
 .data-import-delete-rows-btn {
   flex: 0 0 auto;
+}
+
+.data-import-grid-help-btn {
+  flex: 0 0 auto;
+  width: 34px;
+  min-width: 34px;
+  padding: 6px !important;
+}
+
+.data-import-result-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.data-import-grid-help-trigger {
+  position: relative;
+  display: inline-flex;
+}
+
+.data-import-result-card-header {
+  position: relative;
+}
+
+.data-import-grid-help {
+  position: absolute;
+  z-index: calc(var(--sfoc-z-tool-panel) + 2);
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(460px, calc(100vw - 48px));
+  padding: 10px 12px;
+  border: 1px solid var(--sfoc-border, #334155);
+  border-radius: 8px;
+  background: var(--sfoc-bg-elevated, #233141);
+  color: var(--sfoc-text, #f8fafc);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.4);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.data-import-grid-help-trigger:hover .data-import-grid-help,
+.data-import-grid-help-trigger:focus-within .data-import-grid-help {
+  opacity: 1;
+  visibility: visible;
 }
 
 .data-workbench-csv-map-row {

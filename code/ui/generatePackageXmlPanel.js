@@ -25,6 +25,8 @@ let packageApiVersion = '60.0';
 let currentListType = '';
 /** Selección global: tipo → nombres completos de miembro, o `*` = comodín para todo el tipo. */
 const selectedByType = new Map();
+/** Si está activo, se conserva el package.xml escrito manualmente por el usuario. */
+let isXmlEditMode = false;
 
 function buildPackageXml() {
   return buildPackageXmlFromSelection(selectedByType, packageApiVersion || '60.0');
@@ -32,7 +34,18 @@ function buildPackageXml() {
 
 function updateXmlOutput() {
   const ta = document.getElementById('generatePkgXmlOutput');
-  if (ta) ta.value = buildPackageXml();
+  if (ta && !isXmlEditMode) ta.value = buildPackageXml();
+}
+
+function syncXmlEditMode() {
+  const toggle = document.getElementById('generatePkgEditModeToggle');
+  const ta = document.getElementById('generatePkgXmlOutput');
+  if (toggle) toggle.checked = isXmlEditMode;
+  if (!ta) return;
+
+  ta.readOnly = !isXmlEditMode;
+  ta.setAttribute('aria-readonly', String(!isXmlEditMode));
+  ta.classList.toggle('is-editable', isXmlEditMode);
 }
 
 function getSetForType(typeName) {
@@ -336,6 +349,7 @@ export function setupGeneratePackageXmlPanel() {
   const typeSelect = document.getElementById('generatePkgMetadataType');
   const compareToggle = document.getElementById('generatePkgCompareToggle');
   const compareOpenBtn = document.getElementById('generatePkgCompareOpenBtn');
+  const editModeToggle = document.getElementById('generatePkgEditModeToggle');
 
   wireSearchInputs();
 
@@ -361,6 +375,14 @@ export function setupGeneratePackageXmlPanel() {
       syncCompareButtonVisibility();
       syncRetrieveButtonsVisibility();
       applyArtifactTypeUi();
+    });
+  }
+  if (editModeToggle) {
+    editModeToggle.checked = isXmlEditMode;
+    editModeToggle.addEventListener('change', () => {
+      isXmlEditMode = !!editModeToggle.checked;
+      syncXmlEditMode();
+      if (!isXmlEditMode) updateXmlOutput();
     });
   }
   if (compareOpenBtn) {
@@ -530,6 +552,7 @@ export function setupGeneratePackageXmlPanel() {
   }
 
   updateXmlOutput();
+  syncXmlEditMode();
   syncCompareButtonVisibility();
   syncRetrieveButtonsVisibility();
 }

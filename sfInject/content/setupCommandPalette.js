@@ -2,6 +2,11 @@ import { SETUP_PALETTE_PAGES } from './setupPaletteCatalog.js';
 import { isQuickLinksSalesforcePage } from './matchers/quickLinksPages.js';
 import { SFOC_TOOL_MODES, buildCustomQuickLinkUrl } from '../lib/quickLinkNavigation.js';
 import { sfInjectSend } from './bridge.js';
+import { isModeVisible, isToolVisible, parseFeatureControlsPayload } from '../../shared/featureControls.js';
+import {
+  FEATURE_CONTROLS_STORAGE_KEY,
+  readFeatureControlsCache
+} from '../../shared/featureControlsCache.js';
 import {
   DEFAULT_SETUP_COMMAND_PALETTE_SHORTCUT,
   filterSetupCommandPaletteEntries,
@@ -58,8 +63,22 @@ function setupEntries(copy) {
   });
 }
 
-function sfocEntries(copy) {
-  return Object.keys(SFOC_TOOL_MODES).map((toolId) => ({
+/**
+ * Las herramientas de la paleta deben respetar los mismos controles remotos
+ * que la navegaciÃ³n de SFOC. Mientras se hidrata la cachÃ© no se exponen
+ * herramientas: asÃ­ una herramienta oculta nunca aparece fugazmente.
+ *
+ * @param {import('../../shared/featureControls.js').FeatureControlsConfig | null} config
+ */
+export function getVisibleSetupPaletteToolIds(config) {
+  if (!config) return [];
+  return Object.keys(SFOC_TOOL_MODES).filter((toolId) =>
+    isModeVisible(config, SFOC_TOOL_MODES[toolId]) && isToolVisible(config, toolId)
+  );
+}
+
+function sfocEntries(copy, featureControls) {
+  return getVisibleSetupPaletteToolIds(featureControls).map((toolId) => ({
     kind: 'tool', order: 2, group: copy.tools, label: humanize(toolId), detail: toolId, toolId
   }));
 }
@@ -75,7 +94,8 @@ function quickLinkEntries(copy, links) {
   });
 }
 
-function scriptEntries(copy, scripts = []) {
+function scriptEntries(copy, scripts = [], featureControls) {
+  if (!getVisibleSetupPaletteToolIds(featureControls).includes('AnonymousApex')) return [];
   const saved = (Array.isArray(scripts) ? scripts : []).map((script) => ({
     kind: 'script', order: 1, group: copy.savedScripts, label: script.name || 'script', detail: 'Anonymous Apex', scriptId: script.id
   })).filter((script) => script.scriptId);
@@ -101,9 +121,19 @@ function createResultIcon(doc, entry) {
   return svg;
 }
 
+function resultCategory(entry) {
+  const order = Number(entry.order);
+  if (order === 0) return 'quick-links';
+  if (order === 1) return 'saved-scripts';
+  if (order === 2) return 'tools';
+  if (order === 4) return 'files';
+  return 'setup';
+}
+
 function createOption(doc, entry, active, onSelect, copy) {
   const row = doc.createElement('div');
   row.className = 'sfoc-setup-palette-option';
+  row.classList.add(`sfoc-setup-palette-option--${resultCategory(entry)}`);
   row.setAttribute('role', 'option');
   row.setAttribute('aria-selected', active ? 'true' : 'false');
   if (active) row.classList.add('is-active');
@@ -184,7 +214,9 @@ function createPalette(doc, ctx) {
   root.append(backdrop, dialog);
   doc.body.appendChild(root);
 
-  let entries = [...quickLinkEntries(copy, ctx.quickLinks), ...scriptEntries(copy), ...sfocEntries(copy), ...setupEntries(copy)];
+  let featureControls = null;
+  let destroyed = false;
+  let entries = [...quickLinkEntries(copy, ctx.quickLinks), ...scriptEntries(copy, [], featureControls), ...sfocEntries(copy, featureControls), ...setupEntries(copy)];
   let matches = [];
   let activeIndex = 0;
   let previousFocus = null;
@@ -196,7 +228,13 @@ function createPalette(doc, ctx) {
   let filesLoading = false;
 
   const rebuildEntries = () => {
-    entries = [...quickLinkEntries(copy, ctx.quickLinks), ...scriptEntries(copy, savedScripts), ...sfocEntries(copy), ...setupEntries(copy), ...fileEntries];
+    entries = [
+      ...quickLinkEntries(copy, ctx.quickLinks),
+      ...scriptEntries(copy, savedScripts, featureControls),
+      ...sfocEntries(copy, featureControls),
+      ...setupEntries(copy),
+      ...fileEntries
+    ];
   };
 
   const close = () => {
@@ -322,7 +360,25 @@ function createPalette(doc, ctx) {
     rebuildEntries();
     if (open) render();
   });
-  return () => { doc.removeEventListener('keydown', onKeyDown, true); root.remove(); };
+  void readFeatureControlsCache().then((config) => {
+    if (destroyed) return;
+    featureControls = config;
+    rebuildEntries();
+    if (open) render();
+  });
+  const onFeatureControlsStorageChange = (changes, areaName) => {
+    if (destroyed || areaName !== 'local' || !changes[FEATURE_CONTROLS_STORAGE_KEY]) return;
+    featureControls = parseFeatureControlsPayload(changes[FEATURE_CONTROLS_STORAGE_KEY].newValue);
+    rebuildEntries();
+    if (open) render();
+  };
+  chrome.storage?.onChanged?.addListener(onFeatureControlsStorageChange);
+  return () => {
+    destroyed = true;
+    doc.removeEventListener('keydown', onKeyDown, true);
+    chrome.storage?.onChanged?.removeListener(onFeatureControlsStorageChange);
+    root.remove();
+  };
 }
 
 function isParentPageActive() {

@@ -922,6 +922,7 @@ async function openDeployStatusApexSource(className, initialLine) {
     String(res.body || ''),
     {
       downloadFileName: `${name}.cls`, initialLine, orgId,
+      resourceId: res.id || '', resourceName: name, resourceType: 'ApexClass',
       orgLabel: org?.label || '', instanceUrl: org?.instanceUrl || ''
     }
   );

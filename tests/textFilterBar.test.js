@@ -39,7 +39,9 @@ describe('apexLogTextFilterPrefs', () => {
       'stack',
       'method',
       'unit',
-      'validation'
+      'validation',
+      'variable',
+      'context'
     ]);
     expect(DEFAULT_RELEVANT_CATEGORIES).not.toContain('noise');
     expect(DEFAULT_RELEVANT_CATEGORIES).not.toContain('other');

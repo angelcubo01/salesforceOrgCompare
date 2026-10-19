@@ -296,7 +296,10 @@ export async function restGetSobject(instanceUrl, sid, apiVersion, sobjectApiNam
     throw err;
   }
   const path = `/services/data/v${apiVersion}/sobjects/${encodeURIComponent(obj)}/${encodeURIComponent(id)}`;
-  const res = await restFetchWithSid(instanceUrl, sid, path);
+  const res = await restFetchWithSid(instanceUrl, sid, path, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' }
+  });
   if (res.status === 404) {
     const err = new Error(`Record not found: ${id}`);
     err.code = 'NOT_FOUND';
@@ -1306,7 +1309,7 @@ async function fetchApexLogBodyResponse(instanceUrl, sid, apiVersion, logId) {
   let lastStatus = 0;
   for (const url of urls) {
     await restGate.acquire();
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, { headers, cache: 'no-store' });
     if (res.ok) return res;
     lastStatus = res.status;
   }
@@ -1894,7 +1897,13 @@ export async function fetchSessionUserInfo(instanceUrl, sid) {
   const json = await res.json();
 
   let userId = '';
-  if (json.user_id) userId = String(json.user_id).replace(/[^a-zA-Z0-9]/g, '');
+  if (json.user_id) {
+    const rawUserId = String(json.user_id);
+    // OAuth userinfo suele devolver una URL identity, no solo el Id.
+    userId = rawUserId.includes('/')
+      ? String(rawUserId.split('/').pop() || '').replace(/[^a-zA-Z0-9]/g, '')
+      : rawUserId.replace(/[^a-zA-Z0-9]/g, '');
+  }
   else {
     const sub = json.sub;
     if (typeof sub === 'string' && sub.includes('/')) {

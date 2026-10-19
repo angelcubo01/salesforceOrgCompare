@@ -5,49 +5,71 @@
  * @returns {{ headers: string[], rows: string[][] }}
  */
 export function parseCsv(text, opts = {}) {
-  const delimiter = opts.delimiter || ',';
-  const lines = String(text || '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .split('\n')
-    .filter((line, i, arr) => line.length > 0 || i < arr.length - 1);
-  if (!lines.length) return { headers: [], rows: [] };
+  const source = String(text || '').replace(/^\uFEFF/, '');
+  const delimiter = opts.delimiter || detectCsvDelimiter(source);
+  if (!source) return { headers: [], rows: [] };
 
-  /** @param {string} line */
-  function parseLine(line) {
-    /** @type {string[]} */
-    const cells = [];
-    let cur = '';
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (inQuotes) {
-        if (ch === '"') {
-          if (line[i + 1] === '"') {
-            cur += '"';
-            i++;
-          } else {
-            inQuotes = false;
-          }
-        } else {
-          cur += ch;
-        }
-      } else if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === delimiter) {
-        cells.push(cur);
-        cur = '';
+  /** @type {string[][]} */
+  const records = [];
+  /** @type {string[]} */
+  let record = [];
+  let cell = '';
+  let quoted = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (quoted) {
+      if (char === '"' && source[index + 1] === '"') {
+        cell += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = false;
       } else {
-        cur += ch;
+        cell += char;
       }
+      continue;
     }
-    cells.push(cur);
-    return cells;
+    if (char === '"') {
+      quoted = true;
+    } else if (char === delimiter) {
+      record.push(cell);
+      cell = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && source[index + 1] === '\n') index += 1;
+      record.push(cell);
+      records.push(record);
+      record = [];
+      cell = '';
+    } else {
+      cell += char;
+    }
   }
+  record.push(cell);
+  records.push(record);
 
-  const headers = parseLine(lines[0]).map((h) => h.trim());
-  const rows = lines.slice(1).map((line) => parseLine(line));
+  while (records.length && records[records.length - 1].every((value) => value === '')) records.pop();
+  if (!records.length) return { headers: [], rows: [] };
+  const headers = records[0].map((header) => header.trim());
+  const rows = records.slice(1).filter((row) => row.some((value) => String(value).trim()));
   return { headers, rows };
+}
+
+/** Detecta coma, punto y coma o tabulador sin contar separadores dentro de comillas. */
+export function detectCsvDelimiter(text) {
+  const source = String(text || '');
+  const counts = new Map([[',', 0], [';', 0], ['\t', 0]]);
+  let quoted = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '"') {
+      if (quoted && source[index + 1] === '"') index += 1;
+      else quoted = !quoted;
+      continue;
+    }
+    if (!quoted && (char === '\n' || char === '\r')) break;
+    if (!quoted && counts.has(char)) counts.set(char, counts.get(char) + 1);
+  }
+  const [best] = [...counts.entries()].sort((left, right) => right[1] - left[1]);
+  return best?.[1] ? best[0] : ',';
 }
 
 /**
@@ -86,8 +108,8 @@ export function detectImportFormat(text) {
       return '';
     }
   }
-  if (trimmed.includes('\t')) return 'excel';
-  if (trimmed.includes(',')) return 'csv';
+  if (detectCsvDelimiter(trimmed) === '\t' && trimmed.includes('\t')) return 'excel';
+  if (trimmed.includes(',') || trimmed.includes(';')) return 'csv';
   return '';
 }
 

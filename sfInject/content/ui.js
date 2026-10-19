@@ -29,3 +29,24 @@ export function showInjectToast(message, isError = false) {
     /* fail silent */
   }
 }
+
+/** Muestra un aviso de progreso y devuelve una función para retirarlo. */
+export function showInjectLoadingToast(message) {
+  try {
+    const doc = document;
+    if (!doc.body) return () => {};
+    const el = doc.createElement('div');
+    el.className = 'sfoc-inject-toast sfoc-inject-toast--loading';
+    el.setAttribute('role', 'status');
+    const spinner = doc.createElement('span');
+    spinner.className = 'sfoc-inject-toast-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    const text = doc.createElement('span');
+    text.textContent = message;
+    el.append(spinner, text);
+    doc.body.appendChild(el);
+    return () => el.remove();
+  } catch {
+    return () => {};
+  }
+}

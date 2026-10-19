@@ -60,6 +60,7 @@ import {
 } from './logiUsageUi.js';
 import { runPendingOrgQueryFlow, showOrgQueryApproval } from './logiOrgApproval.js';
 import { executeLocalToolCalls } from './logiToolRunner.js';
+import { collectTurnToolCalls, firstTurnToolMessageIndex } from './logiToolTrace.js';
 
 /**
  * @param {string} action
@@ -2362,20 +2363,17 @@ function parseToolArguments(raw) {
  * @param {number} messageIndex
  * @param {ChatMessage[]} sessionMessages
  */
-function renderToolTraceHtml(message, messageIndex, sessionMessages) {
-  const calls = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+function renderToolTraceHtml(messageIndex, sessionMessages, turnId) {
+  if (!turnId || messageIndex !== firstTurnToolMessageIndex(sessionMessages, turnId)) return '';
+  const calls = collectTurnToolCalls(sessionMessages, turnId);
   if (!calls.length) return '';
 
   const items = calls
-    .map((call, callIndex) => {
+    .map(({ call, result }) => {
       const tc = /** @type {{ id?: string, function?: { name?: string, arguments?: string } }} */ (call || {});
-      const toolId = String(tc.id || '');
       const name = String(tc.function?.name || '');
       const args = parseToolArguments(tc.function?.arguments);
       const label = formatToolActivityLabel(name, args, t) || t('apexLogViewer.logi.thinkingTools');
-      const result = sessionMessages
-        .slice(messageIndex + 1)
-        .find((candidate) => candidate.role === 'tool' && (!toolId || candidate.tool_call_id === toolId));
       const failed = /(?:^|[,{\s])(?:error|ok)\s*[":=]\s*(?:true|false)/i.test(
         String(result?.content || '')
       ) && /(?:error\s*[":=]\s*true|ok\s*[":=]\s*false)/i.test(String(result?.content || ''));
@@ -2438,7 +2436,7 @@ function renderMessages(modal) {
         // Las actividades son un estado temporal del turno activo. No deben
         // quedar como líneas huérfanas cuando Logi ya ha contestado.
         const toolTrace = showThinking && m.turnId === rt?.activeTurnId
-          ? renderToolTraceHtml(m, idx, sessionMessages)
+          ? renderToolTraceHtml(idx, sessionMessages, rt?.activeTurnId)
           : '';
         if (isLogiWelcomeGreeting(m.content || '')) return toolTrace;
         const bodyHtml = formatAssistantHtml(m.content || '', modal);

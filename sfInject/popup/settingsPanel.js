@@ -5,6 +5,7 @@ import { SF_INJECT_SHIPPED } from '../lib/registry.js';
 import { loadSfInjectSettings, saveSfInjectSettings } from '../lib/settings.js';
 import { openQuickLinksSettingsModal } from './quickLinksSettings.js';
 import { openSetupCommandPaletteSettingsModal } from './setupCommandPaletteSettings.js';
+import { openRecordViewerSettingsModal } from './recordViewerSettings.js';
 
 /**
  * @param {(key: string) => string} translate
@@ -44,6 +45,7 @@ export function renderSfInjectSettingsPanel(translate) {
       configureBtn.addEventListener('click', () => {
         if (item.id === 'quickLinks') void openQuickLinksSettingsModal(translate);
         if (item.id === 'setupCommandPalette') void openSetupCommandPaletteSettingsModal(translate);
+        if (item.id === 'recordViewer') void openRecordViewerSettingsModal(translate);
       });
       row.appendChild(configureBtn);
     }

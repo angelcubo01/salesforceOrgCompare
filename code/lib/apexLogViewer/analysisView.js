@@ -28,8 +28,9 @@ function buildAggregatedMethods(methods) {
  * @param {import('monaco-editor') | null} monaco
  * @param {boolean} lightTheme
  * @param {HTMLElement | null} treeToolbar
+ * @param {(hint: { line?: number, text?: string, location?: string, apexLine?: number }) => boolean} [onSourceOpen]
  */
-export function renderAnalysisView(mount, parsed, onJump, t, monaco, lightTheme, treeToolbar) {
+export function renderAnalysisView(mount, parsed, onJump, t, monaco, lightTheme, treeToolbar, onSourceOpen) {
   if (!mount) return;
   mount.innerHTML = `
     ${panelSectionHeading('analysis', t('apexLogViewer.tab.analysis'), t)}
@@ -60,7 +61,8 @@ export function renderAnalysisView(mount, parsed, onJump, t, monaco, lightTheme,
         parsed,
         lightTheme,
         t,
-        sectionMount.querySelector('#apexLogAnalysisTreeToolbar')
+        sectionMount.querySelector('#apexLogAnalysisTreeToolbar'),
+        onSourceOpen
       );
     } else if (active === 'profiling') {
       renderProfilingView(sectionMount, parsed, onJump, t);
@@ -76,7 +78,7 @@ export function renderAnalysisView(mount, parsed, onJump, t, monaco, lightTheme,
         </tr></thead><tbody>${methods
           .slice(0, 100)
           .map(
-            (r) => `<tr><td>${escapeHtml(r.location)}</td><td>${r.executions}</td><td>${escapeHtml(formatMs(r.totalMs))}</td></tr>`
+            (r) => `<tr data-apex-location="${escapeHtml(r.location)}" data-apex-line="${r.apexLine || 0}"><td>${escapeHtml(r.location)}</td><td>${r.executions}</td><td>${escapeHtml(formatMs(r.totalMs))}</td></tr>`
           )
           .join('')}</tbody></table></div>`;
       }

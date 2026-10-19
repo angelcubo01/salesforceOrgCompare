@@ -11,7 +11,9 @@ export const DEFAULT_RELEVANT_CATEGORIES = [
   'stack',
   'method',
   'unit',
-  'validation'
+  'validation',
+  'variable',
+  'context'
 ];
 
 /**

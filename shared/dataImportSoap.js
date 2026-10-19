@@ -4,6 +4,7 @@
 
 const SOAP_ENV = 'http://schemas.xmlsoap.org/soap/envelope/';
 const SOAP_NS = 'urn:partner.soap.sforce.com';
+const SOAP_SOBJECT_NS = 'urn:sobject.partner.soap.sforce.com';
 
 /**
  * @param {string} s
@@ -22,11 +23,16 @@ function escapeXml(s) {
  */
 function recordToXml(record, typeName) {
   let fields = '';
+  let fieldsToNull = '';
   for (const [key, val] of Object.entries(record || {})) {
     if (key === 'attributes' || val == null || val === '') continue;
-    fields += `<urn:${escapeXml(key)}>${escapeXml(val)}</urn:${escapeXml(key)}>`;
+    if (String(val).trim().toUpperCase() === '#N/A') {
+      fieldsToNull += `<urn1:fieldsToNull>${escapeXml(key)}</urn1:fieldsToNull>`;
+      continue;
+    }
+    fields += `<urn1:${escapeXml(key)}>${escapeXml(val)}</urn1:${escapeXml(key)}>`;
   }
-  return `<urn:sObjects xsi:type="urn:${escapeXml(typeName)}">${fields}</urn:sObjects>`;
+  return `<urn:sObjects><urn1:type>${escapeXml(typeName)}</urn1:type>${fieldsToNull}${fields}</urn:sObjects>`;
 }
 
 /**
@@ -77,6 +83,37 @@ export async function executeSoapImportBatch(opts) {
   const ver = String(opts.apiVersion || '59.0').replace(/^v/i, '');
   const url = `${String(opts.instanceUrl || '').replace(/\/$/, '')}/services/Soap/u/${ver}`;
 
+  const envelope = buildSoapImportEnvelope(opts);
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'text/xml; charset=UTF-8',
+      SOAPAction: '""'
+    },
+    body: envelope
+  });
+  const text = await res.text();
+  const fault = text.match(/<(?:\w+:)?faultstring>([\s\S]*?)<\/(?:\w+:)?faultstring>/i)?.[1];
+  if (fault) {
+    throw new Error(decodeXml(fault) || 'SOAP fault');
+  }
+  if (!res.ok) {
+    throw new Error(`SOAP ${operation} failed: HTTP ${res.status}`);
+  }
+  return parseSoapResults(text, records.length);
+}
+
+/**
+ * Construye una petición Partner SOAP. En Partner WSDL los sObjects y sus
+ * campos pertenecen a un namespace distinto del namespace de las llamadas.
+ * @param {Parameters<typeof executeSoapImportBatch>[0]} opts
+ */
+export function buildSoapImportEnvelope(opts) {
+  const operation = String(opts.operation || 'insert').toLowerCase();
+  const objectApiName = String(opts.objectApiName || '').trim();
+  const records = Array.isArray(opts.records) ? opts.records : [];
+
   let bodyInner = '';
   if (operation === 'delete' || operation === 'undelete') {
     const ids = records
@@ -93,33 +130,16 @@ export async function executeSoapImportBatch(opts) {
   }
 
   const headerExtras = buildOptionalSoapHeaders(opts.soapHeaders || {});
-  const envelope =
+  return (
     `<?xml version="1.0" encoding="utf-8"?>` +
-    `<soapenv:Envelope xmlns:soapenv="${SOAP_ENV}" xmlns:urn="${SOAP_NS}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
+    `<soapenv:Envelope xmlns:soapenv="${SOAP_ENV}" xmlns:urn="${SOAP_NS}" xmlns:urn1="${SOAP_SOBJECT_NS}">` +
     `<soapenv:Header>` +
     `<urn:SessionHeader><urn:sessionId>${escapeXml(opts.sid)}</urn:sessionId></urn:SessionHeader>` +
     headerExtras +
     `</soapenv:Header>` +
     `<soapenv:Body>${bodyInner}</soapenv:Body>` +
-    `</soapenv:Envelope>`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/xml; charset=UTF-8',
-      SOAPAction: '""'
-    },
-    body: envelope
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`SOAP ${operation} failed: HTTP ${res.status}`);
-  }
-  if (text.includes('faultstring')) {
-    const fault = text.match(/<faultstring>([^<]*)<\/faultstring>/i)?.[1] || 'SOAP fault';
-    throw new Error(fault);
-  }
-  return parseSoapResults(text, records.length);
+    `</soapenv:Envelope>`
+  );
 }
 
 /**
@@ -129,15 +149,45 @@ export async function executeSoapImportBatch(opts) {
 export function parseSoapResults(xml, expectedCount) {
   /** @type {Array<{ success: boolean, id?: string, errors?: string[] }>} */
   const results = [];
-  const blocks = xml.match(/<result>[\s\S]*?<\/result>/gi) || [];
+  const blocks = xml.match(/<(?:\w+:)?result\b[^>]*>[\s\S]*?<\/(?:\w+:)?result>/gi) || [];
   for (const block of blocks) {
-    const success = /<success>true<\/success>/i.test(block);
-    const id = block.match(/<id>([^<]*)<\/id>/i)?.[1];
-    const errors = [...block.matchAll(/<message>([^<]*)<\/message>/gi)].map((m) => m[1]);
+    const success = /<(?:\w+:)?success>true<\/(?:\w+:)?success>/i.test(block);
+    const id = decodeXml(block.match(/<(?:\w+:)?id>([^<]*)<\/(?:\w+:)?id>/i)?.[1]);
+    const errorBlocks = [...block.matchAll(/<(?:\w+:)?errors\b[^>]*>([\s\S]*?)<\/(?:\w+:)?errors>/gi)]
+      .map((match) => match[1]);
+    const errors = errorBlocks.length
+      ? errorBlocks.map(formatSoapError).filter(Boolean)
+      : [...block.matchAll(/<(?:\w+:)?message>([^<]*)<\/(?:\w+:)?message>/gi)]
+        .map((match) => decodeXml(match[1]))
+        .filter(Boolean);
     results.push({ success, id, errors: errors.length ? errors : undefined });
   }
   while (results.length < expectedCount) {
     results.push({ success: false, errors: ['No SOAP result returned'] });
   }
   return results;
+}
+
+function formatSoapError(errorXml) {
+  const statusCode = decodeXml(
+    errorXml.match(/<(?:\w+:)?statusCode>([^<]*)<\/(?:\w+:)?statusCode>/i)?.[1]
+  );
+  const message = decodeXml(
+    errorXml.match(/<(?:\w+:)?message>([^<]*)<\/(?:\w+:)?message>/i)?.[1]
+  );
+  const fields = [...errorXml.matchAll(/<(?:\w+:)?fields>([^<]*)<\/(?:\w+:)?fields>/gi)]
+    .map((match) => decodeXml(match[1]))
+    .filter(Boolean);
+  const prefix = [statusCode, fields.length ? `[${fields.join(', ')}]` : ''].filter(Boolean).join(' ');
+  return [prefix, message].filter(Boolean).join(': ');
+}
+
+function decodeXml(value) {
+  if (value == null) return undefined;
+  return String(value)
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
 }

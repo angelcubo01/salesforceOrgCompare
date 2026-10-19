@@ -1,6 +1,7 @@
 import '../shared/installEarlyExceptionCapture.js';
 import { loadLang, getCurrentLang } from '../shared/i18n.js';
 import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensionSettings.js';
+import { setupStandaloneCommandPalette } from '../shared/commandPaletteBridge.js';
 
 const COPY = {
   es: {
@@ -260,4 +261,5 @@ async function exportAnalysisPdfV2() {
 $('#hmExportPdf')?.addEventListener('click', exportAnalysisPdfV2);
 function syncPdfExportButton() { const button = $('#hmExportPdf'); if (!button) return; button.hidden = !(state.results.size && !state.running); button.disabled = state.running; if (!button.disabled) button.textContent = pdfReportText('export'); }
 new MutationObserver(syncPdfExportButton).observe(root, { childList:true });
+setupStandaloneCommandPalette();
 void main().then(syncPdfExportButton);

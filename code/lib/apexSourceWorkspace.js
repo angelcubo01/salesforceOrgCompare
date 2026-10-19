@@ -62,7 +62,8 @@ export class ApexSourceWorkspace {
   createModel(tab) {
     const safeOrg = encodeURIComponent(String(tab.orgId || 'unknown-org'));
     const safeClass = encodeURIComponent(String(tab.classId || tab.className || tab.tabId));
-    tab.modelUri = this.monaco.Uri.parse(`sfoc-apex://${safeOrg}/${safeClass}.cls`);
+    const extension = tab.resourceType === 'ApexTrigger' ? 'trigger' : 'cls';
+    tab.modelUri = this.monaco.Uri.parse(`sfoc-apex://${safeOrg}/${safeClass}.${extension}`);
     tab.model = this.monaco.editor.createModel(tab.content || '', 'apex', tab.modelUri);
   }
 
@@ -82,7 +83,7 @@ export class ApexSourceWorkspace {
     const tabId = `apex-${++this.sequence}`;
     tab = {
       tabId, orgId: input.orgId || '', orgLabel: input.orgLabel || '', instanceUrl: input.instanceUrl || '',
-      classId: input.classId || '', className: input.className || 'Apex', content: input.content || '',
+      classId: input.classId || '', className: input.className || 'Apex', resourceType: input.resourceType || 'ApexClass', content: input.content || '',
       downloadFileName: input.downloadFileName || `${input.className || 'Apex'}.cls`,
       state: loading ? 'loading' : 'ready', error: '', model: null, modelUri: null, viewState: null,
       pendingNavigation: input.pendingNavigation || null, generation: 0, abortController: null,
@@ -145,7 +146,7 @@ export class ApexSourceWorkspace {
     if (collisionId && collisionId !== tab.tabId) return this.tabs.get(collisionId);
     this.keys.delete(oldNameKey);
     this.keys.set(newKey, tab.tabId);
-    tab.classId = newClassId; tab.className = newName;
+    tab.classId = newClassId; tab.className = newName; tab.resourceType = response.resourceType || tab.resourceType || 'ApexClass';
     return tab;
   }
 
@@ -159,7 +160,7 @@ export class ApexSourceWorkspace {
       return false;
     }
     tab.content = String(response.body);
-    tab.downloadFileName = `${tab.className}.cls`;
+    tab.downloadFileName = `${tab.className}.${tab.resourceType === 'ApexTrigger' ? 'trigger' : 'cls'}`;
     tab.state = 'ready'; tab.error = ''; tab.abortController = null;
     try { if (!tab.model.isDisposed?.()) tab.model.setValue(tab.content); } catch { return false; }
     if (this.activeId === tabId && tab.pendingNavigation) this.consumePendingNavigation(tab);

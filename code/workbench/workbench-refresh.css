@@ -2787,6 +2787,12 @@ html[data-ui-theme="light"] body[data-ui-mode="v2"] :where(.org-cd-trigger, .org
   box-shadow: none;
 }
 
+body[data-ui-mode="v2"] .workbench-marketing-hero-copy > .workbench-landing-shortcuts {
+  justify-content: flex-start;
+  margin-top: 10px;
+  gap: 7px 14px;
+}
+
 html[data-ui-theme="light"] body[data-ui-mode="v2"] .org-swap-btn {
   border-color: var(--sfoc-accent);
   background: var(--sfoc-selection);

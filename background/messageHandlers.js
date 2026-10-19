@@ -217,6 +217,41 @@ async function fetchDeployCoverageSource(org, sid, className) {
   };
 }
 
+async function fetchApexSourceForViewer(org, sid, { sourceId, sourceName, sourceType }) {
+  if (sourceType !== 'ApexTrigger') {
+    const source = await fetchApexClassSource(org, sid, {
+      ...(sourceId ? { classId: sourceId } : {}),
+      ...(sourceName ? { className: sourceName } : {})
+    });
+    return source ? { ...source, type: 'ApexClass' } : null;
+  }
+  const field = sourceId ? 'Id' : 'Name';
+  const value = escapeSoqlLiteral(sourceId || sourceName);
+  const soql = `SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger WHERE ${field} = '${value}' LIMIT 1`;
+  let rows = [];
+  try {
+    rows = (await restQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+  } catch {
+    rows = [];
+  }
+  if (!rows.length) {
+    try {
+      rows = (await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql)) || [];
+    } catch {
+      rows = [];
+    }
+  }
+  const row = rows[0];
+  if (!String(row?.Body || '').trim()) return null;
+  return {
+    id: String(row.Id || sourceId),
+    name: String(row.Name || sourceName),
+    body: String(row.Body),
+    lastModifiedDate: row.LastModifiedDate ? String(row.LastModifiedDate) : '',
+    type: 'ApexTrigger'
+  };
+}
+
 /** Error devuelto al comparador cuando falla la API Salesforce (título del toast = errorCode). */
 function queryExplorerCatchErrorPayload(e, { preserveFullError = false } = {}) {
   const error = sanitizeUiError(e?.message || e, preserveFullError ? { maxLength: Infinity } : undefined);
@@ -279,6 +314,14 @@ import {
   resolveObjectFromRecordId,
   fetchRecordForCompare
 } from '../shared/recordCompareApi.js';
+import {
+  fetchRecordViewerPayload,
+  fetchViewAllPermissions,
+  fetchRecordViewerPermissionSources,
+  patchRecordViewerRecords,
+  resolveRecordViewerTarget
+} from '../shared/recordViewerApi.js';
+import { RECORD_ID_RE, canEditRecordField, reconcileRecordViewerPatch } from '../shared/recordViewerCore.js';
 import {
   analyzeDependencies,
   buildCustomObjectNameSoql,
@@ -611,6 +654,8 @@ import {
   checkOrgAuthStatus,
   getOrderedSavedOrgs,
   resolveSidForOrg,
+  getSidForOrgId,
+  ALLOWED_SF_SUFFIXES,
   loadSavedOrgOrder,
   loadSavedOrgs,
   makeIndexKey,
@@ -620,6 +665,37 @@ import {
   syncOrgOrderAfterAdd,
   syncOrgOrderAfterRemove
 } from './orgHelpers.js';
+
+const RECORD_VIEWER_REQUEST_PREFIX = 'sfoc_record_viewer_request:';
+const RECORD_VIEWER_REQUEST_TTL_MS = 10 * 60 * 1000;
+
+async function recordViewerContext(requestId, direct = {}) {
+  const id = String(requestId || '').trim();
+  if (/^[a-f0-9-]{36}$/i.test(id)) {
+    const key = `${RECORD_VIEWER_REQUEST_PREFIX}${id}`;
+    const stored = await chrome.storage.session.get(key);
+    const context = stored[key];
+    if (context && Date.now() - Number(context.createdAt || 0) <= RECORD_VIEWER_REQUEST_TTL_MS && RECORD_ID_RE.test(String(context.recordId || ''))) return context;
+    await chrome.storage.session.remove(key);
+  }
+  const recordId = String(direct.recordId || '').trim();
+  const orgId = String(direct.orgId || '').trim();
+  if (!RECORD_ID_RE.test(recordId) || !/^00D[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?$/.test(orgId)) return null;
+  let instance;
+  try { instance = new URL(String(direct.instance || '')); } catch { return null; }
+  const host = instance.hostname.toLowerCase();
+  if (instance.protocol !== 'https:' || !ALLOWED_SF_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) return null;
+  const saved = await loadSavedOrgs();
+  const savedOrg = saved[orgId];
+  if (savedOrg && new URL(savedOrg.instanceUrl).origin === instance.origin) return { orgId, recordId, org: savedOrg };
+  const sid = await getSidForOrgId(orgId);
+  if (!sid) return null;
+  try {
+    const orgInfo = await getOrganizationInfo(instance.origin, sid, '63.0');
+    if (normalizeSalesforceIdKey(orgInfo.id) !== normalizeSalesforceIdKey(orgId)) return null;
+    return { orgId, recordId, sid, org: { id: orgInfo.id, displayName: orgInfo.name, label: instance.hostname, instanceUrl: instance.origin, apiVersion: '63.0', isSandbox: orgInfo.isSandbox } };
+  } catch { return null; }
+}
 
 export function installMessageHandlers() {
   chrome.runtime.onMessage.addListener((message, sender, rawRespond) => {
@@ -1135,7 +1211,10 @@ export function installMessageHandlers() {
                 orgId: message.orgId,
                 orgLabel: message.orgLabel,
                 instanceUrl: message.instanceUrl,
-                logId: message.logId
+                logId: message.logId,
+                resourceId: message.resourceId,
+                resourceName: message.resourceName,
+                resourceType: message.resourceType
               });
               reply({ ok: true, id });
             } catch (e) {
@@ -1159,7 +1238,10 @@ export function installMessageHandlers() {
               ...(v.orgId ? { orgId: v.orgId } : {}),
               ...(v.orgLabel ? { orgLabel: v.orgLabel } : {}),
               ...(v.instanceUrl ? { instanceUrl: v.instanceUrl } : {}),
-              ...(v.logId ? { logId: v.logId } : {})
+              ...(v.logId ? { logId: v.logId } : {}),
+              ...(v.resourceId ? { resourceId: v.resourceId } : {}),
+              ...(v.resourceName ? { resourceName: v.resourceName } : {}),
+              ...(v.resourceType ? { resourceType: v.resourceType } : {})
             });
             break;
           }
@@ -2243,7 +2325,7 @@ export function installMessageHandlers() {
               reply({ ok: false, reason: 'NO_SID' });
               break;
             }
-            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'bulk_import' });
             if (!writeGuard.ok) {
               reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error });
               break;
@@ -2268,16 +2350,22 @@ export function installMessageHandlers() {
               const processChunks = async () => {
                 while (nextChunk < chunks.length) {
                   const chunkIndex = nextChunk++;
-                  chunkResults[chunkIndex] = await executeSoapImportBatch({
-                    instanceUrl: org.instanceUrl,
-                    sid,
-                    apiVersion: org.apiVersion,
-                    operation: String(operation || 'insert'),
-                    objectApiName: String(objectApiName || ''),
-                    records: chunks[chunkIndex],
-                    externalIdField: externalIdField ? String(externalIdField) : 'Id',
-                    soapHeaders
-                  });
+                  try {
+                    chunkResults[chunkIndex] = await executeSoapImportBatch({
+                      instanceUrl: org.instanceUrl,
+                      sid,
+                      apiVersion: org.apiVersion,
+                      operation: String(operation || 'insert'),
+                      objectApiName: String(objectApiName || ''),
+                      records: chunks[chunkIndex],
+                      externalIdField: externalIdField ? String(externalIdField) : 'Id',
+                      soapHeaders
+                    });
+                  } catch (error) {
+                    const detail = String(error?.message || error || 'SOAP batch failed');
+                    chunkResults[chunkIndex] = chunks[chunkIndex]
+                      .map(() => ({ success: false, errors: [detail] }));
+                  }
                 }
               };
               if (workerCount) {
@@ -2719,7 +2807,7 @@ export function installMessageHandlers() {
                 reply({ ok: false, reason: 'NOT_FOUND' });
                 break;
               }
-              reply({ ok: true, name: source.name, body: source.body });
+              reply({ ok: true, id: source.id, name: source.name, body: source.body });
             } catch (e) {
               replyHandlerError(reply, e);
             }
@@ -2893,6 +2981,152 @@ export function installMessageHandlers() {
                 });
               }
             }
+            break;
+          }
+          case 'recordViewer:load': {
+            const context = await recordViewerContext(message.requestId, message);
+            if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
+            const saved = await loadSavedOrgs();
+            const org = context.org || saved[context.orgId];
+            if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
+            const sid = context.sid || await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const payload = await fetchRecordViewerPayload(org.instanceUrl, sid, org.apiVersion, context.recordId);
+              const readOnlyMap = await loadOrgReadOnlyMap();
+              reply({ ok: true, requestId: message.requestId || '', direct: { orgId: context.orgId, recordId: context.recordId, instance: new URL(org.instanceUrl).origin }, org: { id: org.id, label: org.label || org.displayName || org.instanceUrl, instanceUrl: org.instanceUrl, isSandbox: org.isSandbox }, ...payload, objectPermissions: { ...payload.objectPermissions, viewAll: null, modifyAll: null }, orgReadOnly: !!readOnlyMap[org.id] });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:load', artifact_type: 'RecordViewer' }); }
+            break;
+          }
+          case 'recordViewer:loadPermissions': {
+            const context = await recordViewerContext(message.requestId, message);
+            if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
+            const saved = await loadSavedOrgs();
+            const org = context.org || saved[context.orgId];
+            if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
+            const sid = context.sid || await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const objectApiName = await resolveObjectFromRecordId(org.instanceUrl, sid, org.apiVersion, context.recordId);
+              const objectPermissions = await fetchViewAllPermissions(org.instanceUrl, sid, org.apiVersion, objectApiName);
+              reply({ ok: true, objectApiName, objectPermissions });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:loadPermissions', artifact_type: 'RecordViewer' }); }
+            break;
+          }
+          case 'recordViewer:permissionSources': {
+            const context = await recordViewerContext(message.requestId, message);
+            if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
+            const saved = await loadSavedOrgs();
+            const org = context.org || saved[context.orgId];
+            if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
+            const sid = context.sid || await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const objectApiName = await resolveObjectFromRecordId(org.instanceUrl, sid, org.apiVersion, context.recordId);
+              const resourceType = message.resourceType === 'field' ? 'field' : 'object';
+              const fieldName = resourceType === 'field' ? String(message.fieldName || '') : '';
+              const sources = await fetchRecordViewerPermissionSources(
+                org.instanceUrl, sid, org.apiVersion, objectApiName, resourceType, fieldName, String(message.permission || '')
+              );
+              reply({ ok: true, sources });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:permissionSources', artifact_type: 'RecordViewer' }); }
+            break;
+          }
+          case 'recordViewer:resolveTarget': {
+            const context = await recordViewerContext(message.requestId, message);
+            if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
+            const saved = await loadSavedOrgs();
+            const org = context.org || saved[context.orgId];
+            if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
+            const sid = context.sid || await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const path = Array.isArray(message.path) ? message.path.slice(0, 6) : [];
+              const target = await resolveRecordViewerTarget(org.instanceUrl, sid, org.apiVersion, context.recordId, path);
+              const readOnlyMap = await loadOrgReadOnlyMap();
+              reply({ ok: true, path, target: { ...target, orgReadOnly: !!readOnlyMap[org.id] } });
+            } catch (e) {
+              reply({ ok: false, reason: String(e?.code || 'RELATION_RESOLVE_FAILED'), error: String(e?.message || e) });
+            }
+            break;
+          }
+          case 'recordViewer:save': {
+            const context = await recordViewerContext(message.requestId, message);
+            const patch = message.fields && typeof message.fields === 'object' && !Array.isArray(message.fields) ? message.fields : null;
+            const requestedUpdates = Array.isArray(message.updates)
+              ? message.updates.slice(0, 25)
+              : patch && Object.keys(patch).length
+                ? [{ path: [], fields: patch, lastModifiedDate: message.lastModifiedDate }]
+                : [];
+            if (!context || !requestedUpdates.length) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
+            const saved = await loadSavedOrgs(); const org = context.org || saved[context.orgId];
+            if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
+            const sid = context.sid || await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
+            if (!writeGuard.ok) { reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error }); break; }
+            try {
+              const validatedUpdates = [];
+              const seenTargets = new Set();
+              for (const requested of requestedUpdates) {
+                const path = Array.isArray(requested?.path) ? requested.path.map(String) : [];
+                const fields = requested?.fields && typeof requested.fields === 'object' && !Array.isArray(requested.fields)
+                  ? requested.fields
+                  : null;
+                if (!fields || !Object.keys(fields).length || path.length > 5) {
+                  reply({ ok: false, reason: 'INVALID_REQUEST' });
+                  return;
+                }
+                const current = await resolveRecordViewerTarget(org.instanceUrl, sid, org.apiVersion, context.recordId, path);
+                const expectedRecordId = String(requested?.recordId || '').trim();
+                if (expectedRecordId && expectedRecordId !== String(current.record?.Id || '')) {
+                  reply({ ok: false, reason: 'CONCURRENT_UPDATE', path });
+                  return;
+                }
+                const fieldNames = Object.keys(fields);
+                const baseValues = requested?.baseValues && typeof requested.baseValues === 'object' && !Array.isArray(requested.baseValues)
+                  ? requested.baseValues
+                  : null;
+                const hasFieldSnapshot = !!baseValues && fieldNames.every((name) => Object.prototype.hasOwnProperty.call(baseValues, name));
+                if (!hasFieldSnapshot && requested.lastModifiedDate && current.record?.LastModifiedDate && String(requested.lastModifiedDate) !== String(current.record.LastModifiedDate)) {
+                  reply({ ok: false, reason: 'CONCURRENT_UPDATE', path });
+                  return;
+                }
+                if (seenTargets.has(current.record?.Id)) {
+                  reply({ ok: false, reason: 'DUPLICATE_TARGET' });
+                  return;
+                }
+                seenTargets.add(current.record?.Id);
+                const allowed = new Set();
+                for (const field of current.describe.fields || []) {
+                  const decision = canEditRecordField({ objectPermissions: current.objectPermissions, recordAccess: current.recordAccess, field, orgReadOnly: false, writePolicyAllowed: true });
+                  if (decision.editable) allowed.add(field.name);
+                }
+                const safePatch = Object.fromEntries(Object.entries(fields).filter(([name]) => allowed.has(name)));
+                if (Object.keys(safePatch).length !== Object.keys(fields).length) {
+                  reply({ ok: false, reason: 'FIELD_NOT_EDITABLE', path });
+                  return;
+                }
+                const reconciled = reconcileRecordViewerPatch(current.record, safePatch, hasFieldSnapshot ? baseValues : null);
+                if (reconciled.conflicts.length) {
+                  reply({ ok: false, reason: 'CONCURRENT_UPDATE', path, fields: reconciled.conflicts });
+                  return;
+                }
+                if (!Object.keys(reconciled.fields).length) continue;
+                validatedUpdates.push({
+                  path,
+                  objectApiName: current.objectApiName,
+                  recordId: current.record.Id,
+                  fields: reconciled.fields,
+                  lastModifiedDate: current.record?.LastModifiedDate || requested.lastModifiedDate
+                });
+              }
+              if (!validatedUpdates.length) { reply({ ok: true, unchanged: true }); break; }
+              const result = await patchRecordViewerRecords(org.instanceUrl, sid, org.apiVersion, validatedUpdates);
+              if (!result.ok) { reply({ ok: false, reason: result.status === 412 ? 'CONCURRENT_UPDATE' : 'SAVE_FAILED', status: result.status, errors: result.errors || [] }); break; }
+              await recordLocalAudit({ action: 'dml_execute', orgId: String(org.id), detail: `recordViewer:update:${validatedUpdates.map((item) => item.objectApiName).join(',')}:${validatedUpdates.length}` });
+              reply({ ok: true });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:save', artifact_type: 'RecordViewer' }); }
             break;
           }
           case 'permissionsDiff:search': {
@@ -3495,7 +3729,12 @@ export function installMessageHandlers() {
                 body,
                 name: className != null ? String(className) : '',
                 coveredLines: [...covered].sort((a, b) => a - b),
-                uncoveredLines: [...uncovered].sort((a, b) => a - b)
+                uncoveredLines: [...uncovered].sort((a, b) => a - b),
+                org: {
+                  id: org.id || orgId,
+                  label: org.label || org.displayName || org.instanceUrl,
+                  instanceUrl: org.instanceUrl
+                }
               });
             } catch (e) {
               replyHandlerError(reply, e);
@@ -3957,7 +4196,15 @@ export function installMessageHandlers() {
             }
             try {
               const body = await fetchApexLogBody(org.instanceUrl, sid, org.apiVersion, logId);
-              reply({ ok: true, body });
+              reply({
+                ok: true,
+                body,
+                org: {
+                  id: org.id || orgId,
+                  label: org.label || org.displayName || org.instanceUrl,
+                  instanceUrl: org.instanceUrl
+                }
+              });
             } catch (e) {
               replyHandlerError(reply, e);
             }
@@ -4859,7 +5106,56 @@ export function installMessageHandlers() {
                 body,
                 name: className != null ? String(className) : '',
                 coveredLines: coverageLines.coveredLines,
-                uncoveredLines: coverageLines.uncoveredLines
+                uncoveredLines: coverageLines.uncoveredLines,
+                org: {
+                  id: org.id || orgId,
+                  label: org.label || org.displayName || org.instanceUrl,
+                  instanceUrl: org.instanceUrl
+                }
+              });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'apexSource:get': {
+            const orgId = String(message.orgId || '');
+            const sourceId = String(message.sourceId || '').replace(/[^a-zA-Z0-9]/g, '');
+            const sourceName = String(message.sourceName || '').trim();
+            const sourceType = message.sourceType === 'ApexTrigger' ? 'ApexTrigger' : 'ApexClass';
+            if (!sourceId && !isApexIdentifier(sourceName)) {
+              reply({ ok: false, reason: 'INVALID_REQUEST' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, reason: 'ORG_NOT_SAVED' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const source = await fetchApexSourceForViewer(org, sid, {
+                sourceId,
+                sourceName,
+                sourceType
+              });
+              if (!source) {
+                reply({ ok: false, reason: 'NOT_FOUND' });
+                break;
+              }
+              reply({
+                ok: true,
+                source,
+                org: {
+                  id: org.id || orgId,
+                  label: org.label || org.displayName || org.instanceUrl,
+                  instanceUrl: org.instanceUrl
+                }
               });
             } catch (e) {
               replyHandlerError(reply, e);
@@ -4968,6 +5264,7 @@ export function installMessageHandlers() {
               }
               reply({
                 ok: true,
+                id: source.id,
                 name: source.name,
                 body: source.body
               });

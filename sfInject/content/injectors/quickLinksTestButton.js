@@ -6,11 +6,14 @@ import {
   buildSfocQuickLinkUrl
 } from '../../lib/quickLinkNavigation.js';
 import { SFOC_QUICK_LINK_ICON_PATHS, resolveQuickLinkIcon } from '../../lib/quickLinkIcons.js';
+import { recordIdFromSalesforceUrl } from '../../../shared/recordViewerCore.js';
 
 export { buildCustomQuickLinkUrl, buildSfocQuickLinkUrl } from '../../lib/quickLinkNavigation.js';
 
 export const INTEGRATION_ID = 'quickLinks';
 const INJECT_SELECTOR = `[data-sfoc-inject="${INTEGRATION_ID}"]`;
+const RECORD_QUICK_ACTION_NOTICE_KEY = 'sfoc-record-quick-action-notice';
+const QUICK_LINKS_LOCATION_CHANGE_EVENT = 'sfoc:quick-links-location-change';
 const INLINE_ICON_PATHS = Object.freeze({
   link: ['M10 13a5 5 0 0 0 7.07 0l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15', 'M14 11a5 5 0 0 0-7.07 0l-2 2a5 5 0 0 0 7.07 7.07l1.15-1.15'],
   'arrows-diff': ['M7 3v11', 'M7 3l-3 3', 'M7 3l3 3', 'M17 21V10', 'M17 21l-3-3', 'M17 21l3-3'],
@@ -44,6 +47,13 @@ function quickLinkLabel(link) {
   return label || humanizeToolId(link?.toolId);
 }
 
+function quickLinksMenuFingerprint(links, ctx) {
+  const recordActions = Array.isArray(ctx?.recordQuickActions) ? ctx.recordQuickActions : [];
+  const configured = (Array.isArray(links) ? links : []).map((link) => `${link?.id || ''}:${link?.label || ''}:${link?.toolId || ''}:${link?.url || ''}`);
+  const actions = recordActions.map((action) => `${action?.id || ''}:${action?.name || ''}`);
+  return `${ctx?.recordId || ''}|${configured.join('|')}|${actions.join('|')}`;
+}
+
 function createQuickLinkIcon(doc, iconName, color) {
   const icon = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
   icon.classList.add('sfoc-quick-links-menu-icon');
@@ -70,6 +80,100 @@ function openSfocQuickLink(link, ctx, openInNewTab) {
   }).then((result) => {
     if (!result?.ok) ctx.onError?.('No se pudo abrir la herramienta en SFOC.');
   }).catch(() => ctx.onError?.('No se pudo abrir la herramienta en SFOC.'));
+}
+
+function appendQuickLinksSectionTitle(doc, menu, title) {
+  const heading = doc.createElement('div');
+  heading.className = 'sfoc-quick-links-menu-section-title';
+  heading.textContent = title;
+  menu.appendChild(heading);
+}
+
+function recordQuickActionSuccessMessage(name, lang) {
+  return lang === 'en'
+    ? `Record Quick Action “${name}” completed successfully.`
+    : `La Record Quick Action “${name}” se ha ejecutado correctamente.`;
+}
+
+function queueRecordQuickActionNotice(message) {
+  try {
+    sessionStorage.setItem(RECORD_QUICK_ACTION_NOTICE_KEY, JSON.stringify({ message, expiresAt: Date.now() + 15000 }));
+  } catch {
+    // La recarga sigue siendo válida aunque el navegador bloquee sessionStorage.
+  }
+}
+
+function consumeRecordQuickActionNotice(ctx) {
+  try {
+    const raw = sessionStorage.getItem(RECORD_QUICK_ACTION_NOTICE_KEY);
+    if (!raw) return;
+    sessionStorage.removeItem(RECORD_QUICK_ACTION_NOTICE_KEY);
+    const notice = JSON.parse(raw);
+    if (notice?.message && Number(notice.expiresAt) > Date.now()) ctx.onSuccess?.(notice.message);
+  } catch {
+    // No interrumpir Quick Links por un aviso no persistible.
+  }
+}
+
+function createRecordQuickActionRow(doc, action, ctx) {
+  const row = doc.createElement('div');
+  row.className = 'sfoc-quick-links-menu-row sfoc-quick-links-menu-row--record-action';
+  const option = doc.createElement('button');
+  option.type = 'button';
+  option.className = 'sfoc-quick-links-menu-option sfoc-quick-links-menu-option--record-action';
+  option.setAttribute('role', 'menuitem');
+  option.appendChild(createQuickLinkIcon(doc, 'rocket', '#0f9d72'));
+  const text = doc.createElement('span');
+  text.className = 'sfoc-quick-links-menu-text';
+  const label = doc.createElement('strong');
+  label.textContent = action.name;
+  text.appendChild(label);
+  option.appendChild(text);
+  option.addEventListener('click', () => {
+    if (option.disabled) return;
+    option.disabled = true;
+    const originalLabel = label.textContent;
+    label.textContent = ctx.lang === 'en' ? 'Running…' : 'Ejecutando…';
+    const dismissLoading = ctx.onLoading?.(ctx.lang === 'en' ? 'Running Record Quick Action…' : 'Ejecutando Record Quick Action…') || (() => {});
+    void sfInjectSend({
+      type: 'sfInject:executeRecordQuickAction', orgId: ctx.orgId,
+      recordId: ctx.recordId, actionId: action.id
+    }).then((result) => {
+      dismissLoading();
+      if (!result?.ok) {
+        ctx.onError?.(ctx.lang === 'en' ? 'The Record Quick Action could not be completed.' : 'No se ha podido ejecutar la Record Quick Action.');
+        option.disabled = false;
+        label.textContent = originalLabel;
+        return;
+      }
+      queueRecordQuickActionNotice(recordQuickActionSuccessMessage(action.name, ctx.lang));
+      window.location.reload();
+    }).catch(() => {
+      dismissLoading();
+      ctx.onError?.(ctx.lang === 'en' ? 'The Record Quick Action could not be completed.' : 'No se ha podido ejecutar la Record Quick Action.');
+      option.disabled = false;
+      label.textContent = originalLabel;
+    });
+  });
+  const configure = doc.createElement('button');
+  configure.type = 'button';
+  configure.className = 'sfoc-quick-links-menu-record-action-configure';
+  const configureLabel = ctx.lang === 'en' ? 'Configure Record Quick Action' : 'Configurar Record Quick Action';
+  configure.title = configureLabel;
+  configure.setAttribute('aria-label', configureLabel);
+  configure.appendChild(createQuickLinkIcon(doc, 'settings', '#0f9d72'));
+  configure.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void sfInjectSend({
+      type: 'sfInject:openRecordQuickActionConfig', orgId: ctx.orgId,
+      recordId: ctx.recordId, actionId: action.id
+    }).then((result) => {
+      if (!result?.ok) ctx.onError?.(ctx.lang === 'en' ? 'The Record Quick Action configuration could not be opened.' : 'No se ha podido abrir la configuración de la Record Quick Action.');
+    }).catch(() => ctx.onError?.(ctx.lang === 'en' ? 'The Record Quick Action configuration could not be opened.' : 'No se ha podido abrir la configuración de la Record Quick Action.'));
+  });
+  row.append(option, configure);
+  return row;
 }
 
 /** @param {Document} doc @param {unknown[]} links @param {{ orgId?: string, orgLabel?: string }} ctx */
@@ -109,7 +213,17 @@ function createQuickLinksMenu(doc, links, ctx) {
   heading.append(headingTitle, headingActions);
   menu.appendChild(heading);
 
+  const recordQuickActions = Array.isArray(ctx.recordQuickActions) ? ctx.recordQuickActions : [];
   let count = 0;
+  if (recordQuickActions.length) {
+    appendQuickLinksSectionTitle(doc, menu, 'Record Quick Actions');
+    for (const action of recordQuickActions) {
+      if (!action?.id || !action?.name) continue;
+      menu.appendChild(createRecordQuickActionRow(doc, action, ctx));
+      count += 1;
+    }
+  }
+  if (links.length && count) appendQuickLinksSectionTitle(doc, menu, 'Quick Links');
   for (const link of links) {
     if (!link || typeof link !== 'object') continue;
     const href = link.type === 'sfoc' ? '#' : buildCustomQuickLinkUrl(link.url);
@@ -175,7 +289,24 @@ function removeQuickLinksTestButton(doc) {
 
 /** @param {Document} doc */
 export function injectQuickLinksTestButton(doc, ctx = {}) {
-  if (doc.querySelector(INJECT_SELECTOR)) return;
+  const existing = doc.querySelector(INJECT_SELECTOR);
+  if (existing) {
+    const links = Array.isArray(ctx.quickLinks) ? ctx.quickLinks : [];
+    const fingerprint = quickLinksMenuFingerprint(links, ctx);
+    if (existing.dataset.sfocQuickLinksFingerprint === fingerprint) return;
+    const nextMenu = createQuickLinksMenu(doc, links, ctx);
+    const currentMenu = existing.querySelector('.sfoc-quick-links-menu');
+    if (nextMenu) {
+      if (currentMenu) currentMenu.replaceWith(nextMenu);
+      else existing.append(nextMenu);
+      existing.querySelector('.sfoc-quick-links-button')?.setAttribute('aria-haspopup', 'menu');
+    } else if (currentMenu) {
+      currentMenu.remove();
+      existing.querySelector('.sfoc-quick-links-button')?.removeAttribute('aria-haspopup');
+    }
+    existing.dataset.sfocQuickLinksFingerprint = fingerprint;
+    return;
+  }
 
   const actionsHost = findQuickLinksActionsHost(doc);
   if (!actionsHost) return;
@@ -183,6 +314,7 @@ export function injectQuickLinksTestButton(doc, ctx = {}) {
   const item = doc.createElement('li');
   item.className = 'slds-global-actions__item sfoc-quick-links-test-item';
   item.setAttribute('data-sfoc-inject', INTEGRATION_ID);
+  item.dataset.sfocQuickLinksFingerprint = quickLinksMenuFingerprint(Array.isArray(ctx.quickLinks) ? ctx.quickLinks : [], ctx);
 
   const button = doc.createElement('button');
   button.type = 'button';
@@ -232,14 +364,40 @@ export function injectQuickLinksTestButton(doc, ctx = {}) {
  * @returns {() => void}
  */
 export function mountQuickLinksTestButton(doc, ctx) {
-  if (!hasConfiguredQuickLinks(ctx)) {
-    removeQuickLinksTestButton(doc);
-    return () => {};
-  }
-
-  const inject = () => injectQuickLinksTestButton(doc, ctx);
+  let stopped = false;
+  let recordQuickActions = [];
+  let actionsLoaded = false;
+  let recordId = '';
+  const inject = () => {
+    if (!actionsLoaded || stopped) return;
+    const menuContext = { ...ctx, recordId, recordQuickActions };
+    if (!hasConfiguredQuickLinks(menuContext) && !recordQuickActions.length) {
+      removeQuickLinksTestButton(doc);
+      return;
+    }
+    injectQuickLinksTestButton(doc, menuContext);
+  };
+  const refreshRecordQuickActions = () => {
+    recordId = recordIdFromSalesforceUrl(location.href);
+    recordQuickActions = [];
+    actionsLoaded = false;
+    if (!recordId) {
+      actionsLoaded = true;
+      inject();
+      return;
+    }
+    void sfInjectSend({ type: 'sfInject:listRecordQuickActions', orgId: ctx.orgId, recordId })
+      .then((result) => { if (result?.ok) recordQuickActions = Array.isArray(result.actions) ? result.actions : []; })
+      .catch(() => {})
+      .finally(() => { actionsLoaded = true; inject(); });
+  };
+  consumeRecordQuickActionNotice(ctx);
+  refreshRecordQuickActions();
+  window.addEventListener(QUICK_LINKS_LOCATION_CHANGE_EVENT, refreshRecordQuickActions);
   const stopObserver = mountDebouncedDomObserver(doc, inject, { debounceMs: 200, cooldownMs: 30 });
   return () => {
+    stopped = true;
+    window.removeEventListener(QUICK_LINKS_LOCATION_CHANGE_EVENT, refreshRecordQuickActions);
     stopObserver();
     removeQuickLinksTestButton(doc);
   };
@@ -255,13 +413,13 @@ function isParentQuickLinksPage() {
 
 export const quickLinksIntegration = {
   id: INTEGRATION_ID,
-  requiresQuickLinks: true,
+  requiresQuickLinks: false,
   isParentPageActive: isParentQuickLinksPage,
   isFrameRelevant: () => window.top === window,
   mount(doc, ctx) {
     return mountQuickLinksTestButton(doc, ctx);
   },
   retryInject(doc, ctx) {
-    if (hasConfiguredQuickLinks(ctx)) injectQuickLinksTestButton(doc, ctx);
+    if (!doc.querySelector(INJECT_SELECTOR) && hasConfiguredQuickLinks(ctx)) injectQuickLinksTestButton(doc, ctx);
   }
 };

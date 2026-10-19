@@ -28,6 +28,124 @@ import { isApexDebugLogsInjectPage, normalizeApexLogId } from '../content/matche
 import { isDeployStatusDetailInjectPage, isDeployStatusInjectPage } from '../content/matchers/deployStatusPages.js';
 import { isQuickLinksSalesforcePage } from '../content/matchers/quickLinksPages.js';
 import { buildSfocQuickLinkUrl } from '../lib/quickLinkNavigation.js';
+import { RECORD_ID_RE, canEditRecordField } from '../../shared/recordViewerCore.js';
+import { patchRecordViewerRecords, resolveRecordViewerTarget } from '../../shared/recordViewerApi.js';
+import {
+  RECORD_VIEWER_QUICK_ACTIONS_KEY,
+  groupRecordViewerQuickActionUpdates,
+  normalizeRecordViewerQuickActions,
+  recordViewerQuickActionsFor
+} from '../../shared/recordViewerQuickActions.js';
+import { assertOrgWriteAllowed, recordLocalAudit } from '../../background/orgWriteGuard.js';
+
+const RECORD_VIEWER_REQUEST_PREFIX = 'sfoc_record_viewer_request:';
+const RECORD_VIEWER_REQUEST_TTL_MS = 10 * 60 * 1000;
+
+function validRecordViewerId(value) {
+  const id = String(value || '').trim();
+  return RECORD_ID_RE.test(id) ? id : '';
+}
+
+async function resolveRecordQuickActionContext(message, sender) {
+  const recordId = validRecordViewerId(message?.recordId);
+  const requestedOrgId = String(message?.orgId || '').trim();
+  if (!recordId || !requestedOrgId) return { ok: false, reason: 'INVALID_REQUEST' };
+  const resolved = await resolveSavedOrgForInstance(undefined, sender?.tab?.id);
+  if (!resolved.ok || resolved.orgId !== requestedOrgId || !resolved.org) return { ok: false, reason: 'ORG_NOT_SAVED' };
+  const sid = await resolveSidForOrg(resolved.org);
+  if (!sid) return { ok: false, reason: 'NO_SID' };
+  const root = await resolveRecordViewerTarget(resolved.org.instanceUrl, sid, resolved.org.apiVersion, recordId);
+  const stored = await chrome.storage.local.get(RECORD_VIEWER_QUICK_ACTIONS_KEY);
+  const actions = recordViewerQuickActionsFor(
+    normalizeRecordViewerQuickActions(stored?.[RECORD_VIEWER_QUICK_ACTIONS_KEY]),
+    resolved.orgId,
+    root.objectApiName
+  );
+  return { ok: true, org: resolved.org, orgId: resolved.orgId, sid, recordId, root, actions };
+}
+
+async function executeRecordQuickAction(context, action) {
+  const writeGuard = await assertOrgWriteAllowed(context.org, context.sid, { action: 'dml_execute' });
+  if (!writeGuard.ok) return { ok: false, reason: writeGuard.reason || 'WRITE_NOT_ALLOWED' };
+  const requestedUpdates = groupRecordViewerQuickActionUpdates(action.operations);
+  if (!requestedUpdates.length) return { ok: false, reason: 'INVALID_ACTION' };
+  const validatedUpdates = [];
+  const seenTargets = new Set();
+  for (const requested of requestedUpdates) {
+    const path = Array.isArray(requested.path) ? requested.path : [];
+    const current = path.length
+      ? await resolveRecordViewerTarget(context.org.instanceUrl, context.sid, context.org.apiVersion, context.recordId, path)
+      : context.root;
+    if (!current.record?.Id || seenTargets.has(current.record.Id)) return { ok: false, reason: 'DUPLICATE_TARGET' };
+    seenTargets.add(current.record.Id);
+    const allowed = new Set();
+    for (const field of current.describe?.fields || []) {
+      const decision = canEditRecordField({
+        objectPermissions: current.objectPermissions,
+        recordAccess: current.recordAccess,
+        field,
+        orgReadOnly: false,
+        writePolicyAllowed: true
+      });
+      if (decision.editable) allowed.add(field.name);
+    }
+    const fields = requested.fields && typeof requested.fields === 'object' ? requested.fields : {};
+    const safePatch = Object.fromEntries(Object.entries(fields).filter(([name]) => allowed.has(name)));
+    if (!Object.keys(safePatch).length || Object.keys(safePatch).length !== Object.keys(fields).length) {
+      return { ok: false, reason: 'FIELD_NOT_EDITABLE' };
+    }
+    validatedUpdates.push({
+      path,
+      objectApiName: current.objectApiName,
+      recordId: current.record.Id,
+      fields: safePatch,
+      lastModifiedDate: current.record?.LastModifiedDate
+    });
+  }
+  const result = await patchRecordViewerRecords(context.org.instanceUrl, context.sid, context.org.apiVersion, validatedUpdates);
+  if (!result.ok) return { ok: false, reason: result.status === 412 ? 'CONCURRENT_UPDATE' : 'SAVE_FAILED' };
+  await recordLocalAudit({
+    action: 'dml_execute', orgId: String(context.orgId),
+    detail: `recordQuickAction:${action.id}:${validatedUpdates.map((item) => item.objectApiName).join(',')}:${validatedUpdates.length}`
+  });
+  return { ok: true };
+}
+
+async function stageRecordViewerRequest(orgId, recordId) {
+  const stored = await chrome.storage.session.get(null);
+  const now = Date.now();
+  const stale = [];
+  for (const [key, value] of Object.entries(stored)) {
+    if (!key.startsWith(RECORD_VIEWER_REQUEST_PREFIX)) continue;
+    if (!value || now - Number(value.createdAt || 0) > RECORD_VIEWER_REQUEST_TTL_MS) { stale.push(key); continue; }
+    if (value.orgId === orgId && value.recordId === recordId) return key.slice(RECORD_VIEWER_REQUEST_PREFIX.length);
+  }
+  if (stale.length) await chrome.storage.session.remove(stale);
+  const requestId = crypto.randomUUID();
+  await chrome.storage.session.set({
+    [`${RECORD_VIEWER_REQUEST_PREFIX}${requestId}`]: { orgId, recordId, createdAt: Date.now() }
+  });
+  return requestId;
+}
+
+async function openRecordViewerTab(sender, org, recordId, quickActionId = '') {
+  const url = new URL(chrome.runtime.getURL('code/record-viewer.html'));
+  // Solo identificadores no sensibles: la página resuelve la sesión en background.
+  url.searchParams.set('orgId', String(org.id));
+  url.searchParams.set('instance', new URL(String(org.instanceUrl)).origin);
+  url.searchParams.set('recordId', recordId);
+  if (quickActionId) url.searchParams.set('quickAction', quickActionId);
+  const tabs = await chrome.tabs.query({ url: `${chrome.runtime.getURL('code/record-viewer.html')}*` });
+  const existing = tabs.find((tab) => typeof tab.url === 'string' && tab.url === url.href);
+  if (existing?.id != null) {
+    await chrome.tabs.update(existing.id, { active: true });
+    if (existing.windowId != null) await chrome.windows.update(existing.windowId, { focused: true }).catch(() => {});
+    return;
+  }
+  const options = { url: url.href, active: true };
+  if (sender?.tab?.id != null) { options.openerTabId = sender.tab.id; if (sender.tab.index != null) options.index = sender.tab.index + 1; }
+  await chrome.tabs.create(options);
+}
 const COMMAND_PALETTE_FILE_TYPE_LABELS = Object.freeze({
   ApexClass: 'Apex Class',
   ApexTrigger: 'Apex Trigger',
@@ -319,6 +437,72 @@ export async function handleSfInjectMessage(message, sender) {
         if (sender.tab.index != null) tabOpts.index = sender.tab.index + 1;
       }
       await chrome.tabs.create(tabOpts);
+      return { ok: true, opened: true };
+    }
+    case 'sfInject:listRecordQuickActions': {
+      if (!isQuickLinksPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'quickLinks')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      try {
+        const context = await resolveRecordQuickActionContext(message, sender);
+        if (!context.ok) return context;
+        return {
+          ok: true,
+          actions: context.actions.map((action) => ({ id: action.id, name: action.name }))
+        };
+      } catch {
+        return { ok: false, reason: 'LOAD_FAILED' };
+      }
+    }
+    case 'sfInject:executeRecordQuickAction': {
+      if (!isQuickLinksPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      const actionId = String(message.actionId || '').trim();
+      if (!actionId) return { ok: false, reason: 'INVALID_ACTION' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'quickLinks')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      try {
+        const context = await resolveRecordQuickActionContext(message, sender);
+        if (!context.ok) return context;
+        const action = context.actions.find((item) => item.id === actionId);
+        if (!action) return { ok: false, reason: 'ACTION_NOT_AVAILABLE' };
+        return await executeRecordQuickAction(context, action);
+      } catch {
+        return { ok: false, reason: 'EXECUTION_FAILED' };
+      }
+    }
+    case 'sfInject:openRecordQuickActionConfig': {
+      if (!isQuickLinksPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      const actionId = String(message.actionId || '').trim();
+      if (!actionId) return { ok: false, reason: 'INVALID_ACTION' };
+      await loadSfInjectSettings();
+      if (!isSfInjectIntegrationEnabled(getSfInjectSettingsSnapshot(), 'quickLinks')) {
+        return { ok: false, reason: 'DISABLED' };
+      }
+      try {
+        const context = await resolveRecordQuickActionContext(message, sender);
+        if (!context.ok) return context;
+        const action = context.actions.find((item) => item.id === actionId);
+        if (!action) return { ok: false, reason: 'ACTION_NOT_AVAILABLE' };
+        await openRecordViewerTab(sender, context.org, context.recordId, action.id);
+        return { ok: true, opened: true };
+      } catch {
+        return { ok: false, reason: 'OPEN_FAILED' };
+      }
+    }
+    case 'sfInject:openRecordViewer': {
+      const recordId = validRecordViewerId(message.recordId);
+      if (!recordId) return { ok: false, reason: 'INVALID_RECORD_ID' };
+      const extensionUi = isExtensionUiSender(sender);
+      if (!extensionUi && !isQuickLinksPageSender(sender)) return { ok: false, reason: 'FORBIDDEN' };
+      const resolved = extensionUi && typeof message.orgId === 'string'
+        ? await (async () => { const saved = await loadSavedOrgs(); const org = saved[message.orgId]; return org ? { ok: true, orgId: org.id, org } : { ok: false }; })()
+        : await resolveSavedOrgForInstance(message.instanceUrl, sender?.tab?.id);
+      if (!resolved.ok || !resolved.orgId) return { ok: false, reason: 'ORG_NOT_SAVED' };
+      await openRecordViewerTab(sender, resolved.org, recordId);
       return { ok: true, opened: true };
     }
     case 'sfInject:openQuickLinksSettings': {

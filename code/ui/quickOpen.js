@@ -24,9 +24,10 @@ import {
 } from './searchLoadingUi.js';
 import { createIcon } from '../workbench/iconRegistry.js';
 import { getToolIcon, getWorkspaceById } from '../workbench/workspaceRegistry.js';
+import { isCommandPaletteShortcut } from '../../shared/commandPaletteBridge.js';
 
-const QUICK_OPEN_SHORTCUT = Object.freeze({ shift: true, key: 'p' });
-const COMMAND_PALETTE_SHORTCUT = Object.freeze({ shift: false, key: 'k' });
+export { isCommandPaletteShortcut } from '../../shared/commandPaletteBridge.js';
+
 const MAX_TOTAL_RESULTS = 18;
 
 let isOpen = false;
@@ -39,17 +40,6 @@ let resultSequence = 0;
 export function getQuickOpenShortcutLabel() {
   const mac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || '');
   return mac ? '⌘K' : 'Ctrl+K';
-}
-
-/** Acepta el atajo nuevo y conserva Ctrl/Cmd+Shift+P durante la convivencia. */
-export function isCommandPaletteShortcut(event) {
-  if (!event || event.altKey || !(event.ctrlKey || event.metaKey)) return false;
-  const key = String(event.key || '').toLowerCase();
-  const shift = event.shiftKey === true;
-  return (
-    (key === COMMAND_PALETTE_SHORTCUT.key && shift === COMMAND_PALETTE_SHORTCUT.shift) ||
-    (key === QUICK_OPEN_SHORTCUT.key && shift === QUICK_OPEN_SHORTCUT.shift)
-  );
 }
 
 function isV2() {

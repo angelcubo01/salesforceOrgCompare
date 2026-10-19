@@ -16,6 +16,7 @@ import {
   updateAuthIndicators
 } from './ui/orgs.js';
 import { initOrgUserDropdowns } from './ui/orgUserDropdown.js';
+import { setupKeyboardPicklists } from './ui/keyboardPicklists.js';
 import { renderSavedItems, setupCompareListToolbar } from './ui/listUi.js';
 import { updateDocumentTitle } from './ui/documentMeta.js';
 import { renderEditor } from './editor/editorRender.js';
@@ -32,7 +33,7 @@ import {
   setupSidebarToggle
 } from './setup/setupListeners.js';
 import { setupSearch, setOnAfterArtifactTypeChange } from './ui/searchSetup.js';
-import { setupQuickOpen } from './ui/quickOpen.js';
+import { openQuickOpen, setupQuickOpen } from './ui/quickOpen.js';
 import { addBundleFiles, addSelected } from './flows/addItems.js';
 import {
   initializeAppNavigation,
@@ -135,6 +136,7 @@ import { bootstrapFeatureControls } from '../shared/posthogFeatureControlsFlag.j
 import { wakeServiceWorker } from '../shared/wakeServiceWorker.js';
 import { applyUiModeToDocument, loadUiMode } from '../shared/uiMode.js';
 import { ensureWorkbenchIconSprite } from './workbench/iconRegistry.js';
+import { setupCommandPaletteRequestConsumer } from '../shared/commandPaletteBridge.js';
 
 function applyStaticTranslations() {
   const brandLogo = document.getElementById('sidebarBrandLogo');
@@ -216,6 +218,7 @@ async function init() {
     paletteBundleName
   );
   const shouldOpenPaletteItem = startupParams.get('paletteOpen') === '1';
+  const shouldOpenCommandPalette = startupParams.get('commandPalette') === '1';
   if (urlDeepLink.itemType === 'PackageXml') {
     state.selectedItem = null;
     urlDeepLink = { ...urlDeepLink, itemType: null, itemKey: null, fileName: null, descriptor: null };
@@ -307,8 +310,11 @@ async function init() {
   wireSelectors();
   setupOrgSelectorAutoSync();
   initOrgUserDropdowns();
+  setupKeyboardPicklists();
   setupSearch();
   setupQuickOpen();
+  setupCommandPaletteRequestConsumer(openQuickOpen);
+  if (shouldOpenCommandPalette) requestAnimationFrame(() => openQuickOpen());
   setupAppModeTabHandlers();
   setupAppHelp();
   setupAppThemeToggle();

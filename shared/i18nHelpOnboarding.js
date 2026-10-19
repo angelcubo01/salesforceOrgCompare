@@ -310,6 +310,8 @@ export const helpOnboardingEs = {
   'onboarding.common.overviewNote': 'Tour breve de {count} pasos. Puedes salir cuando quieras.',
   'onboarding.common.actionNote': 'No se ejecutará nada durante el tour; vuelve aquí cuando estés listo.',
   'onboarding.common.resultNote': 'Listo: al finalizar puedes continuar desde este punto.',
+  'onboarding.common.keyboardHint':
+    'Teclado: si la herramienta usa una organización Salesforce, Alt+1 la abre. Si usa dos, Alt+1 abre la principal y Alt+2 la segunda. Usa ↑/↓ y Enter para elegir; Escape cierra la lista.',
 
   'onboarding.tool.Comparator.title': 'Comparador de metadatos',
   'onboarding.tool.Comparator.lead':
@@ -848,6 +850,8 @@ export const helpOnboardingEn = {
   'onboarding.common.overviewNote': 'A short {count}-step tour. You can leave whenever you want.',
   'onboarding.common.actionNote': 'Nothing runs during the tour; come back here when you are ready.',
   'onboarding.common.resultNote': 'All set: when you finish, continue from this point.',
+  'onboarding.common.keyboardHint':
+    'Keyboard: when a tool uses one Salesforce org, Alt+1 opens it. When it uses two, Alt+1 opens the primary org and Alt+2 the second. Use ↑/↓ and Enter to choose; Escape closes the list.',
 
   'onboarding.tool.Comparator.title': 'Metadata comparator',
   'onboarding.tool.Comparator.lead':

@@ -21,7 +21,10 @@ function prune() {
  *   orgId?: string,
  *   orgLabel?: string,
  *   instanceUrl?: string,
- *   logId?: string
+ *   logId?: string,
+ *   resourceId?: string,
+ *   resourceName?: string,
+ *   resourceType?: string
  * }} [options]
  */
 export function stageApexViewerPayload(title, content, options = {}) {
@@ -44,6 +47,9 @@ export function stageApexViewerPayload(title, content, options = {}) {
     ...(options.orgLabel ? { orgLabel: String(options.orgLabel) } : {}),
     ...(options.instanceUrl ? { instanceUrl: String(options.instanceUrl) } : {}),
     ...(options.logId ? { logId: String(options.logId) } : {}),
+    ...(options.resourceId ? { resourceId: String(options.resourceId) } : {}),
+    ...(options.resourceName ? { resourceName: String(options.resourceName) } : {}),
+    ...(options.resourceType ? { resourceType: String(options.resourceType) } : {}),
     at: Date.now()
   });
   return id;
@@ -64,7 +70,10 @@ export function takeApexViewerPayload(id) {
         ...(v.orgId ? { orgId: v.orgId } : {}),
         ...(v.orgLabel ? { orgLabel: v.orgLabel } : {}),
         ...(v.instanceUrl ? { instanceUrl: v.instanceUrl } : {}),
-        ...(v.logId ? { logId: v.logId } : {})
+        ...(v.logId ? { logId: v.logId } : {}),
+        ...(v.resourceId ? { resourceId: v.resourceId } : {}),
+        ...(v.resourceName ? { resourceName: v.resourceName } : {}),
+        ...(v.resourceType ? { resourceType: v.resourceType } : {})
       }
     : null;
 }

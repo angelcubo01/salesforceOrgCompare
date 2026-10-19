@@ -92,6 +92,12 @@ Add personal Quick Links in the global Lightning header for SFOC tools or same-o
 
 ![Salesforce Setup → SFOC Command Palette](media/readme/flow-sf-setup-palette.png)
 
+#### Run record actions without leaving the record
+
+Create **Record Quick Actions** in Record Viewer to update one or more fields on the current record or a related record. Choose the environments where each action applies, then run it from the Salesforce **Quick Links** menu while viewing a record. The menu keeps Record Quick Actions separate from regular Quick Links, shows progress and a success notification, refreshes the record after completion, and provides a gear shortcut to edit the action.
+
+![Salesforce Quick Links with Record Quick Actions](media/readme/flow-sf-record-quick-actions.png)
+
 > **Trademark notice:** Salesforce Org Compare is a third-party tool and is not affiliated with or endorsed by Salesforce, Inc.
 
 ---
@@ -135,7 +141,7 @@ Add personal Quick Links in the global Lightning header for SFOC tools or same-o
 - Optional Workbench navigation with Home, favorites, recent tools, contextual actions, and guided onboarding
 - Command palette to jump to tools, metadata, and saved scripts with `Ctrl/Cmd+K`
 - Saved SOQL/SOSL queries, Anonymous Apex scripts, Apex test profiles, and pinned work items
-- Backup and restore for orgs, preferences, favorites, saved work, queries, scripts, and test profiles
+- Backup and restore for orgs, preferences, favorites, saved work, queries, scripts, test profiles, and Record Quick Actions. New backups use the `.sfocbackup` format with light `sfoc` obfuscation; legacy JSON backups can still be imported.
 
 ### Development
 
@@ -194,7 +200,7 @@ Add personal Quick Links in the global Lightning header for SFOC tools or same-o
 - **Debug Logs:** Open each native Setup log in the Apex Log Viewer and optionally place Debug Logs above User Trace Flags.
 - **User Trace Flags:** Filter to relevant active/recently expired traces and extend or reactivate eligible user traces.
 - **Deployments:** Expand errors inline; select an org and Ctrl/Cmd-click Apex references in status or deployment-detail errors to open source in SFOC.
-- **Quick Links:** Add a global Lightning-header menu for SFOC tools and same-org custom URLs.
+- **Quick Links and Record Quick Actions:** Add a global Lightning-header menu for SFOC tools and same-org custom URLs. On record pages, available Record Quick Actions appear in their own section, can be executed directly, and expose a configuration shortcut.
 - **Setup Command Palette:** Use a configurable shortcut (default `Ctrl+K`) to search Setup, Quick Links, saved scripts, and SFOC tools.
 
 

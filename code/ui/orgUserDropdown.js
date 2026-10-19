@@ -31,6 +31,7 @@ let outsideHandler = null;
 let popupKeydownAttached = false;
 let popupRepositionHandler = null;
 let suppressTriggerClick = false;
+let keyboardShortcutsInstalled = false;
 
 const POPUP_FLOAT_CLASS = 'org-cd-popup--floating';
 
@@ -147,6 +148,46 @@ export function shouldShowOrgUserBadge(user, disabled) {
 function selectedOptionLabel(select) {
   const opt = select.options[select.selectedIndex];
   return opt ? opt.textContent || '' : '';
+}
+
+export function resolveOrgKeyboardShortcut(event) {
+  if (!event?.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat) return null;
+  if (event.code === 'Digit1' || event.key === '1') return 'left';
+  if (event.code === 'Digit2' || event.key === '2') return 'right';
+  return null;
+}
+
+function isSelectorVisible(entry) {
+  if (!entry || entry.wrapper.hidden || entry.wrapper.closest('[hidden], [aria-hidden="true"]')) return false;
+  const style = globalThis.getComputedStyle?.(entry.wrapper);
+  return style?.display !== 'none' && style?.visibility !== 'hidden';
+}
+
+/**
+ * Abre o cierra el selector indicado; lo usan los atajos globales Alt+1 / Alt+2.
+ * Repetir el atajo sobre el selector ya abierto lo cierra.
+ */
+export function openOrgUserDropdown(side = 'left') {
+  const entry = ui[side];
+  if (!isSelectorVisible(entry) || entry.trigger.getAttribute('aria-disabled') === 'true') return false;
+  entry.trigger.focus({ preventScroll: true });
+  if (!entry.popup.hidden) {
+    closeAllPopups();
+    return true;
+  }
+  openPopup(side);
+  return true;
+}
+
+export function setupOrgKeyboardShortcuts() {
+  if (keyboardShortcutsInstalled || typeof document === 'undefined') return;
+  keyboardShortcutsInstalled = true;
+  document.addEventListener('keydown', (event) => {
+    const side = resolveOrgKeyboardShortcut(event);
+    if (!side || !openOrgUserDropdown(side)) return;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
 }
 
 function getPopupRows(entry) {
@@ -421,6 +462,12 @@ export function refreshOrgUserDropdowns() {
     const { select, trigger, label, badge } = entry;
 
     label.textContent = selectedOptionLabel(select);
+    const shortcut = side === 'left' ? 'Alt+1' : 'Alt+2';
+    const keyboardLabel = t(side === 'left'
+      ? 'orgDropdown.keyboardPrimary'
+      : 'orgDropdown.keyboardSecondary', { shortcut });
+    trigger.title = keyboardLabel;
+    trigger.setAttribute('aria-label', `${label.textContent}. ${keyboardLabel}`);
 
     // Estado disabled / bloqueado.
     const disabled = !!select.disabled;
@@ -536,4 +583,5 @@ export function initOrgUserDropdowns() {
     buildSideUi(side, selectId, wrapperSel);
   }
   refreshOrgUserDropdowns();
+  setupOrgKeyboardShortcuts();
 }

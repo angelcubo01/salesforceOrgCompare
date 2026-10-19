@@ -47,6 +47,57 @@ test.afterEach(async ({ extensionContext }) => {
   await Promise.all(extensionPages.map((page) => page.close({ runBeforeUnload: false }).catch(() => {})));
 });
 
+test('los picklists y las herramientas de una o dos orgs se manejan solo con teclado', async ({ extensionContext: context, extensionId, extensionWorker }) => {
+  await extensionWorker.evaluate(async () => chrome.storage.sync.set({
+    savedOrgs: {
+      'org-keyboard-a': {
+        id: 'org-keyboard-a', label: 'A', displayName: 'Entorno A',
+        instanceUrl: 'https://a.example.my.salesforce.com', apiVersion: '63.0', isSandbox: true
+      },
+      'org-keyboard-b': {
+        id: 'org-keyboard-b', label: 'B', displayName: 'Entorno B',
+        instanceUrl: 'https://b.example.my.salesforce.com', apiVersion: '63.0', isSandbox: true
+      }
+    },
+    savedOrgOrder: ['org-keyboard-a', 'org-keyboard-b']
+  }));
+  const page = await openExtensionPage(context, extensionId, 'code/code.html');
+  await waitForCodeBoot(page);
+
+  await expect(page.locator('.workbench-landing-shortcuts')).toContainText('Alt+1');
+  await expect(page.locator('.workbench-landing-shortcuts')).toContainText('↑↓ + Enter');
+  await page.locator('#workbenchMarketingPrimaryCta').click();
+  await expect(page.locator('#leftOrg')).toHaveValue('org-keyboard-a');
+
+  await page.keyboard.press('Alt+1');
+  const trigger = page.locator('.org-dropdown-left .org-cd-trigger');
+  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#leftOrg')).toHaveValue('org-keyboard-b');
+  await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+  await page.keyboard.press('Alt+2');
+  const comparisonTrigger = page.locator('.org-dropdown-right .org-cd-trigger');
+  await expect(comparisonTrigger).toBeFocused();
+  await expect(comparisonTrigger).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(comparisonTrigger).toHaveAttribute('aria-expanded', 'false');
+
+  await page.evaluate(async () => {
+    const { navigateToWorkspaceTab } = await import('./workbench/workbenchShell.js');
+    await navigateToWorkspaceTab('apex-quality', 'main', { userInitiated: true });
+  });
+  await expect(page.locator('.org-dropdown-right')).toBeHidden();
+  await page.keyboard.press('Alt+1');
+  await expect(trigger).toBeFocused();
+  await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Alt+2');
+  await expect(comparisonTrigger).toHaveAttribute('aria-expanded', 'false');
+});
+
 test('Classic y V2 comparten página y el popup aplica el cambio en la siguiente apertura', async ({ extensionContext: context, extensionId, extensionWorker }) => {
   await setLocalStorage(extensionWorker, {
     sfocUiMode: 'classic',

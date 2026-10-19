@@ -7,6 +7,7 @@ import { apexViewerIdbTake } from './lib/apexViewerIdb.js';
 import { ApexSourceWorkspace } from './lib/apexSourceWorkspace.js';
 import { renderStandaloneViewerState } from '../shared/standaloneViewerState.js';
 import { findApexSymbolAt, inferApexCallOwner } from '../shared/apexSourceDefinitions.js';
+import { setupStandaloneCommandPalette } from '../shared/commandPaletteBridge.js';
 
 function sanitizeDownloadFilename(raw) {
   const value = String(raw || 'apex-source').replace(/[/\\?%*:|"<>]/g, '-').replace(/\s+/g, ' ').trim().slice(0, 200);
@@ -16,7 +17,8 @@ function downloadTextFile(text, filename) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob);
   const a = document.createElement('a'); a.href = url; a.download = filename; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 }
-function classNameFrom(source, title) { return String(source || '').match(/\bclass\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1] || String(title || '').replace(/^Apex Class\s*[·.]\s*/i, '').replace(/\.cls$/i, '').trim() || 'Apex'; }
+function classNameFrom(source, title) { return String(source || '').match(/\b(?:class|trigger)\s+([A-Za-z_][A-Za-z0-9_]*)/)?.[1] || String(title || '').replace(/^Apex (?:Class|Trigger)\s*[·.]\s*/i, '').replace(/\.(?:cls|trigger)$/i, '').trim() || 'Apex'; }
+function sourceFileName(tab) { return `${tab?.className || 'Apex'}.${tab?.resourceType === 'ApexTrigger' ? 'trigger' : 'cls'}`; }
 function viewerOrgLabel(payload) { try { return String(payload?.orgLabel || '').trim() || new URL(String(payload?.instanceUrl || '')).hostname; } catch { return ''; } }
 function renderViewerOrg(el, payload) { const label = viewerOrgLabel(payload); el.hidden = !label; el.textContent = label ? t('apexSourceViewer.environment', { environment: label }) : ''; el.title = label; }
 function errorText(reason) {
@@ -25,7 +27,7 @@ function errorText(reason) {
 }
 function getQueryKeys() {
   const q = new URLSearchParams(window.location.search || ''); const line = Number(q.get('line')); const column = Number(q.get('column'));
-  return { sid: q.get('staged') || q.get('sid') || '', k: q.get('k') || '', idb: q.get('idb') || '', line: line > 0 ? Math.floor(line) : 0, column: column > 0 ? Math.floor(column) : 1 };
+  return { sid: q.get('staged') || q.get('sid') || '', k: q.get('k') || '', idb: q.get('idb') || '', orgId: q.get('orgId') || '', sourceId: q.get('sourceId') || '', sourceName: q.get('sourceName') || '', sourceType: q.get('sourceType') === 'ApexTrigger' ? 'ApexTrigger' : 'ApexClass', line: line > 0 ? Math.floor(line) : 0, column: column > 0 ? Math.floor(column) : 1 };
 }
 async function loadPayload(sid, k, idb) {
   if (sid) { const res = await bg({ type: 'apexViewer:take', id: sid }); return res?.ok ? res : null; }
@@ -52,42 +54,61 @@ async function main() {
   const titleEl = document.getElementById('apexSrcViewerTitle'); const orgEl = document.getElementById('apexSrcViewerOrg'); const mount = document.getElementById('apexSrcViewerMount');
   const tabsEl = document.getElementById('apexSrcViewerTabs'); const emptyEl = document.getElementById('apexSrcViewerEmpty'); const liveEl = document.getElementById('apexSrcViewerLive'); const errorEl = document.getElementById('apexSrcViewerError');
   document.querySelectorAll('[data-i18n]').forEach((el) => { const key = el.getAttribute('data-i18n'); if (key) el.textContent = t(key); });
-  const { sid, k, idb, line, column } = getQueryKeys(); const payload = await loadPayload(sid, k, idb);
+  const query = getQueryKeys(); const { sid, k, idb, line, column } = query; let payload = await loadPayload(sid, k, idb); let payloadError = '';
+  if (!payload && query.orgId && (query.sourceId || query.sourceName)) {
+    try {
+      const response = await bg({ type: 'apexSource:get', orgId: query.orgId, sourceId: query.sourceId, sourceName: query.sourceName, sourceType: query.sourceType });
+      if (response?.ok && response.source) {
+        const source = response.source;
+        const extension = source.type === 'ApexTrigger' ? 'trigger' : 'cls';
+        payload = { title: `${source.name}.${extension}`, content: String(source.body || ''), downloadFileName: `${source.name}.${extension}`, orgId: response.org?.id || query.orgId, orgLabel: response.org?.label || '', instanceUrl: response.org?.instanceUrl || '', resourceId: source.id || query.sourceId, resourceName: source.name || query.sourceName, resourceType: source.type || query.sourceType };
+      } else payloadError = errorText(response?.reason || response?.error);
+    } catch { payloadError = errorText('SALESFORCE_ERROR'); }
+  }
   if (!payload || !mount) {
-    titleEl.textContent = t('apexLogViewer.missingPayload'); downloadBtn.disabled = true;
-    renderStandaloneViewerState(mount, { kind: 'error', title: t('apexLogViewer.missingPayload'), description: t('state.error.description') }); return;
+    titleEl.textContent = payloadError || t('apexLogViewer.missingPayload'); downloadBtn.disabled = true;
+    renderStandaloneViewerState(mount, { kind: 'error', title: payloadError || t('apexLogViewer.missingPayload'), description: t('state.error.description') }); return;
   }
   let monaco; let editor;
   try { monaco = await loadMonaco(); editor = createSingleEditor(monaco, mount); } catch {
     titleEl.textContent = t('apexLogViewer.monacoError'); downloadBtn.disabled = true;
     renderStandaloneViewerState(mount, { kind: 'error', title: t('apexLogViewer.monacoError'), description: t('state.error.description') }); return;
   }
+  const syncShareUrl = (tab) => {
+    if (!tab?.orgId || (!tab.classId && !tab.className)) return;
+    const url = new URL(location.href); url.search = ''; url.searchParams.set('orgId', tab.orgId);
+    if (tab.classId) url.searchParams.set('sourceId', tab.classId); else url.searchParams.set('sourceName', tab.className);
+    url.searchParams.set('sourceType', tab.resourceType === 'ApexTrigger' ? 'ApexTrigger' : 'ApexClass');
+    if (line > 0) url.searchParams.set('line', String(line)); if (column > 1) url.searchParams.set('column', String(column));
+    history.replaceState(null, '', url.href);
+  };
   let workspace; let navDecorations = []; let hover = null;
   const render = ({ tabs, activeId }) => {
     tabsEl.replaceChildren(); emptyEl.hidden = tabs.length !== 0; mount.hidden = tabs.length === 0;
     const active = tabs.find((tab) => tab.tabId === activeId);
     if (active) {
-      titleEl.textContent = `${active.className}.cls`; document.title = `${active.className}.cls`;
+      titleEl.textContent = sourceFileName(active); document.title = sourceFileName(active);
       renderViewerOrg(orgEl, active); downloadBtn.disabled = active.state !== 'ready';
+      if (active.state === 'ready') syncShareUrl(active);
     } else { titleEl.textContent = t('docTitle.apexSource'); downloadBtn.disabled = true; orgEl.hidden = true; }
     errorEl.hidden = active?.state !== 'error'; errorEl.textContent = active?.state === 'error' ? errorText(active.error) : '';
     for (const tab of tabs) {
       const wrap = document.createElement('div'); wrap.className = 'apex-src-tab-wrap';
       const button = document.createElement('button'); button.type = 'button'; button.className = `apex-src-tab${tab.tabId === activeId ? ' is-active' : ''}${tab.state === 'error' ? ' is-error' : ''}`;
-      button.id = `apex-src-tab-${tab.tabId}`; button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', 'apexSrcViewerMount'); button.setAttribute('aria-selected', String(tab.tabId === activeId)); button.tabIndex = tab.tabId === activeId ? 0 : -1; button.title = `${tab.className}.cls`;
-      const name = document.createElement('span'); name.className = 'apex-src-tab-name'; name.textContent = `${tab.className}.cls`;
+      button.id = `apex-src-tab-${tab.tabId}`; button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', 'apexSrcViewerMount'); button.setAttribute('aria-selected', String(tab.tabId === activeId)); button.tabIndex = tab.tabId === activeId ? 0 : -1; button.title = sourceFileName(tab);
+      const name = document.createElement('span'); name.className = 'apex-src-tab-name'; name.textContent = sourceFileName(tab);
       button.append(name);
       if (tab.state === 'loading') { const spin = document.createElement('span'); spin.className = 'apex-src-tab-spinner'; spin.setAttribute('aria-label', t('apexSourceViewer.loading')); const loading = document.createElement('span'); loading.className = 'apex-src-tab-loading'; loading.textContent = t('apexSourceViewer.loading'); button.append(spin, loading); }
       if (tab.pendingNavigation) { const pending = document.createElement('span'); pending.className = 'apex-src-tab-pending'; pending.textContent = '•'; pending.title = t('apexSourceViewer.pendingNavigation'); button.append(pending); }
       if (tab.state === 'error') { const error = document.createElement('span'); error.className = 'apex-src-tab-error'; error.textContent = '!'; error.title = errorText(tab.error); button.append(error); }
-      const close = document.createElement('button'); close.type = 'button'; close.className = 'apex-src-tab-close'; close.textContent = '×'; close.setAttribute('aria-label', t('apexSourceViewer.closeTab', { name: `${tab.className}.cls` }));
+      const close = document.createElement('button'); close.type = 'button'; close.className = 'apex-src-tab-close'; close.textContent = '×'; close.setAttribute('aria-label', t('apexSourceViewer.closeTab', { name: sourceFileName(tab) }));
       close.onclick = (event) => { event.stopPropagation(); workspace.close(tab.tabId); }; close.onkeydown = (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); workspace.close(tab.tabId); } };
       if (tab.state === 'error') { const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'apex-src-tab-retry'; retry.textContent = t('apexSourceViewer.retry'); retry.onclick = (event) => { event.stopPropagation(); if (tab.loadRequest) startDefinitionLoad(tab, tab.loadRequest, tab.navigationSymbol); }; wrap.append(retry); }
       button.onclick = () => workspace.activate(tab.tabId); button.onauxclick = (event) => { if (event.button === 1) { event.preventDefault(); workspace.close(tab.tabId); } };
       button.onkeydown = (event) => tabKeyDown(event, tab.tabId); wrap.append(button, close); tabsEl.append(wrap);
     }
     if (activeId) document.getElementById(`apex-src-tab-${activeId}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    if (active?.state === 'loading') liveEl.textContent = `${active.className}.cls: ${t('apexSourceViewer.loading')}`;
+    if (active?.state === 'loading') liveEl.textContent = `${sourceFileName(active)}: ${t('apexSourceViewer.loading')}`;
     else if (active?.state === 'error') liveEl.textContent = errorText(active.error); else liveEl.textContent = '';
   };
   const reveal = (tab, nav) => {
@@ -99,12 +120,12 @@ async function main() {
     setTimeout(() => { if (workspace.activeTab?.tabId === tab.tabId && editor.getModel() === model) navDecorations = editor.deltaDecorations(navDecorations, []); }, 2500);
   };
   workspace = new ApexSourceWorkspace({ monaco, editor, onChange: render, onReveal: reveal });
-  const initialContent = String(payload.content || ''); const initialName = classNameFrom(initialContent, payload.title);
-  workspace.registerInitial({ orgId: payload.orgId || '', orgLabel: payload.orgLabel || '', instanceUrl: payload.instanceUrl || '', className: initialName, content: initialContent, downloadFileName: payload.downloadFileName || `${initialName}.cls`, pendingNavigation: line ? { lineNumber: line, column } : null });
+  const initialContent = String(payload.content || ''); const initialName = payload.resourceName || classNameFrom(initialContent, payload.title);
+  workspace.registerInitial({ orgId: payload.orgId || '', orgLabel: payload.orgLabel || '', instanceUrl: payload.instanceUrl || '', classId: payload.resourceId || '', className: initialName, resourceType: payload.resourceType || 'ApexClass', content: initialContent, downloadFileName: payload.downloadFileName || `${initialName}.cls`, pendingNavigation: line ? { lineNumber: line, column } : null });
   const currentLocation = () => { const tab = workspace.activeTab; const pos = editor.getPosition?.() || { lineNumber: 1, column: 1 }; return tab ? { tabId: tab.tabId, lineNumber: pos.lineNumber, column: pos.column, selection: editor.getSelection?.(), scrollTop: editor.getScrollTop?.() || 0 } : null; };
   const openDefinition = (owner, symbol, sourceTab) => {
     const pendingNavigation = symbol.kind === 'class' ? { lineNumber: 1, column: 1, addToHistory: true } : { methodName: symbol.name, lineNumber: 1, column: 1, addToHistory: true };
-    const result = workspace.open({ orgId: sourceTab.orgId, orgLabel: sourceTab.orgLabel, instanceUrl: sourceTab.instanceUrl, className: owner }, { activate: true, loading: true });
+    const result = workspace.open({ orgId: sourceTab.orgId, orgLabel: sourceTab.orgLabel, instanceUrl: sourceTab.instanceUrl, className: owner, resourceType: 'ApexClass' }, { activate: true, loading: true });
     if (!result.created && symbol.kind === 'class' && result.tab.state === 'ready') return result.tab;
     result.tab.pendingNavigation = pendingNavigation;
     const source = sourceTab.model.getValue();
@@ -159,9 +180,10 @@ async function main() {
     else if (event.altKey && /^Arrow(Left|Right)$/.test(event.key)) { event.preventDefault(); const target = event.key === 'ArrowLeft' ? workspace.history.back() : workspace.history.forward(); if (target && workspace.getTab(target.tabId)) { workspace.activate(target.tabId); reveal(workspace.getTab(target.tabId), target); } }
     else if (event.altKey && /^[1-9]$/.test(event.key)) workspace.activate(workspace.order[Number(event.key) - 1]);
   });
-  downloadBtn.addEventListener('click', () => { const tab = workspace.activeTab; if (tab?.state === 'ready') downloadTextFile(tab.model.getValue(), sanitizeDownloadFilename(`${tab.className}.cls`)); });
+  downloadBtn.addEventListener('click', () => { const tab = workspace.activeTab; if (tab?.state === 'ready') downloadTextFile(tab.model.getValue(), sanitizeDownloadFilename(sourceFileName(tab))); });
   const goBack = () => { if (window.opener && !window.opener.closed) window.close(); else if (window.history.length > 1) window.history.back(); else window.close(); };
   backBtn.addEventListener('click', goBack); document.getElementById('apexSrcViewerEmptyBack').addEventListener('click', goBack);
   window.addEventListener('beforeunload', () => workspace.dispose(), { once: true });
 }
+setupStandaloneCommandPalette();
 void main();

@@ -1,12 +1,17 @@
 /**
  * Políticas de escritura por org (deploy, DML, REST mutaciones).
  *
- * Cubierto por assertOrgWriteAllowed: deploy, DML, REST write, anonymous apex (prod permitido).
+ * Cubierto por assertOrgWriteAllowed: deploy, DML, REST write, anonymous apex e importación masiva.
  * Fuera de alcance (permisos Salesforce del usuario): debug logs, trace flags, deleteAll logs.
  */
 
 /** Acciones permitidas en producción (no aplicar bloqueo de deploy). */
-export const PRODUCTION_WRITE_ALLOWED_ACTIONS = Object.freeze(['anonymous_apex_execute']);
+export const PRODUCTION_WRITE_ALLOWED_ACTIONS = Object.freeze([
+  'anonymous_apex_execute',
+  'bulk_import',
+  // Data Workbench usa esta acción para actualizaciones individuales.
+  'dml_execute'
+]);
 
 /**
  * @param {string} [action]

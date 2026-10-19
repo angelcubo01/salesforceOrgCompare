@@ -46,7 +46,7 @@ export const apexLogViewerTabHelpEs = {
   'apexLogViewer.help.text.shows':
     "Todas las líneas del archivo de log tal como Salesforce las generó||Contador «Mostrando X de Y líneas» según los filtros activos||Resaltado temporal al navegar desde otra vista",
   'apexLogViewer.help.text.actions':
-    "Activa o desactiva tipos: SOQL, DML, debug, callout, límites, errores, métodos, unidades y ruido||«Solo relevante» deja lo útil para depurar y oculta ruido||«Mostrar todo» restaura todas las categorías||Desde Resumen o el chip de error puedes saltar directamente a una línea",
+    "Activa o desactiva tipos: SOQL, DML, debug, callout, límites, errores, métodos, unidades, variables, contexto y ruido||«Solo relevante» deja lo útil para depurar y oculta ruido||«Mostrar todo» restaura todas las categorías||Desde Resumen o el chip de error puedes saltar directamente a una línea",
   'apexLogViewer.help.text.tips':
     "Úsala cuando necesites contexto inmediatamente antes o después de una línea||El ruido incluye líneas muy verbosas que rara vez aportan en una primera pasada||Otras vistas (Cronología, Árbol, tablas) te traen aquí al seleccionar una fila",
   'apexLogViewer.help.tree.purpose':
@@ -209,7 +209,7 @@ export const apexLogViewerTabHelpEn = {
   'apexLogViewer.help.text.shows':
     "Every line of the log file as Salesforce generated it||«Showing X of Y lines» counter based on active filters||Temporary highlight when navigating from another view",
   'apexLogViewer.help.text.actions':
-    "Toggle types: SOQL, DML, debug, callout, limits, errors, methods, units, and noise||«Relevant only» keeps what matters for debugging and hides noise||«Show all» restores every category||Jump here from Summary or the error chip",
+    "Toggle types: SOQL, DML, debug, callout, limits, errors, methods, units, variables, context, and noise||«Relevant only» keeps what matters for debugging and hides noise||«Show all» restores every category||Jump here from Summary or the error chip",
   'apexLogViewer.help.text.tips':
     "Use it when you need context immediately before or after a line||Noise includes very verbose lines that rarely help on a first pass||Other views (Timeline, Tree, tables) bring you here when you select a row",
   'apexLogViewer.help.tree.purpose':

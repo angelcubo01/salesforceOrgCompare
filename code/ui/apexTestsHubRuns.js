@@ -10,6 +10,7 @@ import { handleToolError } from '../../shared/reportToolError.js';
 import { exportApexTestRun } from './apexTestsExport.js';
 import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
 import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
+import { buildApexCoverageViewerPath } from '../lib/apexCoverageViewerUrl.js';
 import {
   getApexTestsPollIntervalMs,
   getExtensionSettingsSnapshot,
@@ -510,6 +511,9 @@ export async function openApexTestClassInMonaco(orgId, pick, opts = {}) {
     {
       ...(initialLine != null ? { initialLine } : {}),
       downloadFileName,
+      resourceId: res.id || pick.classId || '',
+      resourceName: name,
+      resourceType: 'ApexClass',
       orgId,
       orgLabel: org?.label || '',
       instanceUrl: org?.instanceUrl || ''
@@ -694,14 +698,19 @@ async function openCoverageLineViewer(orgId, jobId, classOrTriggerId, classLabel
         body: res.body != null ? String(res.body) : '',
         coveredLines: Array.isArray(res.coveredLines) ? res.coveredLines : [],
         uncoveredLines: Array.isArray(res.uncoveredLines) ? res.uncoveredLines : [],
-        orgId
+        orgId,
+        apexId: classOrTriggerId,
+        jobId,
+        className: classLabel || res.name || ''
       }
     });
   } catch {
     showToast(t('apexTests.coverageLinesStorageError'), 'warn');
     return;
   }
-  const url = chrome.runtime.getURL(`code/apex-coverage-viewer.html?k=${encodeURIComponent(key)}`);
+  const url = chrome.runtime.getURL(buildApexCoverageViewerPath(key, {
+    orgId, apexId: classOrTriggerId, jobId, className: classLabel || res.name || ''
+  }));
   window.open(url, '_blank');
 }
 
@@ -982,8 +991,13 @@ async function openTestRunLogTab(orgId, job, displayJobId, opts = {}) {
     const title = parts.join(' · ');
     const content = res.body != null ? String(res.body) : '';
     const downloadFileName = lid ? `${sanitizeApexViewerDownloadFileName(lid)}.log` : undefined;
+    const org = (state.orgsList || []).find((item) => String(item.id) === String(orgId));
     const ok = await openApexLogViewerWithPayload(title, content, {
-      ...(downloadFileName ? { downloadFileName } : {})
+      ...(downloadFileName ? { downloadFileName } : {}),
+      ...(lid ? { logId: lid } : {}),
+      orgId,
+      orgLabel: org?.label || '',
+      instanceUrl: org?.instanceUrl || ''
     });
     if (!ok) showToast(t('apexTests.logOpenError'), 'warn');
   } finally {

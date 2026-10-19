@@ -43,12 +43,25 @@ import {
   normalizeLogiQuickActionPromptStore
 } from '../shared/logi/logiQuickActionPrompts.js';
 import { wireSfInjectSettings } from '../sfInject/popup/settingsPanel.js';
+import { setupStandaloneCommandPalette } from '../shared/commandPaletteBridge.js';
 import { openQuickLinksSettingsModal } from '../sfInject/popup/quickLinksSettings.js';
 import { SF_INJECT_CONFIG_KEY, normalizeSfInjectConfig } from '../sfInject/lib/settings.js';
 import {
   STORAGE_KEY as APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY,
   normalizeApexLogTextFilterPrefs
 } from '../shared/apexLogTextFilterPrefs.js';
+import {
+  RECORD_VIEWER_QUICK_ACTIONS_KEY,
+  mergeRecordViewerQuickActions,
+  normalizeRecordViewerQuickActions
+} from '../shared/recordViewerQuickActions.js';
+import {
+  SFOC_BACKUP_EXTENSION,
+  decodeSfocBackup,
+  encodeSfocBackup,
+  isLegacyJsonBackupFilename,
+  isSfocBackupFilename
+} from '../shared/settingsBackupCodec.js';
 
 const MONACO_THEME_I18N_KEYS = {
   'sfoc-editor-dark': 'settings.monacoThemeSfocDark',
@@ -597,7 +610,8 @@ function wireOrgsBackup() {
         TOOL_RECENTS_STORAGE_KEY,
         ORG_READ_ONLY_STORAGE_KEY,
         SF_INJECT_CONFIG_KEY,
-        APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY
+        APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY,
+        RECORD_VIEWER_QUICK_ACTIONS_KEY
       ]),
       getOrCreateTelemetryInstallId()
     ]);
@@ -606,7 +620,7 @@ function wireOrgsBackup() {
       return;
     }
     const payload = {
-      formatVersion: 3,
+      formatVersion: 4,
       exportedAt: new Date().toISOString(),
       orgConfig: res.payload,
       localConfig: {
@@ -630,16 +644,19 @@ function wireOrgsBackup() {
         apexLogTextFilterPrefs: normalizeApexLogTextFilterPrefs(
           local?.[APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY]
         ),
+        recordViewerQuickActions: normalizeRecordViewerQuickActions(
+          local?.[RECORD_VIEWER_QUICK_ACTIONS_KEY]
+        ),
         telemetryInstallId
       }
     };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: 'application/json;charset=utf-8'
+    const blob = new Blob([encodeSfocBackup(payload)], {
+      type: 'application/octet-stream'
     });
     const a = document.createElement('a');
     const stamp = new Date().toISOString().slice(0, 10);
     a.href = URL.createObjectURL(blob);
-    a.download = `sfoc-backup-${stamp}.json`;
+    a.download = `sfoc-backup-${stamp}${SFOC_BACKUP_EXTENSION}`;
     a.rel = 'noopener';
     document.body.appendChild(a);
     a.click();
@@ -664,7 +681,15 @@ function wireOrgsBackup() {
     setStatus('');
     let data;
     try {
-      data = JSON.parse(await f.text());
+      const content = await f.text();
+      if (isSfocBackupFilename(f.name)) {
+        data = decodeSfocBackup(content);
+      } else if (isLegacyJsonBackupFilename(f.name)) {
+        // Compatibilidad con las copias JSON exportadas por versiones anteriores.
+        data = JSON.parse(content);
+      } else {
+        throw new Error('Unsupported backup file extension');
+      }
     } catch (e) {
       void handleToolError(e, { artifact_type: 'Settings', phase: 'backup_import_parse' });
       setStatus(t('settings.backupImportError'), true);
@@ -718,6 +743,10 @@ function wireOrgsBackup() {
     const incomingApexLogTextFilterPrefs = normalizeApexLogTextFilterPrefs(
       data.localConfig.apexLogTextFilterPrefs
     );
+    const hasRecordViewerQuickActions = Object.hasOwn(data.localConfig, 'recordViewerQuickActions');
+    const incomingRecordViewerQuickActions = normalizeRecordViewerQuickActions(
+      data.localConfig.recordViewerQuickActions
+    );
     const incomingTelemetryId = data.localConfig.telemetryInstallId;
 
     if (importReplace) {
@@ -732,6 +761,9 @@ function wireOrgsBackup() {
       if (hasSfInjectSettings) replacePayload[SF_INJECT_CONFIG_KEY] = incomingSfInjectSettings;
       if (hasApexLogTextFilterPrefs) {
         replacePayload[APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY] = incomingApexLogTextFilterPrefs;
+      }
+      if (hasRecordViewerQuickActions) {
+        replacePayload[RECORD_VIEWER_QUICK_ACTIONS_KEY] = incomingRecordViewerQuickActions;
       }
       if (incomingSettings && typeof incomingSettings === 'object') {
         replacePayload[EXTENSION_CONFIG_KEY] = incomingSettings;
@@ -758,7 +790,8 @@ function wireOrgsBackup() {
         TOOL_RECENTS_STORAGE_KEY,
         ORG_READ_ONLY_STORAGE_KEY,
         SF_INJECT_CONFIG_KEY,
-        APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY
+        APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY,
+        RECORD_VIEWER_QUICK_ACTIONS_KEY
       ]);
       const mergedSettings = {
         ...(current?.[EXTENSION_CONFIG_KEY] || {}),
@@ -798,6 +831,11 @@ function wireOrgsBackup() {
           ...normalizeApexLogTextFilterPrefs(current?.[APEX_LOG_TEXT_FILTER_PREFS_STORAGE_KEY]),
           ...incomingApexLogTextFilterPrefs
         };
+      }
+      if (hasRecordViewerQuickActions) {
+        mergePayload[RECORD_VIEWER_QUICK_ACTIONS_KEY] = mergeRecordViewerQuickActions(
+          current?.[RECORD_VIEWER_QUICK_ACTIONS_KEY], incomingRecordViewerQuickActions
+        );
       }
       await chrome.storage.local.set(mergePayload);
       const currentScripts = readLocalAnonScripts();
@@ -888,4 +926,5 @@ async function main() {
   mountLogiSettingsPanel(t);
 }
 
+setupStandaloneCommandPalette();
 void main();

@@ -1499,6 +1499,15 @@ html[data-ui-theme="light"] .generate-pkg-compare-label {
   color: #334155;
 }
 
+html[data-ui-theme="light"] .generate-pkg-edit-switch {
+  background: #e2e8f0;
+  border: 1px solid #94a3b8;
+}
+
+html[data-ui-theme="light"] .generate-pkg-edit-label {
+  color: #334155;
+}
+
 html[data-ui-theme="light"] .generate-pkg-compare-btn {
   background: #ffffff;
   border: 1px solid #94a3b8;
@@ -1569,6 +1578,10 @@ html[data-ui-theme="light"] .generate-pkg-xml-output {
   border: 1px solid #cbd5e1;
   color: #0f172a;
   color-scheme: light;
+}
+
+html[data-ui-theme="light"] .generate-pkg-xml-output.is-editable {
+  border-color: #0ea5e9;
 }
 
 html[data-ui-theme="light"] .generate-pkg-download-icon-btn {

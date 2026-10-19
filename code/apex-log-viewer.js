@@ -35,6 +35,13 @@ import {
   openLogiAdvisor
 } from './lib/logi/logiAdvisorModal.js';
 import { bindLogiResumeMount, refreshComparisonResumeButton } from './lib/logi/logiResumePanel.js';
+import { setupStandaloneCommandPalette } from '../shared/commandPaletteBridge.js';
+import {
+  buildApexLogSourceIndex,
+  findApexLogSourceTokenRange,
+  openApexLogSourceTarget,
+  resolveApexLogSourceTarget
+} from './lib/apexLogViewer/apexSourceNavigation.js';
 
 function sanitizeLogDownloadFilename(rawTitle) {
   const base = String(rawTitle || 'apex-log')
@@ -66,6 +73,8 @@ function getQueryKeys() {
     sid: q.get('staged') || q.get('sid') || '',
     k: q.get('k') || '',
     idb: q.get('idb') || '',
+    orgId: q.get('orgId') || '',
+    logId: q.get('logId') || '',
     line: Number.isFinite(lineNum) && lineNum > 0 ? lineNum : 0
   };
 }
@@ -214,8 +223,9 @@ async function main() {
 
   setLoading(true);
 
-  const { sid, k, idb, line: lineFromUrl } = getQueryKeys();
+  const { sid, k, idb, orgId: urlOrgId, logId: urlLogId, line: lineFromUrl } = getQueryKeys();
   let payload = null;
+  let payloadError = '';
 
   if (sid) {
     const res = await bg({ type: 'apexViewer:take', id: sid });
@@ -260,12 +270,34 @@ async function main() {
     }
   }
 
+  if (!payload && urlOrgId && urlLogId) {
+    try {
+      const remote = await bg({ type: 'debugLogs:getBody', orgId: urlOrgId, logId: urlLogId });
+      if (remote?.ok) {
+        payload = {
+          title: `${t('docTitle.apexLog')} · ${urlLogId}`,
+          content: String(remote.body || ''),
+          downloadFileName: `${sanitizeLogDownloadFilename(urlLogId)}.log`,
+          orgId: remote.org?.id || urlOrgId,
+          orgLabel: remote.org?.label || '',
+          instanceUrl: remote.org?.instanceUrl || '',
+          logId: urlLogId,
+          ...(lineFromUrl ? { initialLine: lineFromUrl } : {})
+        };
+      } else {
+        payloadError = t('apexLogViewer.remoteLoadFailed');
+      }
+    } catch {
+      payloadError = t('apexLogViewer.remoteLoadFailed');
+    }
+  }
+
   if (!payload) {
     setLoading(false);
-    if (titleEl) titleEl.textContent = t('apexLogViewer.missingPayload');
+    if (titleEl) titleEl.textContent = payloadError || t('apexLogViewer.missingPayload');
     renderStandaloneViewerState(document.getElementById('apexLogSummaryMount'), {
       kind: 'error',
-      title: t('apexLogViewer.missingPayload'),
+      title: payloadError || t('apexLogViewer.missingPayload'),
       description: t('state.error.description')
     });
     return;
@@ -285,6 +317,102 @@ async function main() {
     orgLabel: payload.orgLabel || '',
     logId: payload.logId || ''
   };
+  const shareableLog = Boolean(viewerContext.orgId && viewerContext.logId);
+  if (shareableLog) {
+    const canonicalUrl = new URL(location.href);
+    canonicalUrl.search = '';
+    canonicalUrl.searchParams.set('orgId', viewerContext.orgId);
+    canonicalUrl.searchParams.set('logId', viewerContext.logId);
+    if (initialLine > 0) canonicalUrl.searchParams.set('line', String(initialLine));
+    history.replaceState(null, '', canonicalUrl.href);
+  }
+  let comparisonState = null;
+  let comparisonTextNavigator = null;
+  const apexSourceIndex = buildApexLogSourceIndex(content);
+  let sourceModifierActive = false;
+  let refreshTextSourceNavigation = () => {};
+
+  function resolveSourceHint(hint = {}, sourceIndex = apexSourceIndex) {
+    return resolveApexLogSourceTarget(sourceIndex, hint);
+  }
+
+  function openSourceHint(hint = {}, sourceIndex = apexSourceIndex, context = viewerContext) {
+    const target = resolveSourceHint(hint, sourceIndex);
+    if (!target) return false;
+    void openApexLogSourceTarget(target, context, t);
+    return true;
+  }
+
+  function sourceHintFromElement(element) {
+    return {
+      className: element?.getAttribute('data-apex-class') || '',
+      methodName: element?.getAttribute('data-apex-method') || '',
+      apexLine: element?.getAttribute('data-apex-line') || '',
+      location: element?.getAttribute('data-apex-location') || '',
+      line: element?.getAttribute('data-line') || ''
+    };
+  }
+
+  function refreshDomSourceTargets(root = document) {
+    root.querySelectorAll?.('[data-apex-class], [data-apex-location]').forEach((element) => {
+      element.classList.toggle('apex-log-source-target', Boolean(resolveSourceHint(sourceHintFromElement(element))));
+    });
+  }
+
+  function setSourceModifierActive(active) {
+    sourceModifierActive = Boolean(active);
+    document.body.classList.toggle('apex-log-source-modifier', sourceModifierActive);
+    if (sourceModifierActive) refreshDomSourceTargets();
+    refreshTextSourceNavigation();
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.ctrlKey || event.metaKey || event.key === 'Control' || event.key === 'Meta') {
+      setSourceModifierActive(true);
+    }
+  });
+  document.addEventListener('keyup', (event) => {
+    setSourceModifierActive(event.ctrlKey || event.metaKey);
+  });
+  window.addEventListener('blur', () => setSourceModifierActive(false));
+  document.addEventListener('pointerover', (event) => {
+    if (!sourceModifierActive) return;
+    const origin = event.target instanceof Element ? event.target : null;
+    const element = origin?.closest('[data-apex-class], [data-apex-location]');
+    if (element) refreshDomSourceTargets(element.parentElement || document);
+  });
+
+  document.addEventListener('click', (event) => {
+    if ((!event.ctrlKey && !event.metaKey) || event.button !== 0) return;
+    const origin = event.target instanceof Element ? event.target : null;
+    if (!origin || origin.closest('a[href]')) return;
+    const comparisonElement = origin.closest('[data-a], [data-b]');
+    if (comparisonElement && comparisonState) {
+      const side = comparisonElement.hasAttribute('data-b') ? 'b' : 'a';
+      const sideState = comparisonState[side];
+      const line = comparisonElement.getAttribute(`data-${side}`) || '';
+      const opened = openSourceHint(
+        { line },
+        sideState.sourceIndex,
+        {
+          orgId: sideState.orgId || viewerContext.orgId,
+          orgLabel: sideState.environment || '',
+          instanceUrl: sideState.instanceUrl || ''
+        }
+      );
+      if (opened) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      return;
+    }
+    const element = origin.closest('[data-apex-class], [data-apex-location], [data-line]');
+    if (!element) return;
+    const opened = openSourceHint(sourceHintFromElement(element));
+    if (!opened) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
 
   async function resolveRecords(ids) {
     if (!viewerContext.orgId || !Array.isArray(ids) || !ids.length) return {};
@@ -300,8 +428,6 @@ async function main() {
   if (titleEl) titleEl.textContent = title;
   if (downloadBtn) downloadBtn.hidden = false;
   if (compareBtn) compareBtn.hidden = false;
-  let comparisonState = null;
-  let comparisonTextNavigator = null;
 
   void mountLogiAdvisor({
     getParsed: () => getScopedParsed(),
@@ -599,6 +725,56 @@ async function main() {
     void monacoApi;
   }
 
+  function wireTextSourceNavigation(editor) {
+    let decorationIds = [];
+    let lastPosition = null;
+    const clearHint = () => {
+      decorationIds = editor.deltaDecorations(decorationIds, []);
+      editor.updateOptions({ mouseStyle: 'text' });
+    };
+    const renderHint = () => {
+      if (!sourceModifierActive || !lastPosition) {
+        clearHint();
+        return;
+      }
+      const fileLine = editorLineToFileLine(lastPosition.lineNumber);
+      const target = resolveSourceHint({ line: fileLine });
+      const lineText = editor.getModel()?.getLineContent(lastPosition.lineNumber) || '';
+      const range = findApexLogSourceTokenRange(lineText, target);
+      if (!target || !range) {
+        clearHint();
+        return;
+      }
+      decorationIds = editor.deltaDecorations(decorationIds, [{
+        range: new monaco.Range(lastPosition.lineNumber, range.startColumn, lastPosition.lineNumber, range.endColumn),
+        options: {
+          inlineClassName: 'apex-log-source-token-link',
+          inlineClassNameAffectsLetterSpacing: true,
+          hoverMessage: { value: t(target.methodName ? 'apexSourceViewer.openMethodHint' : 'apexSourceViewer.openClassHint') }
+        }
+      }]);
+      editor.updateOptions({ mouseStyle: 'pointer' });
+    };
+    refreshTextSourceNavigation = renderHint;
+    editor.onMouseMove((event) => {
+      lastPosition = event?.target?.position || null;
+      renderHint();
+    });
+    editor.onMouseLeave(() => {
+      lastPosition = null;
+      clearHint();
+    });
+    editor.onMouseDown((event) => {
+      const browserEvent = event?.event;
+      const position = event?.target?.position;
+      if ((!browserEvent?.ctrlKey && !browserEvent?.metaKey) || !position) return;
+      const fileLine = editorLineToFileLine(position.lineNumber);
+      if (!openSourceHint({ line: fileLine })) return;
+      browserEvent.preventDefault?.();
+      browserEvent.stopPropagation?.();
+    });
+  }
+
   function invalidateRenderedTabs() {
     renderedTabs.clear();
   }
@@ -672,7 +848,8 @@ async function main() {
           t,
           monaco,
           isLightTheme(),
-          null
+          null,
+          openSourceHint
         );
         break;
       case 'network':
@@ -716,6 +893,7 @@ async function main() {
     monaco.editor.setModelLanguage(textEditor.getModel(), 'apex');
     if (initialLine > 0) jumpToLogLine(initialLine);
     wireAskLogiSelection(textEditor, monaco);
+    wireTextSourceNavigation(textEditor);
   } catch {
     setLoading(false);
     if (titleEl) titleEl.textContent = t('apexLogViewer.monacoError');
@@ -815,12 +993,14 @@ async function main() {
           a: {
             parsed: parsedFull, raw: content, environment: viewerContext.orgLabel || viewerContext.instanceUrl || '—',
             entry: getComparisonEntry(content, parsedFull).name, execution: getComparisonEntry(content, parsedFull),
-            logId: viewerContext.logId || payload.logId || '', user: parsedFull.user?.name || ''
+            logId: viewerContext.logId || payload.logId || '', user: parsedFull.user?.name || '',
+            orgId: viewerContext.orgId, instanceUrl: viewerContext.instanceUrl, sourceIndex: apexSourceIndex
           },
           b: {
             parsed: parsedB, raw: String(raw || ''), environment: candidate.environment || t('apexLogViewer.compare.localEnvironment'),
             entry: getComparisonEntry(String(raw || ''), parsedB).name, execution: getComparisonEntry(String(raw || ''), parsedB),
-            logId: candidate.logId || candidate.title || '', user: parsedB.user?.name || candidate.meta?.user || ''
+            logId: candidate.logId || candidate.title || '', user: parsedB.user?.name || candidate.meta?.user || '',
+            orgId: candidate.orgId || viewerContext.orgId, sourceIndex: buildApexLogSourceIndex(String(raw || ''))
           }
         };
         setComparisonTabVisible(true);
@@ -853,4 +1033,5 @@ async function main() {
   });
 }
 
+setupStandaloneCommandPalette();
 void main();

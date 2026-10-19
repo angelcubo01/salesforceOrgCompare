@@ -47,6 +47,7 @@ import {
 import { parseQueryExplorerDeepLink } from '../../shared/queryExplorerBuilder.js';
 
 const QUERY_EXPLORER_SAVED_KEY = 'sfoc_query_explorer_saved_queries';
+const LARGE_QUERY_RESULT_THRESHOLD = 100_000;
 let selectedSavedQueryId = '';
 
 let lastQueryExplorerSchemaOrgId = null;
@@ -1392,16 +1393,20 @@ function rowsToCsvBlob(rows, keysOpt = null) {
     const inner = String(s).replace(/"/g, '""');
     return `"${inner}"`;
   };
-  const lines = [keys.map((k) => escape(k)).join(sep)];
+  const parts = [BOM, keys.map((k) => escape(k)).join(sep)];
+  let chunk = '';
   const missingLabel = t('queryExplorer.rowMissingInOtherOrg');
-  for (const rec of list) {
+  list.forEach((rec, index) => {
     const isMissing = rec == null;
     const row = isMissing ? {} : maybeFlattenRow(rec && typeof rec === 'object' ? /** @type {Record<string, unknown>} */ (rec) : null);
-    lines.push(
-      keys.map((k) => escape(isMissing ? missingLabel : formatCell(row[k]))).join(sep)
-    );
-  }
-  return new Blob([BOM + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    chunk += `\r\n${keys.map((k) => escape(isMissing ? missingLabel : formatCell(row[k]))).join(sep)}`;
+    if ((index + 1) % 2000 === 0) {
+      parts.push(chunk);
+      chunk = '';
+    }
+  });
+  if (chunk) parts.push(chunk);
+  return new Blob(parts, { type: 'text/csv;charset=utf-8' });
 }
 
 /** Texto tabulado para pegar directamente en Excel. */
@@ -1583,6 +1588,20 @@ async function runOrgQueryStream({ run, side, nav, renderer, orgId, variant, que
   const first = await runQueryForOrg(orgId, variant, queryText, run.runId);
   if (!isCurrentQueryRun(run)) return;
   nav.resetFromResponse(first);
+  if (Number(first.totalSize) >= LARGE_QUERY_RESULT_THRESHOLD) {
+    if (!run.largeResultApproval) {
+      run.largeResultApproval = confirmSfocToolAction(
+        t('queryExplorer.largeResultConfirm', { count: Number(first.totalSize).toLocaleString() }),
+        t('queryExplorer.continueLoading'),
+        { title: t('queryExplorer.largeResultTitle'), variant: 'standard', icon: 'database-search' }
+      );
+    }
+    if (!await run.largeResultApproval) {
+      await cancelActiveQueryRun();
+      return;
+    }
+    if (!isCurrentQueryRun(run)) return;
+  }
   run.hasResults = true;
   await renderer?.renderLocal();
   if (!isCurrentQueryRun(run)) return;
@@ -1752,10 +1771,14 @@ function activeExportNav(which) {
 
 function getExportData(which) {
   const nav = activeExportNav(which);
-  return { rows: nav.getRows(), keys: /** @type {string[] | null} */ (null) };
+  return { rows: nav.getRows(), keys: /** @type {string[] | null} */ (null), loading: nav.loadingAll };
 }
 
-function canExportData(rows) {
+function canExportData(rows, loading = false) {
+  if (loading) {
+    showToast(t('queryExplorer.exportWhileLoading'), 'warn');
+    return false;
+  }
   if (!rows.length) {
     showToast(t('queryExplorer.exportEmpty'), 'warn');
     return false;
@@ -1764,16 +1787,16 @@ function canExportData(rows) {
 }
 
 function exportCsv(which) {
-  const { rows, keys } = getExportData(which);
-  if (!canExportData(rows)) return;
+  const { rows, keys, loading } = getExportData(which);
+  if (!canExportData(rows, loading)) return;
   const blob = rowsToCsvBlob(rows, keys);
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
   downloadBlob(blob, `query-explorer-${stamp}.csv`);
 }
 
 function exportJson(which) {
-  const { rows, keys } = getExportData(which);
-  if (!canExportData(rows)) return;
+  const { rows, keys, loading } = getExportData(which);
+  if (!canExportData(rows, loading)) return;
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '');
   const payload = rows.map((r) => {
     if (r == null) return null;
@@ -1807,8 +1830,8 @@ async function writeClipboardText(text) {
 }
 
 async function copyQueryExport(which, format) {
-  const { rows, keys } = getExportData(which);
-  if (!canExportData(rows)) return;
+  const { rows, keys, loading } = getExportData(which);
+  if (!canExportData(rows, loading)) return;
   try {
     const text = format === 'csv'
       ? (await rowsToCsvBlob(rows, keys).text()).replace(/^\uFEFF/, '')
@@ -1834,6 +1857,10 @@ async function sendQueryRowsToImport(which = 'single') {
     return;
   }
   const sourceNav = activeExportNav(which);
+  if (sourceNav.loadingAll) {
+    showToast(t('queryExplorer.exportWhileLoading'), 'warn');
+    return;
+  }
   const sourceRows = sourceNav.getRows();
   if (!sourceRows.length) {
     showToast(t('queryExplorer.exportEmpty'), 'warn');
@@ -1860,6 +1887,16 @@ async function sendQueryRowsToImport(which = 'single') {
   }
   const orgId = which === 'right' ? state.rightOrgId : state.leftOrgId;
   stageDataForImport({ orgId: orgId || '', objectApiName, headers, rows });
+  // Data Import es una herramienta de una sola org. Al preparar filas desde el
+  // panel derecho, mueve esa org al selector de destino antes de navegar para
+  // que la confirmación y la ejecución no terminen apuntando a la org izquierda.
+  if (orgId && state.leftOrgId !== orgId) {
+    const leftOrg = /** @type {HTMLSelectElement | null} */ (document.getElementById('leftOrg'));
+    if (leftOrg && [...leftOrg.options].some((option) => option.value === orgId)) {
+      leftOrg.value = orgId;
+      leftOrg.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
 
   let navigated = false;
   if (document.body.dataset.uiMode === 'v2') {

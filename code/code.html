@@ -648,6 +648,12 @@
               <div class="generate-pkg-col generate-pkg-col-right">
                 <div class="generate-pkg-xml-header">
                   <label class="generate-pkg-label" for="generatePkgXmlOutput">package.xml</label>
+                  <div class="generate-pkg-xml-tools">
+                    <label class="generate-pkg-edit-toggle" for="generatePkgEditModeToggle">
+                      <input type="checkbox" id="generatePkgEditModeToggle" />
+                      <span class="generate-pkg-edit-switch" aria-hidden="true"></span>
+                      <span class="generate-pkg-edit-label" data-i18n="genPkg.editMode">Modo edición</span>
+                    </label>
                   <button
                     type="button"
                     id="generatePkgDownloadXml"
@@ -662,6 +668,7 @@
                       <line x1="12" y1="15" x2="12" y2="3"/>
                     </svg>
                   </button>
+                  </div>
                 </div>
                 <textarea
                   id="generatePkgXmlOutput"
@@ -1644,6 +1651,10 @@
                     <option value="undelete">UNDELETE</option>
                   </select>
                 </div>
+                <div id="dataWorkbenchImportExternalIdWrap" class="sfoc-tool-field hidden">
+                  <label class="sfoc-tool-label" for="dataWorkbenchImportExternalId" data-i18n="dataImport.externalId">External Id</label>
+                  <select id="dataWorkbenchImportExternalId" class="sfoc-query-select"></select>
+                </div>
                 <div class="sfoc-tool-field">
                   <label class="sfoc-tool-label" for="dataWorkbenchImportThreads" data-i18n="dataImport.threads">Hilos</label>
                   <select id="dataWorkbenchImportThreads" class="sfoc-query-select">
@@ -1667,6 +1678,7 @@
                   <div class="data-import-config-actions">
                     <input id="dataWorkbenchImportFile" type="file" class="data-import-file-input" accept=".csv,text/csv,.json,application/json,text/json,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12" hidden />
                     <button type="button" id="dataWorkbenchImportFileBtn" class="query-explorer-secondary-btn data-import-file-btn" data-i18n="dataImport.chooseAndParse">Elegir y analizar archivo</button>
+                    <span id="dataWorkbenchImportFileName" class="data-import-file-name" data-i18n="dataImport.noFile" hidden>Sin archivo seleccionado</span>
                     <button type="button" id="dataWorkbenchImportRunBtn" class="sfoc-btn sfoc-btn--primary org-limits-refresh-btn data-import-run-btn">
                       <svg class="sfoc-icon data-import-run-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-player-play"></use></svg>
                       <span data-i18n="dataImport.run">Run</span>
@@ -1686,14 +1698,26 @@
                     <h3 id="dataImportResultsTitle" class="data-import-card-title" data-i18n="dataImport.importResults">Resultado de importación</h3>
                     <span id="dataWorkbenchImportFilterSummary" class="data-import-grid-hint" aria-live="polite"></span>
                   </div>
-                  <button type="button" id="dataWorkbenchImportDeleteRowsBtn" class="sfoc-btn sfoc-btn--danger data-import-delete-rows-btn">
-                    <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-trash"></use></svg>
-                    <span data-i18n="dataImport.deleteRows">Delete rows</span>
-                  </button>
+                  <div class="data-import-result-actions">
+                    <button type="button" id="dataWorkbenchImportAddRowBtn" class="query-explorer-secondary-btn">
+                      <span data-i18n="dataImport.addRow">Añadir fila</span>
+                    </button>
+                    <button type="button" id="dataWorkbenchImportDeleteRowsBtn" class="sfoc-btn sfoc-btn--danger data-import-delete-rows-btn">
+                      <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-trash"></use></svg>
+                      <span data-i18n="dataImport.deleteRows">Delete rows</span>
+                    </button>
+                    <span class="data-import-grid-help-trigger">
+                      <button type="button" id="dataWorkbenchImportGridHelpBtn" class="sfoc-btn sfoc-btn--ghost data-import-grid-help-btn" aria-describedby="dataWorkbenchImportGridHelp" data-i18n-title="dataImport.gridHelpContent" data-i18n-aria-label="dataImport.gridHelp">
+                        <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v6"></path><path d="M12 7h.01"></path></svg>
+                      </button>
+                      <span id="dataWorkbenchImportGridHelp" class="data-import-grid-help" role="tooltip" data-i18n="dataImport.gridHelpContent">Haz doble clic para editar. Arrastra el punto de la esquina para rellenar filas.</span>
+                    </span>
+                  </div>
                 </div>
                 <div class="data-workbench-table-wrap data-import-preview-wrap data-import-tabulator-wrap">
                   <div id="dataWorkbenchImportTableMount" class="data-import-tabulator query-explorer-table-scroll ph-no-capture" aria-live="polite"></div>
                 </div>
+                <p id="dataWorkbenchStatus" class="data-import-grid-hint" role="status" aria-live="polite"></p>
               </section>
               </div>
             </div>

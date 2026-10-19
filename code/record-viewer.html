@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>[SFOC]</title>
+    <link rel="stylesheet" href="../vendor/tabulator/tabulator.min.css" />
+    <link rel="stylesheet" href="../vendor/vanilla-calendar-pro/styles/index.css" />
+    <link rel="stylesheet" href="code.css" />
+    <link rel="stylesheet" href="record-viewer.css" />
+  </head>
+  <body class="record-viewer-page">
+    <div id="recordViewerLoading" class="record-viewer-loading" role="status" aria-live="polite" aria-busy="true">
+      <img class="record-viewer-loading-logo" src="../icons/logo-horizontal.png" width="112" height="74" alt="" aria-hidden="true" />
+      <span class="record-viewer-loading-spinner" aria-hidden="true"></span>
+      <p id="recordViewerLoadingText" class="record-viewer-loading-text">Cargando registro…</p>
+    </div>
+    <main class="record-viewer-shell" aria-labelledby="recordViewerTitle">
+      <header class="record-viewer-header">
+        <div class="record-viewer-record">
+          <img class="record-viewer-logo" src="../icons/icon-48.png" alt="" />
+          <div class="record-viewer-record-details">
+            <p id="recordViewerObjectLabel" class="record-viewer-object-label">...</p>
+            <h1 id="recordViewerTitle">...</h1>
+            <p id="recordViewerIdentity" class="record-viewer-identity" aria-live="polite"></p>
+          </div>
+        </div>
+        <section id="recordViewerSummary" class="record-viewer-summary" aria-label="Permisos efectivos">
+          <div id="recordViewerSaving" class="record-viewer-saving hidden" role="status" aria-live="polite" aria-busy="false">
+            <span class="record-viewer-loading-spinner" aria-hidden="true"></span>
+            <span id="recordViewerSavingText">Guardando los cambios…</span>
+          </div>
+          <div class="record-viewer-permission-card">
+            <h2 id="recordViewerObjectPermissionsTitle">Permisos del objeto</h2>
+            <div id="recordViewerObjectPermissions" class="record-viewer-permission-icons"></div>
+          </div>
+          <div class="record-viewer-permission-card"><h2 id="recordViewerAccessTitle">Acceso al registro</h2><div id="recordViewerAccess" class="record-viewer-permission-icons"></div></div>
+        </section>
+        <div class="record-viewer-actions">
+          <div id="recordViewerQuickActions" class="record-viewer-quick-actions">
+            <button id="recordViewerQuickActionsButton" type="button" aria-haspopup="menu" aria-expanded="false">Quick Actions</button>
+            <section id="recordViewerQuickActionsMenu" class="record-viewer-quick-actions-menu" role="menu" aria-label="Quick Actions">
+              <header><strong id="recordViewerQuickActionsTitle">Quick Actions</strong><button id="recordViewerQuickActionAdd" type="button" aria-label="Crear Quick Action" title="Crear Quick Action">+</button></header>
+              <div id="recordViewerQuickActionsList"></div>
+            </section>
+          </div>
+          <button id="recordViewerSf" type="button">Ver en Salesforce</button><button id="recordViewerCopy" type="button">Copiar Id</button><button id="recordViewerReload" type="button">Recargar</button>
+        </div>
+      </header>
+      <p id="recordViewerStatus" class="record-viewer-status" role="status"></p>
+      <section class="record-viewer-toolbar" aria-label="Herramientas de campos">
+        <input id="recordViewerSearch" type="search" placeholder="Buscar campo, tipo o valor..." aria-label="Buscar campos" />
+        <div id="recordViewerFilters" class="record-viewer-filters" role="group" aria-label="Filtrar por permisos">
+          <button data-filter="all" aria-pressed="true"></button><button data-filter="editable" aria-pressed="false"></button><button data-filter="readonly" aria-pressed="false"></button><button data-filter="noaccess" aria-pressed="false"></button><button data-filter="changed" aria-pressed="false"></button><button data-filter="error" aria-pressed="false"></button>
+        </div>
+      </section>
+      <div id="recordViewerTable" class="record-viewer-table" aria-label="Campos del registro"></div>
+      <footer id="recordViewerPending" class="record-viewer-pending hidden" aria-live="polite"><div><span id="recordViewerPendingText">Sin cambios pendientes</span><div id="recordViewerRelatedPending" class="record-viewer-related-pending"></div></div><span><button id="recordViewerDiscard" type="button">Descartar cambios</button><button id="recordViewerSave" type="button" class="record-viewer-save">Guardar cambios</button></span></footer>
+    </main>
+    <div id="recordViewerQuickActionModal" class="record-viewer-modal hidden" role="presentation">
+      <section class="record-viewer-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="recordViewerQuickActionModalTitle">
+        <header><div><p id="recordViewerQuickActionModalEyebrow">Automatización</p><h2 id="recordViewerQuickActionModalTitle">Nueva Quick Action</h2></div><button id="recordViewerQuickActionClose" type="button" aria-label="Cerrar">×</button></header>
+        <div class="record-viewer-modal-body">
+          <label class="record-viewer-form-field"><span id="recordViewerQuickActionNameLabel">Nombre</span><input id="recordViewerQuickActionName" type="text" maxlength="100" autocomplete="off" /></label>
+          <fieldset class="record-viewer-form-field record-viewer-quick-action-environments"><legend id="recordViewerQuickActionEnvironmentsLabel">Aplicar en entornos</legend><div id="recordViewerQuickActionEnvironments"></div></fieldset>
+          <div class="record-viewer-quick-action-changes-heading"><div><strong id="recordViewerQuickActionChangesTitle">Actualizaciones</strong><p id="recordViewerQuickActionChangesHint">Configura uno o varios campos del registro actual o de registros relacionados.</p></div><button id="recordViewerQuickActionAddChange" type="button">+ Añadir actualización</button></div>
+          <div id="recordViewerQuickActionOperations" class="record-viewer-quick-action-operations"></div>
+          <p id="recordViewerQuickActionModalError" class="record-viewer-modal-error" role="alert"></p>
+        </div>
+        <footer><button id="recordViewerQuickActionDelete" class="record-viewer-danger hidden" type="button">Eliminar</button><span class="record-viewer-modal-footer-spacer"></span><button id="recordViewerQuickActionCancel" type="button">Cancelar</button><button id="recordViewerQuickActionSave" class="record-viewer-save" type="button">Guardar Quick Action</button></footer>
+      </section>
+    </div>
+    <script type="module" src="record-viewer.js"></script>
+  </body>
+</html>

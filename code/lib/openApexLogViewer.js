@@ -11,6 +11,19 @@ function sanitizeApexViewerDownloadFileName(name) {
   return s || 'file';
 }
 
+export function buildApexLogViewerPath(transportKey, transportId, viewerOpts = {}) {
+  const params = new URLSearchParams();
+  if (transportKey && transportId) params.set(String(transportKey), String(transportId));
+  if (viewerOpts.orgId && viewerOpts.logId) {
+    params.set('orgId', String(viewerOpts.orgId));
+    params.set('logId', String(viewerOpts.logId));
+  }
+  const initialLine = Number(viewerOpts.initialLine);
+  if (Number.isFinite(initialLine) && initialLine > 0) params.set('line', String(Math.floor(initialLine)));
+  const query = params.toString();
+  return `code/apex-log-viewer.html${query ? `?${query}` : ''}`;
+}
+
 /**
  * @param {string} title
  * @param {string} content
@@ -48,7 +61,7 @@ export async function openApexLogViewerWithPayload(title, content, viewerOpts = 
   const staged = await bg({ type: 'apexViewer:stage', ...stagePayload });
   if (staged.ok && staged.id) {
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?staged=${encodeURIComponent(staged.id)}`),
+      chrome.runtime.getURL(buildApexLogViewerPath('staged', staged.id, viewerOpts)),
       '_blank'
     );
     return true;
@@ -59,7 +72,7 @@ export async function openApexLogViewerWithPayload(title, content, viewerOpts = 
   try {
     await chrome.storage.local.set({ [storageKey]: storagePayload });
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?k=${encodeURIComponent(storageKey)}`),
+      chrome.runtime.getURL(buildApexLogViewerPath('k', storageKey, viewerOpts)),
       '_blank'
     );
     return true;
@@ -71,7 +84,7 @@ export async function openApexLogViewerWithPayload(title, content, viewerOpts = 
     const idbId = randomStagingId('idb_');
     await apexViewerIdbPut(idbId, storagePayload);
     window.open(
-      chrome.runtime.getURL(`code/apex-log-viewer.html?idb=${encodeURIComponent(idbId)}`),
+      chrome.runtime.getURL(buildApexLogViewerPath('idb', idbId, viewerOpts)),
       '_blank'
     );
     return true;

@@ -14,6 +14,7 @@ let foldingProviderRegistered = false;
 let treeLogLineToRow = new Map();
 /** @type {string[]} */
 let treeAllLines = [];
+let treeSourceNavigationDisposable = null;
 
 /**
  * @param {import('monaco-editor')} monaco
@@ -100,8 +101,9 @@ function applyTreeFilter(query, slowOnly, errorsOnly, parsed) {
  * @param {boolean} lightTheme
  * @param {(key: string, params?: object) => string} t
  * @param {HTMLElement | null} [toolbarEl]
+ * @param {(hint: { line?: number, text?: string }) => boolean} [onSourceOpen]
  */
-export function renderTreeView(monaco, mount, parsed, lightTheme, t, toolbarEl) {
+export function renderTreeView(monaco, mount, parsed, lightTheme, t, toolbarEl, onSourceOpen) {
   if (!mount || !parsed?.tree) return null;
   ensurePanelSectionHeading(mount.parentElement, 'tree', t('apexLogViewer.tab.tree'), t);
   registerSfocApexLogTreeLanguage(monaco);
@@ -137,6 +139,23 @@ export function renderTreeView(monaco, mount, parsed, lightTheme, t, toolbarEl) 
   }
 
   treeEditor.setValue(text);
+  treeSourceNavigationDisposable?.dispose?.();
+  treeSourceNavigationDisposable = treeEditor.onMouseDown((event) => {
+    const browserEvent = event?.event;
+    const position = event?.target?.position;
+    if ((!browserEvent?.ctrlKey && !browserEvent?.metaKey) || !position || !onSourceOpen) return;
+    const displayedText = treeEditor?.getModel()?.getLineContent(position.lineNumber) || '';
+    let logLine = 0;
+    for (const [candidateLine, row] of treeLogLineToRow) {
+      if (row === position.lineNumber) {
+        logLine = candidateLine;
+        break;
+      }
+    }
+    if (!onSourceOpen({ line: logLine, text: displayedText })) return;
+    browserEvent.preventDefault?.();
+    browserEvent.stopPropagation?.();
+  });
 
   const filterInput = toolbarEl?.querySelector('#apexLogTreeFilter');
   const slowCb = toolbarEl?.querySelector('#apexLogTreeSlow');

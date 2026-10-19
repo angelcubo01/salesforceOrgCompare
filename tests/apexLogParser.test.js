@@ -222,6 +222,11 @@ describe('classifyLogEvent / groupDuplicateSoql', () => {
     expect(classifyLogEvent('SOQL_EXECUTE_BEGIN')).toBe('soql');
     expect(classifyLogEvent('CALLOUT_REQUEST')).toBe('callout');
     expect(classifyLogEvent('HEAP_ALLOCATE')).toBe('noise');
+    expect(classifyLogEvent('VARIABLE_ASSIGNMENT')).toBe('variable');
+    expect(classifyLogEvent('VARIABLE_SCOPE_BEGIN')).toBe('variable');
+    expect(classifyLogEvent('STATIC_VARIABLE_LIST')).toBe('variable');
+    expect(classifyLogEvent('SYSTEM_MODE_ENTER')).toBe('context');
+    expect(classifyLogEvent('SYSTEM_MODE_EXIT')).toBe('context');
   });
 
   it('detecta custom metadata en texto SOQL', () => {

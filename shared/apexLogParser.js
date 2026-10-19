@@ -87,13 +87,13 @@ export function classifyLogEvent(event) {
   if (ev === 'EXCEPTION_THROWN' || ev === 'FATAL_ERROR') return 'error';
   if (ev.includes('METHOD') || ev.includes('CONSTRUCTOR')) return 'method';
   if (ev.startsWith('VALIDATION_') || ev.startsWith('WF_')) return 'validation';
+  if (ev.startsWith('VARIABLE_') || ev === 'STATIC_VARIABLE_LIST') return 'variable';
+  if (ev === 'SYSTEM_MODE_ENTER' || ev === 'SYSTEM_MODE_EXIT') return 'context';
   if (
     ev === 'HEAP_ALLOCATE' ||
-    ev === 'STATEMENT_EXECUTE' ||
-    ev === 'VARIABLE_ASSIGNMENT' ||
-    ev === 'VARIABLE_SCOPE_BEGIN' ||
-    ev === 'SYSTEM_MODE_ENTER' ||
-    ev === 'SYSTEM_MODE_EXIT'
+    ev === 'HEAP_DEALLOCATE' ||
+    ev === 'BULK_HEAP_ALLOCATE' ||
+    ev === 'STATEMENT_EXECUTE'
   ) {
     return 'noise';
   }

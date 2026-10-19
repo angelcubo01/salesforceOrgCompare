@@ -6,6 +6,7 @@ import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { randomStagingId } from '../../shared/randomId.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
+import { buildApexCoverageViewerPath } from '../lib/apexCoverageViewerUrl.js';
 
 /**
  * @type {Array<{
@@ -179,9 +180,11 @@ async function openSplitLineCoverageViewer(
         [key]: {
           mode: 'split',
           title,
+          className: classBit,
           left: {
             orgLabel: leftLabel,
             orgId: leftOrgId,
+            apexId: leftApexId,
             body: leftBody,
             coveredLines: leftCovered,
             uncoveredLines: leftUncovered
@@ -189,6 +192,7 @@ async function openSplitLineCoverageViewer(
           right: {
             orgLabel: rightLabel,
             orgId: rightOrgId,
+            apexId: rightApexId,
             body: rightBody,
             coveredLines: rightCovered,
             uncoveredLines: rightUncovered
@@ -212,7 +216,9 @@ async function openSplitLineCoverageViewer(
       showToast(t('coverageCompare.lineViewNoLinesDetail'), 'info');
     }
     window.open(
-      chrome.runtime.getURL(`code/apex-coverage-viewer.html?k=${encodeURIComponent(key)}`),
+      chrome.runtime.getURL(buildApexCoverageViewerPath(key, {
+        mode: 'split', leftOrgId, leftApexId, rightOrgId, rightApexId, className: classBit
+      })),
       '_blank'
     );
   } finally {
@@ -250,7 +256,7 @@ async function openLineCoverageViewer(orgId, apexClassOrTriggerId, classLabel) {
     const uncoveredLines = Array.isArray(res.uncoveredLines) ? res.uncoveredLines : [];
     try {
       await chrome.storage.local.set({
-        [key]: { title, body, coveredLines, uncoveredLines, orgId }
+        [key]: { title, body, coveredLines, uncoveredLines, orgId, apexId: apexClassOrTriggerId, className: classLabel || res.name || '' }
       });
     } catch {
       showToast(t('apexTests.coverageLinesStorageError'), 'warn');
@@ -260,7 +266,9 @@ async function openLineCoverageViewer(orgId, apexClassOrTriggerId, classLabel) {
       showToast(t('coverageCompare.lineViewNoLinesDetail'), 'info');
     }
     window.open(
-      chrome.runtime.getURL(`code/apex-coverage-viewer.html?k=${encodeURIComponent(key)}`),
+      chrome.runtime.getURL(buildApexCoverageViewerPath(key, {
+        orgId, apexId: apexClassOrTriggerId, className: classLabel || res.name || ''
+      })),
       '_blank'
     );
   } finally {

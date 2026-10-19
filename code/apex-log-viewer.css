@@ -1660,6 +1660,16 @@ html[data-ui-theme='light'] .apex-log-segment-btn.is-active {
   margin-bottom: 0;
 }
 
+body.apex-log-source-modifier .apex-log-source-target:not(tr),
+body.apex-log-source-modifier tr.apex-log-source-target > td:first-child,
+.monaco-editor .apex-log-source-token-link {
+  color: var(--alb-accent) !important;
+  cursor: pointer !important;
+  text-decoration: underline !important;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
 .apex-log-summary-limit-row[data-line] {
   cursor: pointer;
   border-radius: var(--sfoc-radius-sm);

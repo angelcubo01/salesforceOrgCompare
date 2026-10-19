@@ -53,6 +53,13 @@ export const SF_INJECT_SHIPPED = /** @type {const} */ ([
     settingsHintKey: 'settings.sfInjectSetupCommandPaletteHint',
     settingsConfigureLabelKey: 'settings.sfInjectSetupCommandPaletteConfigure',
     settingsConfigureModalTitleKey: 'settings.sfInjectSetupCommandPaletteConfigureTitle'
+  },
+  {
+    id: 'recordViewer',
+    settingsLabelKey: 'settings.sfInjectRecordViewer',
+    settingsHintKey: 'settings.sfInjectRecordViewerHint',
+    settingsConfigureLabelKey: 'settings.sfInjectRecordViewerConfigure',
+    settingsConfigureModalTitleKey: 'settings.sfInjectRecordViewerConfigureTitle'
   }
 ]);
 

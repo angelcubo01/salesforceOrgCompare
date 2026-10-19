@@ -1,0 +1,179 @@
+.record-viewer-page { margin:0; min-width:860px; background:var(--bg, #0f172a); color:var(--text, #e2e8f0); }
+.record-viewer-loading { position:fixed; inset:0; z-index:10000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:#1a1a1a; color:#e0e0e0; text-align:center; }
+.record-viewer-loading.hidden { display:none!important; }
+.record-viewer-loading-logo { display:block; width:112px; height:auto; object-fit:contain; }
+.record-viewer-loading-spinner { width:28px; height:28px; border:3px solid #3f3f46; border-top-color:#38bdf8; border-radius:50%; animation:record-viewer-spin .7s linear infinite; }
+.record-viewer-loading-text { margin:0; max-width:360px; font-size:14px; font-weight:500; line-height:1.4; color:#e0e0e0; }
+@keyframes record-viewer-spin { to { transform:rotate(360deg); } }
+html[data-ui-theme="light"] .record-viewer-loading { background:#f6f9fc; color:#1f2937; }
+html[data-ui-theme="light"] .record-viewer-loading-spinner { border-color:#cbd5e1; border-top-color:#0284c7; }
+html[data-ui-theme="light"] .record-viewer-loading-text { color:#334155; }
+.record-viewer-shell { width:100%; box-sizing:border-box; margin:0; padding:16px clamp(12px, 2vw, 32px); }
+.record-viewer-header,.record-viewer-toolbar,.record-viewer-pending { display:flex; gap:16px; align-items:center; justify-content:space-between; }
+.record-viewer-header { gap:18px; border-bottom:1px solid var(--border, #334155); padding-bottom:14px; }
+.record-viewer-record { display:flex; align-items:center; gap:12px; min-width:0; flex:1 1 300px; }
+.record-viewer-logo { width:42px; height:42px; object-fit:contain; flex:0 0 auto; }
+.record-viewer-record-details { min-width:0; }
+.record-viewer-header h1 { visibility:hidden; }
+.record-viewer-page.record-viewer-loaded .record-viewer-header h1 { visibility:visible; }
+.record-viewer-object-label { color:#38bdf8; margin:0 0 3px; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.record-viewer-header h1 { margin:0; font-size:1.15rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.record-viewer-identity,.record-viewer-status { color:var(--muted, #94a3b8); margin:5px 0 0; font-size:.82rem; }
+.record-viewer-status.is-error { color:#fca5a5; }
+.record-viewer-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; flex:0 0 auto; }
+.record-viewer-page button,.record-viewer-page input,.record-viewer-page select,.record-viewer-page textarea { font:inherit; }.record-viewer-page button { background:#1e293b;color:inherit;border:1px solid #475569;border-radius:6px;padding:8px 11px;cursor:pointer; }.record-viewer-page button:hover,.record-viewer-page button[aria-pressed="true"]{border-color:#38bdf8;background:#0c4a6e}.record-viewer-page button:focus-visible,.record-viewer-page input:focus-visible,.record-viewer-page select:focus-visible,.record-viewer-page textarea:focus-visible{outline:2px solid #38bdf8;outline-offset:-2px}
+#recordViewerSf,#recordViewerCopy,#recordViewerReload,.record-viewer-copy-action { padding-left:32px!important; background-repeat:no-repeat!important; background-position:10px center!important; background-size:15px 15px!important; }
+#recordViewerSf { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237dd3fc' stroke-width='2'%3E%3Cpath d='M14 3h7v7'/%3E%3Cpath d='m21 3-9 9'/%3E%3Cpath d='M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5'/%3E%3C/svg%3E"); }
+#recordViewerCopy,.record-viewer-copy-action { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a5f3fc' stroke-width='2'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E"); }
+#recordViewerReload { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2393c5fd' stroke-width='2'%3E%3Cpath d='M21 12a9 9 0 1 1-2.64-6.36'/%3E%3Cpath d='M21 3v6h-6'/%3E%3C/svg%3E"); }
+.record-viewer-table .tabulator-cell .record-viewer-copy-action { display:inline-flex!important; align-items:center; gap:5px; min-height:24px; padding:3px 7px!important; font-size:.72rem!important; line-height:1.1; }
+.record-viewer-table .tabulator-cell .record-viewer-copy-action::before { content:""; display:inline-block; flex:0 0 15px; width:15px; height:15px; background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a5f3fc' stroke-width='2'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E") center/15px 15px no-repeat!important; }
+.record-viewer-summary { display:grid; grid-template-columns:repeat(2,minmax(280px,1fr)); gap:8px; flex:0 0 620px; }
+.record-viewer-summary.is-updating { grid-template-columns:minmax(150px,180px) repeat(2,minmax(250px,1fr)); flex-basis:720px; }
+.record-viewer-permission-card { position:relative; min-width:0; border:1px solid #334155; border-radius:8px; padding:9px 10px; background:rgba(30,41,59,.55); }
+.record-viewer-saving { min-width:0; display:flex; align-items:center; justify-content:center; gap:9px; padding:8px 12px; border:1px solid #38bdf8; border-radius:8px; background:rgba(17,28,46,.96); color:#e0f2fe; box-shadow:0 8px 24px rgba(2,6,23,.35); font-size:.78rem; font-weight:650; }
+.record-viewer-saving .record-viewer-loading-spinner { width:18px; height:18px; border-width:2px; flex:0 0 auto; }
+html[data-ui-theme="light"] .record-viewer-saving { background:rgba(246,249,252,.97); color:#0c4a6e; border-color:#0284c7; box-shadow:0 8px 24px rgba(15,23,42,.16); }
+.record-viewer-is-updating .record-viewer-table .tabulator-editable { pointer-events:none; }
+.record-viewer-summary h2 { font-size:.72rem; margin:0 0 7px; color:var(--muted,#94a3b8); font-weight:600; }
+.record-viewer-permission-icons { display:flex; gap:5px; flex-wrap:nowrap; overflow:hidden; }
+.record-viewer-permission-icon { cursor:help; }
+.record-viewer-permission-icon.is-interactive { cursor:pointer; }
+.record-viewer-permission-icon.is-interactive:focus-visible { outline:2px solid #38bdf8; outline-offset:2px; }
+.record-viewer-permission-details { position:fixed; z-index:12000; width:min(320px,calc(100vw - 24px)); max-height:min(360px,calc(100vh - 24px)); overflow:auto; padding:11px 12px; border:1px solid #38bdf8; border-radius:8px; background:#111c2e; color:#e5edf9; box-shadow:0 12px 30px rgba(2,6,23,.52); }
+.record-viewer-permission-details-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.record-viewer-permission-details-header>strong { color:#bae6fd; font-size:.8rem; }
+.record-viewer-permission-details-close { display:grid; place-items:center; width:24px; height:24px; min-width:24px; padding:0!important; border:0!important; border-radius:4px!important; background:transparent!important; color:#bae6fd!important; font-size:1.1rem!important; line-height:1!important; }
+.record-viewer-permission-details-close:hover { background:#1d3a56!important; }
+.record-viewer-permission-details p { margin:0; color:#94a3b8; font-size:.76rem; }
+.record-viewer-permission-details ul { display:grid; gap:6px; margin:0; padding:0; list-style:none; }
+.record-viewer-permission-details li { display:flex; flex-direction:column; gap:1px; padding:7px 8px; border:1px solid #334155; border-radius:6px; background:#17263b; }
+.record-viewer-permission-details li span { color:#7dd3fc; font-size:.66rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase; }
+.record-viewer-permission-details li strong { font-size:.78rem; overflow-wrap:anywhere; }
+.perm-flag--transfer { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2'%3E%3Cpath d='M5 7h11'/%3E%3Cpath d='m13 3 4 4-4 4'/%3E%3Cpath d='M19 17H8'/%3E%3Cpath d='m11 13-4 4 4 4'/%3E%3C/svg%3E"); }
+.record-viewer-toolbar{margin:12px 0;flex-wrap:wrap}.record-viewer-toolbar input{min-width:275px;padding:9px 10px;border:1px solid #475569;border-radius:6px;background:#0f172a;color:inherit}.record-viewer-filters{display:flex;gap:6px;flex-wrap:wrap}.record-viewer-table{border:1px solid #334155;border-radius:8px;overflow:hidden}.record-viewer-value{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;width:100%;white-space:pre-wrap;word-break:break-word}.record-viewer-row-error{background:rgba(127,29,29,.22)}.record-viewer-permission{font-size:.78rem}.record-viewer-relation{color:#7dd3fc;background:none!important;border:0!important;padding:0!important;text-decoration:underline}.record-viewer-pending{position:sticky;z-index:50;bottom:12px;margin-top:14px;padding:12px 14px;background:#172554;border:1px solid #38bdf8;border-radius:8px;box-shadow:0 8px 30px rgba(2,6,23,.45)}.record-viewer-save{background:#0369a1!important}.hidden{display:none!important}
+.record-viewer-table .tabulator-row.record-viewer-row-changed .tabulator-cell { background:rgba(14,116,144,.24)!important; }
+.record-viewer-table .tabulator-row.record-viewer-row-changed .tabulator-cell[tabulator-field="pendingValue"] { box-shadow:inset 4px 0 0 #22d3ee; }
+.record-viewer-table .tabulator-row.record-viewer-row-error .tabulator-cell { background:rgba(127,29,29,.28)!important; }
+.record-viewer-edited-marker { flex:0 0 auto; padding:2px 6px; border:1px solid #22d3ee; border-radius:999px; color:#a5f3fc; background:rgba(8,145,178,.2); font-size:.66rem; font-weight:700; line-height:1.2; text-transform:uppercase; }
+html[data-ui-theme="light"] .record-viewer-edited-marker { color:#155e75; background:#cffafe; border-color:#0891b2; }
+.record-viewer-value-status { display:inline-flex; align-items:center; gap:5px; flex:0 0 auto; }
+.record-viewer-row-actions { display:inline-flex; align-items:center; gap:5px; }
+.record-viewer-undo-action { min-width:30px; min-height:26px; padding:3px 7px!important; border-color:#22d3ee!important; color:#a5f3fc!important; background:#164e63!important; font-size:1rem!important; font-weight:700!important; line-height:1!important; }
+.record-viewer-undo-action:hover { background:#155e75!important; }
+html[data-ui-theme="light"] .record-viewer-undo-action { border-color:#0891b2!important; color:#155e75!important; background:#cffafe!important; }
+.record-viewer-table.tabulator { height:calc(100vh - 255px)!important; }
+.record-viewer-table .tabulator-cell[tabulator-field="pendingValue"] { white-space:normal; overflow:visible; text-overflow:clip; }
+.record-viewer-field-permissions { display:inline-flex; align-items:center; gap:4px; min-height:26px; }
+.record-viewer-cell-editor { box-sizing:border-box; width:100%; min-height:32px; padding:5px 8px; border:1px solid #38bdf8; border-radius:4px; background:#0f172a; color:#e2e8f0; color-scheme:dark; }
+.record-viewer-cell-editor option { background:#17263b; color:#e5edf9; }
+.record-viewer-cell-editor option:checked { background:#075985; color:#fff; }
+.record-viewer-cell-editor option:disabled { color:#94a3b8; }
+.record-viewer-cell-editor::-webkit-calendar-picker-indicator { cursor:pointer; filter:invert(88%) sepia(11%) saturate(431%) hue-rotate(178deg); }
+.record-viewer-cell-editor--textarea { min-height:90px; resize:vertical; }
+.record-viewer-cell-editor--tickCross { width:20px; min-height:20px; margin:6px; accent-color:#0284c7; }
+html[data-ui-theme="light"] .record-viewer-cell-editor { background:#fff; color:#1f2937; border-color:#0284c7; color-scheme:light; }
+html[data-ui-theme="light"] .record-viewer-cell-editor option { background:#fff; color:#1f2937; }
+html[data-ui-theme="light"] .record-viewer-cell-editor option:checked { background:#bae6fd; color:#0c4a6e; }
+html[data-ui-theme="light"] .record-viewer-cell-editor option:disabled { color:#64748b; }
+html[data-ui-theme="light"] .record-viewer-cell-editor::-webkit-calendar-picker-indicator { filter:none; }
+.record-viewer-reference-menu { position:relative; display:inline-flex; max-width:100%; }
+.record-viewer-relation-actions { position:absolute; z-index:30; top:100%; left:0; display:flex; flex-direction:column; gap:3px; padding:4px; border:1px solid #475569; border-radius:7px; background:#172238; box-shadow:0 8px 18px rgba(2,6,23,.45); opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-3px); transition:opacity .12s ease,transform .12s ease,visibility .12s; }
+.record-viewer-reference-menu:hover .record-viewer-relation-actions,.record-viewer-reference-menu:focus-within .record-viewer-relation-actions { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
+.record-viewer-relation-action { min-width:142px; min-height:30px; padding:5px 9px 5px 32px!important; border-radius:5px!important; background-color:#1e293b!important; background-repeat:no-repeat!important; background-position:9px center!important; background-size:15px 15px!important; color:inherit; font-size:.76rem!important; line-height:1.2; text-align:left; white-space:nowrap; }
+.record-viewer-relation-action--sf { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237dd3fc' stroke-width='2'%3E%3Cpath d='M14 3h7v7'/%3E%3Cpath d='m21 3-9 9'/%3E%3Cpath d='M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5'/%3E%3C/svg%3E")!important; }
+.record-viewer-relation-action--copy { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a5f3fc' stroke-width='2'%3E%3Crect x='9' y='9' width='11' height='11' rx='2'/%3E%3Cpath d='M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'/%3E%3C/svg%3E")!important; }
+html[data-ui-theme="light"] .record-viewer-relation-actions { background:#fff; border-color:#94a3b8; box-shadow:0 8px 18px rgba(15,23,42,.18); }
+.record-viewer-quick-actions { position:relative; }
+#recordViewerQuickActionsButton { padding-left:34px!important; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237dd3fc' stroke-width='2'%3E%3Cpath d='M12 3v18M3 12h18'/%3E%3C/svg%3E")!important; background-repeat:no-repeat!important; background-position:10px center!important; background-size:16px 16px!important; }
+.record-viewer-quick-actions-menu { position:absolute; z-index:120; top:100%; right:0; width:330px; max-height:min(480px,70vh); overflow:auto; border:1px solid #475569; border-radius:9px; background:#111c2e; box-shadow:0 14px 34px rgba(2,6,23,.5); opacity:0; visibility:hidden; pointer-events:none; transform:translateY(-5px); transition:opacity .12s ease,transform .12s ease,visibility .12s; }
+.record-viewer-quick-actions:hover .record-viewer-quick-actions-menu,.record-viewer-quick-actions:focus-within .record-viewer-quick-actions-menu,.record-viewer-quick-actions.is-open .record-viewer-quick-actions-menu { opacity:1; visibility:visible; pointer-events:auto; transform:translateY(0); }
+.record-viewer-quick-actions.is-dismissed .record-viewer-quick-actions-menu,.record-viewer-quick-actions.is-executing .record-viewer-quick-actions-menu { opacity:0!important; visibility:hidden!important; pointer-events:none!important; transform:translateY(-5px)!important; }
+.record-viewer-quick-actions-menu>header { position:sticky; z-index:1; top:0; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 11px; border-bottom:1px solid #334155; background:#17263b; }
+.record-viewer-quick-actions-menu>header strong { color:#e0f2fe; }
+#recordViewerQuickActionAdd { display:grid; place-items:center; width:29px; height:29px; padding:0!important; border-color:#0ea5e9; color:#bae6fd; font-size:1.18rem; line-height:1; }
+.record-viewer-quick-actions-empty { margin:0; padding:18px 14px; color:#94a3b8; font-size:.8rem; text-align:center; }
+.record-viewer-quick-action-row { display:grid; grid-template-columns:minmax(0,1fr) 38px; align-items:stretch; border-bottom:1px solid #26364b; }
+.record-viewer-quick-action-row:last-child { border-bottom:0; }
+.record-viewer-quick-action-run { display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:0; padding:10px 12px!important; border:0!important; border-radius:0!important; background:transparent!important; text-align:left; }
+.record-viewer-quick-action-run:hover { background:#1d3a56!important; }
+.record-viewer-quick-action-run strong { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#e5edf9; }
+.record-viewer-quick-action-run small { color:#94a3b8; }
+.record-viewer-quick-action-edit { align-self:center; width:30px; height:30px; padding:0!important; color:#bae6fd!important; }
+.record-viewer-related-pending { display:flex; flex-wrap:wrap; gap:6px; margin-top:7px; }
+.record-viewer-related-change { display:inline-flex; align-items:center; gap:6px; max-width:440px; padding:4px 5px 4px 9px; border:1px solid #22d3ee; border-radius:999px; background:rgba(8,145,178,.2); color:#cffafe; font-size:.72rem; }
+.record-viewer-related-change>span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.record-viewer-related-change button { min-width:24px; min-height:22px; padding:1px 6px!important; border:0!important; border-radius:999px!important; background:#164e63!important; color:#a5f3fc!important; font-weight:700; }
+.record-viewer-modal { position:fixed; z-index:11000; inset:0; display:grid; place-items:center; padding:20px; background:rgba(2,6,23,.72); backdrop-filter:blur(3px); }
+.record-viewer-modal-dialog { display:flex; flex-direction:column; width:min(900px,calc(100vw - 40px)); max-height:calc(100vh - 40px); overflow:hidden; border:1px solid #475569; border-radius:12px; background:#0f1a2b; box-shadow:0 24px 70px rgba(0,0,0,.55); }
+.record-viewer-modal-dialog>header,.record-viewer-modal-dialog>footer { display:flex; align-items:center; gap:10px; padding:14px 17px; background:#111c2e; }
+.record-viewer-modal-dialog>header { justify-content:space-between; border-bottom:1px solid #334155; }
+.record-viewer-modal-dialog>footer { justify-content:flex-end; border-top:1px solid #334155; }
+.record-viewer-modal-dialog h2 { margin:2px 0 0; font-size:1.05rem; }
+#recordViewerQuickActionModalEyebrow { margin:0; color:#38bdf8; font-size:.68rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+#recordViewerQuickActionClose { width:34px; height:34px; padding:0!important; font-size:1.3rem; }
+.record-viewer-modal-body { overflow:auto; padding:17px; }
+.record-viewer-form-field { display:flex; flex-direction:column; gap:6px; min-width:0; margin-bottom:13px; }
+.record-viewer-form-field>span { color:#cbd5e1; font-size:.75rem; font-weight:600; }
+.record-viewer-quick-action-environments { padding:0; border:0; }
+.record-viewer-quick-action-environments legend { padding:0; color:#cbd5e1; font-size:.75rem; font-weight:600; }
+#recordViewerQuickActionEnvironments { display:block; margin-top:2px; }
+.record-viewer-quick-action-environment-selector { border:1px solid #334155; border-radius:7px; background:#111c2e; }
+.record-viewer-quick-action-environment-selector>summary { display:flex; align-items:center; justify-content:space-between; min-height:38px; padding:0 12px; cursor:pointer; color:#e5edf9; font-size:.78rem; font-weight:600; list-style:none; }
+.record-viewer-quick-action-environment-selector>summary::-webkit-details-marker { display:none; }
+.record-viewer-quick-action-environment-selector>summary::after { content:'⌄'; color:#7dd3fc; font-size:1rem; transition:transform .15s ease; }
+.record-viewer-quick-action-environment-selector[open]>summary::after { transform:rotate(180deg); }
+.record-viewer-quick-action-environment-panel { display:grid; gap:10px; max-height:210px; overflow:auto; padding:11px 12px 13px; border-top:1px solid #334155; }
+.record-viewer-quick-action-environment-all { display:flex; align-items:center; justify-content:flex-start; gap:8px; min-height:24px; padding:0 0 9px; border-bottom:1px solid #334155; color:#bae6fd; font-size:.76rem; font-weight:600; }
+.record-viewer-quick-action-environment-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 20px; }
+.record-viewer-quick-action-environment { display:flex; align-items:center; gap:7px; min-width:0; min-height:22px; padding:2px 3px; color:#e5edf9; font-size:.76rem; }
+.record-viewer-quick-action-environment-all input,.record-viewer-quick-action-environment input { flex:0 0 auto; box-sizing:border-box; width:14px!important; min-width:14px!important; height:14px!important; min-height:14px!important; margin:0; padding:0!important; border:0!important; border-radius:2px!important; accent-color:#0284c7; }
+.record-viewer-quick-action-environments-empty { margin:0; color:#94a3b8; font-size:.76rem; }
+.record-viewer-quick-action-search-picker { position:relative; display:block; min-width:0; }
+.record-viewer-quick-action-search { width:100%; padding-right:30px!important; }
+.record-viewer-quick-action-search-picker::after { position:absolute; top:10px; right:10px; color:#7dd3fc; content:'⌄'; font-size:1rem; pointer-events:none; }
+.record-viewer-quick-action-search-results { position:fixed; z-index:12010; display:grid; overflow:auto; padding:5px; border:1px solid #38bdf8; border-radius:7px; background:#111c2e; box-shadow:0 12px 24px rgba(2,6,23,.48); }
+.record-viewer-quick-action-search-result { display:block; width:100%; min-height:31px; overflow:hidden; padding:6px 8px!important; border:0!important; border-radius:4px!important; background:transparent!important; color:#e5edf9!important; font-size:.76rem!important; font-weight:600!important; line-height:1.25; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.record-viewer-quick-action-search-result:hover,.record-viewer-quick-action-search-result.is-active { background:#1d3a56!important; color:#fff!important; }
+.record-viewer-quick-action-search-empty { margin:3px 5px; color:#94a3b8; font-size:.75rem; }
+.record-viewer-form-field input,.record-viewer-form-field select,.record-viewer-form-field textarea { box-sizing:border-box; width:100%; min-height:38px; padding:8px 9px; border:1px solid #475569; border-radius:6px; background:#0b1220; color:#e5edf9; color-scheme:dark; }
+.record-viewer-form-field textarea { resize:vertical; }
+.record-viewer-quick-action-changes-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin:20px 0 10px; }
+.record-viewer-quick-action-changes-heading p { margin:4px 0 0; color:#94a3b8; font-size:.76rem; }
+.record-viewer-quick-action-operations { display:grid; gap:11px; }
+.record-viewer-quick-action-operation { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px 12px; padding:12px; border:1px solid #334155; border-radius:9px; background:#111c2e; }
+.record-viewer-quick-action-operation>header,.record-viewer-quick-action-target,.record-viewer-quick-action-loading { grid-column:1/-1; }
+.record-viewer-quick-action-operation>header,.record-viewer-quick-action-target { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.record-viewer-quick-action-operation>header button { padding:2px 8px!important; }
+.record-viewer-quick-action-target { padding:7px 9px; border-radius:6px; background:#17263b; color:#bae6fd; font-size:.77rem; }
+.record-viewer-quick-action-target button { padding:3px 7px!important; font-size:.7rem!important; }
+.record-viewer-quick-action-loading { margin:3px 0; color:#94a3b8; }
+.record-viewer-quick-action-loading.is-error,.record-viewer-modal-error { color:#fca5a5; }
+.record-viewer-modal-error { min-height:1.2em; margin:12px 0 0; font-size:.78rem; }
+.record-viewer-modal-footer-spacer { flex:1; }
+.record-viewer-danger { border-color:#ef4444!important; color:#fecaca!important; background:#450a0a!important; }
+html[data-ui-theme="light"] .record-viewer-quick-actions-menu,html[data-ui-theme="light"] .record-viewer-modal-dialog { border-color:#94a3b8; background:#fff; color:#1f2937; box-shadow:0 14px 34px rgba(15,23,42,.22); }
+html[data-ui-theme="light"] .record-viewer-quick-actions-menu>header,html[data-ui-theme="light"] .record-viewer-modal-dialog>header,html[data-ui-theme="light"] .record-viewer-modal-dialog>footer,html[data-ui-theme="light"] .record-viewer-quick-action-operation { border-color:#cbd5e1; background:#f1f5f9; }
+html[data-ui-theme="light"] .record-viewer-quick-action-run strong { color:#1f2937; }
+html[data-ui-theme="light"] .record-viewer-form-field>span { color:#334155; }
+html[data-ui-theme="light"] .record-viewer-quick-action-environments legend { color:#334155; }
+html[data-ui-theme="light"] .record-viewer-quick-action-environment-selector { border-color:#cbd5e1; background:#fff; }
+html[data-ui-theme="light"] .record-viewer-quick-action-environment-selector>summary,html[data-ui-theme="light"] .record-viewer-quick-action-environment { color:#1f2937; }
+html[data-ui-theme="light"] .record-viewer-quick-action-environment-panel,html[data-ui-theme="light"] .record-viewer-quick-action-environment-all { border-color:#cbd5e1; }
+html[data-ui-theme="light"] .record-viewer-quick-action-environment-all { color:#075985; }
+html[data-ui-theme="light"] .record-viewer-quick-action-search-results { border-color:#0284c7; background:#fff; box-shadow:0 12px 24px rgba(15,23,42,.2); }
+html[data-ui-theme="light"] .record-viewer-quick-action-search-result { color:#1f2937!important; }
+html[data-ui-theme="light"] .record-viewer-quick-action-search-result:hover,html[data-ui-theme="light"] .record-viewer-quick-action-search-result.is-active { background:#e0f2fe!important; color:#0c4a6e!important; }
+html[data-ui-theme="light"] .record-viewer-permission-details { border-color:#0284c7; background:#fff; color:#1f2937; box-shadow:0 12px 30px rgba(15,23,42,.2); }
+html[data-ui-theme="light"] .record-viewer-permission-details-header>strong,html[data-ui-theme="light"] .record-viewer-permission-details-close { color:#075985!important; }
+html[data-ui-theme="light"] .record-viewer-permission-details li { border-color:#cbd5e1; background:#f1f5f9; }
+html[data-ui-theme="light"] .record-viewer-form-field input,html[data-ui-theme="light"] .record-viewer-form-field select,html[data-ui-theme="light"] .record-viewer-form-field textarea { border-color:#94a3b8; background:#fff; color:#1f2937; color-scheme:light; }
+html[data-ui-theme="light"] .record-viewer-quick-action-target { background:#e0f2fe; color:#075985; }
+html[data-ui-theme="light"] .record-viewer-related-change { background:#cffafe; color:#155e75; }
+/* El mount es el propio nodo Tabulator: misma paleta que Data Import. */
+html:not([data-ui-theme="light"]) .record-viewer-table.tabulator,html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-tableholder,html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-table{background:#0b1220!important;color:#e5edf9!important;border-color:#334155!important}html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-header,html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-header .tabulator-col{background:#111c2e!important;color:#e5edf9!important;border-color:#334155!important}html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-row{background:#0f1a2b!important;color:#e5edf9!important;border-bottom-color:#26364b!important}html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-row.tabulator-row-even{background:#17263b!important}html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-row .tabulator-cell{background:transparent!important;color:#e5edf9!important;border-right-color:#334155!important}html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-row:hover{background:#1d3a56!important}html[data-ui-theme="light"] .record-viewer-table.tabulator,html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-tableholder,html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-table{background:#fff!important;color:#1f2937!important;border-color:#94a3b8!important}html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-header,html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-header .tabulator-col{background:#e8eef6!important;color:#334155!important;border-color:#cbd5e1!important}html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-row{background:#fff!important;color:#1f2937!important;border-bottom-color:#d7e0eb!important}html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-row.tabulator-row-even{background:#f6f9fc!important}html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-row .tabulator-cell{background:transparent!important;color:#1f2937!important;border-right-color:#d7e0eb!important}
+html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-row.record-viewer-row-changed .tabulator-cell { background:rgba(14,116,144,.32)!important; }
+html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-row.record-viewer-row-changed .tabulator-cell { background:#cffafe!important; }
+html:not([data-ui-theme="light"]) .record-viewer-table.tabulator .tabulator-row.record-viewer-row-error .tabulator-cell { background:rgba(127,29,29,.36)!important; }
+html[data-ui-theme="light"] .record-viewer-table.tabulator .tabulator-row.record-viewer-row-error .tabulator-cell { background:#fee2e2!important; }
+@media (max-width:1150px){.record-viewer-header{flex-wrap:wrap}.record-viewer-summary,.record-viewer-summary.is-updating{order:3;flex-basis:100%;width:100%;max-width:none}.record-viewer-actions{margin-left:auto}}@media (max-width:900px){.record-viewer-page{min-width:0}.record-viewer-shell{padding:14px}.record-viewer-header{align-items:flex-start;flex-direction:column}.record-viewer-summary{grid-template-columns:1fr 1fr;width:100%;max-width:none}.record-viewer-summary.is-updating{grid-template-columns:minmax(140px,180px) 1fr 1fr}.record-viewer-actions{margin-left:0}.record-viewer-header h1{white-space:normal}.record-viewer-table.tabulator{height:calc(100vh - 360px)!important}.record-viewer-quick-action-operation{grid-template-columns:1fr}.record-viewer-quick-actions-menu{right:auto;left:0}}@media (max-width:640px){.record-viewer-summary,.record-viewer-summary.is-updating{grid-template-columns:1fr}.record-viewer-modal{padding:8px}.record-viewer-modal-dialog{width:calc(100vw - 16px);max-height:calc(100vh - 16px)}}

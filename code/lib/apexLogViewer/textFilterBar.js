@@ -2,26 +2,18 @@ import { escapeHtml } from '../../../shared/htmlEscape.js';
 import { classifyLogEvent } from '../../../shared/apexLogParser.js';
 import {
   buildStrippedText,
+  DEFAULT_RELEVANT_CATEGORIES,
   readApexLogTextFilterPrefs,
   writeApexLogTextFilterPrefs
 } from '../../../shared/apexLogTextFilterPrefs.js';
 
 const FILTER_KEYS = [
-  'soql',
-  'dml',
-  'debug',
-  'callout',
-  'limit',
-  'error',
-  'stack',
-  'method',
-  'unit',
-  'validation',
+  ...DEFAULT_RELEVANT_CATEGORIES,
   'noise',
   'other'
 ];
 
-const RELEVANT_KEYS = FILTER_KEYS.filter((k) => k !== 'noise' && k !== 'other');
+const RELEVANT_KEYS = DEFAULT_RELEVANT_CATEGORIES;
 
 /** @type {{ getEditorToFileLine: (editorLine: number) => number, getFileToEditorLine: (fileLine: number) => number, isStripMode: () => boolean } | null} */
 let textFilterApi = null;

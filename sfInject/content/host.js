@@ -5,9 +5,10 @@
  */
 import { SF_INJECT_CONTENT_INTEGRATIONS } from './injectors/registry.js';
 import { fetchSfInjectBootstrap, resolveActiveSavedOrg } from './bridge.js';
-import { setInjectStatus, showInjectToast } from './ui.js';
+import { setInjectStatus, showInjectLoadingToast, showInjectToast } from './ui.js';
 import { instanceUrlFromLocation } from '../lib/instanceUrl.js';
 import { isSfInjectIntegrationEnabled } from '../lib/settings.js';
+import { installRecordViewerShortcut } from './recordViewerShortcut.js';
 
 /** @type {Map<string, () => void>} */
 const teardownById = new Map();
@@ -19,8 +20,25 @@ let bootstrapTimer = null;
 let bootstrapRunning = false;
 /** Señal para re-ejecutar tras el bootstrap en curso. */
 let bootstrapQueued = false;
+/** El atajo no inyecta DOM, pero sigue el mismo toggle que las integraciones UI. */
+let teardownRecordViewerShortcut = null;
+let activeRecordViewerShortcut = '';
 /** Última URL observada (SPA / hash). */
 let lastHref = location.href;
+
+function syncRecordViewerShortcut(settings) {
+  const enabled = isSfInjectIntegrationEnabled(settings, 'recordViewer');
+  const shortcut = String(settings?.prefs?.recordViewerShortcut || '');
+  if (enabled && (!teardownRecordViewerShortcut || activeRecordViewerShortcut !== shortcut)) {
+    teardownRecordViewerShortcut?.();
+    teardownRecordViewerShortcut = installRecordViewerShortcut(shortcut);
+    activeRecordViewerShortcut = shortcut;
+  } else if (!enabled && teardownRecordViewerShortcut) {
+    teardownRecordViewerShortcut();
+    teardownRecordViewerShortcut = null;
+    activeRecordViewerShortcut = '';
+  }
+}
 
 function clearRetryTimer() {
   if (retryTimer != null) {
@@ -32,6 +50,15 @@ function clearRetryTimer() {
 function teardownAll() {
   for (const teardown of teardownById.values()) teardown();
   teardownById.clear();
+  clearRetryTimer();
+}
+
+function teardownForNavigation() {
+  for (const [id, teardown] of teardownById.entries()) {
+    if (id === 'quickLinks') continue;
+    teardown();
+    teardownById.delete(id);
+  }
   clearRetryTimer();
 }
 
@@ -103,6 +130,7 @@ async function bootstrap() {
   }
 
   const settings = bootstrapRes.settings;
+  syncRecordViewerShortcut(settings);
   if (!settings.enabled) {
     setInjectStatus('disabled');
     teardownAll();
@@ -130,7 +158,9 @@ async function bootstrap() {
     quickLinks: Array.isArray(settings.quickLinks?.[orgRes?.orgId])
       ? settings.quickLinks[orgRes.orgId]
       : [],
-    onError: (msg) => showInjectToast(msg, true)
+    onError: (msg) => showInjectToast(msg, true),
+    onSuccess: (msg) => showInjectToast(msg),
+    onLoading: (msg) => showInjectLoadingToast(msg)
   };
 
   let mountedAny = false;
@@ -206,7 +236,8 @@ startInitialBootstrap();
 function checkHrefChanged() {
   if (location.href === lastHref) return;
   lastHref = location.href;
-  teardownAll();
+  window.dispatchEvent(new Event('sfoc:quick-links-location-change'));
+  teardownForNavigation();
   scheduleBootstrap(100);
 }
 
