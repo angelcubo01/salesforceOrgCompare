@@ -193,6 +193,8 @@ export function matchesSfocConfirmationText(value, requiredText) {
  *   icon?: string;
  *   danger?: boolean;
  *   hideConfirm?: boolean;
+ *   showCloseButton?: boolean;
+ *   closeLabel?: string;
  *   escapeSafe?: boolean;
  *   dismissOnBackdrop?: boolean;
  *   requiredText?: string;
@@ -238,6 +240,16 @@ export function openSfocModal(opts) {
   titleEl.className = 'sfoc-modal-title';
   titleEl.textContent = opts.title;
   heading.append(iconWrap, titleEl);
+  if (opts.showCloseButton) {
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'sfoc-modal-close';
+    closeBtn.setAttribute('aria-label', opts.closeLabel || t('common.close'));
+    closeBtn.title = opts.closeLabel || t('common.close');
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => closeSfocModal());
+    heading.appendChild(closeBtn);
+  }
 
   const bodyEl = document.createElement('div');
   bodyEl.id = descriptionId;

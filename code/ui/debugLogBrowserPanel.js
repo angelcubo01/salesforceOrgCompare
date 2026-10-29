@@ -3,6 +3,7 @@ import { bg } from '../core/bridge.js';
 import { t } from '../../shared/i18n.js';
 import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js';
 import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
+import { ACTION_ICONS, createIcon } from '../workbench/iconRegistry.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { escapeHtml } from '../../shared/htmlEscape.js';
 import { handleToolResponseFailure } from '../../shared/reportToolError.js';
@@ -105,6 +106,38 @@ function sanitizeApexViewerDownloadFileName(name) {
     .trim()
     .slice(0, 200);
   return s || 'file';
+}
+
+async function downloadDebugLog(logId) {
+  if (!state.leftOrgId || !logId) return;
+  const fileName = `${sanitizeApexViewerDownloadFileName(logId)}.log`;
+  showToastWithSpinner(t('debugLogs.downloadingLog'));
+  try {
+    const bodyRes = await bg({
+      type: 'debugLogs:getBody',
+      orgId: state.leftOrgId,
+      logId
+    });
+    if (!bodyRes?.ok) {
+      const message = bodyRes?.reason === 'NO_SID'
+        ? t('toast.noSession')
+        : bodyRes?.error || t('debugLogs.loadLogError');
+      void handleToolResponseFailure(bodyRes, { artifact_type: 'DebugLogs', phase: 'download_body' });
+      showToast(message, 'error');
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([String(bodyRes.body || '')], { type: 'text/plain;charset=utf-8' }));
+    const download = document.createElement('a');
+    download.href = url;
+    download.download = fileName;
+    document.body.appendChild(download);
+    download.click();
+    download.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    showToast(t('toast.downloaded', { name: fileName }), 'success');
+  } finally {
+    dismissSpinnerToast();
+  }
 }
 
 function getFilterElements() {
@@ -543,7 +576,18 @@ function renderRows() {
         dismissSpinnerToast();
       }
     });
-    actionCell?.appendChild(openBtn);
+    const downloadBtn = document.createElement('button');
+    downloadBtn.type = 'button';
+    downloadBtn.className = 'debug-log-browser-download-btn';
+    downloadBtn.disabled = !logId;
+    downloadBtn.setAttribute('aria-label', t('debugLogs.downloadLog'));
+    downloadBtn.title = t('debugLogs.downloadLog');
+    downloadBtn.appendChild(createIcon(ACTION_ICONS.download, { size: 16 }));
+    downloadBtn.addEventListener('click', () => void downloadDebugLog(logId));
+    const actions = document.createElement('div');
+    actions.className = 'debug-log-browser-actions';
+    actions.append(openBtn, downloadBtn);
+    actionCell?.appendChild(actions);
     tbody.appendChild(tr);
   }
   updateContextLoadingUi();

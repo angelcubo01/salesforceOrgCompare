@@ -16,6 +16,7 @@ import {
   toolingQuery,
   toolingQueryAll,
   parseApexTestMethodNames,
+  parseApexTestMethodNamesFromBody,
   executeAnonymous,
   runTestsAsynchronous,
   fetchApexTestQueueServletStatus,
@@ -315,13 +316,15 @@ import {
   fetchRecordForCompare
 } from '../shared/recordCompareApi.js';
 import {
+  createRecordViewerRecord,
+  deleteRecordViewerRecord,
   fetchRecordViewerPayload,
   fetchViewAllPermissions,
   fetchRecordViewerPermissionSources,
   patchRecordViewerRecords,
   resolveRecordViewerTarget
 } from '../shared/recordViewerApi.js';
-import { RECORD_ID_RE, canEditRecordField, reconcileRecordViewerPatch } from '../shared/recordViewerCore.js';
+import { RECORD_ID_RE, buildRecordViewerCloneFields, canEditRecordField, reconcileRecordViewerPatch } from '../shared/recordViewerCore.js';
 import {
   analyzeDependencies,
   buildCustomObjectNameSoql,
@@ -1729,6 +1732,8 @@ export function installMessageHandlers() {
               }
               const byClass = [];
               const chunkSize = 50;
+              const mergeMethodNames = (...groups) => [...new Set(groups.flat().filter(Boolean))]
+                .sort((a, b) => a.localeCompare(b));
               const idKey = (x) => {
                 const s = String(x || '');
                 return s.length >= 18 ? s.slice(0, 15) : s;
@@ -1736,23 +1741,93 @@ export function installMessageHandlers() {
               for (let i = 0; i < uniqueIds.length; i += chunkSize) {
                 const chunk = uniqueIds.slice(i, i + chunkSize);
                 const inList = chunk.map((id) => `'${escapeSoqlLiteral(id)}'`).join(',');
-                const soql = `SELECT Id, Name, SymbolTable FROM ApexClass WHERE Id IN (${inList})`;
-                const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+                let rows;
+                let bodyIncluded = true;
+                try {
+                  rows = await toolingQuery(
+                    org.instanceUrl,
+                    sid,
+                    org.apiVersion,
+                    `SELECT Id, Name, SymbolTable, Body FROM ApexClass WHERE Id IN (${inList})`
+                  );
+                } catch {
+                  bodyIncluded = false;
+                  rows = await toolingQuery(
+                    org.instanceUrl,
+                    sid,
+                    org.apiVersion,
+                    `SELECT Id, Name, SymbolTable FROM ApexClass WHERE Id IN (${inList})`
+                  );
+                }
                 for (const r of rows || []) {
-                  const methods = parseApexTestMethodNames(r.SymbolTable);
-                  byClass.push({ id: r.Id, name: r.Name, methods });
+                  let symbolMethods = parseApexTestMethodNames(r.SymbolTable);
+                  let bodyMethods = bodyIncluded ? parseApexTestMethodNamesFromBody(r.Body) : [];
+                  if (!bodyIncluded || (!symbolMethods.length && !bodyMethods.length)) {
+                    try {
+                      const bodyRows = await toolingQuery(
+                        org.instanceUrl,
+                        sid,
+                        org.apiVersion,
+                        `SELECT Body FROM ApexClass WHERE Id = '${escapeSoqlLiteral(r.Id)}' LIMIT 1`
+                      );
+                      bodyMethods = parseApexTestMethodNamesFromBody(bodyRows?.[0]?.Body);
+                    } catch {
+                      /* SymbolTable sigue siendo utilizable si Body no está disponible. */
+                    }
+                  }
+                  const methods = mergeMethodNames(symbolMethods, bodyMethods);
+                  byClass.push({
+                    id: r.Id,
+                    name: r.Name,
+                    methods,
+                    methodSource: bodyMethods.length ? (symbolMethods.length ? 'combined' : 'body') : 'symbolTable'
+                  });
                 }
               }
               const gotKeys = new Set(byClass.map((b) => idKey(b.id)));
               for (const id of uniqueIds) {
                 if (gotKeys.has(idKey(id))) continue;
                 try {
-                  const soql = `SELECT Id, Name, SymbolTable FROM ApexClass WHERE Id = '${escapeSoqlLiteral(id)}' LIMIT 1`;
-                  const rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+                  let rows;
+                  try {
+                    rows = await toolingQuery(
+                      org.instanceUrl,
+                      sid,
+                      org.apiVersion,
+                      `SELECT Id, Name, SymbolTable, Body FROM ApexClass WHERE Id = '${escapeSoqlLiteral(id)}' LIMIT 1`
+                    );
+                  } catch {
+                    rows = await toolingQuery(
+                      org.instanceUrl,
+                      sid,
+                      org.apiVersion,
+                      `SELECT Id, Name, SymbolTable FROM ApexClass WHERE Id = '${escapeSoqlLiteral(id)}' LIMIT 1`
+                    );
+                  }
                   const r = rows && rows[0];
                   if (r) {
-                    const methods = parseApexTestMethodNames(r.SymbolTable);
-                    byClass.push({ id: r.Id, name: r.Name, methods });
+                    const symbolMethods = parseApexTestMethodNames(r.SymbolTable);
+                    let bodyMethods = parseApexTestMethodNamesFromBody(r.Body);
+                    if (!bodyMethods.length) {
+                      try {
+                        const bodyRows = await toolingQuery(
+                          org.instanceUrl,
+                          sid,
+                          org.apiVersion,
+                          `SELECT Body FROM ApexClass WHERE Id = '${escapeSoqlLiteral(id)}' LIMIT 1`
+                        );
+                        bodyMethods = parseApexTestMethodNamesFromBody(bodyRows?.[0]?.Body);
+                      } catch {
+                        /* La clase aún puede ejecutarse completa. */
+                      }
+                    }
+                    const methods = mergeMethodNames(symbolMethods, bodyMethods);
+                    byClass.push({
+                      id: r.Id,
+                      name: r.Name,
+                      methods,
+                      methodSource: bodyMethods.length ? (symbolMethods.length ? 'combined' : 'body') : 'symbolTable'
+                    });
                     gotKeys.add(idKey(r.Id));
                   }
                 } catch {
@@ -3127,6 +3202,55 @@ export function installMessageHandlers() {
               await recordLocalAudit({ action: 'dml_execute', orgId: String(org.id), detail: `recordViewer:update:${validatedUpdates.map((item) => item.objectApiName).join(',')}:${validatedUpdates.length}` });
               reply({ ok: true });
             } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:save', artifact_type: 'RecordViewer' }); }
+            break;
+          }
+          case 'recordViewer:clone': {
+            const context = await recordViewerContext(message.requestId, message);
+            if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
+            const saved = await loadSavedOrgs(); const org = context.org || saved[context.orgId];
+            if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
+            const sid = context.sid || await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
+            if (!writeGuard.ok) { reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error }); break; }
+            try {
+              const current = await fetchRecordViewerPayload(org.instanceUrl, sid, org.apiVersion, context.recordId);
+              if (!current.objectPermissions.createable) { reply({ ok: false, reason: 'OBJECT_NOT_CREATEABLE' }); break; }
+              const fields = buildRecordViewerCloneFields(current.record, current.describe?.fields);
+              const result = await createRecordViewerRecord(org.instanceUrl, sid, org.apiVersion, current.objectApiName, fields);
+              const recordId = String(result?.json?.id || '');
+              if (!result.ok || !RECORD_ID_RE.test(recordId)) {
+                reply({ ok: false, reason: 'CLONE_FAILED', status: result?.status, errors: result?.json || [] });
+                break;
+              }
+              await recordLocalAudit({ action: 'dml_execute', orgId: String(org.id), detail: `recordViewer:clone:${current.objectApiName}` });
+              reply({ ok: true, recordId });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:clone', artifact_type: 'RecordViewer' }); }
+            break;
+          }
+          case 'recordViewer:delete': {
+            const context = await recordViewerContext(message.requestId, message);
+            if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
+            const saved = await loadSavedOrgs(); const org = context.org || saved[context.orgId];
+            if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
+            const sid = context.sid || await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
+            if (!writeGuard.ok) { reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error }); break; }
+            try {
+              const current = await fetchRecordViewerPayload(org.instanceUrl, sid, org.apiVersion, context.recordId);
+              if (!current.objectPermissions.deletable || current.recordAccess?.HasDeleteAccess !== true) {
+                reply({ ok: false, reason: 'RECORD_NOT_DELETABLE' });
+                break;
+              }
+              const result = await deleteRecordViewerRecord(org.instanceUrl, sid, org.apiVersion, current.objectApiName, current.record.Id);
+              if (!result.ok) {
+                reply({ ok: false, reason: 'DELETE_FAILED', status: result.status, errors: result.json || [] });
+                break;
+              }
+              await recordLocalAudit({ action: 'dml_execute', orgId: String(org.id), detail: `recordViewer:delete:${current.objectApiName}` });
+              reply({ ok: true });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:delete', artifact_type: 'RecordViewer' }); }
             break;
           }
           case 'permissionsDiff:search': {

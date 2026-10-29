@@ -12,14 +12,25 @@ describe('selector de pruebas Apex', () => {
     expect(source).toContain('event.ctrlKey || event.metaKey');
     expect(source).toContain('methodName ? { methodName } : {}');
     expect(source).toContain("'apex-tests-td-name apex-tests-source-target'");
+    expect(source).toContain('function selectWholeClassAndLoadMethods(classValue)');
+    expect(source).toContain('selectWholeClassAndLoadMethods(cb.value);');
+    expect(source).toContain('function syncActiveMethodClassToSelection()');
+    expect(source).toContain('function removeClassFromRunnerSelection(className)');
+    expect(source).toContain('renderMethodClassPicker();');
   });
 
-  it('sitúa Volver junto al selector y muestra las pistas de navegación', () => {
+  it('sitúa Volver en la barra superior y explica el flujo de selección', () => {
     const html = readFileSync(join(root, 'code', 'code.html'), 'utf8');
     const controls = html.indexOf('id="apexTestsControls"');
     const back = html.indexOf('id="apexTestsBackToHubBtn"');
-    expect(back).toBeGreaterThan(controls);
-    expect(html).toContain('apexTests.sourceOpenCtrlClickHint');
-    expect(html).toContain('apex-tests-table-heading');
+    expect(back).toBeGreaterThan(-1);
+    expect(back).toBeLessThan(controls);
+    expect(html).toContain('apex-tests-runner-back-link');
+    expect(html).toContain('id="apexTestsClassFilter"');
+    expect(html).toContain('id="apexTestsMethodFilter"');
+    expect(html).toContain('id="apexTestsMethodClassSelect"');
+    expect(html).toContain('id="apexTestsSelectAllMethodsToggle"');
+    expect(html).not.toContain('apexTests.selectionWorkflowHint');
+    expect(html).not.toContain('apexTests.manualMethodHint');
   });
 });

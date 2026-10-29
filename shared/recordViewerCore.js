@@ -82,6 +82,52 @@ export function buildRecordViewerPatch(rows) {
   return patch;
 }
 
+/** Construye el cuerpo de un clonado desde el describe efectivo del registro. */
+export function buildRecordViewerCloneFields(record, fields) {
+  const source = record && typeof record === 'object' ? record : {};
+  const clone = {};
+  for (const field of Array.isArray(fields) ? fields : []) {
+    const name = String(field?.name || '');
+    if (!name || name === 'Id' || field?.createable !== true || field?.accessible === false) continue;
+    if (field?.calculated || field?.autoNumber || !Object.prototype.hasOwnProperty.call(source, name)) continue;
+    clone[name] = source[name];
+  }
+  return clone;
+}
+
+/**
+ * Convierte los errores REST/Composite de Salesforce en un mensaje breve y
+ * accionable para el usuario, sin perder el mensaje general de la interfaz.
+ */
+export function formatRecordViewerSaveErrors(errors, fallbackMessage = '') {
+  const messages = [];
+  const seen = new Set();
+  const add = (value) => {
+    const message = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!message || seen.has(message)) return;
+    seen.add(message);
+    messages.push(message);
+  };
+  const collect = (value, depth = 0) => {
+    if (depth > 3 || value == null) return;
+    if (typeof value === 'string') {
+      add(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach((item) => collect(item, depth + 1));
+      return;
+    }
+    if (typeof value !== 'object') return;
+    if (typeof value.message === 'string') add(value.message);
+    if (value.errors) collect(value.errors, depth + 1);
+    if (value.body) collect(value.body, depth + 1);
+  };
+  collect(errors);
+  const detail = messages.slice(0, 3).join(' · ');
+  return detail ? `${fallbackMessage} ${detail}`.trim() : String(fallbackMessage || '');
+}
+
 function comparableRecordViewerValue(value) {
   return value === undefined ? null : value;
 }

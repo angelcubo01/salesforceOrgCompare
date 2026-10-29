@@ -524,6 +524,25 @@ body {
   background: rgba(15, 23, 42, 0.45);
 }
 
+.settings-quick-links-global-remove-confirmation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(186, 5, 23, 0.1);
+}
+
+.settings-quick-links-global-remove-confirmation p {
+  margin: 0;
+  color: #fecdd3;
+  font-size: 12px;
+}
+
+.settings-quick-links-global-remove-confirmation .settings-quick-links-card-actions {
+  flex: 0 0 auto;
+}
+
 .settings-quick-links-card-config .settings-quick-links-field:first-child {
   grid-column: 1 / -1;
 }
@@ -676,6 +695,15 @@ html[data-ui-theme='light'] .settings-quick-links-tool-option[aria-selected='tru
 html[data-ui-theme='light'] .settings-quick-links-card-config {
   border-color: var(--sfoc-light-border);
   background: var(--sfoc-light-bg-elevated);
+}
+
+html[data-ui-theme='light'] .settings-quick-links-global-remove-confirmation {
+  border-color: color-mix(in srgb, #ba0517 24%, var(--sfoc-light-border));
+  background: color-mix(in srgb, #ba0517 8%, var(--sfoc-light-bg-surface));
+}
+
+html[data-ui-theme='light'] .settings-quick-links-global-remove-confirmation p {
+  color: #7f1d1d;
 }
 
 html[data-ui-theme='light'] .settings-quick-links-appearance-popover {
@@ -1499,6 +1527,30 @@ html[data-ui-theme='light'] .settings-logi-model-btn {
   letter-spacing: -0.015em;
 }
 
+.sfoc-modal-close {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--sfoc-text-muted);
+  font: 500 26px/1 inherit;
+  cursor: pointer;
+}
+
+.sfoc-modal-close:hover {
+  background: color-mix(in srgb, var(--sfoc-text) 10%, transparent);
+  color: var(--sfoc-text);
+}
+
+.sfoc-modal-close:focus-visible {
+  outline: 2px solid var(--sfoc-accent);
+  outline-offset: 2px;
+}
+
 .sfoc-modal-body {
   padding: 20px 24px 4px;
   color: var(--sfoc-text-muted);
@@ -1567,6 +1619,10 @@ html[data-ui-theme='light'] .sfoc-modal-panel {
 
 html[data-ui-theme='light'] .sfoc-modal-title {
   color: var(--sfoc-light-text);
+}
+
+html[data-ui-theme='light'] .sfoc-modal-close {
+  color: var(--sfoc-light-text-muted);
 }
 
 html[data-ui-theme='light'] .sfoc-modal-body {

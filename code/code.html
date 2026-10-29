@@ -941,6 +941,17 @@
               <div class="apex-tests-runner-toolbar-start">
                 <button
                   type="button"
+                  id="apexTestsBackToHubBtn"
+                  class="apex-tests-runner-back-link"
+                  data-i18n-title="apexTests.backToRuns"
+                  data-i18n-aria-label="apexTests.backToRuns"
+                  title="Ver ejecuciones"
+                >
+                  <span aria-hidden="true">←</span>
+                  <span data-i18n="apexTests.backToRuns">Ver ejecuciones</span>
+                </button>
+                <button
+                  type="button"
                   id="apexTestsProfilesBtn"
                   class="apex-tests-toolbar-btn"
                   data-i18n="apexTests.profilesBtn"
@@ -980,38 +991,22 @@
                   <p id="apexTestsOrgStatus" class="apex-tests-org-status apex-tests-org-status-warn hidden" role="status"></p>
 
                   <div id="apexTestsControls" class="apex-tests-controls">
-                    <div class="apex-tests-runner-content-head">
-                      <button
-                        type="button"
-                        id="apexTestsBackToHubBtn"
-                        class="apex-tests-back-btn"
-                        data-i18n-title="apexTests.backToHub"
-                        data-i18n-aria-label="apexTests.backToHub"
-                        title="Volver"
-                      >
-                        <span aria-hidden="true">←</span>
-                        <span data-i18n="apexTests.backToHub">Volver</span>
-                      </button>
-                      <span class="apex-tests-runner-content-hint" data-i18n="apexTests.sourceOpenCtrlClickHint">Ctrl/Cmd + clic en una clase o método para abrir su código</span>
-                    </div>
-                    <label class="apex-tests-label" for="apexTestsClassFilter" data-i18n="apexTests.filterClasses"></label>
-                    <input
-                      id="apexTestsClassFilter"
-                      type="search"
-                      class="apex-tests-search-input sfoc-query-input"
-                      data-i18n-placeholder="apexTests.filterClassesPh"
-                      placeholder="Filtrar clases por nombre…"
-                      autocomplete="off"
-                      spellcheck="false"
-                      disabled
-                    />
-
                     <div id="apexTestsTablesWrap" class="apex-tests-tables-wrap">
                       <div class="apex-tests-table-col">
                         <div class="apex-tests-table-panel">
-                          <div class="apex-tests-table-heading">
+                          <div class="apex-tests-table-heading apex-tests-table-heading--with-filter">
                             <span data-i18n="apexTests.selectClasses">Clases</span>
-                            <span data-i18n="apexTests.classOpenCtrlClickHint">Ctrl/Cmd + clic para abrir la clase</span>
+                            <input
+                              id="apexTestsClassFilter"
+                              type="search"
+                              class="apex-tests-panel-filter"
+                              data-i18n-placeholder="apexTests.filterClassesPh"
+                              data-i18n-aria-label="apexTests.filterClasses"
+                              placeholder="Filtrar por nombre de clase…"
+                              autocomplete="off"
+                              spellcheck="false"
+                              disabled
+                            />
                           </div>
                           <div id="apexTestsClassLoading" class="apex-tests-loading-overlay hidden" aria-hidden="true">
                             <span class="apex-tests-spinner" aria-hidden="true"></span>
@@ -1032,35 +1027,23 @@
                       </div>
                       <div class="apex-tests-table-col">
                         <div class="apex-tests-table-panel">
-                          <div class="apex-tests-table-heading">
+                          <div class="apex-tests-table-heading apex-tests-table-heading--with-filter">
                             <span data-i18n="apexTests.selectMethods">Métodos</span>
-                            <span data-i18n="apexTests.methodOpenCtrlClickHint">Ctrl/Cmd + clic para abrir la clase en el método</span>
+                            <input
+                              id="apexTestsMethodFilter"
+                              type="search"
+                              class="apex-tests-panel-filter"
+                              data-i18n-placeholder="apexTests.filterMethodsPh"
+                              data-i18n-aria-label="apexTests.filterMethods"
+                              placeholder="Filtrar métodos por nombre…"
+                              autocomplete="off"
+                              spellcheck="false"
+                              disabled
+                            />
                           </div>
-                          <div
-                            id="apexTestsMethodTabs"
-                            class="apex-tests-method-tabs hidden"
-                            role="tablist"
-                            aria-label="Clases seleccionadas"
-                          ></div>
-                          <div class="apex-tests-method-bulk-actions">
-                            <button
-                              type="button"
-                              id="apexTestsSelectAllMethodsBtn"
-                              class="apex-tests-toolbar-btn apex-tests-method-bulk-btn"
-                              disabled
-                              data-i18n="apexTests.selectAllMethods"
-                            >
-                              Seleccionar todos
-                            </button>
-                            <button
-                              type="button"
-                              id="apexTestsUnselectAllMethodsBtn"
-                              class="apex-tests-toolbar-btn apex-tests-method-bulk-btn"
-                              disabled
-                              data-i18n="apexTests.unselectAllMethods"
-                            >
-                              Quitar todos
-                            </button>
+                          <div id="apexTestsMethodClassPicker" class="apex-tests-method-class-picker hidden">
+                            <label for="apexTestsMethodClassSelect" data-i18n="apexTests.methodClassLabel">Clase</label>
+                            <select id="apexTestsMethodClassSelect" class="apex-tests-method-class-select" disabled></select>
                           </div>
                           <div id="apexTestsMethodLoading" class="apex-tests-loading-overlay hidden" aria-hidden="true">
                             <span class="apex-tests-spinner" aria-hidden="true"></span>
@@ -1071,7 +1054,15 @@
                               <thead>
                                 <tr>
                                   <th scope="col" class="apex-tests-th-check"></th>
-                                  <th scope="col" data-i18n="apexTests.tableMethodsCol">Método</th>
+                                  <th scope="col">
+                                    <div class="apex-tests-methods-column-head">
+                                      <span data-i18n="apexTests.tableMethodsCol">Método</span>
+                                      <label class="apex-tests-method-select-all" for="apexTestsSelectAllMethodsToggle">
+                                        <input id="apexTestsSelectAllMethodsToggle" type="checkbox" disabled />
+                                        <span data-i18n="apexTests.selectAllMethodsToggle">Todos los métodos de esta clase</span>
+                                      </label>
+                                    </div>
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody id="apexTestsMethodTbody"></tbody>

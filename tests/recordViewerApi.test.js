@@ -24,6 +24,8 @@ import {
   fetchRecordViewerPayload,
   fetchRecordViewerPermissionSources,
   fetchViewAllPermissions,
+  createRecordViewerRecord,
+  deleteRecordViewerRecord,
   patchRecordViewerRecord,
   patchRecordViewerRecords,
   resolveRecordViewerTarget
@@ -139,6 +141,23 @@ describe('recordViewerApi', () => {
         headers: { 'If-Unmodified-Since': 'Fri, 16 Oct 2026 08:30:00 GMT' },
         body: JSON.stringify({ Subject: 'Nuevo', Priority: 'High' })
       }
+    );
+  });
+
+  it('crea y elimina registros con los endpoints REST del objeto', async () => {
+    restRequestWithSid
+      .mockResolvedValueOnce({ ok:true, status:201, json:{ id:'500000000000002AAA' } })
+      .mockResolvedValueOnce({ ok:true, status:204 });
+
+    await createRecordViewerRecord('https://example.my.salesforce.com', 'sid', '63.0', 'Case', { Subject:'Consulta' });
+    await deleteRecordViewerRecord('https://example.my.salesforce.com', 'sid', '63.0', 'Case', '500000000000002AAA');
+
+    expect(restRequestWithSid).toHaveBeenNthCalledWith(
+      1, 'https://example.my.salesforce.com', 'sid', 'POST', '/services/data/v63.0/sobjects/Case',
+      { body:JSON.stringify({ Subject:'Consulta' }) }
+    );
+    expect(restRequestWithSid).toHaveBeenNthCalledWith(
+      2, 'https://example.my.salesforce.com', 'sid', 'DELETE', '/services/data/v63.0/sobjects/Case/500000000000002AAA'
     );
   });
 

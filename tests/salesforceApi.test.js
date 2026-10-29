@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   parseApexTestMethodNames,
+  parseApexTestMethodNamesFromBody,
   stripLeadingWhileOneJson,
   sourceSignatureFromFiles,
   normalizeApexLogBodyText,
@@ -15,6 +16,10 @@ import {
   apexLogBodyLooksLikeTestClass,
   pickBestApexLogForTestRun,
   restSoqlQueryPage,
+  searchIndex,
+  listIndexAll,
+  fetchSource,
+  fetchSourceListOnly,
   probeApiVersion,
   getSalesforceServerTime,
   resolveApexLogsInWindowLimit
@@ -327,6 +332,62 @@ describe('probeApiVersion', () => {
   it('devuelve la última versión de la lista', async () => {
     const v = await probeApiVersion('https://example.my.salesforce.com', 'sid');
     expect(v).toBe('62.0');
+  });
+});
+
+describe('parseApexTestMethodNamesFromBody', () => {
+  it('recupera métodos @IsTest, testMethod y por convención desde el código', () => {
+    const body = `
+      @IsTest
+      private static void validatesAccount() { System.assert(true); }
+      static testMethod void legacyTest() { System.assert(true); }
+      private static void testByConvention() { System.assert(true); }
+      private static void helper() {}
+    `;
+    expect(parseApexTestMethodNamesFromBody(body)).toEqual([
+      'legacyTest', 'testByConvention', 'validatesAccount'
+    ]);
+  });
+
+  it('ignora firmas escritas dentro de comentarios o strings', () => {
+    const body = `
+      // @IsTest static void fakeOne() {}
+      /* testMethod void fakeTwo() {} */
+      static String helper() { return 'testMethod void fakeThree() {}'; }
+      @IsTest static void realTest() {}
+    `;
+    expect(parseApexTestMethodNamesFromBody(body)).toEqual(['realTest']);
+  });
+});
+
+describe('ApexClass y ApexTrigger del comparador', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each(['ApexClass', 'ApexTrigger'])('usa REST estándar para buscar, listar y cargar %s', async (type) => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      done: true,
+      records: [{
+        Name: 'ClaseDePrueba',
+        Body: 'public class ClaseDePrueba {}',
+        LastModifiedDate: '2026-10-28T16:00:00.000+0000',
+        LastModifiedBy: { Name: 'Administrador', Username: 'admin@example.com' }
+      }]
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await searchIndex('https://example.my.salesforce.com', 'sid', '66.0', type, 'Prueba');
+    await listIndexAll('https://example.my.salesforce.com', 'sid', '66.0', type);
+    await fetchSourceListOnly('https://example.my.salesforce.com', 'sid', '66.0', type, { name: 'ClaseDePrueba' });
+    await fetchSource('https://example.my.salesforce.com', 'sid', '66.0', type, { name: 'ClaseDePrueba' });
+
+    const urls = fetchMock.mock.calls.map(([url]) => String(url));
+    expect(urls).toHaveLength(4);
+    expect(urls).toEqual(expect.arrayContaining([
+      expect.stringContaining('/services/data/v66.0/query?')
+    ]));
+    expect(urls.every((url) => !url.includes('/tooling/'))).toBe(true);
   });
 });
 

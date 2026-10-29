@@ -1,9 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { buildRecordViewerPatch, canEditRecordField, isRecordViewerShortcut, reconcileRecordViewerPatch, recordIdFromSalesforceUrl, recordViewerEditorType, recordViewerPicklistOptions } from '../shared/recordViewerCore.js';
+import { buildRecordViewerCloneFields, buildRecordViewerPatch, canEditRecordField, formatRecordViewerSaveErrors, isRecordViewerShortcut, reconcileRecordViewerPatch, recordIdFromSalesforceUrl, recordViewerEditorType, recordViewerPicklistOptions } from '../shared/recordViewerCore.js';
 import { isSfInjectIntegrationEnabled, normalizeSfInjectConfig } from '../sfInject/lib/settings.js';
 import { normalizeRecordViewerShortcut } from '../sfInject/content/recordViewerShortcutUtils.js';
 
 describe('recordViewerCore', () => {
+  it('incluye el detalle de Salesforce al formatear errores de guardado', () => {
+    const message = formatRecordViewerSaveErrors([
+      { message: 'La regla de validación exige informar el motivo.', fields: ['Motivo__c'] },
+      { message: 'La regla de validación exige informar el motivo.' },
+      { body: [{ message: 'No tienes permiso para actualizar el propietario.' }] }
+    ], 'No se pudieron guardar los cambios.');
+
+    expect(message).toBe('No se pudieron guardar los cambios. La regla de validación exige informar el motivo. · No tienes permiso para actualizar el propietario.');
+  });
+
   it('detecta Ids en Lightning y Salesforce Console', () => {
     expect(recordIdFromSalesforceUrl('https://acme.lightning.force.com/lightning/r/Account/001000000000001AAA/view')).toBe('001000000000001AAA');
     expect(recordIdFromSalesforceUrl('https://acme.lightning.force.com/one/one.app#/sObject/500000000000001AAA/view')).toBe('500000000000001AAA');
@@ -29,6 +39,16 @@ describe('recordViewerCore', () => {
   });
   it('solo construye el payload de campos modificados autorizados', () => {
     expect(buildRecordViewerPatch([{apiName:'Name',editable:true,changed:true,pendingValue:'Nuevo'},{apiName:'Description',editable:true,changed:true,pendingValue:'Texto'},{apiName:'Secret__c',editable:false,changed:true,pendingValue:'x'},{apiName:'Id',editable:true,changed:true,pendingValue:'001'}])).toEqual({Name:'Nuevo',Description:'Texto'});
+  });
+  it('solo conserva campos creables al preparar un clonado', () => {
+    expect(buildRecordViewerCloneFields(
+      { Subject:'Consulta', Status:'New', Secret__c:'No', Formula__c:'Calculado', Id:'500000000000001AAA' },
+      [
+        { name:'Subject', createable:true }, { name:'Status', createable:true },
+        { name:'Secret__c', createable:true, accessible:false }, { name:'Formula__c', createable:true, calculated:true },
+        { name:'Id', createable:true }
+      ]
+    )).toEqual({ Subject:'Consulta', Status:'New' });
   });
   it('reconcilia por campo sin bloquear cambios ajenos en el registro', () => {
     expect(reconcileRecordViewerPatch(

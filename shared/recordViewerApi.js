@@ -295,6 +295,26 @@ export async function patchRecordViewerRecord(instanceUrl, sid, apiVersion, obje
   );
 }
 
+/** Crea un registro a partir de los campos validados en el Record Viewer. */
+export async function createRecordViewerRecord(instanceUrl, sid, apiVersion, objectApiName, fields) {
+  return restRequestWithSid(
+    instanceUrl,
+    sid,
+    'POST',
+    `/services/data/v${apiVersion}/sobjects/${encodeURIComponent(objectApiName)}`,
+    { body: JSON.stringify(fields) }
+  );
+}
+
+export async function deleteRecordViewerRecord(instanceUrl, sid, apiVersion, objectApiName, recordId) {
+  return restRequestWithSid(
+    instanceUrl,
+    sid,
+    'DELETE',
+    `/services/data/v${apiVersion}/sobjects/${encodeURIComponent(objectApiName)}/${encodeURIComponent(recordId)}`
+  );
+}
+
 /** Ejecuta varios PATCH como una única transacción Composite allOrNone. */
 export async function patchRecordViewerRecords(instanceUrl, sid, apiVersion, updates) {
   const safeUpdates = Array.isArray(updates) ? updates.slice(0, 25) : [];

@@ -3,6 +3,7 @@ import { loadExtensionSettings, applyUiThemeToDocument } from '../shared/extensi
 import { setupStandaloneCommandPalette } from '../shared/commandPaletteBridge.js';
 import {
   canEditRecordField,
+  formatRecordViewerSaveErrors,
   buildRecordViewerPatch,
   recordViewerEditorType,
   recordViewerPicklistOptions
@@ -19,6 +20,8 @@ let quickActions = null;
 let permissionDetails = null;
 let permissionDetailsRequest = 0;
 let quickActionToConfigure = new URL(location.href).searchParams.get('quickAction') || '';
+let recordDeleted = false;
+let pendingNotice = new URL(location.href).searchParams.get('notice') || '';
 
 const $ = (id) => document.getElementById(id);
 const bg = (message) => chrome.runtime.sendMessage(message);
@@ -47,7 +50,28 @@ function setInlineLoading(active, message = '') {
   $('recordViewerSummary').classList.toggle('is-updating', active);
   $('recordViewerReload').disabled = active;
   $('recordViewerQuickActionsButton').disabled = active;
+  updateRecordOptions();
   if (message) $('recordViewerSavingText').textContent = message;
+}
+
+function canCloneRecord() {
+  return !!payload?.objectPermissions?.createable && !payload?.orgReadOnly && !recordDeleted;
+}
+
+function canDeleteRecord() {
+  return !!payload?.objectPermissions?.deletable && payload?.recordAccess?.HasDeleteAccess === true && !payload?.orgReadOnly && !recordDeleted;
+}
+
+function updateRecordOptions() {
+  $('recordViewerClone').disabled = saving || !canCloneRecord();
+  $('recordViewerDelete').disabled = saving || !canDeleteRecord();
+  $('recordViewerSf').disabled = recordDeleted;
+  $('recordViewerCopy').disabled = recordDeleted;
+}
+
+function setRecordOptionsOpen(open) {
+  $('recordViewerRecordOptions').classList.toggle('is-open', open);
+  $('recordViewerRecordOptionsButton').setAttribute('aria-expanded', String(open));
 }
 
 function closePermissionDetails() {
@@ -180,6 +204,7 @@ function renderRecordHeader() {
 
 function renderPermissions() {
   renderRecordHeader();
+  updateRecordOptions();
   const objectContainer = $('recordViewerObjectPermissions');
   const recordContainer = $('recordViewerAccess');
   objectContainer.replaceChildren();
@@ -620,6 +645,7 @@ async function load(options = {}) {
     }
     closePermissionDetails();
     payload = result;
+    recordDeleted = false;
     renderPermissions();
     await renderTable();
     quickActions?.setPayload(payload);
@@ -627,7 +653,14 @@ async function load(options = {}) {
       quickActions?.openAction(quickActionToConfigure);
       quickActionToConfigure = '';
     }
-    setStatus('');
+    const notice = pendingNotice === 'cloned' ? rv('cloned') : '';
+    pendingNotice = '';
+    if (notice) {
+      const url = new URL(location.href);
+      url.searchParams.delete('notice');
+      history.replaceState(null, '', url.href);
+    }
+    setStatus(notice);
     void loadSupplementaryPermissions(sequence, { requestId: payload.requestId, ...payload.direct });
     return true;
   } catch {
@@ -666,7 +699,9 @@ async function persistUpdates(updates) {
       updates
     });
     if (!result?.ok) {
-      const error = result?.reason === 'CONCURRENT_UPDATE' ? rv('concurrent') : rv('saveFailed');
+      const error = result?.reason === 'CONCURRENT_UPDATE'
+        ? rv('concurrent')
+        : formatRecordViewerSaveErrors(result?.errors, rv('saveFailed'));
       setStatus(error, true);
       applySaveErrors(result?.errors);
       if (result?.reason === 'CONCURRENT_UPDATE' && Array.isArray(result.fields)) {
@@ -725,6 +760,69 @@ function hasPendingChanges() {
   return !!table?.getData().some((row) => row.changed) || !!quickActions?.hasPendingChanges();
 }
 
+function navigateToRecord(recordId) {
+  const url = new URL(location.href);
+  url.searchParams.delete('request');
+  url.searchParams.delete('quickAction');
+  url.searchParams.set('recordId', recordId);
+  url.searchParams.set('notice', 'cloned');
+  location.assign(url.href);
+}
+
+async function cloneRecord() {
+  if (saving || !canCloneRecord() || !payload) return;
+  if (hasPendingChanges() && !window.confirm(rv('cloneDiscardPendingConfirm'))) return;
+  if (!window.confirm(rv('cloneConfirm', { record: recordDisplayName(payload.record) || payload.record.Id }))) return;
+  saving = true;
+  refreshPending();
+  setInlineLoading(true, rv('cloning'));
+  setStatus(rv('cloning'));
+  try {
+    const result = await bg({ type: 'recordViewer:clone', requestId: payload.requestId, ...payload.direct });
+    if (!result?.ok || !result.recordId) {
+      setStatus(formatRecordViewerSaveErrors(result?.errors, rv('cloneFailed')), true);
+      return;
+    }
+    navigateToRecord(String(result.recordId));
+  } catch {
+    setStatus(rv('cloneFailed'), true);
+  } finally {
+    saving = false;
+    setInlineLoading(false);
+    refreshPending();
+  }
+}
+
+async function deleteRecord() {
+  if (saving || !canDeleteRecord() || !payload) return;
+  if (hasPendingChanges() && !window.confirm(rv('deleteDiscardPendingConfirm'))) return;
+  if (!window.confirm(rv('deleteConfirm', { record: recordDisplayName(payload.record) || payload.record.Id }))) return;
+  saving = true;
+  refreshPending();
+  setInlineLoading(true, rv('deleting'));
+  setStatus(rv('deleting'));
+  try {
+    const result = await bg({ type: 'recordViewer:delete', requestId: payload.requestId, ...payload.direct });
+    if (!result?.ok) {
+      setStatus(formatRecordViewerSaveErrors(result?.errors, rv('deleteFailed')), true);
+      return;
+    }
+    recordDeleted = true;
+    quickActions?.discardAll();
+    await table?.replaceData([]);
+    refreshPending();
+    updateRecordOptions();
+    await load({ busy: 'none' });
+    setStatus(rv('deleted'));
+  } catch {
+    setStatus(rv('deleteFailed'), true);
+  } finally {
+    saving = false;
+    setInlineLoading(false);
+    refreshPending();
+  }
+}
+
 function setUiText() {
   $('recordViewerTitle').textContent = rv('title');
   $('recordViewerObjectPermissionsTitle').textContent = rv('objectPermissions');
@@ -739,6 +837,10 @@ function setUiText() {
   $('recordViewerSf').textContent = rv('viewInSalesforce');
   $('recordViewerCopy').textContent = rv('copyId');
   $('recordViewerReload').textContent = rv('reload');
+  $('recordViewerRecordOptionsButton').textContent = rv('recordOptions');
+  $('recordViewerRecordOptionsMenu').setAttribute('aria-label', rv('recordOptions'));
+  $('recordViewerClone').textContent = rv('clone');
+  $('recordViewerDelete').textContent = rv('delete');
   $('recordViewerSave').textContent = rv('save');
   $('recordViewerDiscard').textContent = rv('discard');
   $('recordViewerQuickActionsButton').textContent = rv('quickActions');
@@ -772,9 +874,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (permissionDetails && !permissionDetails.element.contains(event.target) && !permissionDetails.anchor.contains(event.target)) {
       closePermissionDetails();
     }
+    if (!$('recordViewerRecordOptions').contains(event.target)) setRecordOptionsOpen(false);
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && permissionDetails) closePermissionDetails();
+    if (event.key === 'Escape' && $('recordViewerRecordOptions').classList.contains('is-open')) {
+      setRecordOptionsOpen(false);
+      $('recordViewerRecordOptionsButton').focus({ preventScroll: true });
+    }
   });
   window.addEventListener('resize', closePermissionDetails);
   await quickActions.init();
@@ -800,6 +907,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       window.open(`${payload.org.instanceUrl}/lightning/r/${encodeURIComponent(payload.objectApiName)}/${encodeURIComponent(payload.record.Id)}/view`, '_blank', 'noopener');
     }
   });
+  $('recordViewerRecordOptionsButton').addEventListener('click', () => {
+    setRecordOptionsOpen(true);
+  });
+  $('recordViewerRecordOptions').addEventListener('pointerenter', () => setRecordOptionsOpen(true));
+  $('recordViewerRecordOptions').addEventListener('pointerleave', () => {
+    if (!$('recordViewerRecordOptions').matches(':focus-within')) setRecordOptionsOpen(false);
+  });
+  $('recordViewerRecordOptions').addEventListener('focusin', () => setRecordOptionsOpen(true));
+  $('recordViewerRecordOptions').addEventListener('focusout', (event) => {
+    if (!$('recordViewerRecordOptions').contains(event.relatedTarget)) setRecordOptionsOpen(false);
+  });
+  $('recordViewerClone').addEventListener('click', () => void cloneRecord());
+  $('recordViewerDelete').addEventListener('click', () => void deleteRecord());
   $('recordViewerSave').addEventListener('click', save);
   $('recordViewerDiscard').addEventListener('click', discard);
   window.addEventListener('beforeunload', (event) => {

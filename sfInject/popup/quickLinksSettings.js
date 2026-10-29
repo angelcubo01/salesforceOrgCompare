@@ -1,6 +1,6 @@
 import { listAllNavTools } from '../../code/ui/appModeNav.js';
 import { QUICK_LINK_ICONS, TOOL_ICONS, createIcon } from '../../code/workbench/iconRegistry.js';
-import { confirmSfocToolAction, openSfocModal } from '../../code/ui/sfocModal.js';
+import { openSfocModal } from '../../code/ui/sfocModal.js';
 import { bootstrapFeatureControls } from '../../shared/posthogFeatureControlsFlag.js';
 import {
   SF_INJECT_GLOBAL_QUICK_LINKS_KEY,
@@ -31,6 +31,24 @@ function compactButton(label, title) {
   item.setAttribute('aria-label', title);
   item.title = title;
   return item;
+}
+
+/**
+ * Elimina un enlace global de la plantilla y de cada entorno al que se copió.
+ * Los enlaces globales conservan su id al aplicarse, por lo que este es el
+ * identificador común incluso si el usuario ha cambiado después sus detalles.
+ *
+ * @param {Record<string, unknown>} quickLinks
+ * @param {string} linkId
+ */
+export function removeQuickLinkFromAllScopes(quickLinks, linkId) {
+  if (!quickLinks || typeof quickLinks !== 'object' || !linkId) return;
+  for (const linksInScope of Object.values(quickLinks)) {
+    if (!Array.isArray(linksInScope)) continue;
+    for (let itemIndex = linksInScope.length - 1; itemIndex >= 0; itemIndex -= 1) {
+      if (linksInScope[itemIndex]?.id === linkId) linksInScope.splice(itemIndex, 1);
+    }
+  }
 }
 
 function field(label, control) {
@@ -284,6 +302,7 @@ export async function openQuickLinksSettingsModal(translate, opts = {}) {
   let expandedLinkId = '';
   let applyAllNotice = '';
   let draggedLinkId = '';
+  let pendingGlobalRemovalLinkId = '';
   const body = document.createElement('div');
   body.className = 'settings-quick-links-modal';
 
@@ -400,6 +419,7 @@ export async function openQuickLinksSettingsModal(translate, opts = {}) {
     orgSelect.addEventListener('change', () => {
       selectedOrgId = orgSelect.value;
       expandedLinkId = '';
+      pendingGlobalRemovalLinkId = '';
       render();
     });
     orgField.appendChild(orgSelect);
@@ -551,20 +571,11 @@ export async function openQuickLinksSettingsModal(translate, opts = {}) {
       });
       const remove = compactButton('×', translate('settings.sfInjectQuickLinksRemove'));
       remove.classList.add('settings-quick-links-icon-btn--danger');
-      remove.addEventListener('click', async () => {
+      remove.addEventListener('click', () => {
         if (selectedOrgId === SF_INJECT_GLOBAL_QUICK_LINKS_KEY) {
-          const confirmed = await confirmSfocToolAction(
-            translate('settings.sfInjectQuickLinksRemoveGlobalConfirm', { name: title.textContent || '' }),
-            translate('settings.sfInjectQuickLinksRemoveGlobalAction'),
-            { title: translate('settings.sfInjectQuickLinksRemoveGlobalTitle') }
-          );
-          if (!confirmed) return;
-          for (const linksInScope of Object.values(draft)) {
-            if (!Array.isArray(linksInScope)) continue;
-            for (let itemIndex = linksInScope.length - 1; itemIndex >= 0; itemIndex -= 1) {
-              if (linksInScope[itemIndex].id === link.id) linksInScope.splice(itemIndex, 1);
-            }
-          }
+          pendingGlobalRemovalLinkId = link.id;
+          render();
+          return;
         } else {
           links.splice(index, 1);
         }
@@ -574,6 +585,34 @@ export async function openQuickLinksSettingsModal(translate, opts = {}) {
       actions.append(up, down, configure, remove);
       header.append(dragHandle, icon, title, kind, actions);
       card.appendChild(header);
+      if (pendingGlobalRemovalLinkId === link.id) {
+        const confirmation = document.createElement('div');
+        confirmation.className = 'settings-quick-links-global-remove-confirmation';
+        const message = document.createElement('p');
+        message.textContent = translate('settings.sfInjectQuickLinksRemoveGlobalConfirm', {
+          name: title.textContent || ''
+        });
+        const confirmationActions = document.createElement('div');
+        confirmationActions.className = 'settings-quick-links-card-actions';
+        const cancelRemoval = button(translate('common.cancel'));
+        cancelRemoval.addEventListener('click', () => {
+          pendingGlobalRemovalLinkId = '';
+          render();
+        });
+        const confirmRemoval = button(
+          translate('settings.sfInjectQuickLinksRemoveGlobalAction'),
+          'settings-primary-action'
+        );
+        confirmRemoval.addEventListener('click', () => {
+          removeQuickLinkFromAllScopes(draft, link.id);
+          pendingGlobalRemovalLinkId = '';
+          if (expandedLinkId === link.id) expandedLinkId = '';
+          render();
+        });
+        confirmationActions.append(cancelRemoval, confirmRemoval);
+        confirmation.append(message, confirmationActions);
+        card.appendChild(confirmation);
+      }
       if (expandedLinkId === link.id) card.appendChild(renderLinkConfig(link, updatePreview));
       list.appendChild(card);
     });
@@ -587,6 +626,8 @@ export async function openQuickLinksSettingsModal(translate, opts = {}) {
     body,
     confirmLabel: translate('settings.sfInjectQuickLinksSave'),
     cancelLabel: translate('common.cancel'),
+    showCloseButton: true,
+    closeLabel: translate('common.close'),
     variant: 'form',
     onConfirm: async () => {
       // Configurar enlaces deja la integración lista para usarse. Si el entorno
@@ -596,6 +637,9 @@ export async function openQuickLinksSettingsModal(translate, opts = {}) {
         integrations: { quickLinks: true },
         quickLinks: draft
       });
+      // Guardar deja el diálogo abierto para que se puedan seguir ajustando
+      // enlaces sin tener que abrir de nuevo la configuración.
+      return false;
     }
   });
 }

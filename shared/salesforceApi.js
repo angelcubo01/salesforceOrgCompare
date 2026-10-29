@@ -630,7 +630,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
   switch (type) {
     case 'ApexClass': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
-      const rows = await toolingQuery(
+      const rows = await restQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -640,7 +640,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
     }
     case 'ApexTrigger': {
       const q = prefix ? `WHERE Name LIKE '%${like}%'` : '';
-      const rows = await toolingQuery(
+      const rows = await restQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -744,7 +744,7 @@ export async function searchIndex(instanceUrl, sid, apiVersion, type, prefix) {
 export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
   switch (type) {
     case 'ApexClass': {
-      const rows = await toolingQueryAll(
+      const rows = await restQueryAll(
         instanceUrl,
         sid,
         apiVersion,
@@ -753,7 +753,7 @@ export async function listIndexAll(instanceUrl, sid, apiVersion, type) {
       return rows.map((r) => ({ type, name: r.Name }));
     }
     case 'ApexTrigger': {
-      const rows = await toolingQueryAll(
+      const rows = await restQueryAll(
         instanceUrl,
         sid,
         apiVersion,
@@ -899,7 +899,7 @@ function auraFileNameToDefType(fileName, bundleDeveloperName) {
 export async function fetchSourceListOnly(instanceUrl, sid, apiVersion, type, descriptor) {
   switch (type) {
     case 'ApexClass': {
-      const rows = await toolingQuery(
+      const rows = await restQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -916,7 +916,7 @@ export async function fetchSourceListOnly(instanceUrl, sid, apiVersion, type, de
       }];
     }
     case 'ApexTrigger': {
-      const rows = await toolingQuery(
+      const rows = await restQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -1029,7 +1029,7 @@ export async function fetchSourceVersionSignature(instanceUrl, sid, apiVersion, 
 export async function fetchSource(instanceUrl, sid, apiVersion, type, descriptor) {
   switch (type) {
     case 'ApexClass': {
-      const rows = await toolingQuery(
+      const rows = await restQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -1046,7 +1046,7 @@ export async function fetchSource(instanceUrl, sid, apiVersion, type, descriptor
       }];
     }
     case 'ApexTrigger': {
-      const rows = await toolingQuery(
+      const rows = await restQuery(
         instanceUrl,
         sid,
         apiVersion,
@@ -1206,6 +1206,29 @@ export function parseApexTestMethodNames(symbolTable) {
     }
   }
   return [...new Set(out)].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Fallback para orgs donde Tooling API devuelve `SymbolTable` vacío o
+ * incompleto. Extrae métodos de prueba directamente del Body de Apex.
+ */
+export function parseApexTestMethodNamesFromBody(body) {
+  const source = String(body || '')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\/\/[^\r\n]*/g, ' ')
+    .replace(/'(?:\\.|[^'\\])*'/g, "''");
+  if (!source.trim()) return [];
+  const declarationRe = /((?:@\w+(?:\s*\([^)]*\))?\s*)*(?:(?:public|private|protected|global|static|virtual|override|abstract|webservice|testmethod|final|transient)\s+)*(?:[A-Za-z_]\w*(?:\s*<[^;{}()]+>)?(?:\s*\[\s*\])?)\s+([A-Za-z_]\w*)\s*\([^;{}]*\)\s*(?:throws\s+[^{]+)?\{)/gi;
+  const names = [];
+  for (const match of source.matchAll(declarationRe)) {
+    const declaration = String(match[1] || '');
+    const name = String(match[2] || '');
+    if (!name) continue;
+    if (/@isTest\b/i.test(declaration) || /\btestmethod\b/i.test(declaration) || /^test/i.test(name)) {
+      names.push(name);
+    }
+  }
+  return [...new Set(names)].sort((a, b) => a.localeCompare(b));
 }
 
 /** Respuesta vacía cuando ApexTestQueueServlet no está disponible o devuelve HTML/no-JSON. */
