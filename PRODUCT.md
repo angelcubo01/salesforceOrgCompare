@@ -66,7 +66,7 @@ Repository evidence used to write this record includes:
 - code/workbench/workspaceRegistry.js for the tool and workspace inventory
 - sfInject/lib/registry.js for the shipped UI-integration capabilities
 - package.json for stack, tooling, and test/build workflow
-- PRIVACY.md, docs/RELEASE_NOTES_*.md, and the rest of docs for privacy, release history, and optional AI/telemetry behavior
+- PRIVACY.md for privacy and optional AI/telemetry behavior
 
 ## Product Principles
 

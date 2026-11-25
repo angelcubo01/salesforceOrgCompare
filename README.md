@@ -8,7 +8,7 @@
 
 **Compare, test, debug and manage Salesforce orgs with the browser session you already have — no Salesforce CLI, no Connected App, no API keys.**
 
-[Website](https://salesforceorgcompare.com/) · [Privacy](PRIVACY.md) · [Release notes](docs/RELEASE_NOTES_4.4.0.md) · Built for admins, developers, and release managers who live in multiple orgs every day.
+[Website](https://salesforceorgcompare.com/) · [Privacy](PRIVACY.md) · Built for admins, developers, and release managers who live in multiple orgs every day.
 
 ![Salesforce Org Compare — multi-org, browser session, no CLI](media/readme/sfoc-readme-cover.png)
 
@@ -252,7 +252,7 @@ With the *View All Data & Editor* capability on, press the configurable shortcut
 
 ## What's new
 
-The latest release is **4.4.0** — see [docs/RELEASE_NOTES_4.4.0.md](docs/RELEASE_NOTES_4.4.0.md). Highlights since 4.2:
+The latest release is **4.4.0**. Highlights since 4.2:
 
 - **Object & Field Access** — bulk grant/revoke across Profiles and Permission Sets, with preview and per-target results.
 - **User management in the Setup Command Palette** — permission sets, groups, public groups, trace flags, user edits, passwords, and Login As.
@@ -261,8 +261,6 @@ The latest release is **4.4.0** — see [docs/RELEASE_NOTES_4.4.0.md](docs/RELEA
 - **Comparator single view**, Query Explorer quick save and copy link, and a faster REST layer that limits concurrency per org instead of pausing every request.
 - **Tabulator grids** in Query Explorer and Data Import (4.3.x).
 - **Health Monitor**, effective permissions by user, deployment package archives, and Apex Log Viewer log comparison.
-
-Earlier notes: [4.3.6](docs/RELEASE_NOTES_4.3.6.md) · [4.2.1](docs/RELEASE_NOTES_4.2.1.md) · [4.2.0](docs/RELEASE_NOTES_4.2.0.md) · [4.1.x](docs/RELEASE_NOTES_4.1.0_TO_4.1.5.md) · [4.0.0](docs/RELEASE_NOTES_4.0.0.md)
 
 ---
 
@@ -294,8 +292,6 @@ To validate this description, inspect the source code or monitor network traffic
 - **Salesforce UI Integration:** `sfInject/content/bundle.js` is a generated content-script bundle. Its host checks URL, frame, user settings, and org/session requirements before mounting individual injectors. It uses namespaced DOM and styles, observes Lightning re-renders, and removes controls when they are disabled or no longer applicable. Privileged operations run in the service worker and are validated against the sender tab, the saved org, and the enabled capability.
 - **Workbench:** `code/workbench/workspaceRegistry.js` declares every category, workspace, tab, risk level, and org scope; the landing page, command palette, and navigation derive from it, filtered by the remote feature controls. The Workbench (UI v2) is the active interface: the popup stores `sfocUiMode = "v2"` whenever it opens. The Classic navigation code is still in the repository as a rollback path but has no user-facing switch.
 - **Offline-friendly UI:** Monaco Editor, icons, and other browser assets are packaged with the extension; the product UI does not need remote fonts, scripts, styles, or icon requests.
-
-For the detailed capability and runtime matrix, see [docs/SF_UI_INTEGRATIONS.md](docs/SF_UI_INTEGRATIONS.md).
 
 ---
 
@@ -415,7 +411,6 @@ Unit tests use Vitest and live under `tests/`. End-to-end coverage uses Playwrig
 | `icons/` | Extension icons |
 | `tests/` | Unit tests (Vitest) |
 | `e2e/` | End-to-end tests (Playwright) |
-| `docs/` | Release notes and integration documentation |
 
 ---
 
@@ -426,9 +421,6 @@ Unit tests use Vitest and live under `tests/`. End-to-end coverage uses Playwrig
 | [PRIVACY.md](PRIVACY.md) | Privacy and data-handling summary |
 | [PRODUCT.md](PRODUCT.md) | Product purpose, audience, capabilities, and constraints |
 | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Bundled libraries and attributions |
-| [docs/RELEASE_NOTES_4.4.0.md](docs/RELEASE_NOTES_4.4.0.md) | What changed in the latest release |
-| [docs/SF_UI_INTEGRATIONS.md](docs/SF_UI_INTEGRATIONS.md) | Salesforce UI Integration catalog and runtime matrix |
-| [docs/SF_INJECT_SETTINGS_SPEC.md](docs/SF_INJECT_SETTINGS_SPEC.md) | Settings controls and defaults for UI Integration |
 
 ---
 
