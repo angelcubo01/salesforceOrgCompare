@@ -6,11 +6,11 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-salesforceorgcompare.com-0176d3)](https://salesforceorgcompare.com/)
 
-**Compare Salesforce orgs with the browser session you already have — no Salesforce CLI, no Connected App, no API keys.**
+**Compare, test, debug and manage Salesforce orgs with the browser session you already have — no Salesforce CLI, no Connected App, no API keys.**
 
-[Website](https://salesforceorgcompare.com/) · [Privacy](PRIVACY.md) · Built for admins, developers, and release managers who live in multiple orgs every day.
+[Website](https://salesforceorgcompare.com/) · [Privacy](PRIVACY.md) · [Release notes](docs/RELEASE_NOTES_4.4.0.md) · Built for admins, developers, and release managers who live in multiple orgs every day.
 
-![Salesforce Org Compare — multi-org, browser session, no CLI](media/readme/hero-marketing-v2.png)
+![Salesforce Org Compare — multi-org, browser session, no CLI](media/readme/sfoc-readme-cover.png)
 
 ---
 
@@ -23,20 +23,33 @@ Skip Connected Apps, API keys, and CLI installs for day-to-day compare and debug
 | | |
 |---|---|
 | **Your session, not new credentials** | Reuses the Salesforce tab you already logged into |
-| **Multi-org in one place** | Save PRO, UAT, and sandboxes with aliases and jump between them |
+| **Multi-org in one place** | Save PRO, UAT, and sandboxes with aliases and groups, and jump between them |
 | **Diff on screen** | Metadata and code comparison — export HTML when you need a report |
-| **Dev hub in Chrome** | Apex tests, SOQL, Quick Edit, REST, debug logs, and more |
-| **Free** | Available on the Chrome Web Store |
+| **A developer hub in Chrome** | Apex tests, SOQL, Quick Edit, REST, debug logs, data and permissions |
+| **Safe by design** | Direct browser-to-Salesforce calls, your own permissions, per-org read-only mode |
+| **Free** | Available on the Chrome Web Store, in English and Spanish |
+
+![Browser-first: advantages and considerations](media/readme/sfoc-readme-benefits-considerations.png)
 
 ---
 
 ## How it works
 
-![Get started — log in, save orgs, compare or debug](media/readme/flow-get-started.png)
+![Compare orgs using the session you already have](media/readme/sfoc-readme-how-it-works.png)
 
 1. **Log into Salesforce** in Chrome.
 2. **Save orgs** from the extension popup (aliases, groups).
-3. **Compare, debug, or open logs** from the main app — or jump in from Setup when UI Integration is enabled.
+3. **Compare, test, query, or debug** from the main app — or jump in from Setup when UI Integration is enabled.
+
+![Get started — log in, save orgs, compare or debug](media/readme/flow-get-started.png)
+
+---
+
+## One workspace for Salesforce operations
+
+![One workspace for Salesforce operations](media/readme/sfoc-readme-platform-overview.png)
+
+![Your Salesforce productivity toolkit](media/readme/sfoc-readme-productivity-toolkit.png)
 
 ---
 
@@ -55,6 +68,14 @@ From a raw Apex debug log to parsed analysis to an optional AI assist (**Logi**:
 Access is invite-only during beta — [request access](https://salesforceorgcompare.com/solicitar-acceso-logi/) with your installation ID (Settings → About).
 
 ![Debug flow: Apex log → parse & analyze → Logi](media/readme/flow-debug-logi.png)
+
+### Change access in bulk, with a preview ![New](https://img.shields.io/badge/New-4.4.0-0176d3)
+
+Pick an object (and optionally a field), select any number of Profiles and Permission Sets, and queue the final state you want for each permission. Review the current-versus-final preview, then apply. A failure on one target does not stop the others, and you get an applied / unchanged / failed summary.
+
+### Manage a user without leaving Setup ![New](https://img.shields.io/badge/New-4.4.0-0176d3)
+
+Search for a user in the Setup Command Palette, open their summary, and manage permission sets, permission set groups, public-group membership, trace flags, profile data, passwords, and **Login As** — in the current tab, a new tab, or incognito.
 
 ### Salesforce UI Integration ![Beta](https://img.shields.io/badge/Beta-0176d3)
 
@@ -86,7 +107,7 @@ On the deployment-detail page, select a saved org and Ctrl/Cmd-click a component
 
 #### Your SFOC tools from any Lightning page
 
-Add personal Quick Links in the global Lightning header for SFOC tools or same-org custom paths. Use the configurable Setup Command Palette shortcut (default `Ctrl+K`) to search Setup pages, configured links, saved scripts, and SFOC tools.
+Add personal Quick Links in the global Lightning header for SFOC tools or same-org custom paths. Use the configurable Setup Command Palette shortcut (default `Ctrl+K`) to search Setup pages, configured links, saved scripts, SFOC tools, and users.
 
 ![Salesforce Lightning → SFOC Quick Links](media/readme/flow-sf-quick-links.png)
 
@@ -97,6 +118,10 @@ Add personal Quick Links in the global Lightning header for SFOC tools or same-o
 Create **Record Quick Actions** in Record Viewer to update one or more fields on the current record or a related record. Choose the environments where each action applies, then run it from the Salesforce **Quick Links** menu while viewing a record. The menu keeps Record Quick Actions separate from regular Quick Links, shows progress and a success notification, refreshes the record after completion, and provides a gear shortcut to edit the action.
 
 ![Salesforce Quick Links with Record Quick Actions](media/readme/flow-sf-record-quick-actions.png)
+
+#### Open any record in View All Data & Editor
+
+With the *View All Data & Editor* capability on, press the configurable shortcut (default `Ctrl+Shift+E`) on a Salesforce record page to open every field of the record in a dedicated SFOC tab — with object permissions and record access shown alongside.
 
 > **Trademark notice:** Salesforce Org Compare is a third-party tool and is not affiliated with or endorsed by Salesforce, Inc.
 
@@ -110,6 +135,7 @@ Create **Record Quick Actions** in Record Viewer to update one or more fields on
 - [How it works](#how-it-works)
 - [Usage flows](#usage-flows)
 - [Features](#features)
+- [What's new](#whats-new)
 
 **Technical**
 
@@ -120,6 +146,7 @@ Create **Record Quick Actions** in Record Viewer to update one or more fields on
 - [Contributions](#contributions)
 - [Development](#development)
 - [Project Structure](#project-structure)
+- [Documentation](#documentation)
 - [Third-Party Libraries](#third-party-libraries)
 - [About](#about)
 - [License](#license)
@@ -132,40 +159,44 @@ Create **Record Quick Actions** in Record Viewer to update one or more fields on
 
 - Search and index metadata across saved orgs
 - Retrieve source and compare side by side with Monaco Editor
-- Export diffs to HTML
-- Support for Apex, LWC, Aura, Visualforce, Permission Sets, Profiles, FlexiPages, and more
+- Ignore whitespace-only changes and export diffs to HTML
+- **Single view** to open a component in one org without diffing
+- Pin items, reorder the compare list with drag and drop, and share deep links
+- Support for Apex, LWC, Aura, Visualforce, Permission Sets, Profiles, FlexiPages, and any metadata type supported by retrieve / `package.xml`
 - Persist compared items locally between sessions
 
 ### Workbench & productivity
 
-- Optional Workbench navigation with Home, favorites, recent tools, contextual actions, and guided onboarding
-- Command palette to jump to tools, metadata, and saved scripts with `Ctrl/Cmd+K`
+- Workbench navigation — Home, Comparator, Development, Analysis, Monitoring, and Manifests — with favorites, recent tools, contextual actions, and guided onboarding tours
+- Command palette to jump to tools, metadata, and saved scripts with `Ctrl/Cmd+K` (`Ctrl/Cmd+Shift+P` also works)
 - Saved SOQL/SOSL queries, Anonymous Apex scripts, Apex test profiles, and pinned work items
+- Configurable date and time display format
 - Backup and restore for orgs, preferences, favorites, saved work, queries, scripts, test profiles, and Record Quick Actions. New backups use the `.sfocbackup` format with light `sfoc` obfuscation; legacy JSON backups can still be imported.
 
 ### Development
 
 | Tool | Description |
 |------|-------------|
-| **Apex Tests** | Run tests, manage jobs and reuse named test profiles |
-| **Apex Coverage Compare** | Compare coverage between orgs and inspect covered lines |
+| **Apex Tests** | Run tests by class or method with independent filters and a selection summary; reuse named test profiles; track jobs; copy failures or job Ids; see the slowest methods; open or download run logs, singly or as a ZIP |
+| **Apex Coverage Compare** | Compare coverage between orgs, with class deltas and line-level viewers |
 | **Quick Edit** | Retrieve, edit, validate, and deploy Apex or Visualforce source |
 | **Lightning Quick Edit** | Retrieve, edit, validate, and deploy LWC and Aura bundles |
-| **Anonymous Apex** | Execute and keep reusable Anonymous Apex scripts |
-| **Query Explorer** | Build, run, save, and share SOQL or SOSL queries |
-| **REST Explorer** | Interact with Salesforce REST APIs |
-| **Debug Log Browser** | Browse logs, manage traces, and open detailed analysis |
-| **Event Monitor** | Subscribe to Platform Events in real time |
+| **Anonymous Apex** | Execute and keep reusable scripts; open or download the resulting log |
+| **Query Explorer** | Build, run, save, and share SOQL or SOSL (REST or Tooling API), compare results across orgs, export CSV/JSON, and send results to Data Workbench |
+| **REST Explorer** | Interact with Salesforce REST APIs using the org session |
+| **Debug Log Browser** | Filter by date, user, and operation; manage traces; open, analyze locally, download, or ZIP selected logs; bulk-delete |
+| **Event Monitor** | Subscribe to Platform Events and Change Events with configurable replay |
+| **Data Workbench** | Edit records field by field, or import CSV, Excel, or JSON with column mapping and insert / update / upsert / delete |
+| **Object & Field Access** ![New](https://img.shields.io/badge/New-4.4.0-0176d3) | Grant or revoke object and field permissions across many Profiles and Permission Sets with queue, preview, and per-target results |
 
 ### Analysis
 
 | Tool | Description |
 |------|-------------|
+| **Permission Diff** | Compare Profiles and Permission Sets (Object, Field, and Setup sections), or compare the effective permissions of two users |
 | **Field Dependency** | Explore dependent-picklist relationships |
 | **Dependency Explorer** | Analyze metadata dependencies and their graph |
-| **Permission Diff** | Compare permission sets and profiles |
 | **Object Describe** | Inspect object and field metadata |
-| **Data Workbench** | Create and edit records, plus import CSV data |
 | **Custom Settings Compare** | Diff custom settings across orgs |
 | **Custom Metadata Compare** | Diff custom metadata types |
 | **Record Compare** | Compare individual records |
@@ -175,9 +206,10 @@ Create **Record Quick Actions** in Record Viewer to update one or more fields on
 | Tool | Description |
 |------|-------------|
 | **Environment Status** | Review Trust status, instance health, and environment signals |
+| **Health Monitor** | On-demand environment diagnostic with a health score, critical limits, Apex coverage, async and scheduled-job failures, and PDF export |
 | **Org Limits** | Review org limits, consumption, and warning thresholds |
-| **Deploy Status** | Track metadata deployments |
-| **Bulk Job Monitor** | Monitor bulk API jobs |
+| **Deploy Status** | Track deployments, read errors inline, inspect executed tests and coverage |
+| **Bulk Job Monitor** | Monitor Bulk API v1/v2 jobs and download result files |
 | **Setup Audit Trail** | Review setup change history |
 | **Field History** | Inspect field history tracking |
 
@@ -190,10 +222,12 @@ Create **Record Quick Actions** in Record Viewer to update one or more fields on
 
 ### Standalone Viewers
 
-- **Apex Log Viewer** — advanced debug log parsing and analysis
+- **Apex Log Viewer** — execution tree, timeline, SOQL, DML, limits, callouts, profiling, validations, workflow, and errors; compare two logs; export timeline data as CSV or JSON
 - **Logi** ![Beta](https://img.shields.io/badge/Logi-Beta-0176d3) — optional AI advisor inside the Apex Log Viewer (summarize, chat, quick actions). [Request beta access](https://salesforceorgcompare.com/solicitar-acceso-logi/).
-- **Apex Coverage Viewer** — coverage visualization
-- **Apex Source Viewer** — focused Apex source inspection
+- **Apex Coverage Viewer** — coverage visualization, using the archived deployment package when available
+- **Apex Source Viewer** — focused, multi-tab Apex source inspection with symbol navigation
+- **Record Viewer (View All Data & Editor)** — all fields of a record with object permissions and record access, inline editing, clone, delete, and Record Quick Actions
+- **Health Monitor** — full-page environment diagnostic opened from Environment Status
 
 ### Salesforce UI Integration (`sfInject`)
 
@@ -201,16 +235,34 @@ Create **Record Quick Actions** in Record Viewer to update one or more fields on
 - **User Trace Flags:** Filter to relevant active/recently expired traces and extend or reactivate eligible user traces.
 - **Deployments:** Expand errors inline; select an org and Ctrl/Cmd-click Apex references in status or deployment-detail errors to open source in SFOC.
 - **Quick Links and Record Quick Actions:** Add a global Lightning-header menu for SFOC tools and same-org custom URLs. On record pages, available Record Quick Actions appear in their own section, can be executed directly, and expose a configuration shortcut.
-- **Setup Command Palette:** Use a configurable shortcut (default `Ctrl+K`) to search Setup, Quick Links, saved scripts, and SFOC tools.
-
+- **Setup Command Palette:** Use a configurable shortcut (default `Ctrl+K`) to search Setup, Quick Links, saved scripts, SFOC tools, and users. From a user result you can review the summary, manage permission sets, permission set groups, and public-group membership, enable or renew debug logs, edit selected user fields, set a password, or start **Login As**.
+- **View All Data & Editor:** Open the current record in Record Viewer with a configurable shortcut (default `Ctrl+Shift+E`).
 
 ### Popup & Settings
 
-- Manage saved orgs (aliases, groups, drag-and-drop ordering)
+- Manage saved orgs (aliases, groups, drag-and-drop ordering), with session status at a glance
+- Mark any org as **read-only** to block deploys, DML, REST writes, Anonymous Apex, and imports from the extension
 - Detect the org from the active browser tab
-- Optional Workbench navigation, light/dark appearance, and theme controls
+- Workbench navigation, light/dark appearance, and theme controls
 - Language (EN/ES), telemetry opt-out, and export/import settings
 - Favorites and recent tools in the main app
+- Works in incognito windows with their own session (`"incognito": "split"`); Login As in incognito requires **Allow in Incognito** for the extension
+
+---
+
+## What's new
+
+The latest release is **4.4.0** — see [docs/RELEASE_NOTES_4.4.0.md](docs/RELEASE_NOTES_4.4.0.md). Highlights since 4.2:
+
+- **Object & Field Access** — bulk grant/revoke across Profiles and Permission Sets, with preview and per-target results.
+- **User management in the Setup Command Palette** — permission sets, groups, public groups, trace flags, user edits, passwords, and Login As.
+- **Apex Tests run actions** — copy failures or job Id, slowest methods, logs as a ZIP; same for the Debug Log Browser.
+- **Record Viewer** — clone and delete records; View All Data & Editor shortcut; Record Quick Actions.
+- **Comparator single view**, Query Explorer quick save and copy link, and a faster REST layer that limits concurrency per org instead of pausing every request.
+- **Tabulator grids** in Query Explorer and Data Import (4.3.x).
+- **Health Monitor**, effective permissions by user, deployment package archives, and Apex Log Viewer log comparison.
+
+Earlier notes: [4.3.6](docs/RELEASE_NOTES_4.3.6.md) · [4.2.1](docs/RELEASE_NOTES_4.2.1.md) · [4.2.0](docs/RELEASE_NOTES_4.2.0.md) · [4.1.x](docs/RELEASE_NOTES_4.1.0_TO_4.1.5.md) · [4.0.0](docs/RELEASE_NOTES_4.0.0.md)
 
 ---
 
@@ -218,9 +270,10 @@ Create **Record Quick Actions** in Record Viewer to update one or more fields on
 
 The Salesforce Org Compare extension communicates **directly between your browser and Salesforce**. Org data is not sent to third-party servers for processing (except when you explicitly use optional features such as Logi).
 
-- Authentication reuses your existing Salesforce browser session (session cookie read at runtime; never stored in extension storage).
-- API calls use the official Salesforce REST and Metadata APIs with the permissions of the logged-in user.
-- Preferences, saved org aliases, and locally cached metadata are stored in `chrome.storage.local` on your device.
+- Authentication reuses your existing Salesforce browser session (session cookie read at runtime; never stored in extension storage). Incognito tabs use their own cookie store, never the one from a normal window.
+- API calls use the official Salesforce REST, Tooling, SOAP, and Metadata APIs with the permissions of the logged-in user.
+- Org writes pass through a guard: orgs marked read-only are blocked, and deploys to production are blocked. Sensitive actions are recorded in a local audit trail (IDs and outcomes only, never Salesforce messages or credentials).
+- Preferences, saved org aliases, and locally cached metadata are stored in `chrome.storage.local` on your device. A user password set from the Setup Command Palette is sent only for that action and never stored.
 - Optional usage telemetry is sent to PostHog (EU region) and can be disabled in extension settings. Telemetry does not include Salesforce record data.
 - Logi (when enabled and used) sends log excerpts / chat to an LLM via a secure proxy or your own OpenRouter key — only when you invoke Logi.
 - Salesforce UI Integration is opt-in and runs as a local DOM enhancement on matching Lightning and Setup pages. Data actions require a saved org and active session; DOM-only actions and deployment source links follow their own documented constraints.
@@ -234,10 +287,12 @@ To validate this description, inspect the source code or monitor network traffic
 
 ## Technical Architecture
 
-- **Chrome Manifest V3:** `background.js` is the service-worker entry point; the popup, settings, main application, and standalone viewers are local extension pages.
-- **Salesforce access:** The extension reuses the active browser session and calls Salesforce REST, Tooling, and Metadata APIs with the logged-in user's permissions. Saved orgs carry their selected API version; the current default is API `63.0`.
-- **Local state:** Preferences, saved orgs, cached comparison state, saved queries/scripts, and UI-integration configuration live in Chrome storage. Session credentials are read at runtime and are not persisted there.
-- **Salesforce UI Integration:** `sfInject/content/bundle.js` is a generated content-script bundle. Its host checks URL, frame, user settings, and org/session requirements before mounting individual injectors. It uses namespaced DOM and styles, observes Lightning re-renders, and removes controls when they are disabled or no longer applicable.
+- **Chrome Manifest V3:** `background.js` is the service-worker entry point; the popup, settings, main application, and standalone viewers are local extension pages. The manifest uses `"incognito": "split"`, so an incognito window runs its own extension context.
+- **Salesforce access:** The extension reuses the active browser session and calls Salesforce REST, Tooling, SOAP, and Metadata APIs with the logged-in user's permissions. Saved orgs carry their selected API version; the fallback default is API `63.0`. REST calls are limited to six concurrent requests per Salesforce origin, so one slow org does not throttle another.
+- **Write guard:** Deploys, DML, REST writes, Anonymous Apex, and bulk import go through one write-policy check (read-only orgs, production deploy protection) and a local audit trail.
+- **Local state:** Preferences, saved orgs, cached comparison state, saved queries/scripts, and UI-integration configuration live in Chrome storage. Session credentials are read at runtime and are not persisted there. Large Apex-log payloads for the viewer use IndexedDB.
+- **Salesforce UI Integration:** `sfInject/content/bundle.js` is a generated content-script bundle. Its host checks URL, frame, user settings, and org/session requirements before mounting individual injectors. It uses namespaced DOM and styles, observes Lightning re-renders, and removes controls when they are disabled or no longer applicable. Privileged operations run in the service worker and are validated against the sender tab, the saved org, and the enabled capability.
+- **Workbench:** `code/workbench/workspaceRegistry.js` declares every category, workspace, tab, risk level, and org scope; the landing page, command palette, and navigation derive from it, filtered by the remote feature controls. The Workbench (UI v2) is the active interface: the popup stores `sfocUiMode = "v2"` whenever it opens. The Classic navigation code is still in the repository as a rollback path but has no user-facing switch.
 - **Offline-friendly UI:** Monaco Editor, icons, and other browser assets are packaged with the extension; the product UI does not need remote fonts, scripts, styles, or icon requests.
 
 For the detailed capability and runtime matrix, see [docs/SF_UI_INTEGRATIONS.md](docs/SF_UI_INTEGRATIONS.md).
@@ -264,8 +319,12 @@ Visit **[salesforceorgcompare.com](https://salesforceorgcompare.com/)** for the 
 
 - **Extension not detecting your org** — Make sure you are logged into Salesforce in the same browser profile and refresh the Salesforce tab.
 - **Org not found after enabling My Domain** — Restart your browser or clear the old `sid` cookie for the previous Salesforce domain.
+- **Working from an incognito window** — Incognito uses its own session. Log into Salesforce inside that window; the extension will not reuse the cookie from a normal window.
+- **A write action is blocked** — The org may be marked read-only in the popup, or it is a production org (deploys to production are blocked by design).
+- **Login As in incognito does nothing** — Enable **Allow in Incognito** for the extension in `chrome://extensions`, then retry.
 - **Missing icons when loading unpacked** — Ensure the `icons/` folder with `icon-16.png`, `icon-32.png`, `icon-48.png`, and `icon-128.png` is present (required by `manifest.json`).
 - **Salesforce UI Integration not visible** — Enable the master switch and the relevant capability in Settings, confirm that the org is saved, and refresh a supported Lightning or Setup page. Quick Links also needs at least one configured link.
+- **A tool is missing from the menu** — Some tools can be hidden or marked beta remotely through the extension's feature controls. Reopen the popup to refresh them; they are cached for up to six hours.
 
 ---
 
@@ -310,18 +369,31 @@ npm run minify:extension  # Minify for production
 npm run pack:chrome       # Package for Chrome Web Store (Windows PowerShell)
 ```
 
+### Vendored libraries
+
+```bash
+npm run vendor:driver      # Driver.js
+npm run vendor:calendar    # vanilla-calendar-pro
+npm run vendor:tabulator   # Tabulator
+npm run vendor:jspdf       # jsPDF
+npm run vendor:excel       # read-excel-file
+```
+
+Third-party browser assets live in `vendor/`. These scripts copy them from `node_modules` (they also run as part of `npm install` via `prepare`) so each release ships a known version. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ### Telemetry config (local only)
 
 Copy `shared/telemetryConfig.example.js` to `shared/telemetryConfig.js` and fill in your PostHog key if needed. This file is gitignored and must never be committed.
 
-### Unit tests
+### Tests
 
 ```bash
-npm test
-npm run test:e2e          # Playwright extension tests
+npm test                  # Vitest unit tests (tests/)
+npm run test:coverage     # Unit tests with V8 coverage
+npm run test:e2e          # Playwright MV3 extension tests (e2e/)
 ```
 
-Unit tests use Vitest and live under `tests/`; end-to-end coverage uses Playwright under `e2e/`.
+Unit tests use Vitest and live under `tests/`. End-to-end coverage uses Playwright under `e2e/` and includes accessibility (axe), visual, performance, light-theme, onboarding, workbench, permission-access, and user-management specs.
 
 ---
 
@@ -331,15 +403,32 @@ Unit tests use Vitest and live under `tests/`; end-to-end coverage uses Playwrig
 |------|---------|
 | `manifest.json` | Chrome MV3 extension manifest |
 | `background.js` | Service worker entry point |
-| `background/` | Message handlers, org auth, caches, telemetry |
+| `background/` | Message handlers, org auth and write guard, caches, health monitor, telemetry |
 | `popup/` | Extension popup and settings UI |
-| `code/` | Main app — comparator, tools, Monaco editor |
-| `sfInject/` | Salesforce UI Integration (content scripts, injectors, `bundle.mjs`) |
-| `shared/` | Shared APIs, i18n, feature controls |
-| `vendor/` | Third-party libraries (Monaco Editor, etc.) |
+| `code/` | Main app — comparator, tools, Monaco editor, and standalone viewers (Apex Log, Coverage, Source, Record, Health Monitor) |
+| `code/workbench/` | Workbench shell: workspace, icon, and landing registries |
+| `code/ui/` | One module per tool panel |
+| `sfInject/` | Salesforce UI Integration (content scripts, injectors, background handlers, `bundle.mjs`) |
+| `shared/` | Shared APIs, cores (pure logic), i18n, feature controls |
+| `vendor/` | Third-party libraries (Monaco Editor, Tabulator, jsPDF, etc.) |
 | `media/readme/` | README marketing and usage images |
 | `icons/` | Extension icons |
 | `tests/` | Unit tests (Vitest) |
+| `e2e/` | End-to-end tests (Playwright) |
+| `docs/` | Release notes and integration documentation |
+
+---
+
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [PRIVACY.md](PRIVACY.md) | Privacy and data-handling summary |
+| [PRODUCT.md](PRODUCT.md) | Product purpose, audience, capabilities, and constraints |
+| [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) | Bundled libraries and attributions |
+| [docs/RELEASE_NOTES_4.4.0.md](docs/RELEASE_NOTES_4.4.0.md) | What changed in the latest release |
+| [docs/SF_UI_INTEGRATIONS.md](docs/SF_UI_INTEGRATIONS.md) | Salesforce UI Integration catalog and runtime matrix |
+| [docs/SF_INJECT_SETTINGS_SPEC.md](docs/SF_INJECT_SETTINGS_SPEC.md) | Settings controls and defaults for UI Integration |
 
 ---
 
