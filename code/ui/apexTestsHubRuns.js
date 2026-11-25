@@ -7,7 +7,18 @@ import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
 import { extractApexTestRunJobId } from '../../shared/extractApexTestRunJobId.js';
 import { logApexTestRunUsage } from './apexTestUsageLog.js';
 import { handleToolError } from '../../shared/reportToolError.js';
-import { exportApexTestRun } from './apexTestsExport.js';
+import { downloadBlobFile, downloadTextFile, exportApexTestRun } from './apexTestsExport.js';
+import { ACTION_ICONS, createIcon } from '../workbench/iconRegistry.js';
+import { createZipArchive } from '../lib/createZipArchive.js';
+import { copyTextToClipboard } from '../lib/copyText.js';
+import {
+  apexTestLogsZipFileName,
+  buildApexLogZipEntries,
+  formatApexRunTime,
+  formatApexTestFailuresText,
+  mapWithConcurrency,
+  summarizeApexTestTimings
+} from '../../shared/apexTestRunActions.js';
 import { openApexLogViewerWithPayload } from '../lib/openApexLogViewer.js';
 import { openApexSourceViewerWithPayload } from '../lib/openApexSourceViewer.js';
 import { buildApexCoverageViewerPath } from '../lib/apexCoverageViewerUrl.js';
@@ -38,6 +49,7 @@ import {
   confirmSfocOrgAction,
   confirmSfocToolAction,
   mountSfocOverlay,
+  openSfocModal,
   unmountSfocOverlay
 } from './sfocModal.js';
 
@@ -159,10 +171,65 @@ function createApexRunActionIconSvg(kind) {
       path('M19 12h.01');
       path('M5 12h.01');
       break;
+    case 'copy':
+      path('M10 8h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z');
+      path('M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2');
+      break;
+    case 'copy-fail':
+      path('M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2');
+      path('M10 3h4a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z');
+      path('M10 12l4 4');
+      path('M14 12l-4 4');
+      break;
+    case 'archive':
+      path('M3 3h18a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z');
+      path('M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8');
+      path('M10 12h4');
+      break;
+    case 'timer':
+      path('M10 2h4');
+      path('M12 14l3-3');
+      path('M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16z');
+      break;
+    case 'table':
+      path('M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z');
+      path('M3 9h18');
+      path('M3 15h18');
+      path('M9 3v18');
+      break;
+    case 'braces':
+      path('M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5c0 1.1.9 2 2 2h1');
+      path('M16 21h1a2 2 0 0 0 2-2v-5c0-1.1.9-2 2-2a2 2 0 0 1-2-2V5a2 2 0 0 0-2-2h-1');
+      break;
+    case 'unwatch':
+      path('M9.88 9.88a3 3 0 1 0 4.24 4.24');
+      path('M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68');
+      path('M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61');
+      path('M2 2l20 20');
+      break;
+    case 'trash':
+      path('M3 6h18');
+      path('M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6');
+      path('M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2');
+      path('M10 11v6');
+      path('M14 11v6');
+      break;
     default:
       path('M12 12h.01');
   }
   return svg;
+}
+
+/** Vuelca icono + etiqueta en un botón de acción (también al refrescar el botón Seguir/Dejar de seguir). */
+function fillApexRunActionButton(btn, { icon, label }) {
+  btn.textContent = '';
+  const iconWrap = document.createElement('span');
+  iconWrap.className = 'apex-tests-runs-action-icon';
+  iconWrap.appendChild(createApexRunActionIconSvg(icon));
+  const txt = document.createElement('span');
+  txt.className = 'apex-tests-runs-action-label';
+  txt.textContent = label;
+  btn.append(iconWrap, txt);
 }
 
 /**
@@ -176,14 +243,7 @@ function createApexRunActionButton(opts) {
   btn.disabled = !!opts.disabled;
   btn.title = opts.title || opts.label;
   btn.setAttribute('aria-label', opts.label);
-  const icon = document.createElement('span');
-  icon.className = 'apex-tests-runs-action-icon';
-  icon.appendChild(createApexRunActionIconSvg(opts.icon));
-  const txt = document.createElement('span');
-  txt.className = 'apex-tests-runs-action-label';
-  txt.textContent = opts.label;
-  btn.appendChild(icon);
-  btn.appendChild(txt);
+  fillApexRunActionButton(btn, opts);
   if (opts.onClick) btn.addEventListener('click', opts.onClick);
   return btn;
 }
@@ -198,7 +258,20 @@ function createApexRunsActionGroup(children) {
 }
 
 /**
- * @param {{ disabled?: boolean, onExportCsv: () => void, onExportJson: () => void, extraItems?: { label: string, onClick: () => void, disabled?: boolean }[] }} opts
+ * Menú "Más opciones". Recibe siempre la misma lista de acciones: las que no aplican a
+ * esta ejecución van deshabilitadas (con el motivo en el tooltip) en lugar de desaparecer,
+ * para que todas las filas se vean igual.
+ *
+ * @typedef {{
+ *   icon: string,
+ *   label: string,
+ *   onClick: () => void,
+ *   disabled?: boolean,
+ *   title?: string,
+ *   danger?: boolean,
+ *   separatorBefore?: boolean
+ * }} ApexRunMenuItem
+ * @param {{ items: ApexRunMenuItem[] }} opts
  */
 function createApexRunsMoreOptionsMenu(opts) {
   const wrap = document.createElement('div');
@@ -206,8 +279,7 @@ function createApexRunsMoreOptionsMenu(opts) {
 
   const btn = createApexRunActionButton({
     icon: 'more',
-    label: t('apexTests.runsMoreOptions'),
-    disabled: !!opts.disabled
+    label: t('apexTests.runsMoreOptions')
   });
   btn.classList.add('apex-tests-runs-more-btn');
   btn.setAttribute('aria-haspopup', 'menu');
@@ -217,13 +289,27 @@ function createApexRunsMoreOptionsMenu(opts) {
   menu.className = 'apex-tests-runs-more-menu';
   menu.setAttribute('role', 'menu');
 
-  for (const item of opts.extraItems || []) {
+  for (const item of opts.items) {
+    if (item.separatorBefore) {
+      const sep = document.createElement('div');
+      sep.className = 'apex-tests-runs-more-sep';
+      sep.setAttribute('role', 'separator');
+      menu.appendChild(sep);
+    }
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'apex-tests-runs-more-item';
+    if (item.danger) el.classList.add('apex-tests-runs-more-item--danger');
     el.setAttribute('role', 'menuitem');
-    el.textContent = item.label;
     el.disabled = !!item.disabled;
+    if (item.title) el.title = item.title;
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'apex-tests-runs-action-icon';
+    iconWrap.appendChild(createApexRunActionIconSvg(item.icon));
+    const txt = document.createElement('span');
+    txt.className = 'apex-tests-runs-more-item-label';
+    txt.textContent = item.label;
+    el.append(iconWrap, txt);
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       closeAllApexRunsMoreMenus();
@@ -233,23 +319,7 @@ function createApexRunsMoreOptionsMenu(opts) {
     menu.appendChild(el);
   }
 
-  const itemCsv = document.createElement('button');
-  itemCsv.type = 'button';
-  itemCsv.className = 'apex-tests-runs-more-item';
-  itemCsv.setAttribute('role', 'menuitem');
-  itemCsv.textContent = t('apexTests.exportCsvMenuItem');
-
-  const itemJson = document.createElement('button');
-  itemJson.type = 'button';
-  itemJson.className = 'apex-tests-runs-more-item';
-  itemJson.setAttribute('role', 'menuitem');
-  itemJson.textContent = t('apexTests.exportJsonMenuItem');
-
-  menu.appendChild(itemCsv);
-  menu.appendChild(itemJson);
-  wrap.appendChild(btn);
-  wrap.appendChild(menu);
-
+  wrap.append(btn, menu);
   menu.addEventListener('click', (e) => e.stopPropagation());
 
   btn.addEventListener('click', (e) => {
@@ -262,20 +332,6 @@ function createApexRunsMoreOptionsMenu(opts) {
       btn.setAttribute('aria-expanded', 'true');
       positionApexRunsMoreMenu(btn, menu);
     }
-  });
-
-  itemCsv.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllApexRunsMoreMenus();
-    if (btn.disabled) return;
-    opts.onExportCsv();
-  });
-
-  itemJson.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllApexRunsMoreMenus();
-    if (btn.disabled) return;
-    opts.onExportJson();
   });
 
   return wrap;
@@ -870,6 +926,252 @@ async function rerunStoredApexJob(rowOrgId, storedJob) {
   }
 }
 
+/** Mensaje de usuario para un fallo de `apexTests:getTestRunLog`. */
+function apexTestRunLogErrorMessage(res, fallbackKey = 'apexTests.logOpenError') {
+  if (res?.reason === 'NO_SID') return t('toast.noSession');
+  switch (String(res?.error)) {
+    case 'NO_APEX_LOGS_TRACES':
+      return t('apexTests.logNoLogsTraces');
+    case 'NO_LOG_USER':
+      return t('apexTests.logNoJobUser');
+    case 'NO_JOB_START':
+      return t('apexTests.logNoJobStart');
+    default:
+      return sanitizeUiError(res?.error) || t(fallbackKey);
+  }
+}
+
+/** Copia el Id del job (el canónico de 18 caracteres si se conoce). */
+async function copyApexRunJobId(jobId) {
+  const id = String(jobId || '').trim();
+  if (!id) return;
+  if (await copyTextToClipboard(id)) showToast(t('toast.copied', { name: id }), 'success');
+  else showToast(t('apexTests.copyFailed'), 'error');
+}
+
+/** Copia al portapapeles los fallos de la ejecución (clase.método, mensaje y stack trace). */
+async function copyApexRunFailures(orgId, jobId) {
+  showToastWithSpinner(t('apexTests.exportInProgress'));
+  try {
+    const fails = await loadFailures(orgId, jobId, { useCache: false });
+    if (fails.error) {
+      showToast(fails.error, 'error');
+      return;
+    }
+    const { text, count } = formatApexTestFailuresText(fails.rows);
+    if (!count) {
+      showToast(t('apexTests.noFailuresToCopy'), 'warn');
+      return;
+    }
+    if (await copyTextToClipboard(text)) {
+      showToast(t('apexTests.copyFailuresDone', { count: String(count) }), 'success');
+    } else {
+      showToast(t('apexTests.copyFailed'), 'error');
+    }
+  } finally {
+    dismissSpinnerToast();
+  }
+}
+
+/** Una celda de la tabla de tiempos. */
+function timingsCell(tag, className, content) {
+  const el = document.createElement(tag);
+  if (className) el.className = className;
+  if (content != null) el.textContent = content;
+  return el;
+}
+
+/**
+ * Modal con los métodos más lentos de la ejecución: tiempo, % del total acumulado y resultado.
+ * Pulsar un método abre su clase de test en el visor, situada en el método.
+ */
+async function openApexRunTimings(orgId, jobId) {
+  showToastWithSpinner(t('apexTests.timingsLoading'));
+  let res;
+  try {
+    res = await bg({ type: 'apexTests:getRunTimings', orgId, jobId });
+  } catch (e) {
+    void handleToolError(e, { artifact_type: 'ApexTests', phase: 'run_timings' });
+    res = { ok: false };
+  } finally {
+    dismissSpinnerToast();
+  }
+  if (!res?.ok) {
+    showToast(
+      res?.reason === 'NO_SID'
+        ? t('toast.noSession')
+        : sanitizeUiError(res?.error) || t('apexTests.timingsError'),
+      'error'
+    );
+    return;
+  }
+  const locale = getCurrentLang() === 'en' ? 'en-GB' : 'es-ES';
+  const summary = summarizeApexTestTimings(res.methods, { limit: 50 });
+  const body = document.createElement('div');
+  body.className = 'apex-tests-timings';
+
+  if (!summary.count) {
+    const empty = document.createElement('p');
+    empty.className = 'apex-tests-timings-empty';
+    empty.textContent = t('apexTests.timingsNoData');
+    body.appendChild(empty);
+  } else {
+    const head = document.createElement('p');
+    head.className = 'apex-tests-timings-summary';
+    head.textContent = t('apexTests.timingsSummary', {
+      count: String(summary.count),
+      total: formatApexRunTime(summary.totalMs, locale)
+    });
+    body.appendChild(head);
+
+    const scroll = document.createElement('div');
+    scroll.className = 'apex-tests-timings-scroll';
+    const table = document.createElement('table');
+    table.className = 'apex-tests-coverage-table apex-tests-timings-table';
+    const thead = document.createElement('thead');
+    const headRow = document.createElement('tr');
+    for (const key of ['Class', 'Method', 'Outcome', 'Time', 'Share']) {
+      headRow.appendChild(timingsCell('th', '', t(`apexTests.timingsCol${key}`)));
+    }
+    thead.appendChild(headRow);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    for (const row of summary.top) {
+      const tr = document.createElement('tr');
+      tr.appendChild(timingsCell('td', 'apex-tests-timings-class', row.className || '—'));
+
+      const methodTd = timingsCell('td', 'apex-tests-timings-method');
+      const link = timingsCell('button', 'apex-tests-timings-link', row.methodName);
+      link.type = 'button';
+      link.title = row.className || '';
+      link.disabled = !row.className;
+      link.addEventListener('click', (e) => {
+        e.stopPropagation();
+        void openApexTestClassInMonaco(
+          orgId,
+          { classId: null, className: row.className, label: row.className },
+          { methodName: row.methodName }
+        );
+      });
+      methodTd.appendChild(link);
+      if (row.isTestSetup) {
+        methodTd.appendChild(timingsCell('span', 'apex-tests-timings-tag', t('apexTests.timingsSetupTag')));
+      }
+      tr.appendChild(methodTd);
+
+      tr.appendChild(timingsCell('td', '', formatApexTestOutcome(row.outcome)));
+      tr.appendChild(
+        timingsCell('td', 'apex-tests-coverage-pct apex-tests-timings-time', formatApexRunTime(row.runTime, locale))
+      );
+
+      const shareTd = timingsCell('td', 'apex-tests-timings-share');
+      const pct = Math.max(0, Math.min(100, row.share * 100));
+      const bar = timingsCell('span', 'apex-tests-timings-bar');
+      bar.setAttribute('aria-hidden', 'true');
+      const fill = timingsCell('span', 'apex-tests-timings-bar-fill');
+      fill.style.width = `${pct}%`;
+      bar.appendChild(fill);
+      shareTd.append(
+        bar,
+        timingsCell('span', 'apex-tests-timings-pct', `${pct.toLocaleString(locale, { maximumFractionDigits: 1 })} %`)
+      );
+      tr.appendChild(shareTd);
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    scroll.appendChild(table);
+    body.appendChild(scroll);
+
+    const notes = [];
+    if (summary.truncated) {
+      notes.push(t('apexTests.timingsTruncated', { shown: String(summary.top.length), count: String(summary.count) }));
+    }
+    notes.push(t('apexTests.timingsParallelNote'));
+    const foot = document.createElement('p');
+    foot.className = 'apex-tests-timings-note';
+    foot.textContent = notes.join(' ');
+    body.appendChild(foot);
+  }
+
+  const { panel } = openSfocModal({
+    id: 'apexTestsTimingsModal',
+    title: t('apexTests.timingsTitle'),
+    icon: 'gauge',
+    body,
+    hideConfirm: true,
+    cancelLabel: t('apexTests.coverageModalClose')
+  });
+  panel.classList.add('apex-tests-timings-panel');
+}
+
+/**
+ * Descarga en un único ZIP todos los ApexLog de la ejecución (los mismos que lista "Ver log").
+ * @param {string} orgId
+ * @param {{ Id?: string, CreatedDate?: string, CompletedDate?: string, CreatedById?: string } | null | undefined} job
+ * @param {string} displayJobId
+ * @param {string} [envLabel]
+ */
+async function downloadApexRunLogsZip(orgId, job, displayJobId, envLabel = '') {
+  const jobId = job?.Id || displayJobId;
+  showToastWithSpinner(t('apexTests.logsZipPreparing'));
+  try {
+    const listRes = await bg({
+      type: 'apexTests:getTestRunLog',
+      intent: 'list',
+      orgId,
+      jobId,
+      createdDate: job?.CreatedDate,
+      completedDate: job?.CompletedDate,
+      createdById: job?.CreatedById
+    });
+    if (!listRes?.ok) {
+      showToast(apexTestRunLogErrorMessage(listRes, 'apexTests.logsZipError'), 'warn');
+      return;
+    }
+    const logIds = (Array.isArray(listRes.logs) ? listRes.logs : [])
+      .map((row) => String(row?.Id || '').trim())
+      .filter(Boolean);
+    if (!logIds.length) {
+      showToast(t('apexTests.logNoLogsTraces'), 'warn');
+      return;
+    }
+    const results = await mapWithConcurrency(logIds, 4, async (logId) => {
+      try {
+        const res = await bg({ type: 'apexTests:getTestRunLog', intent: 'body', orgId, jobId, logId });
+        return res?.ok ? { ok: true, logId, body: String(res.body ?? '') } : { ok: false, logId, res };
+      } catch {
+        return { ok: false, logId };
+      }
+    });
+    const downloaded = results.filter((r) => r.ok);
+    const failed = results.length - downloaded.length;
+    if (!downloaded.length) {
+      const noSession = results.some((r) => r.res?.reason === 'NO_SID');
+      showToast(noSession ? t('toast.noSession') : t('apexTests.logsZipError'), 'error');
+      return;
+    }
+    const zip = createZipArchive(buildApexLogZipEntries(downloaded));
+    downloadBlobFile(
+      new Blob([zip], { type: 'application/zip' }),
+      apexTestLogsZipFileName(envLabel || String(jobId))
+    );
+    if (failed) {
+      showToast(
+        t('apexTests.logsZipPartial', { downloaded: String(downloaded.length), failed: String(failed) }),
+        'warn'
+      );
+    } else {
+      showToast(t('apexTests.logsZipDone', { count: String(downloaded.length) }), 'success');
+    }
+  } catch (e) {
+    void handleToolError(e, { artifact_type: 'ApexTests', phase: 'download_logs_zip' });
+    showToast(t('apexTests.logsZipError'), 'error');
+  } finally {
+    dismissSpinnerToast();
+  }
+}
+
 /**
  * Tabla de Ids de ApexLog (mismo estilo que el modal de cobertura); botón por fila.
  * @param {string} orgId
@@ -932,7 +1234,22 @@ function openViewLogRecordsModal(orgId, job, displayJobId, logs) {
       closeModal();
       void openTestRunLogTab(oid, job, dj, { logId: rid });
     });
-    c5.appendChild(btn);
+    const downloadBtn = document.createElement('button');
+    downloadBtn.type = 'button';
+    downloadBtn.className = 'apex-tests-coverage-view-btn apex-tests-view-log-download-btn';
+    downloadBtn.disabled = !rid;
+    downloadBtn.title = t('apexTests.viewLogDownload');
+    downloadBtn.setAttribute('aria-label', t('apexTests.viewLogDownload'));
+    downloadBtn.appendChild(createIcon(ACTION_ICONS.download, { size: 16 }));
+    downloadBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!rid) return;
+      void downloadTestRunLog(oid, job, dj, rid);
+    });
+    const actions = document.createElement('div');
+    actions.className = 'apex-tests-view-log-actions';
+    actions.append(btn, downloadBtn);
+    c5.appendChild(actions);
     rtr.appendChild(c1);
     rtr.appendChild(c2);
     rtr.appendChild(c3);
@@ -967,17 +1284,7 @@ async function openTestRunLogTab(orgId, job, displayJobId, opts = {}) {
       createdById: job?.CreatedById
     });
     if (!res.ok) {
-      const msg =
-        res.reason === 'NO_SID'
-          ? t('toast.noSession')
-          : String(res.error) === 'NO_APEX_LOGS_TRACES'
-            ? t('apexTests.logNoLogsTraces')
-            : String(res.error) === 'NO_LOG_USER'
-              ? t('apexTests.logNoJobUser')
-              : String(res.error) === 'NO_JOB_START'
-                ? t('apexTests.logNoJobStart')
-                : sanitizeUiError(res.error) || t('apexTests.logOpenError');
-      showToast(msg, 'warn');
+      showToast(apexTestRunLogErrorMessage(res), 'warn');
       return;
     }
     if (res.pick && Array.isArray(res.logs) && res.logs.length) {
@@ -1000,6 +1307,40 @@ async function openTestRunLogTab(orgId, job, displayJobId, opts = {}) {
       instanceUrl: org?.instanceUrl || ''
     });
     if (!ok) showToast(t('apexTests.logOpenError'), 'warn');
+  } finally {
+    dismissSpinnerToast();
+  }
+}
+
+/**
+ * Descarga el cuerpo de un ApexLog concreto como .log sin abrir el visor.
+ * El modal sigue abierto para poder bajar varios logs seguidos.
+ */
+async function downloadTestRunLog(orgId, job, displayJobId, logId) {
+  const fileName = `${sanitizeApexViewerDownloadFileName(logId)}.log`;
+  showToastWithSpinner(t('apexTests.logDownloading'));
+  try {
+    const res = await bg({
+      type: 'apexTests:getTestRunLog',
+      intent: 'body',
+      orgId,
+      jobId: job?.Id || displayJobId,
+      logId
+    });
+    if (!res?.ok) {
+      showToast(
+        res?.reason === 'NO_SID'
+          ? t('toast.noSession')
+          : sanitizeUiError(res?.error) || t('apexTests.logDownloadError'),
+        'warn'
+      );
+      return;
+    }
+    downloadTextFile(String(res.body ?? ''), 'text/plain;charset=utf-8', fileName);
+    showToast(t('toast.downloaded', { name: fileName }), 'success');
+  } catch (e) {
+    void handleToolError(e, { artifact_type: 'ApexTests', phase: 'download_log' });
+    showToast(t('apexTests.logDownloadError'), 'error');
   } finally {
     dismissSpinnerToast();
   }
@@ -2475,7 +2816,13 @@ export async function rememberWatchedApexTestJob(orgId, jobId, envLabel, meta = 
   updateApexTestsHubPollingState();
 }
 
-export async function unwatchApexTestJob(orgId, jobId) {
+/**
+ * Quita una ejecución de la tabla y del seguimiento.
+ * @param {string} orgId
+ * @param {string} jobId
+ * @param {{ removed?: boolean }} [opts] `removed`: ejecución propia (no "seguida"); cambia solo el mensaje.
+ */
+export async function unwatchApexTestJob(orgId, jobId, opts = {}) {
   if (!orgId || !jobId) return;
   const oid = String(orgId);
   const want = sfApexIdKey(jobId);
@@ -2498,7 +2845,8 @@ export async function unwatchApexTestJob(orgId, jobId) {
     syncAllExpandButtonStates();
   }
   lastPollResult = null;
-  showToast(t('apexTests.otherRunsUnwatchOk'), 'info');
+  if (opts.removed) showToast(t('apexTests.runRemovedOk'), 'success');
+  else showToast(t('apexTests.otherRunsUnwatchOk'), 'info');
   void tickApexTestsHubRuns();
 }
 
@@ -2516,10 +2864,10 @@ function applyOtherRunsWatchButton(btn, orgId, parentId, jobMeta, storedJobs) {
   btn.classList.toggle('apex-tests-other-unwatch-btn', watched);
   btn.classList.toggle('apex-tests-other-watch-btn', !watched);
   if (watched) {
-    btn.textContent = t('apexTests.otherRunsUnwatch');
+    fillApexRunActionButton(btn, { icon: 'unwatch', label: t('apexTests.otherRunsUnwatch') });
     btn.title = t('apexTests.otherRunsUnwatchHint');
   } else {
-    btn.textContent = t('apexTests.otherRunsWatch');
+    fillApexRunActionButton(btn, { icon: 'view', label: t('apexTests.otherRunsWatch') });
     btn.title = t('apexTests.otherRunsWatchHint');
   }
   btn.onclick = (e) => {
@@ -3172,17 +3520,22 @@ async function renderHubRunsTable(opts = {}) {
     const inspectDisabled = !!(run.missing || run.pollFailure || !run.job || !terminal || !poll?.ok);
     const skipCoverageForRun = !!(j.runBody && typeof j.runBody === 'object' && j.runBody.skipCodeCoverage === true);
 
-    const btnCoverage = skipCoverageForRun
-      ? null
-      : createApexRunActionButton({
-          icon: 'coverage',
-          label: t('apexTests.runsCoverage'),
-          disabled: inspectDisabled
-        });
+    /* Estructura fija en todas las filas: lo que no aplica se deshabilita (con el motivo en el
+       tooltip) en vez de desaparecer, para que cada botón quede siempre en el mismo sitio. */
+    const needsFinishedTitle = (label) => (inspectDisabled ? t('apexTests.runsNeedsFinishedHint') : label);
+    const btnCoverage = createApexRunActionButton({
+      icon: 'coverage',
+      label: t('apexTests.runsCoverage'),
+      disabled: inspectDisabled || skipCoverageForRun,
+      title: skipCoverageForRun
+        ? t('apexTests.runsCoverageSkippedHint')
+        : needsFinishedTitle(t('apexTests.runsCoverage'))
+    });
     const btnLog = createApexRunActionButton({
       icon: 'log',
       label: t('apexTests.runsLog'),
-      disabled: inspectDisabled
+      disabled: inspectDisabled,
+      title: needsFinishedTitle(t('apexTests.runsLog'))
     });
     const btnViewTest = createApexRunActionButton({
       icon: 'view',
@@ -3214,14 +3567,17 @@ async function renderHubRunsTable(opts = {}) {
         failCount > 0 &&
         !rerunBlockedInFlight
       ),
-      title: t('apexTests.runsRerunFailures')
+      title:
+        failCount > 0 || !terminal
+          ? t('apexTests.runsRerunFailures')
+          : t('apexTests.rerunFailuresEmpty')
     });
     const btnAbort = createApexRunActionButton({
       icon: 'abort',
       label: t('apexTests.runsAbort'),
       variant: 'danger',
       disabled: !canAbortJob,
-      title: canAbortJob ? t('apexTests.runsAbortHint') : t('apexTests.runsAbort')
+      title: canAbortJob ? t('apexTests.runsAbortHint') : t('apexTests.runsAbortNotRunningHint')
     });
 
     const actionsInner = document.createElement('div');
@@ -3234,33 +3590,67 @@ async function renderHubRunsTable(opts = {}) {
       summary: run.missing || run.pollFailure ? '' : formatOutcomeSummary(run.outcomeCounts)
     };
     const canonicalForExport = run.job?.Id || run.canonicalJobId || jobId;
+    const finishedHint = exportDisabled ? t('apexTests.runsNeedsFinishedHint') : undefined;
+    const noFailures = !(failCount > 0);
 
-    const moreExtra = [];
-    if (isWatchedStoredJob(j)) {
-      moreExtra.push({
-        label: t('apexTests.runsUnwatch'),
-        onClick: () => void unwatchApexTestJob(rowOrgId, jobId)
-      });
-    }
+    /** @type {ApexRunMenuItem[]} */
+    const menuItems = [
+      {
+        icon: 'table',
+        label: t('apexTests.exportCsvMenuItem'),
+        disabled: exportDisabled,
+        title: finishedHint,
+        onClick: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'csv', exportMeta)
+      },
+      {
+        icon: 'braces',
+        label: t('apexTests.exportJsonMenuItem'),
+        disabled: exportDisabled,
+        title: finishedHint,
+        onClick: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'json', exportMeta)
+      },
+      {
+        icon: 'copy-fail',
+        label: t('apexTests.menuCopyFailures'),
+        disabled: exportDisabled || noFailures,
+        title: exportDisabled ? finishedHint : noFailures ? t('apexTests.noFailuresToCopy') : undefined,
+        onClick: () => void copyApexRunFailures(rowOrgId, canonicalForExport)
+      },
+      {
+        icon: 'timer',
+        label: t('apexTests.menuSlowestMethods'),
+        disabled: exportDisabled,
+        title: finishedHint,
+        onClick: () => void openApexRunTimings(rowOrgId, canonicalForExport)
+      },
+      {
+        icon: 'archive',
+        label: t('apexTests.menuDownloadLogsZip'),
+        disabled: inspectDisabled,
+        title: inspectDisabled ? t('apexTests.runsNeedsFinishedHint') : undefined,
+        onClick: () => void downloadApexRunLogsZip(rowOrgId, run.job, jobId, j.displayEnv)
+      },
+      {
+        icon: 'copy',
+        label: t('apexTests.menuCopyRunId'),
+        separatorBefore: true,
+        onClick: () => void copyApexRunJobId(canonicalForExport)
+      },
+      {
+        icon: isWatchedStoredJob(j) ? 'unwatch' : 'trash',
+        label: isWatchedStoredJob(j) ? t('apexTests.runsUnwatch') : t('apexTests.menuRemoveRun'),
+        danger: true,
+        separatorBefore: true,
+        onClick: () =>
+          void unwatchApexTestJob(rowOrgId, jobId, { removed: !isWatchedStoredJob(j) })
+      }
+    ];
+    const moreMenu = createApexRunsMoreOptionsMenu({ items: menuItems });
 
-    const moreMenu = createApexRunsMoreOptionsMenu({
-      disabled: exportDisabled && !moreExtra.length,
-      extraItems: moreExtra,
-      onExportCsv: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'csv', exportMeta),
-      onExportJson: () => void exportApexTestRun(rowOrgId, canonicalForExport, 'json', exportMeta)
-    });
-
-    const groupInspect = createApexRunsActionGroup(
-      skipCoverageForRun ? [btnLog, btnViewTest] : [btnCoverage, btnLog, btnViewTest]
-    );
-    const groupRun = createApexRunsActionGroup([
-      btnRerun,
-      failCount > 0 ? btnRerunFailures : null
-    ]);
-    const groupTail = createApexRunsActionGroup([canAbortJob ? btnAbort : null, moreMenu]);
-    actionsInner.appendChild(groupInspect);
-    actionsInner.appendChild(groupRun);
-    actionsInner.appendChild(groupTail);
+    /* Siempre 3 grupos con el mismo número de botones: Inspeccionar | Ejecutar | Gestionar. */
+    actionsInner.appendChild(createApexRunsActionGroup([btnCoverage, btnLog, btnViewTest]));
+    actionsInner.appendChild(createApexRunsActionGroup([btnRerun, btnRerunFailures]));
+    actionsInner.appendChild(createApexRunsActionGroup([btnAbort, moreMenu]));
     tdActions.appendChild(actionsInner);
     tr.appendChild(tdExpand);
     tr.appendChild(tdEnv);

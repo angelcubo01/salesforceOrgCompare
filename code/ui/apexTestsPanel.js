@@ -83,7 +83,7 @@ function classNameFromOptionValue(val) {
 function snapshotRunnerSelection() {
   const methods = {};
   for (const [cn, set] of methodSelectionsByClass) {
-    if (set?.size) methods[cn] = [...set].sort((a, b) => a.localeCompare(b));
+    if (set) methods[cn] = [...set].sort((a, b) => a.localeCompare(b));
   }
   return {
     classValues: [...selectedClassOptionValues],
@@ -152,7 +152,7 @@ async function restoreRunnerSelectionForOrg(orgId) {
     }
     if (snap.methods && typeof snap.methods === 'object') {
       for (const [cn, arr] of Object.entries(snap.methods)) {
-        if (!Array.isArray(arr) || !arr.length) continue;
+        if (!Array.isArray(arr)) continue;
         methodSelectionsByClass.set(
           String(cn),
           new Set(arr.map((m) => String(m)).filter(Boolean))
@@ -436,7 +436,7 @@ function getActiveClassSelectionStats() {
   const total = methods.length;
   const val = classOptionValueForName(cn);
   const methodSet = methodSelectionsByClass.get(cn);
-  const wholeClass = !!(val && selectedClassOptionValues.has(val) && (!methodSet || methodSet.size === 0));
+  const wholeClass = !!(val && selectedClassOptionValues.has(val) && !methodSelectionsByClass.has(cn));
   const selected = wholeClass ? total : methodSet?.size || 0;
   const anySelected = wholeClass || selected > 0;
   const allSelected = total > 0 && selected >= total;
@@ -449,7 +449,7 @@ function syncMethodCheckboxesFromState() {
   const cn = getActiveClassName();
   const methodSet = cn ? methodSelectionsByClass.get(cn) : null;
   const val = cn ? classOptionValueForName(cn) : null;
-  const wholeClass = !!(val && selectedClassOptionValues.has(val) && (!methodSet || methodSet.size === 0));
+  const wholeClass = !!(val && selectedClassOptionValues.has(val) && !methodSelectionsByClass.has(cn));
   methodTbody.querySelectorAll('input.apex-tests-method-cb').forEach((cb) => {
     try {
       const [, mn] = JSON.parse(cb.value);
@@ -520,33 +520,31 @@ function unselectAllMethodsForActiveClass() {
   const cn = getActiveClassName();
   const val = classOptionValueForName(cn);
   if (!cn || !val) return;
-  selectedClassOptionValues.delete(val);
-  methodSelectionsByClass.delete(cn);
+  selectedClassOptionValues.add(val);
+  methodSelectionsByClass.set(cn, new Set());
   syncMethodCheckboxesFromState();
   const rowCb = getEls().classTbody?.querySelector(
     `input.apex-tests-class-cb[value="${CSS.escape(val)}"]`
   );
   if (rowCb) syncClassCheckboxVisual(rowCb, cn);
-  pruneMethodSelections();
-  syncActiveMethodClassToSelection();
   updateClassRowActiveHighlight();
   renderMethodClassPicker();
   refreshSelectionTree();
   syncAllClassCheckboxVisuals();
   updateMethodBulkButtons();
-  scheduleReloadMethods();
   schedulePersistRunnerSelection();
 }
 
 function updateMethodBulkButtons() {
-  const { selectAllMethodsToggle } = getEls();
+  const { selectAllMethodsToggle, runBtn, filter } = getEls();
   const stats = getActiveClassSelectionStats();
-  const controlsOn = !getEls().filter?.disabled;
+  const controlsOn = !filter?.disabled;
   if (selectAllMethodsToggle) {
     selectAllMethodsToggle.disabled = !controlsOn || !stats.total;
     selectAllMethodsToggle.checked = stats.allSelected;
     selectAllMethodsToggle.indeterminate = stats.anySelected && !stats.allSelected;
   }
+  if (runBtn) runBtn.disabled = !controlsOn || getClassesWithoutSelectedTests().length > 0;
 }
 
 function summarizeProfileRunBody(runBody) {
@@ -779,6 +777,14 @@ function getSelectedClassNamesOrdered() {
   return [...names].sort((a, b) => a.localeCompare(b));
 }
 
+/** Clases que el usuario ha mantenido seleccionadas pero sin métodos marcados. */
+function getClassesWithoutSelectedTests() {
+  return getSelectedClassNamesOrdered().filter((className) => {
+    const methods = methodSelectionsByClass.get(className);
+    return methodSelectionsByClass.has(className) && (!methods || methods.size === 0);
+  });
+}
+
 function syncClassCheckboxPartialClass(cb) {
   cb.classList.toggle('apex-tests-cb--partial', !!cb.indeterminate);
 }
@@ -797,7 +803,7 @@ function syncClassCheckboxVisual(cb, className) {
     return;
   }
 
-  if (valInSet && (!methodSet || methodSet.size === 0)) {
+  if (valInSet && !methodSelectionsByClass.has(cn)) {
     cb.checked = true;
     syncClassCheckboxPartialClass(cb);
     return;
@@ -846,7 +852,7 @@ function syncMethodCheckboxToMap(cb) {
     const val = classOptionValueForName(cn);
     const knownMethods = methodsByClassCache.get(cn) || [];
     const existing = methodSelectionsByClass.get(cn);
-    const wholeClass = !!(val && selectedClassOptionValues.has(val) && (!existing || existing.size === 0));
+    const wholeClass = !!(val && selectedClassOptionValues.has(val) && !methodSelectionsByClass.has(cn));
     const next = updateApexMethodSelection({
       knownMethods,
       selectedMethods: [...(existing || [])],
@@ -859,7 +865,7 @@ function syncMethodCheckboxToMap(cb) {
     } else {
       if (val) selectedClassOptionValues.delete(val);
     }
-    if (next.selectedMethods?.length) {
+    if (next.selectedMethods !== null) {
       methodSelectionsByClass.set(cn, new Set(next.selectedMethods));
     } else {
       methodSelectionsByClass.delete(cn);
@@ -940,11 +946,6 @@ function removeMethodFromRunnerSelection(className, methodName) {
   const methods = methodSelectionsByClass.get(className);
   if (!methods) return;
   methods.delete(methodName);
-  if (!methods.size) {
-    methodSelectionsByClass.delete(className);
-    const val = classOptionValueForName(className);
-    if (val) selectedClassOptionValues.delete(val);
-  }
   const activeChanged = syncActiveMethodClassToSelection();
   syncAllClassCheckboxVisuals();
   syncMethodCheckboxesFromState();
@@ -1023,11 +1024,16 @@ function refreshSelectionTree() {
         sub.appendChild(liM);
       }
       li.appendChild(sub);
-    } else {
+    } else if (!methodSelectionsByClass.has(cn)) {
       const whole = document.createElement('div');
       whole.className = 'apex-tests-tree-whole';
       whole.textContent = t('apexTests.treeAllMethodsInClass');
       li.appendChild(whole);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'apex-tests-tree-whole';
+      empty.textContent = t('apexTests.treeNoMethodsSelected');
+      li.appendChild(empty);
     }
     ul.appendChild(li);
   }
@@ -1311,6 +1317,9 @@ function buildRunBody() {
     const set = methodSelectionsByClass.get(cn);
     const methods =
       set && set.size > 0 ? [...set].sort((a, b) => a.localeCompare(b)) : null;
+    // Una entrada vacía representa una clase seleccionada sin tests; no debe
+    // degradarse a una ejecución de la clase completa.
+    if (methodSelectionsByClass.has(cn) && !methods?.length) continue;
     if (c?.id) {
       /** `className` es solo para UI / hub; la API usa `classId` (se elimina en background). */
       if (methods?.length) tests.push({ classId: c.id, className: cn, testMethods: methods });
@@ -1395,6 +1404,13 @@ async function runApexTestsWithBody(body) {
 
 async function runApexTests() {
   if (!state.leftOrgId) return;
+  if (getClassesWithoutSelectedTests().length) {
+    const msg = t('apexTests.selectionNoMethodsToRun');
+    const { runStatus } = getEls();
+    if (runStatus) runStatus.textContent = msg;
+    showToast(msg, 'warn');
+    return;
+  }
   const body = buildRunBody();
   await runApexTestsWithBody(body);
 }

@@ -934,6 +934,17 @@ function zipFilesToBase64(files) {
   return uint8ArrayToBase64(result);
 }
 
+/** Crea un ZIP Metadata API a partir de rutas y contenido de texto. */
+export function createMetadataZipBase64(files) {
+  const encoded = {};
+  for (const [name, content] of Object.entries(files || {})) {
+    encoded[String(name)] = content instanceof Uint8Array
+      ? content
+      : new TextEncoder().encode(String(content ?? ''));
+  }
+  return zipFilesToBase64(encoded);
+}
+
 function crc32(data) {
   let crc = 0xffffffff;
   const table = getCrc32Table();
@@ -1278,4 +1289,3 @@ export async function deployAndWait(instanceUrl, sid, apiVersion, zipBase64, opt
 
   throw new Error(`Deploy agotó el tiempo de espera tras ${maxAttempts} intentos.`);
 }
-

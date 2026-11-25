@@ -26,6 +26,7 @@ const TOOL_ROUTES = [
   ['analysis', 'RecordCompare', 'recordComparePanel'],
   ['analysis', 'ObjectDescribe', 'objectDescribePanel'],
   ['development', 'DataWorkbench', 'dataWorkbenchPanel'],
+  ['development', 'PermissionAccess', 'permissionAccessPanel'],
   ['monitoring', 'EnvironmentStatus', 'environmentStatusPanel'],
   ['monitoring', 'OrgLimits', 'orgLimitsPanel'],
   ['monitoring', 'DeployStatus', 'deployStatusPanel'],
@@ -100,7 +101,7 @@ test.afterEach(async ({ extensionContext, extensionWorker }) => {
   });
 });
 
-test('los 26 Tool IDs conservan contraste WCAG A/AA en tema claro', async ({
+test('los Tool IDs conservan contraste WCAG A/AA en tema claro', async ({
   extensionContext: context,
   extensionId
 }) => {

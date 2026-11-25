@@ -102,8 +102,8 @@ describe('onboardingPrefs', () => {
     expect(shouldShowFirstInstallWelcome(dismissed, 0)).toBe(false);
   });
 
-  it('lista de herramientas alineada con onboarding (26)', () => {
-    expect(ALL_ONBOARDING_TOOLS).toHaveLength(26);
+  it('lista de herramientas alineada con onboarding (27)', () => {
+    expect(ALL_ONBOARDING_TOOLS).toHaveLength(27);
     expect(ALL_ONBOARDING_TOOLS).toContain('Comparator');
     expect(ALL_ONBOARDING_TOOLS).toContain('FieldHistory');
     expect(ALL_ONBOARDING_TOOLS).toContain('LightningQuickEdit');
@@ -115,6 +115,7 @@ describe('onboardingPrefs', () => {
     expect(ALL_ONBOARDING_TOOLS).toContain('CustomMetadataCompare');
     expect(ALL_ONBOARDING_TOOLS).toContain('RecordCompare');
     expect(ALL_ONBOARDING_TOOLS).toContain('DataWorkbench');
+    expect(ALL_ONBOARDING_TOOLS).toContain('PermissionAccess');
     expect(ALL_ONBOARDING_TOOLS).toContain('EventMonitor');
     expect(ALL_ONBOARDING_TOOLS).toContain('BulkJobMonitor');
     expect(ALL_ONBOARDING_TOOLS).toContain('ObjectDescribe');

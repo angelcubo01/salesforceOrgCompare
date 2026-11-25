@@ -105,6 +105,10 @@ export const TOOL_ONBOARDING_TOURS = Object.freeze({
     context: '#permissionDiffQueryGrid', contextInteraction: SAFE, prepare: '#permissionDiffNameInput',
     action: '#permissionDiffCompareToggle', result: '#permissionDiffTable'
   }),
+  PermissionAccess: standardTour('PermissionAccess', '#permissionAccessPanel', {
+    context: '#permissionAccessResourcesCard', prepare: '#permissionAccessMatrixCard',
+    action: '[data-action-id="permission-access-apply"]', result: '.permission-access-queue-card'
+  }),
   CustomSettingsCompare: standardTour('CustomSettingsCompare', '#customSettingsComparePanel', {
     context: '#orgDropdowns', prepare: '#customSettingsCompareTypeSelect',
     action: '#customSettingsCompareDiffOnly', result: '#customSettingsCompareTableMount'

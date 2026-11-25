@@ -12,7 +12,7 @@ import {
 
 describe('toolOnboardingTours', () => {
   it('declara exactamente un tour para cada Tool ID soportado', () => {
-    expect(Object.keys(TOOL_ONBOARDING_TOURS)).toHaveLength(26);
+    expect(Object.keys(TOOL_ONBOARDING_TOURS)).toHaveLength(27);
     expect(new Set(Object.keys(TOOL_ONBOARDING_TOURS))).toEqual(new Set(ALL_ONBOARDING_TOOLS));
     expect(validateToolOnboardingTours()).toEqual({ missing: [], extra: [], duplicateCount: 0 });
   });

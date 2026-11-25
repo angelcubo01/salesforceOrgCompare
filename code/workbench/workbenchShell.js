@@ -673,7 +673,8 @@ function createCompareInfoPill(sourceId, className, { live = false } = {}) {
     // `compact` solo vale mientras describa el texto actual del origen.
     const compact = source.dataset.compactFor === text ? source.dataset.compact : '';
     pill.textContent = compact || text;
-    pill.hidden = !text;
+    // El origen se oculta con la clase `hidden` (p. ej. «Vista única» no tiene diff).
+    pill.hidden = !text || source.classList.contains('hidden');
     pill.title = text;
   };
   sync();
@@ -681,7 +682,7 @@ function createCompareInfoPill(sourceId, className, { live = false } = {}) {
   const observer = new MutationObserver(sync);
   observer.observe(source, {
     attributes: true,
-    attributeFilter: ['data-compact', 'data-compact-for'],
+    attributeFilter: ['class', 'data-compact', 'data-compact-for'],
     childList: true,
     subtree: true,
     characterData: true

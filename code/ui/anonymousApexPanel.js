@@ -692,6 +692,16 @@ function refreshSavedScriptsUi() {
   }
 }
 
+/** Muestra/oculta y habilita/deshabilita a la vez "Ver log" y "Descargar log". */
+function syncLogButtons({ visible, enabled }) {
+  for (const id of ['anonymousApexOpenLogBtn', 'anonymousApexDownloadLogBtn']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.classList.toggle('hidden', !visible);
+    btn.disabled = !enabled;
+  }
+}
+
 function renderResult(resultByOrg) {
   const resultWrap = document.getElementById('anonymousApexResultWrap');
   const combined = document.getElementById('anonymousApexResultCombined');
@@ -717,8 +727,16 @@ function renderResult(resultByOrg) {
     combined.textContent = errorLines.join('\n\n');
     resultWrap.classList.remove('hidden');
   }
-  logBtn.classList.remove('hidden');
-  logBtn.disabled = !lastAnonLogs.length;
+  syncLogButtons({ visible: true, enabled: lastAnonLogs.length > 0 });
+}
+
+export function anonymousApexLogFromExecution(orgId, response, label = '') {
+  const result = response?.result || {};
+  if (!response?.ok || result.compiled !== true) return null;
+  const inlineLogs = result.logs ? String(result.logs) : '';
+  const logId = response.logId ? String(response.logId) : '';
+  if (!inlineLogs && !logId) return null;
+  return { orgId, label: label || String(orgId || 'Org'), inlineLogs, logId };
 }
 
 async function ensureEditor(restoreIfNeeded = true) {
@@ -785,7 +803,6 @@ async function ensureEditor(restoreIfNeeded = true) {
 async function runAnonymousApex() {
   if (guardToolAction('anonymous_apex_execute')) return;
   const runBtn = document.getElementById('anonymousApexRunBtn');
-  const logBtn = document.getElementById('anonymousApexOpenLogBtn');
   if (!state.leftOrgId) {
     showToast(t('anonymousApex.selectOrg'), 'warn');
     return;
@@ -812,10 +829,7 @@ async function runAnonymousApex() {
     })) return;
   }
   if (runBtn) runBtn.disabled = true;
-  if (logBtn) {
-    logBtn.disabled = true;
-    logBtn.classList.add('hidden');
-  }
+  syncLogButtons({ visible: false, enabled: false });
   setExecStatus(t('anonymousApex.running'));
   const usageBase = {
     leftOrgId: state.leftOrgId || '',
@@ -849,12 +863,9 @@ async function runAnonymousApex() {
       const result = res.result || {};
       resultsByOrg[orgId] = result;
       if (!(result.compiled === true && result.success === true)) hasCompileErrorOrRuntime = true;
-      const inlineLogs = result.logs ? String(result.logs) : '';
-      const logId = res.logId ? String(res.logId) : '';
+      const availableLog = anonymousApexLogFromExecution(orgId, res, getOrgLabelById(orgId));
       // Solo ejecuciones compiladas pueden tener log útil.
-      if (result.compiled === true && (inlineLogs || logId)) {
-        lastAnonLogs.push({ orgId, label: getOrgLabelById(orgId), inlineLogs, logId });
-      }
+      if (availableLog) lastAnonLogs.push(availableLog);
     }
     if (requestErrors.length) {
       setExecStatus(`${t('anonymousApex.runError')}\n${requestErrors.join('\n')}`, 'error');
@@ -868,10 +879,7 @@ async function runAnonymousApex() {
   } catch (e) {
     void handleToolError(e, { artifact_type: 'AnonymousApex', phase: 'execute' });
     setExecStatus(`${t('anonymousApex.runError')}\n${String(e?.message || e)}`, 'error');
-    if (logBtn) {
-      logBtn.classList.remove('hidden');
-      logBtn.disabled = true;
-    }
+    syncLogButtons({ visible: true, enabled: false });
     void logAnonymousApexUsage({
       ...usageBase
     });
@@ -880,31 +888,73 @@ async function runAnonymousApex() {
   }
 }
 
-async function openAnonymousApexLog() {
-  const btn = document.getElementById('anonymousApexOpenLogBtn');
-  if (!btn) return;
+/**
+ * Elige el log de la última ejecución. Con un solo entorno lo devuelve directo;
+ * en modo comparación pide al usuario que elija entorno.
+ * @returns {Promise<{ picked: object, usedPicker: boolean } | null>} null si no hay log o se cancela.
+ */
+async function pickAnonymousApexLog() {
   const available = (lastAnonLogs || []).filter((x) => x && (x.inlineLogs || x.logId));
   if (!available.length) {
     showToast(t('anonymousApex.logMissing'), 'warn');
-    return;
+    return null;
   }
-  let picked = available[0];
-  let usedPicker = false;
-  if (available.length > 1) {
-    const selected = await openLogPickerModal(available);
-    if (!selected) return;
-    picked = selected;
-    usedPicker = true;
+  if (available.length === 1) return { picked: available[0], usedPicker: false };
+  const selected = await openLogPickerModal(available);
+  if (!selected) return null;
+  return { picked: selected, usedPicker: true };
+}
+
+function fetchAnonymousApexLogBody(orgId, logId) {
+  return bg({ type: 'anonymousApex:getLogBody', orgId, logId });
+}
+
+/** Nombre de archivo seguro para el .log descargado. */
+export function anonymousApexLogDownloadFileName(picked) {
+  const base = String(picked?.logId || '').trim() || `anonymous-apex-${String(picked?.label || 'org').trim()}`;
+  const safe = base
+    .replace(/[/\\?%*:|"<>]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+  return `${safe || 'anonymous-apex'}.log`;
+}
+
+async function downloadAnonymousApexLog() {
+  const choice = await pickAnonymousApexLog();
+  if (!choice) return;
+  const { picked, usedPicker } = choice;
+  try {
+    const content = await resolveAnonymousApexLogContent(picked, fetchAnonymousApexLogBody);
+    if (!content) {
+      showToast(t('anonymousApex.logMissing'), 'warn');
+      return;
+    }
+    const fileName = anonymousApexLogDownloadFileName(picked);
+    const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    showToast(t('toast.downloaded', { name: fileName }), 'success');
+  } catch (e) {
+    void handleToolError(e, { artifact_type: 'AnonymousApex', phase: 'download_log' });
+    showToast(t('anonymousApex.downloadLogError'), 'error');
+  } finally {
+    if (usedPicker) closeLogPickerModal();
   }
-  let content = picked.inlineLogs || '';
-  if (!content && picked.logId && picked.orgId) {
-    const bodyRes = await bg({
-      type: 'anonymousApex:getLogBody',
-      orgId: picked.orgId,
-      logId: picked.logId
-    });
-    if (bodyRes?.ok && bodyRes.body != null) content = String(bodyRes.body);
-  }
+}
+
+async function openAnonymousApexLog() {
+  const btn = document.getElementById('anonymousApexOpenLogBtn');
+  if (!btn) return;
+  const choice = await pickAnonymousApexLog();
+  if (!choice) return;
+  const { picked, usedPicker } = choice;
+  const content = await resolveAnonymousApexLogContent(picked, fetchAnonymousApexLogBody);
   if (!content) {
     showToast(t('anonymousApex.logMissing'), 'warn');
     return;
@@ -919,6 +969,23 @@ async function openAnonymousApexLog() {
     return;
   }
   if (usedPicker) closeLogPickerModal();
+}
+
+/**
+ * Prefiere el ApexLog persistido cuando ya existe y conserva el log SOAP
+ * inline como fallback fiable ante retrasos, permisos o errores de descarga.
+ */
+export async function resolveAnonymousApexLogContent(picked, fetchPersistedBody) {
+  let content = '';
+  if (picked?.logId && picked?.orgId && typeof fetchPersistedBody === 'function') {
+    try {
+      const bodyRes = await fetchPersistedBody(picked.orgId, picked.logId);
+      if (bodyRes?.ok && bodyRes.body != null) content = String(bodyRes.body);
+    } catch {
+      content = '';
+    }
+  }
+  return content || String(picked?.inlineLogs || '');
 }
 
 function closeLogPickerModal() {
@@ -1048,6 +1115,7 @@ export async function refreshAnonymousApexPanel() {
 export function setupAnonymousApexPanel() {
   const runBtn = document.getElementById('anonymousApexRunBtn');
   const logBtn = document.getElementById('anonymousApexOpenLogBtn');
+  const downloadLogBtn = document.getElementById('anonymousApexDownloadLogBtn');
   const toggle = document.getElementById('anonymousApexCompareToggle');
   const saveScriptBtn = document.getElementById('anonymousApexSaveScriptBtn');
   const openScriptsBtn = document.getElementById('anonymousApexOpenScriptsModalBtn');
@@ -1059,6 +1127,7 @@ export function setupAnonymousApexPanel() {
   const scriptsCloseBtn = document.getElementById('anonymousApexScriptsModalCloseBtn');
   if (runBtn) runBtn.addEventListener('click', () => void runAnonymousApex());
   if (logBtn) logBtn.addEventListener('click', () => void openAnonymousApexLog());
+  if (downloadLogBtn) downloadLogBtn.addEventListener('click', () => void downloadAnonymousApexLog());
   if (saveScriptBtn) {
     saveScriptBtn.addEventListener('click', () => {
       const inp = document.getElementById('anonymousApexScriptNameInput');
@@ -1115,10 +1184,7 @@ export function setupAnonymousApexPanel() {
     });
   }
   clearAnonymousApexOutput();
-  if (logBtn) {
-    logBtn.classList.add('hidden');
-    logBtn.disabled = true;
-  }
+  syncLogButtons({ visible: false, enabled: false });
   setupCodeEditorSessionPersistence('AnonymousApex', persistSession);
   refreshSavedScriptsUi();
   // Migra la biblioteca ya existente para que la paleta disponible en Salesforce la pueda buscar.

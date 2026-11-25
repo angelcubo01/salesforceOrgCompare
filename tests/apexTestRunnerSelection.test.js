@@ -33,4 +33,13 @@ describe('caducidad de la selección del runner Apex', () => {
       checked: true
     })).toEqual({ selectedClass: true, selectedMethods: null });
   });
+
+  it('mantiene la clase al desmarcar su último método', () => {
+    expect(updateApexMethodSelection({
+      knownMethods: ['testA'],
+      selectedMethods: ['testA'],
+      methodName: 'testA',
+      checked: false
+    })).toEqual({ selectedClass: true, selectedMethods: [] });
+  });
 });

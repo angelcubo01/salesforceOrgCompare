@@ -21,7 +21,7 @@ export const WORKBENCH_CATEGORIES = Object.freeze([
     id: 'development', labelKey: 'workbench.category.development', icon: CATEGORY_ICONS.development,
     workspaceIds: Object.freeze([
       'apex-quality', 'apex-coverage', 'code-studio', 'anonymous-apex', 'rest-explorer',
-      'query-explorer', 'data-workbench'
+      'query-explorer', 'data-workbench', 'permission-access'
     ])
   },
   {
@@ -91,6 +91,8 @@ export const WORKBENCH_HEADER_ACTIONS = Object.freeze({
   anonymousSave: action({ id: 'anonymous-save', labelKey: 'anonymousApex.saveCurrentScript', icon: ACTION_ICONS.save, targetId: 'anonymousApexQuickSaveBtn', priority: 50 }),
   queryRun: action({ id: 'query-run', labelKey: 'queryExplorer.run', icon: ACTION_ICONS.run, targetId: 'queryExplorerRunBtn', variant: 'primary', priority: 1, allowOverflow: false }),
   querySaved: action({ id: 'query-saved', labelKey: 'queryExplorer.openSavedQueries', icon: 'database-search', targetId: 'queryExplorerOpenSavedModalBtn', priority: 40 }),
+  querySave: action({ id: 'query-save', labelKey: 'queryExplorer.saveCurrentQuery', icon: ACTION_ICONS.save, targetId: 'queryExplorerQuickSaveBtn', priority: 50 }),
+  queryCopyLink: action({ id: 'query-copy-link', labelKey: 'queryExplorer.copyLink', icon: ACTION_ICONS.copy, targetId: 'queryExplorerCopyLinkBtn', priority: 60 }),
   queryPrepareImport: action({ id: 'query-prepare-import', labelKey: 'queryExplorer.sendToImport', icon: 'database-cog', targetId: 'queryExplorerSendToImportBtn', priority: 65 }),
   restSend: action({ id: 'rest-send', labelKey: 'restExplorer.send', icon: ACTION_ICONS.forward, targetId: 'restExplorerSendBtn', variant: 'primary', risk: 'write', priority: 1, allowOverflow: false }),
   fieldDependenciesLoad: action({ id: 'field-dependencies-load', labelKey: 'fieldDep.getDependencies', icon: ACTION_ICONS.search, targetId: 'fieldDepRetrieveBtn', variant: 'primary', priority: 1, allowOverflow: false }),
@@ -100,6 +102,7 @@ export const WORKBENCH_HEADER_ACTIONS = Object.freeze({
   recordsCompare: action({ id: 'records-compare', labelKey: 'recordCompare.compare', icon: 'arrows-diff', targetId: 'recordCompareBtn', variant: 'primary', priority: 1, allowOverflow: false }),
   objectDescribe: action({ id: 'object-describe', labelKey: 'objectDescribe.describe', icon: 'schema', targetId: 'objectDescribeDescribeBtn', variant: 'primary', priority: 1, allowOverflow: false }),
   dataImportRun: action({ id: 'data-import-run', labelKey: 'dataImport.run', icon: ACTION_ICONS.run, targetId: 'dataWorkbenchImportRunBtn', variant: 'primary', risk: 'write', priority: 2, allowOverflow: false, visibleWhen: 'source-context' }),
+  permissionAccessApply: action({ id: 'permission-access-apply', labelKey: 'permissionAccess.apply', icon: 'shield-cog', targetId: 'permissionAccessApplyBtn', variant: 'primary', risk: 'write', priority: 1, allowOverflow: false }),
   eventLoadChannels: action({ id: 'event-load-channels', labelKey: 'eventMonitor.loadChannels', icon: ACTION_ICONS.refresh, targetId: 'eventMonitorLoadChannelsBtn', variant: 'primary', priority: 1, allowOverflow: false }),
   environmentRefresh: action({ id: 'environment-refresh', labelKey: 'envStatus.refresh', icon: ACTION_ICONS.refresh, targetId: 'environmentStatusRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
   limitsRefresh: action({ id: 'limits-refresh', labelKey: 'orgLimits.refresh', icon: ACTION_ICONS.refresh, targetId: 'orgLimitsRefreshBtn', variant: 'primary', priority: 1, allowOverflow: false }),
@@ -191,7 +194,12 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     id: 'query-explorer', categoryId: 'development', labelKey: 'workbench.workspace.queryExplorer',
     descriptionKey: 'workbench.workspace.queryExplorerDescription', icon: 'database-search',
     aliases: ['query', 'soql', 'sosl'], keywords: ['database', 'consulta'],
-    tabs: [tab('main', 'workbench.tab.query', 'QueryExplorer', 'development', 'queryExplorerPanel', 'single', 'read', [WORKBENCH_HEADER_ACTIONS.querySaved])]
+    tabs: [tab('main', 'workbench.tab.query', 'QueryExplorer', 'development', 'queryExplorerPanel', 'single', 'read', [
+      WORKBENCH_HEADER_ACTIONS.queryRun,
+      WORKBENCH_HEADER_ACTIONS.querySaved,
+      WORKBENCH_HEADER_ACTIONS.querySave,
+      WORKBENCH_HEADER_ACTIONS.queryCopyLink
+    ])]
   }),
   workspace({
     id: 'rest-explorer', categoryId: 'development', labelKey: 'workbench.workspace.restExplorer',
@@ -257,6 +265,12 @@ export const WORKBENCH_WORKSPACES = Object.freeze([
     tabs: [tab('main', 'workbench.tab.data', 'DataWorkbench', 'development', 'dataWorkbenchPanel', 'single', 'write')]
   }),
   workspace({
+    id: 'permission-access', categoryId: 'development', labelKey: 'workbench.workspace.permissionAccess',
+    descriptionKey: 'workbench.workspace.permissionAccessDescription', icon: 'shield-cog',
+    aliases: ['permissions', 'object access', 'field access', 'permisos'], keywords: ['profile', 'permission set', 'security', 'fields', 'objects'],
+    tabs: [tab('main', 'workbench.tab.permissionAccess', 'PermissionAccess', 'development', 'permissionAccessPanel', 'single', 'write', [WORKBENCH_HEADER_ACTIONS.permissionAccessApply])]
+  }),
+  workspace({
     id: 'org-environments', categoryId: 'monitoring', labelKey: 'workbench.workspace.orgEnvironments',
     descriptionKey: 'workbench.workspace.orgEnvironmentsDescription', icon: 'heartbeat',
     aliases: ['org status'], keywords: ['health', 'environment'],
@@ -317,6 +331,7 @@ export const LEGACY_TOOL_ROUTES = Object.freeze({
   RestExplorer: { workspaceId: 'rest-explorer', tabId: 'main' },
   ObjectDescribe: { workspaceId: 'object-describe', tabId: 'main' },
   DataWorkbench: { workspaceId: 'data-workbench', tabId: 'main' },
+  PermissionAccess: { workspaceId: 'permission-access', tabId: 'main' },
   DebugLogBrowser: { workspaceId: 'diagnostics', tabId: 'main' },
   EventMonitor: { workspaceId: 'event-monitor', tabId: 'main' },
   FieldDependency: { workspaceId: 'field-dependency', tabId: 'main' },

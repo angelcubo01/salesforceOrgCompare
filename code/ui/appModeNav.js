@@ -73,6 +73,7 @@ export const TOOL_I18N = {
   RecordCompare: 'code.opRecordCompare',
   ObjectDescribe: 'code.opObjectDescribe',
   DataWorkbench: 'code.opDataWorkbench',
+  PermissionAccess: 'code.opPermissionAccess',
   BulkJobMonitor: 'code.opBulkJobMonitor',
   EventMonitor: 'code.opEventMonitor',
   GeneratePackageXml: 'code.opPkgGenerate',

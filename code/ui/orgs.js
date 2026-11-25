@@ -21,6 +21,7 @@ let pausedRightOrgId = null;
 
 /** @param {(className: string) => boolean} hasClass */
 export function isSingleOrgToolActiveFromBody(hasClass) {
+  if (hasClass('artifact-comparator-single-view')) return true;
   if (hasClass('artifact-environment-status')) return true;
   if (hasClass('artifact-deploy-status')) return true;
   if (hasClass('artifact-apex-tests')) return true;
@@ -74,6 +75,8 @@ export function isDualOrgUiActive() {
     document.body.classList.contains(className)
   );
   if (dualFromBody) return true;
+  // «Vista única» abre el componente solo en la org izquierda aunque estemos en el comparador.
+  if (document.body.classList.contains('artifact-comparator-single-view')) return false;
   return state.appNavMode === 'comparator';
 }
 
@@ -266,6 +269,13 @@ export function updateOrgDropdownLayout() {
   }
 
   leftDropdown.classList.remove('hidden');
+
+  if (document.body.classList.contains('artifact-comparator-single-view')) {
+    rightDropdown.classList.add('hidden');
+    leftDropdown.classList.add('single-mode');
+    updateOrgSwapButtonState();
+    return;
+  }
 
   if (
     (document.body.classList.contains('artifact-generate-package-xml') &&

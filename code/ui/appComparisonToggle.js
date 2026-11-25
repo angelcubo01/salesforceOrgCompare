@@ -2,8 +2,12 @@
  * Un punto único para el modo comparación de las herramientas que lo soportan.
  * Los controles conservan su propio id y listeners: solo se reubican en el
  * chrome superior cuando su herramienta está activa.
+ *
+ * `Comparator` es el caso inverso: ya compara por defecto y su control es la
+ * «Vista única», que al activarse abre el componente sin comparar.
  */
 const TOGGLE_BY_TOOL = Object.freeze({
+  Comparator: 'comparatorSingleViewToggle',
   GeneratePackageXml: 'generatePkgCompareToggle',
   DependencyExplorer: 'depExplorerCompareToggle',
   AnonymousApex: 'anonymousApexCompareToggle',

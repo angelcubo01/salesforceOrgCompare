@@ -26,6 +26,7 @@ import { saveItemsToStorage } from '../core/persistence.js';
 import { renderEditor } from '../editor/editorRender.js';
 import { renderSavedItems, clearBundleCollapsedForKey, syncListActiveHighlight } from './listUi.js';
 import { ensureModeForTool } from './appModeNav.js';
+import { resetComparatorSingleView } from './comparatorSingleView.js';
 import { handleArtifactTypeSelectChange } from './searchSetup.js';
 import {
   beginMetadataTypeCompareUiSession,
@@ -174,6 +175,8 @@ function ensureMetadataTypeComparePackageInList(metadataType, apiVersion) {
 async function switchToComparatorWithItem(item) {
   if (!item) return false;
   state.selectedItem = item;
+  // Este flujo abre un diff real: la «Vista única» (una sola org) lo dejaría vacío.
+  resetComparatorSingleView();
   await ensureModeForTool('Comparator');
   handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
   renderSavedItems(true);

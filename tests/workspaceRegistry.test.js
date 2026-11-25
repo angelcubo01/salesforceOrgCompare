@@ -36,7 +36,7 @@ describe('workspaceRegistry', () => {
     expect(WORKBENCH_WORKSPACES.some(({ toolAliases }) => toolAliases?.length)).toBe(false);
     expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'development')?.workspaceIds).toEqual([
       'apex-quality', 'apex-coverage', 'code-studio', 'anonymous-apex', 'rest-explorer',
-      'query-explorer', 'data-workbench'
+      'query-explorer', 'data-workbench', 'permission-access'
     ]);
     expect(WORKBENCH_CATEGORIES.find(({ id }) => id === 'monitoring')?.workspaceIds).toEqual([
       'diagnostics', 'event-monitor', 'org-environments', 'org-limits', 'deploy-status',
@@ -44,6 +44,16 @@ describe('workspaceRegistry', () => {
     ]);
     expect(getWorkspaceById('diagnostics')?.categoryId).toBe('monitoring');
     expect(getWorkspaceById('event-monitor')?.categoryId).toBe('monitoring');
+  });
+
+  it('registra Object & Field Access como herramienta write de una sola org en Development', () => {
+    const workspace = getWorkspaceById('permission-access');
+    expect(workspace).toMatchObject({ categoryId: 'development', icon: 'shield-cog' });
+    expect(workspace?.tabs[0]).toMatchObject({
+      toolId: 'PermissionAccess', panelId: 'permissionAccessPanel', orgScope: 'single', risk: 'write'
+    });
+    expect(LEGACY_TOOL_ROUTES.PermissionAccess).toEqual({ workspaceId: 'permission-access', tabId: 'main' });
+    expect(getLegacyHref('PermissionAccess')).toContain('nav=development&op=PermissionAccess');
   });
 
   it('mantiene Calidad Apex, Logs y trazas y Dependencias sin vistas internas', () => {
@@ -68,7 +78,7 @@ describe('workspaceRegistry', () => {
 
   it('resuelve cada Tool ID legacy exactamente a un workspace y tab válidos', () => {
     const tools = getCanonicalToolIds();
-    expect(tools).toHaveLength(26);
+    expect(tools).toHaveLength(27);
     expect(new Set(tools).size).toBe(tools.length);
     for (const toolId of tools) {
       const route = getWorkspaceRouteForTool(toolId);

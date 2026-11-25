@@ -11,6 +11,7 @@ import { refreshAnonymousApexPanel } from '../ui/anonymousApexPanel.js';
 import { refreshQueryExplorerPanel } from '../ui/queryExplorerPanel.js';
 import { refreshObjectDescribePanel } from '../ui/objectDescribePanel.js';
 import { refreshDataWorkbenchPanel } from '../ui/dataWorkbenchPanel.js';
+import { refreshPermissionAccessPanel } from '../ui/permissionAccessPanel.js';
 import { refreshOrgLimitsPanel } from '../ui/orgLimitsPanel.js';
 import { reloadEnvironmentStatusIfActive } from '../ui/environmentStatusPanel.js';
 import { refreshDebugLogBrowserPanel } from '../ui/debugLogBrowserPanel.js';
@@ -51,6 +52,7 @@ export function refreshActiveToolOnOrgChange(side) {
     QueryExplorer: () => void refreshQueryExplorerPanel(),
     ObjectDescribe: () => void refreshObjectDescribePanel(),
     DataWorkbench: () => void refreshDataWorkbenchPanel(),
+    PermissionAccess: () => void refreshPermissionAccessPanel(),
     OrgLimits: () => void refreshOrgLimitsPanel(),
     EnvironmentStatus: () => void reloadEnvironmentStatusIfActive(),
     PermissionDiff: () => void refreshPermissionDiffPanel(),

@@ -55,4 +55,13 @@ describe('i18n', () => {
     expect(t('envStatus.timelineHint')).toBe('Hover or select a bar to view its details.');
     expect(t('envStatus.noMetrics')).toBe('No metrics are available for this instance.');
   });
+
+  it('traduce Object & Field Access y sus estados en español e inglés', () => {
+    setLang('es');
+    expect(t('permissionAccess.title')).toBe('Acceso a objetos y campos');
+    expect(t('permissionAccess.grant')).toBe('Conceder');
+    setLang('en');
+    expect(t('permissionAccess.title')).toBe('Object & Field Access');
+    expect(t('permissionAccess.revoke')).toBe('Revoke');
+  });
 });

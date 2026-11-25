@@ -1413,9 +1413,31 @@ html[data-ui-theme="light"] .apex-tests-runs-more-menu {
 html[data-ui-theme="light"] .apex-tests-runs-more-item {
   color: #334155;
 }
-html[data-ui-theme="light"] .apex-tests-runs-more-item:hover {
+html[data-ui-theme="light"] .apex-tests-runs-more-item:hover:not(:disabled) {
   background: #f1f5f9;
   color: #0f172a;
+}
+html[data-ui-theme="light"] .apex-tests-runs-more-item--danger {
+  color: #b91c1c;
+}
+html[data-ui-theme="light"] .apex-tests-runs-more-item--danger:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #991b1b;
+}
+html[data-ui-theme="light"] .apex-tests-runs-more-sep {
+  background: #e2e8f0;
+}
+html[data-ui-theme="light"] .apex-tests-timings-link {
+  color: #1d4ed8;
+}
+html[data-ui-theme="light"] .apex-tests-timings-tag {
+  border-color: #cbd5e1;
+}
+html[data-ui-theme="light"] .apex-tests-timings-bar {
+  background: #e2e8f0;
+}
+html[data-ui-theme="light"] .apex-tests-timings-bar-fill {
+  background: #2563eb;
 }
 html[data-ui-theme="light"] .apex-tests-runs-action-btn:hover:not(:disabled) {
   background: #e2e8f0;
@@ -1764,6 +1786,26 @@ html[data-ui-theme="light"] .debug-log-browser-input[type='datetime-local']::-we
 html[data-ui-theme="light"] .setup-audit-input[type='datetime-local']::-webkit-calendar-picker-indicator {
   filter: none;
   opacity: 0.75;
+}
+
+html[data-ui-theme="light"] .debug-log-browser-select-all {
+  color: #334155;
+}
+
+html[data-ui-theme="light"] .debug-log-browser-selected-count {
+  color: var(--sfoc-light-text-muted);
+}
+
+html[data-ui-theme="light"] .debug-log-browser-download-selected-btn {
+  background: #e0f2fe;
+  border-color: #38bdf8;
+  color: #075985;
+}
+
+html[data-ui-theme="light"] .debug-log-browser-download-selected-btn:hover:not(:disabled) {
+  background: #bae6fd;
+  border-color: #0284c7;
+  color: #0c4a6e;
 }
 
 /* Los selectores compartidos nacieron con la paleta oscura: en claro los
@@ -3767,4 +3809,78 @@ html[data-ui-theme="light"] .sfoc-btn--ghost {
 
 html[data-ui-theme="light"] .sfoc-btn--ghost:hover:not(:disabled) {
   color: var(--sfoc-light-text);
+}
+
+/* Object & Field Access: surfaces, matrix states, and inputs in Workbench light mode. */
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-panel {
+  color: var(--sfoc-text);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-card,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-suggestions {
+  border-color: var(--sfoc-border);
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-suggestions {
+  box-shadow: var(--sfoc-shadow-popover);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-resource-controls,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-status,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-matrix-state,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-group-empty {
+  color: var(--sfoc-text-muted);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-target-group-head,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-table th {
+  background: var(--sfoc-surface-2);
+  color: var(--sfoc-text-muted);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-matrix-container,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-table th,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-table td {
+  border-color: var(--sfoc-border);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] #permissionAccessPanel .permission-access-mini-search input {
+  border-color: var(--sfoc-border-strong);
+  background: var(--sfoc-bg-panel);
+  color: var(--sfoc-text);
+  color-scheme: light;
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] #permissionAccessPanel .permission-access-mini-search input::placeholder {
+  color: var(--sfoc-text-disabled);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-suggestion:hover,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-suggestion:focus-visible,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-table tbody tr:hover td {
+  background: var(--sfoc-hover);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-count,
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-target-type {
+  background: var(--sfoc-selection);
+  color: var(--sfoc-accent-strong);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-matrix-table tr.is-modified td {
+  background: var(--sfoc-selection);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-matrix-table td.is-modified {
+  box-shadow: inset 0 -2px 0 var(--sfoc-accent);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-table tr[data-status="failed"] td {
+  background: var(--sfoc-code-removed-bg);
+}
+
+html[data-ui-theme="light"] body[data-ui-mode="v2"] .permission-access-table tr[data-status="success"] td {
+  background: var(--sfoc-code-added-bg);
 }

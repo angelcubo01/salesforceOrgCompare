@@ -12,6 +12,7 @@ import { confirmSfocOrgAction } from './sfocModal.js';
 import { createDateTimeRangePicker } from './dateTimeRangePicker.js';
 import { createTablePagination } from './tablePagination.js';
 import { getSalesforceNow } from './salesforceServerClock.js';
+import { createZipArchive } from '../lib/createZipArchive.js';
 import {
   formatDateTimeForDisplay,
   isValidUtcRange,
@@ -37,6 +38,8 @@ let filterChangeTimer = null;
 const pagination = createTablePagination({ initialPageSize: 25 });
 let sortState = { key: 'StartTime', direction: 'desc' };
 let tableState = 'initial';
+const selectedLogIds = new Set();
+let bulkDownloadInFlight = false;
 
 function rowExecutionFields(row) {
   if (!row?.contextFromBody) {
@@ -140,6 +143,135 @@ async function downloadDebugLog(logId) {
   }
 }
 
+function getFilteredLogIds() {
+  return applyClientFilters(lastRows)
+    .map((row) => String(row?.Id || ''))
+    .filter(Boolean);
+}
+
+function pruneSelectedLogIds() {
+  const available = new Set(lastRows.map((row) => String(row?.Id || '')).filter(Boolean));
+  for (const logId of selectedLogIds) {
+    if (!available.has(logId)) selectedLogIds.delete(logId);
+  }
+}
+
+function updateBulkSelectionUi() {
+  const { selectAllFiltered, downloadSelectedBtn, downloadSelectedLabel, selectedCount } = getFilterElements();
+  const filteredIds = getFilteredLogIds();
+  const filteredSelected = filteredIds.filter((logId) => selectedLogIds.has(logId)).length;
+  const selectedTotal = selectedLogIds.size;
+
+  if (selectAllFiltered) {
+    selectAllFiltered.checked = filteredIds.length > 0 && filteredSelected === filteredIds.length;
+    selectAllFiltered.indeterminate = filteredSelected > 0 && filteredSelected < filteredIds.length;
+    selectAllFiltered.disabled = isLoading || bulkDownloadInFlight || filteredIds.length === 0;
+  }
+  if (downloadSelectedBtn) downloadSelectedBtn.disabled = isLoading || bulkDownloadInFlight || selectedTotal === 0;
+  if (downloadSelectedLabel) {
+    downloadSelectedLabel.textContent = `${t('debugLogs.downloadSelected')} (${selectedTotal})`;
+  }
+  if (selectedCount) {
+    const selectedCountKey = selectedTotal === 1 ? 'debugLogs.selectedCountOne' : 'debugLogs.selectedCount';
+    selectedCount.textContent = t(selectedCountKey, { count: String(selectedTotal) });
+  }
+  document.querySelectorAll('.debug-log-browser-row-select').forEach((checkbox) => {
+    checkbox.disabled = isLoading || bulkDownloadInFlight || !checkbox.dataset.logId;
+  });
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob);
+  const download = document.createElement('a');
+  download.href = url;
+  download.download = fileName;
+  document.body.appendChild(download);
+  download.click();
+  download.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function fetchSelectedLogBodies(logIds) {
+  const results = new Array(logIds.length);
+  let cursor = 0;
+  const workerCount = Math.min(4, logIds.length);
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (cursor < logIds.length) {
+      const index = cursor;
+      cursor += 1;
+      const logId = logIds[index];
+      try {
+        const response = await bg({
+          type: 'debugLogs:getBody',
+          orgId: state.leftOrgId,
+          logId
+        });
+        results[index] = response?.ok
+          ? { ok: true, logId, body: String(response.body || '') }
+          : { ok: false, logId, response };
+      } catch (error) {
+        results[index] = { ok: false, logId, error };
+      }
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+async function downloadSelectedDebugLogs() {
+  if (!state.leftOrgId) {
+    showToast(t('debugLogs.selectOrg'), 'error');
+    return;
+  }
+  const selectedRows = lastRows.filter((row) => selectedLogIds.has(String(row?.Id || '')));
+  const logIds = selectedRows.map((row) => String(row.Id));
+  if (!logIds.length || bulkDownloadInFlight) return;
+
+  bulkDownloadInFlight = true;
+  updateBulkSelectionUi();
+  showToastWithSpinner(t('debugLogs.downloadingSelected', { count: String(logIds.length) }));
+  try {
+    const results = await fetchSelectedLogBodies(logIds);
+    const successful = results.filter((result) => result?.ok);
+    const failed = results.filter((result) => !result?.ok);
+    const firstResponseFailure = failed.find((result) => result?.response)?.response;
+    if (firstResponseFailure) {
+      void handleToolResponseFailure(firstResponseFailure, {
+        artifact_type: 'DebugLogs',
+        phase: 'bulk_download_body',
+        failed_count: failed.length
+      });
+    }
+    if (!successful.length) {
+      const noSession = failed.some((result) => result?.response?.reason === 'NO_SID');
+      showToast(noSession ? t('toast.noSession') : t('debugLogs.bulkDownloadError'), 'error');
+      return;
+    }
+
+    const zipBytes = createZipArchive(successful.map((result) => ({
+      name: `${sanitizeApexViewerDownloadFileName(result.logId)}.log`,
+      data: result.body
+    })));
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `apex-logs-${timestamp}.zip`;
+    downloadBlob(new Blob([zipBytes], { type: 'application/zip' }), fileName);
+    if (failed.length) {
+      showToast(t('debugLogs.bulkDownloadPartial', {
+        downloaded: String(successful.length),
+        failed: String(failed.length)
+      }), 'warn');
+    } else {
+      showToast(t('debugLogs.bulkDownloadDone', { count: String(successful.length) }), 'success');
+    }
+  } catch {
+    showToast(t('debugLogs.bulkDownloadError'), 'error');
+  } finally {
+    bulkDownloadInFlight = false;
+    dismissSpinnerToast();
+    updateBulkSelectionUi();
+  }
+}
+
 function getFilterElements() {
   return {
     panelInner: document.querySelector('.debug-log-browser-panel-inner'),
@@ -161,6 +293,10 @@ function getFilterElements() {
     lastPage: document.getElementById('debugLogBrowserLastPage'),
     pageInput: document.getElementById('debugLogBrowserPageInput'),
     pageLabel: document.getElementById('debugLogBrowserPageLabel'),
+    selectAllFiltered: document.getElementById('debugLogBrowserSelectAllFiltered'),
+    downloadSelectedBtn: document.getElementById('debugLogBrowserDownloadSelectedBtn'),
+    downloadSelectedLabel: document.getElementById('debugLogBrowserDownloadSelectedLabel'),
+    selectedCount: document.getElementById('debugLogBrowserSelectedCount'),
     tbody: document.getElementById('debugLogBrowserTbody'),
     empty: document.getElementById('debugLogBrowserEmpty'),
     contextLoading: document.getElementById('debugLogBrowserContextLoading')
@@ -172,7 +308,7 @@ function renderLoadingSkeleton() {
   if (!tbody) return;
   tbody.innerHTML = Array.from({ length: 7 }, () => {
     const cells = Array.from(
-      { length: 10 },
+      { length: 11 },
       () => '<td><span class="debug-log-browser-skeleton-bar"></span></td>'
     ).join('');
     return `<tr class="debug-log-browser-skeleton-row" aria-hidden="true">${cells}</tr>`;
@@ -194,6 +330,7 @@ function setLoadingState(loading) {
   for (const el of [refreshBtn, deleteAllBtn, user, operation, since, until, pageSize, prevPage, nextPage]) {
     if (el) el.disabled = !!loading;
   }
+  updateBulkSelectionUi();
 }
 
 function shouldShowContextLoading() {
@@ -490,13 +627,14 @@ function renderRows() {
   if (isLoading) return;
   const { rows, pageRows } = getVisiblePageRows();
   updatePaginationUi(rows.length);
+  updateBulkSelectionUi();
   tbody.innerHTML = '';
   if (!pageRows.length) {
     empty.classList.add('hidden');
     const tr = document.createElement('tr');
     tr.className = 'sfoc-table-empty-row';
     const td = document.createElement('td');
-    td.colSpan = 10;
+    td.colSpan = 11;
     td.textContent = tableState === 'no-session' ? t('toast.noSession') : t('debugLogs.empty');
     if (tableState === 'no-session') {
       const retry = document.createElement('button');
@@ -525,6 +663,7 @@ function renderRows() {
     const pendingContext = !!logIdNorm && !row?.contextFromBody;
     const statusText = row?.Status ? String(row.Status) : '—';
     tr.innerHTML = `
+      <td class="debug-log-browser-select-cell"></td>
       <td class="debug-log-browser-status-cell">${escapeHtml(statusText)}</td>
       <td>${escapeHtml(formatDateTime(row?.StartTime))}</td>
       <td>${escapeHtml(userCell)}</td>
@@ -536,6 +675,22 @@ function renderRows() {
       <td class="debug-log-browser-context-cell${pendingContext ? ' is-pending' : ''}">${escapeHtml(ctx.Method)}</td>
       <td class="debug-log-browser-action-cell"></td>
     `;
+    const selectCell = tr.querySelector('.debug-log-browser-select-cell');
+    const selectCheckbox = document.createElement('input');
+    selectCheckbox.type = 'checkbox';
+    selectCheckbox.className = 'debug-log-browser-row-select';
+    selectCheckbox.dataset.logId = logId;
+    selectCheckbox.checked = selectedLogIds.has(logId);
+    selectCheckbox.disabled = !logId || bulkDownloadInFlight;
+    selectCheckbox.setAttribute('aria-label', t('debugLogs.selectLog', { id: logId }));
+    tr.classList.toggle('is-selected', selectCheckbox.checked);
+    selectCheckbox.addEventListener('change', () => {
+      if (selectCheckbox.checked) selectedLogIds.add(logId);
+      else selectedLogIds.delete(logId);
+      tr.classList.toggle('is-selected', selectCheckbox.checked);
+      updateBulkSelectionUi();
+    });
+    selectCell?.appendChild(selectCheckbox);
     const actionCell = tr.querySelector('.debug-log-browser-action-cell');
     const openBtn = document.createElement('button');
     openBtn.type = 'button';
@@ -636,6 +791,7 @@ async function loadLogs() {
     bodyEnrichedIds.clear();
     populateUserOptions(lastRows);
     populateOperationOptions(lastRows);
+    pruneSelectedLogIds();
     if (status) status.textContent = '';
   } catch {
     tableState = 'error';
@@ -644,6 +800,7 @@ async function loadLogs() {
     if (status) status.textContent = t('debugLogs.loadError');
     showToast(t('debugLogs.loadError'), 'error');
   } finally {
+    pruneSelectedLogIds();
     setLoadingState(false);
     dismissSpinnerToast();
     renderRowsAndEnrich();
@@ -710,6 +867,7 @@ export async function refreshDebugLogBrowserPanel() {
   const { status, since, until } = getFilterElements();
   await ensureDefaultDateRange();
   if (!state.leftOrgId) {
+    selectedLogIds.clear();
     setLoadingState(false);
     if (status) status.textContent = t('debugLogs.selectOrg');
     return;
@@ -725,7 +883,10 @@ export async function refreshDebugLogBrowserPanel() {
 }
 
 export function setupDebugLogBrowserPanel() {
-  const { user, operation, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, rowStatus, text } =
+  const {
+    user, operation, since, until, pageSize, firstPage, prevPage, nextPage, lastPage, pageInput, rowStatus, text,
+    selectAllFiltered, downloadSelectedBtn
+  } =
     getFilterElements();
   const refreshBtn = document.getElementById('debugLogBrowserRefreshBtn');
   if (refreshBtn) refreshBtn.addEventListener('click', () => void refreshLogsNow());
@@ -740,6 +901,15 @@ export function setupDebugLogBrowserPanel() {
   operation?.addEventListener('change', () => scheduleClientFilterUpdate());
   rowStatus?.addEventListener('change', () => scheduleClientFilterUpdate());
   text?.addEventListener('input', () => scheduleClientFilterUpdate(180));
+  selectAllFiltered?.addEventListener('change', () => {
+    const filteredIds = getFilteredLogIds();
+    for (const logId of filteredIds) {
+      if (selectAllFiltered.checked) selectedLogIds.add(logId);
+      else selectedLogIds.delete(logId);
+    }
+    renderRows();
+  });
+  downloadSelectedBtn?.addEventListener('click', () => void downloadSelectedDebugLogs());
   if (pageSize)
     pageSize.addEventListener('change', () => {
       pagination.setPageSize(pageSize.value, applyClientFilters(lastRows).length);
@@ -829,6 +999,7 @@ export function setupDebugLogBrowserPanel() {
   }
   void ensureDefaultDateRange().then(() => {
     appliedFilters = captureDraftFilters();
+    updateBulkSelectionUi();
   });
   document.querySelectorAll('#debugLogBrowserTableWrap th[data-sort]').forEach((header) => {
     header.addEventListener('click', () => {

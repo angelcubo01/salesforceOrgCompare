@@ -1,4 +1,4 @@
-import { discoverActiveTabContext, getSidForCookieDomain, resolveSidForSavedOrg } from '../shared/orgDiscovery.js';
+import { discoverActiveTabContext, getSidForCookieDomain, resolveSidForSavedOrg, buildHostCandidatesForOrg } from '../shared/orgDiscovery.js';
 import { probeApiVersion, getOrganizationInfo } from '../shared/salesforceApi.js';
 import { ALLOWED_SF_SUFFIXES } from '../shared/sfDomains.js';
 import { authStatusCache, versionCache } from './caches.js';
@@ -45,15 +45,94 @@ export async function resolveSidForOrg(org) {
   return resolveSidForSavedOrg(org, getSidForOrgId);
 }
 
-export async function getSidForOrgId(orgId) {
+export async function getSidForOrgId(orgId, cookieStoreId = '') {
   if (!orgId) return '';
   try {
-    const all = await chrome.cookies.getAll({ name: 'sid', secure: true });
+    const all = await chrome.cookies.getAll({
+      name: 'sid',
+      secure: true,
+      ...(cookieStoreId ? { storeId: cookieStoreId } : {})
+    });
     const filtered = all.filter((c) => ALLOWED_SF_SUFFIXES.some((sfx) => (c.domain || '').endsWith(sfx)));
     const match = filtered.find((c) => typeof c.value === 'string' && c.value.startsWith(orgId + '!'));
     if (match) return match.value;
   } catch {}
   return '';
+}
+
+/** Devuelve el almacén de cookies al que pertenece una pestaña, incluido incógnito. */
+export async function getCookieStoreIdForTab(tabId) {
+  if (tabId == null || typeof chrome.cookies?.getAllCookieStores !== 'function') return '';
+  try {
+    const stores = await chrome.cookies.getAllCookieStores();
+    const store = stores.find((item) => Array.isArray(item?.tabIds) && item.tabIds.includes(tabId));
+    return typeof store?.id === 'string' ? store.id : '';
+  } catch {}
+  return '';
+}
+
+async function tabUsesCurrentExtensionCookieContext(tabId) {
+  if (tabId == null || typeof chrome.tabs?.get !== 'function') return false;
+  if (typeof chrome.extension?.inIncognitoContext !== 'boolean') return false;
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return !!tab && Boolean(tab.incognito) === chrome.extension.inIncognitoContext;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveSidInCurrentCookieContext(org) {
+  const sid = await getSidForOrgId(org?.id);
+  if (sid) return sid;
+  for (const host of buildHostCandidatesForOrg(org)) {
+    try {
+      const cookie = await chrome.cookies.get({ url: 'https://' + host + '/', name: 'sid' });
+      if (cookie?.value) return cookie.value;
+    } catch {}
+  }
+  return '';
+}
+
+/**
+ * Resuelve la sesión de una organización en el mismo perfil de la pestaña de
+ * origen. Evita reutilizar la cookie de una ventana normal al operar desde
+ * incógnito (y viceversa).
+ */
+export async function resolveSidForOrgInTab(
+  org,
+  tabId,
+  { strictStore = false, allowCurrentContextFallback = false } = {}
+) {
+  const cookieStoreId = await getCookieStoreIdForTab(tabId);
+  if (cookieStoreId) {
+    const sid = await getSidForOrgId(org?.id, cookieStoreId);
+    if (sid) return sid;
+    if (strictStore) {
+      // A saved-org key need not be Organization.Id. Resolve by domain in the
+      // identified store, never fall back to a different browser profile.
+      for (const host of buildHostCandidatesForOrg(org)) {
+        try {
+          const cookie = await chrome.cookies.get({ url: 'https://' + host + '/', name: 'sid', storeId: cookieStoreId });
+          if (cookie?.value) return cookie.value;
+        } catch {}
+      }
+      return '';
+    }
+  }
+  if (strictStore) {
+    // With incognito=split, each service worker only handles tabs from its own
+    // profile. The default store is safe only when the tab matches that process.
+    if (
+      allowCurrentContextFallback &&
+      !cookieStoreId &&
+      await tabUsesCurrentExtensionCookieContext(tabId)
+    ) {
+      return resolveSidInCurrentCookieContext(org);
+    }
+    return '';
+  }
+  return resolveSidForOrg(org);
 }
 
 export async function loadSavedOrgs() {

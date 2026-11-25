@@ -24,4 +24,15 @@ describe('org swap button visibility helpers', () => {
     const hasClass = hasClassFactory(['artifact-anonymous-apex']);
     expect(isSingleOrgToolActiveFromBody(hasClass)).toBe(true);
   });
+
+  it('Comparator en vista única es mono-org (sin intercambio de entornos)', () => {
+    const hasClass = hasClassFactory(['artifact-comparator-single-view']);
+    expect(isSingleOrgToolActiveFromBody(hasClass)).toBe(true);
+    expect(isDualOrgUiActiveFromBody(hasClass)).toBe(false);
+  });
+
+  it('el Comparator sin vista única no se marca como mono-org', () => {
+    const hasClass = hasClassFactory([]);
+    expect(isSingleOrgToolActiveFromBody(hasClass)).toBe(false);
+  });
 });

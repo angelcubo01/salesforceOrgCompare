@@ -4,6 +4,7 @@ import { showToast, showToastWithSpinner, dismissSpinnerToast } from './toast.js
 import { addSelected } from '../flows/addItems.js';
 import { retrieveAndLoadFromZip } from '../flows/retrieveFlow.js';
 import { ensureModeForTool } from './appModeNav.js';
+import { resetComparatorSingleView } from './comparatorSingleView.js';
 import { getSelectedArtifactType } from './artifactTypeUi.js';
 import { applyArtifactTypeUi } from './artifactTypeUi.js';
 import { handleArtifactTypeSelectChange } from './searchSetup.js';
@@ -413,6 +414,8 @@ export function setupGeneratePackageXmlPanel() {
         state.packageXmlLocalContent[key] = { fileName: 'package.xml', content: xml };
         addSelected(packageItem);
 
+        // Retrieve de package.xml compara dos orgs: requiere salir de «Vista única».
+        resetComparatorSingleView();
         await ensureModeForTool('Comparator');
         handleArtifactTypeSelectChange({ isUserChange: false, preserveSelection: true });
 

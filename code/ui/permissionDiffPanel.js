@@ -46,6 +46,15 @@ let committedUserLeft = null;
 /** @type {{ id: string, name: string, username: string, profileName?: string }|null} */
 let committedUserRight = null;
 
+/** Usuario opcional recibido desde la gestión de usuarios por deep link. */
+let pendingDeepLinkedUser = (() => {
+  const params = new URLSearchParams(globalThis.location?.search || '');
+  const id = String(params.get('permissionDiffUserId') || '').trim();
+  const name = String(params.get('permissionDiffUserName') || '').trim();
+  if (!/^005[A-Za-z0-9]{12}(?:[A-Za-z0-9]{3})?$/.test(id) || !name) return null;
+  return { id, name, username: String(params.get('permissionDiffUsername') || '').trim() };
+})();
+
 let searchTimer = null;
 let suggestGeneration = 0;
 
@@ -1276,6 +1285,18 @@ export async function refreshPermissionDiffPanel() {
   syncDirectionUi();
   if (!state.leftOrgId) {
     setStatus(t('permDiff.selectOrg'));
+    return;
+  }
+  if (pendingDeepLinkedUser) {
+    const deepLinkedUser = pendingDeepLinkedUser;
+    pendingDeepLinkedUser = null;
+    state.permissionDiffCompareMode = false;
+    if (toggle) toggle.checked = false;
+    queryDirection = 'user';
+    committedUserLeft = deepLinkedUser;
+    if (els().userLeftInput) els().userLeftInput.value = deepLinkedUser.name;
+    syncDirectionUi();
+    void runLoad();
     return;
   }
   if (isCustomPermMode()) {

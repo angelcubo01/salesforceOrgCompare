@@ -28,7 +28,8 @@ export function updateApexMethodSelection({
   const next = wholeClass ? new Set(known) : new Set(selectedMethods.filter(Boolean));
   if (checked) next.add(methodName);
   else next.delete(methodName);
-  if (!next.size) return { selectedClass: false, selectedMethods: null };
+  // Un array vacío mantiene la clase seleccionada, aunque no haya métodos ejecutables.
+  if (!next.size) return { selectedClass: true, selectedMethods: [] };
   if (known.length && known.every((name) => next.has(name))) {
     return { selectedClass: true, selectedMethods: null };
   }

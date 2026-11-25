@@ -14,8 +14,15 @@ import {
  * @param {string} mime
  * @param {string} fileName
  */
-function downloadTextFile(content, mime, fileName) {
-  const blob = new Blob([content], { type: mime });
+export function downloadTextFile(content, mime, fileName) {
+  downloadBlobFile(new Blob([content], { type: mime }), fileName);
+}
+
+/**
+ * @param {Blob} blob
+ * @param {string} fileName
+ */
+export function downloadBlobFile(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

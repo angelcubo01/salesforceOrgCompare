@@ -43,6 +43,8 @@ export const state = {
   queryExplorerCompareMode: false,
   dependencyExplorerCompareMode: false,
   recordCompareCompareMode: false,
+  /** Comparar metadata en «vista única»: abre el componente solo en la org izquierda, sin diff. */
+  comparatorSingleView: false,
   orgsList: [],
   /** Contexto de retorno desde Deploy Status a Quick Edit / Lightning Quick Edit. */
   quickEditDeployReturn: null

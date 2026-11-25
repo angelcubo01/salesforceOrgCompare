@@ -44,7 +44,7 @@ import {
   syncQueryExplorerEditorLanguage,
   applyQueryExplorerEditorHeight
 } from './queryExplorerMonaco.js';
-import { parseQueryExplorerDeepLink } from '../../shared/queryExplorerBuilder.js';
+import { encodeQueryExplorerDeepLink, parseQueryExplorerDeepLink } from '../../shared/queryExplorerBuilder.js';
 
 const QUERY_EXPLORER_SAVED_KEY = 'sfoc_query_explorer_saved_queries';
 const LARGE_QUERY_RESULT_THRESHOLD = 100_000;
@@ -1946,11 +1946,14 @@ function findSavedQueryByName(name) {
 
 function syncSaveQueryButtonLabels() {
   const saveBtn = document.getElementById('queryExplorerSaveNamedQueryBtn');
+  const quickBtn = document.getElementById('queryExplorerQuickSaveBtn');
   const inp = /** @type {HTMLInputElement | null} */ (document.getElementById('queryExplorerQueryNameInput'));
   if (!inp) return;
   const selectedExists = !!selectedSavedQueryId
     && readSavedQueries().some((x) => x.id === selectedSavedQueryId);
-  if (saveBtn) saveBtn.textContent = t(selectedExists ? 'queryExplorer.updateNamedQuery' : 'queryExplorer.saveNamedQuery');
+  const labelKey = selectedExists ? 'queryExplorer.updateNamedQuery' : 'queryExplorer.saveNamedQuery';
+  if (saveBtn) saveBtn.textContent = t(labelKey);
+  if (quickBtn) quickBtn.textContent = t(labelKey);
 }
 
 function closeQueryExplorerSavedModal() {
@@ -2147,9 +2150,44 @@ async function persistQueryWithName(name) {
   return true;
 }
 
+async function quickSaveCurrentQuery() {
+  await ensureQueryExplorerEditor();
+  const body = getQueryExplorerEditorRawText();
+  if (!body.trim()) {
+    showToast(t('queryExplorer.emptyQuerySave'), 'warn');
+    return;
+  }
+  const selected = selectedSavedQueryId
+    ? readSavedQueries().find((item) => item.id === selectedSavedQueryId)
+    : null;
+  if (selected) {
+    await persistQueryWithName(selected.name);
+    return;
+  }
+  openQueryExplorerSavedModal();
+}
+
+async function copyQueryDeepLink() {
+  const query = getQueryExplorerQueryText().trim();
+  if (!query) {
+    showToast(t('queryExplorer.builderMissingQuery'), 'warn');
+    return;
+  }
+  const { api, lang } = getQueryExplorerApiLangFromControls();
+  const suffix = encodeQueryExplorerDeepLink(query, { api, lang });
+  const url = `${window.location.origin}${window.location.pathname}${suffix}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast(t('queryExplorer.linkCopied'), 'success');
+  } catch {
+    showToast(t('queryExplorer.linkCopyFailed'), 'error');
+  }
+}
+
 function setupQueryExplorerSavedQueriesUi() {
   const saveNamedBtn = document.getElementById('queryExplorerSaveNamedQueryBtn');
   const openModalBtn = document.getElementById('queryExplorerOpenSavedModalBtn');
+  const quickSaveBtn = document.getElementById('queryExplorerQuickSaveBtn');
   const newSavedQueryBtn = document.getElementById('queryExplorerNewSavedQueryBtn');
   const searchInput = document.getElementById('queryExplorerSavedQueriesSearch');
   const scriptNameInput = document.getElementById('queryExplorerQueryNameInput');
@@ -2162,6 +2200,7 @@ function setupQueryExplorerSavedQueriesUi() {
     });
   }
   if (openModalBtn) openModalBtn.addEventListener('click', () => openQueryExplorerSavedModal());
+  if (quickSaveBtn) quickSaveBtn.addEventListener('click', () => void quickSaveCurrentQuery());
   if (newSavedQueryBtn) newSavedQueryBtn.addEventListener('click', startNewSavedQuery);
   if (backdrop) backdrop.addEventListener('click', () => closeQueryExplorerSavedModal());
   if (closeBtn) closeBtn.addEventListener('click', () => closeQueryExplorerSavedModal());
@@ -2266,6 +2305,7 @@ export function setupQueryExplorerPanel() {
   document.getElementById('queryExplorerRightCopyCsv')?.addEventListener('click', () => void copyQueryExport('right', 'csv'));
   document.getElementById('queryExplorerRightCopyExcel')?.addEventListener('click', () => void copyQueryExport('right', 'excel'));
   document.getElementById('queryExplorerRightSendToImportBtn')?.addEventListener('click', () => void sendQueryRowsToImport('right'));
+  document.getElementById('queryExplorerCopyLinkBtn')?.addEventListener('click', () => void copyQueryDeepLink());
 
   syncCompareLayoutUi();
   syncToolingSoslRule();

@@ -12,7 +12,7 @@ import { installRecordViewerShortcut } from './recordViewerShortcut.js';
 
 /** @type {Map<string, () => void>} */
 const teardownById = new Map();
-/** @type {ReturnType<typeof setInterval> | null} */
+/** @type {ReturnType<typeof setTimeout> | null} */
 let retryTimer = null;
 /** @type {ReturnType<typeof setTimeout> | null} */
 let bootstrapTimer = null;
@@ -20,6 +20,8 @@ let bootstrapTimer = null;
 let bootstrapRunning = false;
 /** Señal para re-ejecutar tras el bootstrap en curso. */
 let bootstrapQueued = false;
+/** Sondeo de navegación SPA; solo existe en documentos que pueden necesitarlo. */
+let navigationPollTimer = null;
 /** El atajo no inyecta DOM, pero sigue el mismo toggle que las integraciones UI. */
 let teardownRecordViewerShortcut = null;
 let activeRecordViewerShortcut = '';
@@ -42,7 +44,7 @@ function syncRecordViewerShortcut(settings) {
 
 function clearRetryTimer() {
   if (retryTimer != null) {
-    clearInterval(retryTimer);
+    clearTimeout(retryTimer);
     retryTimer = null;
   }
 }
@@ -204,18 +206,18 @@ async function bootstrap() {
   // Solo arrancar el retry si aún no hay uno activo (no reiniciarlo en cada bootstrap).
   if (retryTimer == null) {
     let attempts = 0;
-    retryTimer = setInterval(() => {
-      attempts += 1;
-      if (attempts > 40) {
-        clearRetryTimer();
-        return;
-      }
+    const retry = () => {
+      retryTimer = null;
+      if (!document.hidden) attempts += 1;
+      if (attempts > 40) return;
       for (const integration of SF_INJECT_CONTENT_INTEGRATIONS) {
         if (!relevantIds.has(integration.id)) continue;
         if (!isSfInjectIntegrationEnabled(settings, integration.id)) continue;
         integration.retryInject?.(document, ctx);
       }
-    }, 1500);
+      retryTimer = setTimeout(retry, document.hidden ? 5000 : 1500);
+    };
+    retryTimer = setTimeout(retry, document.hidden ? 5000 : 1500);
   }
 }
 
@@ -244,8 +246,36 @@ function checkHrefChanged() {
 window.addEventListener('popstate', checkHrefChanged);
 window.addEventListener('hashchange', checkHrefChanged);
 
-// Lightning a veces cambia la URL sin popstate; muestreo barato.
-setInterval(checkHrefChanged, 1000);
+// Lightning a veces cambia la URL sin popstate. Los iframes irrelevantes no
+// necesitan mantener un intervalo de por vida; el documento superior sí se
+// observa porque puede navegar por la SPA hacia una página compatible.
+function shouldPollNavigation() {
+  return window.top === window || anyParentPageActive();
+}
+
+function scheduleNavigationPoll() {
+  if (navigationPollTimer != null) clearTimeout(navigationPollTimer);
+  navigationPollTimer = null;
+  if (!shouldPollNavigation()) return;
+  navigationPollTimer = setTimeout(() => {
+    navigationPollTimer = null;
+    checkHrefChanged();
+    scheduleNavigationPoll();
+  }, document.hidden ? 5000 : 1000);
+}
+
+function onVisibilityChange() {
+  if (!document.hidden) checkHrefChanged();
+  scheduleNavigationPoll();
+}
+
+document.addEventListener('visibilitychange', onVisibilityChange);
+window.addEventListener('pagehide', () => {
+  if (navigationPollTimer != null) clearTimeout(navigationPollTimer);
+  navigationPollTimer = null;
+  clearRetryTimer();
+}, { once: true });
+scheduleNavigationPoll();
 
 try {
   chrome.storage.onChanged.addListener((changes, area) => {

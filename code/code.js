@@ -59,6 +59,7 @@ import { setupFieldDependencyPanel } from './ui/fieldDependencyPanel.js';
 import { setupObjectDescribePanel, refreshObjectDescribePanel } from './ui/objectDescribePanel.js';
 import { setupRestExplorerPanel, refreshRestExplorerPanel } from './ui/restExplorerPanel.js';
 import { setupDataWorkbenchPanel, refreshDataWorkbenchPanel } from './ui/dataWorkbenchPanel.js';
+import { setupPermissionAccessPanel, refreshPermissionAccessPanel } from './ui/permissionAccessPanel.js';
 import { setupBulkJobMonitorPanel, refreshBulkJobMonitorPanel } from './ui/bulkJobMonitorPanel.js';
 import { setupEventMonitorPanel, refreshEventMonitorPanel } from './ui/eventMonitorPanel.js';
 import {
@@ -73,6 +74,7 @@ import {
   openAnonymousApexSavedScript
 } from './ui/anonymousApexPanel.js';
 import { setupOrgLimitsPanel, refreshOrgLimitsPanel } from './ui/orgLimitsPanel.js';
+import { setupComparatorSingleViewToggle } from './ui/comparatorSingleView.js';
 import {
   setupEnvironmentStatusPanel,
   refreshEnvironmentStatusPanel,
@@ -331,6 +333,7 @@ async function init() {
     await openAnonymousApexInMonaco();
   }
   setupOrgLimitsPanel();
+  setupComparatorSingleViewToggle();
   setupEnvironmentStatusPanel();
   setupDeployStatusPanel();
   setupPermissionDiffPanel();
@@ -351,6 +354,7 @@ async function init() {
   setupObjectDescribePanel();
   setupRestExplorerPanel();
   setupDataWorkbenchPanel();
+  setupPermissionAccessPanel();
   setupBulkJobMonitorPanel();
   setupEventMonitorPanel();
   setupDependencyExplorerPanel();
@@ -375,35 +379,6 @@ async function init() {
     renderEditor();
   }
   refreshGeneratePackageXmlTypes();
-  // Cada panel decide internamente si es el activo. Esperar sus promesas evita
-  // enseñar una aplicación a medio hidratar, sin bloquear por fallos aislados
-  // de un servicio o de un entorno.
-  await Promise.allSettled([
-    refreshLandingToolRecents(),
-    refreshMetadataTypeComparePanel(),
-    refreshApexTestsPanel(),
-    refreshAnonymousApexPanel(),
-    refreshOrgLimitsPanel(),
-    refreshEnvironmentStatusPanel(),
-    refreshDeployStatusPanel(),
-    refreshPermissionDiffPanel(),
-    refreshQueryExplorerPanel(),
-    refreshRestExplorerPanel(),
-    refreshObjectDescribePanel(),
-    refreshDataWorkbenchPanel(),
-    refreshBulkJobMonitorPanel(),
-    refreshEventMonitorPanel(),
-    refreshDebugLogBrowserPanel(),
-    refreshApexCoverageComparePanel(),
-    refreshCustomSettingsComparePanel(),
-    refreshCustomMetadataComparePanel(),
-    refreshRecordComparePanel(),
-    refreshSetupAuditTrailPanel(),
-    refreshFieldHistoryPanel(),
-    refreshQuickEditPanel(),
-    refreshLightningQuickEditPanel(),
-    Promise.resolve(refreshDependencyExplorerPanel())
-  ]);
   setupResizable();
   setupCompareListToolbar();
   setupDownloadAll();
@@ -420,6 +395,48 @@ async function init() {
   syncCompareUrlFromState(state);
   setupPersistSavedItemsOnPageClose();
   setupClearApexTestJobsOnPageClose();
+
+  // La navegación, los botones y el editor ya son utilizables. Las cargas de
+  // datos de la herramienta activa se lanzan al ceder el primer frame para no
+  // mantener el splash por trabajo de red o de paneles que el usuario no ve.
+  revealAppNavigation();
+  const initialPanelRefreshers = [
+    refreshLandingToolRecents,
+    refreshMetadataTypeComparePanel,
+    refreshApexTestsPanel,
+    refreshAnonymousApexPanel,
+    refreshOrgLimitsPanel,
+    refreshEnvironmentStatusPanel,
+    refreshDeployStatusPanel,
+    refreshPermissionDiffPanel,
+    refreshQueryExplorerPanel,
+    refreshRestExplorerPanel,
+    refreshObjectDescribePanel,
+    refreshDataWorkbenchPanel,
+    refreshPermissionAccessPanel,
+    refreshBulkJobMonitorPanel,
+    refreshEventMonitorPanel,
+    refreshDebugLogBrowserPanel,
+    refreshApexCoverageComparePanel,
+    refreshCustomSettingsComparePanel,
+    refreshCustomMetadataComparePanel,
+    refreshRecordComparePanel,
+    refreshSetupAuditTrailPanel,
+    refreshFieldHistoryPanel,
+    refreshQuickEditPanel,
+    refreshLightningQuickEditPanel,
+    refreshDependencyExplorerPanel
+  ];
+  const refreshInitialPanels = () => Promise.allSettled(
+    initialPanelRefreshers.map((refresh) => Promise.resolve().then(refresh))
+  );
+  requestAnimationFrame(() => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => { void refreshInitialPanels(); }, { timeout: 200 });
+    } else {
+      setTimeout(() => { void refreshInitialPanels(); }, 0);
+    }
+  });
   setInterval(async () => {
     const auth = await bg({ type: 'auth:getStatuses', force: true });
     state.authStatuses = auth.ok ? auth.statuses || {} : {};

@@ -10,26 +10,56 @@ import {
 } from './salesforceRestErrors.js';
 import { normalizeSalesforceIdKey } from './salesforceIds.js';
 
-function createWindowLimiter(maxPerWindow, windowMs) {
-  const stamps = [];
+function createConcurrencyLimiter(maxConcurrent) {
+  let active = 0;
+  const waiters = [];
+
   async function acquire() {
-    const now = Date.now();
-    const stillValid = stamps.filter((ts) => now - ts < windowMs);
-    stamps.length = 0;
-    stamps.push(...stillValid);
-    if (stamps.length < maxPerWindow) {
-      stamps.push(now);
-      return;
+    if (active >= maxConcurrent) {
+      await new Promise((resolve) => waiters.push(resolve));
     }
-    const oldest = Math.min(...stamps);
-    const sleep = windowMs - (now - oldest) + 12;
-    if (sleep > 0) await new Promise((r) => setTimeout(r, sleep));
-    return acquire();
+    active += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      active = Math.max(0, active - 1);
+      waiters.shift()?.();
+    };
   }
+
   return { acquire };
 }
 
-const restGate = createWindowLimiter(5, 1000);
+// Salesforce limita las peticiones concurrentes, no las peticiones cortas por
+// segundo. La antigua ventana global de 5 req/s introducía pausas de un segundo
+// incluso con respuestas inmediatas y hacía que una org frenase a la otra.
+const REST_MAX_CONCURRENT_PER_ORIGIN = 6;
+const restGates = new Map();
+
+function restGateFor(instanceUrl) {
+  let origin = String(instanceUrl || '').replace(/\/$/, '');
+  try {
+    origin = new URL(origin).origin;
+  } catch {
+    // La validación de la URL y el error útil siguen correspondiendo a fetch().
+  }
+  let gate = restGates.get(origin);
+  if (!gate) {
+    gate = createConcurrencyLimiter(REST_MAX_CONCURRENT_PER_ORIGIN);
+    restGates.set(origin, gate);
+  }
+  return gate;
+}
+
+async function gatedFetch(instanceUrl, url, init) {
+  const release = await restGateFor(instanceUrl).acquire();
+  try {
+    return await fetch(url, init);
+  } finally {
+    release();
+  }
+}
 
 function escapeSoqlLiteral(value) {
   const s = String(value == null ? '' : value);
@@ -42,12 +72,11 @@ function sanitizeSearchPrefix(prefix) {
 }
 
 async function restFetchWithSid(instanceUrl, sid, path, init = {}) {
-  await restGate.acquire();
   const url = `${String(instanceUrl).replace(/\/$/, '')}${path}`;
   const headers = new Headers(init.headers || {});
   headers.set('Authorization', `Bearer ${sid}`);
   headers.set('Accept', 'application/json');
-  return fetch(url, { ...init, headers });
+  return gatedFetch(instanceUrl, url, { ...init, headers });
 }
 
 /**
@@ -1246,7 +1275,6 @@ export function stripLeadingWhileOneJson(text) {
  */
 export async function fetchApexTestQueueServletStatus(instanceUrl, sid) {
   try {
-    await restGate.acquire();
     const base = String(instanceUrl).replace(/\/$/, '');
     const url = `${base}/_ui/common/apex/test/ApexTestQueueServlet?action=STATUS&_=${Date.now()}`;
     const headers = new Headers();
@@ -1254,7 +1282,7 @@ export async function fetchApexTestQueueServletStatus(instanceUrl, sid) {
     headers.set('Accept', 'application/json');
     headers.set('X-Requested-With', 'XMLHttpRequest');
     headers.set('sforce-call-options', 'client=devconsole');
-    const res = await fetch(url, { method: 'GET', headers });
+    const res = await gatedFetch(instanceUrl, url, { method: 'GET', headers });
     const text = await res.text();
     if (!res.ok) return APEX_TEST_QUEUE_SERVLET_EMPTY;
     let json;
@@ -1331,8 +1359,7 @@ async function fetchApexLogBodyResponse(instanceUrl, sid, apiVersion, logId) {
   ];
   let lastStatus = 0;
   for (const url of urls) {
-    await restGate.acquire();
-    const res = await fetch(url, { headers, cache: 'no-store' });
+    const res = await gatedFetch(instanceUrl, url, { headers, cache: 'no-store' });
     if (res.ok) return res;
     lastStatus = res.status;
   }
@@ -1905,13 +1932,12 @@ function toSfJsonUtcDateTime(exp) {
  * @returns {Promise<{ userId: string, username: string, name: string }>}
  */
 export async function fetchSessionUserInfo(instanceUrl, sid) {
-  await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');
   const url = `${base}/services/oauth2/userinfo`;
   const headers = new Headers();
   headers.set('Authorization', `Bearer ${sid}`);
   headers.set('Accept', 'application/json');
-  const res = await fetch(url, { headers });
+  const res = await gatedFetch(instanceUrl, url, { headers });
   if (!res.ok) {
     const err = new Error(`userinfo: HTTP ${res.status}`);
     err.status = res.status;
@@ -1984,12 +2010,11 @@ async function queryDebugLevelIdForTraces(instanceUrl, sid, apiVersion, develope
 export async function deleteTraceFlagById(instanceUrl, sid, apiVersion, traceFlagId) {
   const id = String(traceFlagId || '').replace(/[^a-zA-Z0-9]/g, '');
   if (!id) return;
-  await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');
   const url = `${base}/services/data/v${apiVersion}/tooling/sobjects/TraceFlag/${id}`;
   const headers = new Headers();
   headers.set('Authorization', `Bearer ${sid}`);
-  const res = await fetch(url, { method: 'DELETE', headers });
+  const res = await gatedFetch(instanceUrl, url, { method: 'DELETE', headers });
   if (!res.ok && res.status !== 404) {
     const err = new Error(`TraceFlag DELETE: HTTP ${res.status}`);
     err.status = res.status;
@@ -2022,14 +2047,13 @@ async function deleteExistingUserDebugTraceFlags(instanceUrl, sid, apiVersion, u
 }
 
 async function toolingCreateTraceFlag(instanceUrl, sid, apiVersion, body) {
-  await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');
   const url = `${base}/services/data/v${apiVersion}/tooling/sobjects/TraceFlag/`;
   const headers = new Headers();
   headers.set('Authorization', `Bearer ${sid}`);
   headers.set('Accept', 'application/json');
   headers.set('Content-Type', 'application/json; charset=UTF-8');
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const res = await gatedFetch(instanceUrl, url, { method: 'POST', headers, body: JSON.stringify(body) });
   const text = await res.text();
   let json = {};
   try {
@@ -2143,7 +2167,7 @@ export async function searchUsersByNameOrUsername(instanceUrl, sid, apiVersion, 
  * Lista DebugLevels disponibles en el entorno.
  * @returns {Promise<Array<{ id: string, developerName: string, label: string }>>}
  */
-export async function queryDebugLevels(instanceUrl, sid, apiVersion) {
+export async function queryDebugLevels(instanceUrl, sid, apiVersion, { strict = false } = {}) {
   const soql = 'SELECT Id, DeveloperName, MasterLabel FROM DebugLevel ORDER BY MasterLabel LIMIT 200';
   let rows = [];
   try {
@@ -2151,7 +2175,8 @@ export async function queryDebugLevels(instanceUrl, sid, apiVersion) {
   } catch {
     try {
       rows = (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
-    } catch {
+    } catch (error) {
+      if (strict) throw error;
       rows = [];
     }
   }
@@ -2173,7 +2198,7 @@ export async function createUserDebugTraceFlag(
   instanceUrl,
   sid,
   apiVersion,
-  { userId, debugLevelId, startIso, expirationIso }
+  { userId, debugLevelId, startIso, expirationIso, replaceExisting = true }
 ) {
   const uid = String(userId || '').replace(/[^a-zA-Z0-9]/g, '');
   const dlId = String(debugLevelId || '').replace(/[^a-zA-Z0-9]/g, '');
@@ -2191,7 +2216,7 @@ export async function createUserDebugTraceFlag(
   if (expMs - startMs > maxWindowMs) {
     throw new Error('Trace window cannot exceed 24 hours');
   }
-  await deleteExistingUserDebugTraceFlags(instanceUrl, sid, apiVersion, uid);
+  if (replaceExisting) await deleteExistingUserDebugTraceFlags(instanceUrl, sid, apiVersion, uid);
   const body = {
     TracedEntityId: uid,
     LogType: 'USER_DEBUG',
@@ -2231,9 +2256,14 @@ import {
  * Lista TraceFlags USER_DEBUG recientes del entorno.
  * @returns {Promise<Array<{ id: string, tracedEntityId: string, debugLevelId: string, debugLevelLabel: string, debugLevelDeveloperName: string, startIso: string, expirationIso: string, logType: string }>>}
  */
-export async function queryUserDebugTraceFlags(instanceUrl, sid, apiVersion) {
+export async function queryUserDebugTraceFlags(instanceUrl, sid, apiVersion, userId = '', { strict = false, debugLevels = null } = {}) {
+  const tracedEntityId = String(userId || '').replace(/[^a-zA-Z0-9]/g, '');
+  const userFilter = /^[a-zA-Z0-9]{15}(?:[a-zA-Z0-9]{3})?$/.test(tracedEntityId)
+    ? ` AND TracedEntityId = '${escapeSoqlLiteral(tracedEntityId)}'`
+    : '';
+  const limit = userFilter ? 50 : 2000;
   const soql =
-    "SELECT Id, TracedEntityId, TracedEntity.Name, DebugLevelId, StartDate, ExpirationDate, LogType FROM TraceFlag WHERE LogType = 'USER_DEBUG' ORDER BY ExpirationDate DESC LIMIT 2000";
+    `SELECT Id, TracedEntityId, TracedEntity.Name, DebugLevelId, StartDate, ExpirationDate, LogType FROM TraceFlag WHERE LogType = 'USER_DEBUG'${userFilter} ORDER BY ExpirationDate DESC LIMIT ${limit}`;
   let rows = [];
   try {
     rows = (await toolingQuery(instanceUrl, sid, apiVersion, soql)) || [];
@@ -2241,17 +2271,18 @@ export async function queryUserDebugTraceFlags(instanceUrl, sid, apiVersion) {
     try {
       // Fallback sin relación Name por si el org no la permite.
       const soqlBasic =
-        "SELECT Id, TracedEntityId, DebugLevelId, StartDate, ExpirationDate, LogType FROM TraceFlag WHERE LogType = 'USER_DEBUG' ORDER BY ExpirationDate DESC LIMIT 2000";
+        `SELECT Id, TracedEntityId, DebugLevelId, StartDate, ExpirationDate, LogType FROM TraceFlag WHERE LogType = 'USER_DEBUG'${userFilter} ORDER BY ExpirationDate DESC LIMIT ${limit}`;
       rows = (await toolingQuery(instanceUrl, sid, apiVersion, soqlBasic)) || [];
     } catch {
       try {
         rows = (await restQuery(instanceUrl, sid, apiVersion, soql)) || [];
-      } catch {
+      } catch (error) {
+        if (strict) throw error;
         rows = [];
       }
     }
   }
-  const levels = await queryDebugLevels(instanceUrl, sid, apiVersion);
+  const levels = debugLevels || await queryDebugLevels(instanceUrl, sid, apiVersion, { strict });
   const levelById = new Map(levels.map((l) => [l.id, l]));
   return rows
     .map((r) => {
@@ -2386,7 +2417,6 @@ export async function updateUserDebugTraceFlag(
 }
 
 export async function runTestsAsynchronous(instanceUrl, sid, apiVersion, body) {
-  await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');
   const url = `${base}/services/data/v${apiVersion}/tooling/runTestsAsynchronous`;
   const headers = new Headers();
@@ -2394,7 +2424,7 @@ export async function runTestsAsynchronous(instanceUrl, sid, apiVersion, body) {
   headers.set('Accept', 'application/json');
   headers.set('Content-Type', 'application/json; charset=UTF-8');
   headers.set('sforce-call-options', 'client=devconsole');
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+  const res = await gatedFetch(instanceUrl, url, { method: 'POST', headers, body: JSON.stringify(body) });
   const text = await res.text();
   let json;
   try {
@@ -2456,12 +2486,14 @@ function decodeXmlText(s) {
 
 function extractSoapTagValue(xml, tagName) {
   try {
-    const re = new RegExp(`<${tagName}[^>]*>([\\s\\S]*?)<\\/${tagName}>`, 'i');
+    const qualifiedTag = `(?:[A-Za-z_][\\w.-]*:)?${tagName}`;
+    const re = new RegExp(`<${qualifiedTag}[^>]*>([\\s\\S]*?)<\\/${qualifiedTag}>`, 'i');
     const m = re.exec(xml || '');
     if (!m) return null;
-    const openTag = (m[0].match(new RegExp(`<${tagName}[^>]*>`, 'i')) || [''])[0];
-    if (/xsi:nil\s*=\s*["']true["']/i.test(openTag)) return null;
-    return m[1] != null ? decodeXmlText(m[1]).trim() : '';
+    const openTag = (m[0].match(new RegExp(`<${qualifiedTag}[^>]*>`, 'i')) || [''])[0];
+    if (/(?:[A-Za-z_][\w.-]*:)?nil\s*=\s*["']true["']/i.test(openTag)) return null;
+    const inner = String(m[1] ?? '').replace(/^<!\[CDATA\[([\s\S]*)\]\]>$/i, '$1');
+    return decodeXmlText(inner).trim();
   } catch {
     return null;
   }
@@ -2495,7 +2527,7 @@ export function shouldUseSoapForAnonymousBody(anonymousBody) {
  */
 export function parseExecuteAnonymousSoapResponse(responseXml) {
   const xml = String(responseXml || '');
-  if (/<faultcode/i.test(xml) || /<soapenv:Fault/i.test(xml) || /<Fault[\s>]/i.test(xml)) {
+  if (/<(?:[A-Za-z_][\w.-]*:)?faultcode/i.test(xml) || /<(?:[A-Za-z_][\w.-]*:)?Fault[\s>]/i.test(xml)) {
     const msg = extractSoapTagValue(xml, 'faultstring') || 'executeAnonymous SOAP fault';
     const err = new Error(msg);
     err.soapFault = true;
@@ -2504,7 +2536,7 @@ export function parseExecuteAnonymousSoapResponse(responseXml) {
   const resultBlock =
     extractSoapTagValue(xml, 'result') != null
       ? (() => {
-          const re = /<result[^>]*>([\s\S]*?)<\/result>/i;
+          const re = /<(?:[A-Za-z_][\w.-]*:)?result[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?result>/i;
           const m = re.exec(xml);
           return m ? m[1] : xml;
         })()
@@ -2512,6 +2544,7 @@ export function parseExecuteAnonymousSoapResponse(responseXml) {
   const compileProblem = extractSoapTagValue(resultBlock, 'compileProblem');
   const exceptionMessage = extractSoapTagValue(resultBlock, 'exceptionMessage');
   const exceptionStackTrace = extractSoapTagValue(resultBlock, 'exceptionStackTrace');
+  const debugLog = extractSoapTagValue(xml, 'debugLog');
   return {
     line: parseSoapInt(extractSoapTagValue(resultBlock, 'line')),
     column: parseSoapInt(extractSoapTagValue(resultBlock, 'column')),
@@ -2519,18 +2552,36 @@ export function parseExecuteAnonymousSoapResponse(responseXml) {
     success: parseSoapBool(extractSoapTagValue(resultBlock, 'success')),
     compileProblem: compileProblem || null,
     exceptionMessage: exceptionMessage || null,
-    exceptionStackTrace: exceptionStackTrace || null
+    exceptionStackTrace: exceptionStackTrace || null,
+    ...(debugLog != null ? { logs: debugLog } : {})
   };
 }
 
 const APEX_SOAP_NS = 'http://soap.sforce.com/2006/08/apex';
+const ANONYMOUS_APEX_DEBUG_CATEGORIES = Object.freeze([
+  ['Db', 'INFO'],
+  ['Workflow', 'INFO'],
+  ['Validation', 'INFO'],
+  ['Callout', 'INFO'],
+  ['Apex_code', 'DEBUG'],
+  ['Apex_profiling', 'INFO'],
+  ['Visualforce', 'INFO'],
+  ['System', 'DEBUG']
+]);
 
 /**
  * Construye el envelope SOAP para executeAnonymous (Apex API).
  * @param {string} sid
  * @param {string} body
+ * @param {{ captureDebugLog?: boolean }} [options]
  */
-export function buildExecuteAnonymousSoapEnvelope(sid, body) {
+export function buildExecuteAnonymousSoapEnvelope(sid, body, options = {}) {
+  const debuggingHeader = options.captureDebugLog
+    ? `<DebuggingHeader>${ANONYMOUS_APEX_DEBUG_CATEGORIES.map(
+        ([category, level]) =>
+          `<categories><category>${category}</category><level>${level}</level></categories>`
+      ).join('')}</DebuggingHeader>`
+    : '';
   return (
     `<?xml version="1.0" encoding="UTF-8"?>` +
     `<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/" ` +
@@ -2541,6 +2592,7 @@ export function buildExecuteAnonymousSoapEnvelope(sid, body) {
     `<SessionHeader>` +
     `<sessionId>${escapeXmlText(sid)}</sessionId>` +
     `</SessionHeader>` +
+    debuggingHeader +
     `</env:Header>` +
     `<env:Body>` +
     `<executeAnonymous>` +
@@ -2562,13 +2614,12 @@ function buildApexSoapEndpoint(instanceUrl, apiVersion, salesforceOrgId) {
 }
 
 async function executeAnonymousViaRest(instanceUrl, sid, apiVersion, body) {
-  await restGate.acquire();
   const base = String(instanceUrl).replace(/\/$/, '');
   const url = `${base}/services/data/v${apiVersion}/tooling/executeAnonymous/?anonymousBody=${encodeURIComponent(body)}`;
   const headers = new Headers();
   headers.set('Authorization', `Bearer ${sid}`);
   headers.set('Accept', 'application/json');
-  const res = await fetch(url, { method: 'GET', headers });
+  const res = await gatedFetch(instanceUrl, url, { method: 'GET', headers });
   const text = await res.text();
   let json;
   try {
@@ -2591,11 +2642,10 @@ async function executeAnonymousViaRest(instanceUrl, sid, apiVersion, body) {
   return json;
 }
 
-async function executeAnonymousViaSoap(instanceUrl, sid, apiVersion, body, salesforceOrgId) {
-  await restGate.acquire();
+async function executeAnonymousViaSoap(instanceUrl, sid, apiVersion, body, salesforceOrgId, options = {}) {
   const url = buildApexSoapEndpoint(instanceUrl, apiVersion, salesforceOrgId);
-  const envelope = buildExecuteAnonymousSoapEnvelope(sid, body);
-  const res = await fetch(url, {
+  const envelope = buildExecuteAnonymousSoapEnvelope(sid, body, options);
+  const res = await gatedFetch(instanceUrl, url, {
     method: 'POST',
     headers: {
       'Content-Type': 'text/xml; charset=UTF-8',
@@ -2622,11 +2672,12 @@ export async function executeAnonymous(
   sid,
   apiVersion,
   anonymousBody,
-  salesforceOrgId
+  salesforceOrgId,
+  options = {}
 ) {
   const body = String(anonymousBody == null ? '' : anonymousBody);
-  if (shouldUseSoapForAnonymousBody(body)) {
-    return executeAnonymousViaSoap(instanceUrl, sid, apiVersion, body, salesforceOrgId);
+  if (options.captureDebugLog === true || shouldUseSoapForAnonymousBody(body)) {
+    return executeAnonymousViaSoap(instanceUrl, sid, apiVersion, body, salesforceOrgId, options);
   }
   return executeAnonymousViaRest(instanceUrl, sid, apiVersion, body);
 }

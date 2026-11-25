@@ -30,7 +30,8 @@ export const APP_NAV_DEVELOPMENT_TOOLS = Object.freeze([
   'ApexCoverageCompare',
   'EventMonitor',
   'QueryExplorer',
-  'DataWorkbench'
+  'DataWorkbench',
+  'PermissionAccess'
 ]);
 
 /** Modo «Análisis»: dependencias, permisos y comparación de datos entre orgs. */

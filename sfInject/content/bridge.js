@@ -139,3 +139,27 @@ export async function extendUserTraceFlag(opts) {
     return { ok: false, reason: 'MESSAGE_FAILED' };
   }
 }
+
+/** API de Users de Setup Palette: nunca transporta sesiones al content script. */
+export const setupPaletteUsersBridge = Object.freeze({
+  search: (orgId, query) => sfInjectSend({ type: 'sfInject:searchSetupUsers', orgId, query }),
+  details: (orgId, userId) => sfInjectSend({ type: 'sfInject:getSetupUserDetails', orgId, userId }),
+  permissionSets: (orgId, userId) => sfInjectSend({ type: 'sfInject:getUserPermissionAssignments', orgId, userId }),
+  permissionSetGroups: (orgId, userId) => sfInjectSend({ type: 'sfInject:getUserPermissionGroupAssignments', orgId, userId }),
+  availablePermissions: (orgId, userId, kind, query, cursor = null) => sfInjectSend({ type: 'sfInject:searchUserAvailablePermissions', orgId, userId, kind, query, cursor }),
+  publicGroups: (orgId, userId) => sfInjectSend({ type: 'sfInject:getUserPublicGroups', orgId, userId }),
+  loginAvailability: (orgId, userId) => sfInjectSend({ type: 'sfInject:getUserLoginAsAvailability', orgId, userId }),
+  assignPermissionSets: (orgId, userId, ids) => sfInjectSend({ type: 'sfInject:assignUserPermissionSets', orgId, userId, ids }),
+  removePermissionSets: (orgId, userId, assignmentIds) => sfInjectSend({ type: 'sfInject:removeUserPermissionSets', orgId, userId, assignmentIds }),
+  assignGroups: (orgId, userId, ids) => sfInjectSend({ type: 'sfInject:assignUserPermissionSetGroups', orgId, userId, ids }),
+  removeGroups: (orgId, userId, assignmentIds) => sfInjectSend({ type: 'sfInject:removeUserPermissionSetGroups', orgId, userId, assignmentIds }),
+  traces: (orgId, userId) => sfInjectSend({ type: 'sfInject:getUserTraceConfiguration', orgId, userId }),
+  createTrace: (orgId, userId, options) => sfInjectSend({ type: 'sfInject:createUserTraceFlag', orgId, userId, ...options }),
+  updateTrace: (orgId, userId, options) => sfInjectSend({ type: 'sfInject:updateUserTraceFlag', orgId, userId, ...options }),
+  extendTrace: (orgId, userId, traceFlagId, minutes = 30) => sfInjectSend({ type: 'sfInject:extendUserTraceFlag', orgId, userId, traceFlagId, minutes }),
+  deleteTrace: (orgId, userId, traceFlagId) => sfInjectSend({ type: 'sfInject:deleteUserTraceFlag', orgId, userId, traceFlagId }),
+  setPassword: (orgId, userId, password) => sfInjectSend({ type: 'sfInject:setUserPassword', orgId, userId, password }),
+  updateUser: (orgId, userId, fields) => sfInjectSend({ type: 'sfInject:updateSetupUser', orgId, userId, fields }),
+  openPermissionAnalysis: (orgId, userId) => sfInjectSend({ type: 'sfInject:openUserPermissionAnalysis', orgId, userId }),
+  loginAs: (orgId, userId, target) => sfInjectSend({ type: 'sfInject:openUserLoginAs', orgId, userId, target })
+});

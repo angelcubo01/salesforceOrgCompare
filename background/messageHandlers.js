@@ -292,6 +292,13 @@ import {
   fetchAssignmentsForCustomPermission
 } from '../shared/permissionsDiffApi.js';
 import {
+  applyPermissionAccessBatch,
+  describePermissionAccessObject,
+  previewPermissionAccess,
+  searchPermissionAccessObjects,
+  searchPermissionAccessTargets
+} from '../shared/permissionAccessApi.js';
+import {
   resolveHistoryContext,
   queryFieldHistoryRows,
   isValidSalesforceRecordId
@@ -425,9 +432,7 @@ import {
   getMetadataDeployMaxAttempts,
   getMetadataDeployPollIntervalMs,
   getDebugLogsListMaxRows,
-  getSetupAuditQueryDefaultLimit,
-  getAnonymousApexLogSearchMaxAttempts,
-  getAnonymousApexLogSearchDelayMs
+  getSetupAuditQueryDefaultLimit
 } from '../shared/extensionSettings.js';
 import { stageApexViewerPayload, takeApexViewerPayload } from './apexViewerStaging.js';
 import { isTestSetupApexTestResult } from '../shared/apexTestMakeDataMethod.js';
@@ -656,8 +661,9 @@ import {
   buildOrgFromActiveTab,
   checkOrgAuthStatus,
   getOrderedSavedOrgs,
-  resolveSidForOrg,
   getSidForOrgId,
+  resolveSidForOrgInTab,
+  resolveSidForOrg,
   ALLOWED_SF_SUFFIXES,
   loadSavedOrgOrder,
   loadSavedOrgs,
@@ -672,7 +678,7 @@ import {
 const RECORD_VIEWER_REQUEST_PREFIX = 'sfoc_record_viewer_request:';
 const RECORD_VIEWER_REQUEST_TTL_MS = 10 * 60 * 1000;
 
-async function recordViewerContext(requestId, direct = {}) {
+async function recordViewerContext(requestId, direct = {}, sender) {
   const id = String(requestId || '').trim();
   if (/^[a-f0-9-]{36}$/i.test(id)) {
     const key = `${RECORD_VIEWER_REQUEST_PREFIX}${id}`;
@@ -691,7 +697,11 @@ async function recordViewerContext(requestId, direct = {}) {
   const saved = await loadSavedOrgs();
   const savedOrg = saved[orgId];
   if (savedOrg && new URL(savedOrg.instanceUrl).origin === instance.origin) return { orgId, recordId, org: savedOrg };
-  const sid = await getSidForOrgId(orgId);
+  const sid = await resolveSidForOrgInTab(
+    { id: orgId, instanceUrl: instance.origin },
+    sender?.tab?.id,
+    { strictStore: true, allowCurrentContextFallback: true }
+  );
   if (!sid) return null;
   try {
     const orgInfo = await getOrganizationInfo(instance.origin, sid, '63.0');
@@ -1924,25 +1934,14 @@ export function installMessageHandlers() {
               break;
             }
             const startedAtIso = new Date().toISOString();
-            let traceFlagId = null;
             try {
-              try {
-                await loadExtensionSettings();
-                traceFlagId = await enableUserDebugTraceForSessionUser(
-                  org.instanceUrl,
-                  sid,
-                  org.apiVersion,
-                  getApexTestsTraceDebugLevel()
-                );
-              } catch {
-                traceFlagId = null;
-              }
               const result = await executeAnonymous(
                 org.instanceUrl,
                 sid,
                 org.apiVersion,
                 String(anonymousBody || ''),
-                org.id
+                org.id,
+                { captureDebugLog: true }
               );
               let logId = '';
               // Errores de compilación (compiled=false) no generan ejecución ni log útil.
@@ -1950,46 +1949,23 @@ export function installMessageHandlers() {
                 try {
                   const userId = await fetchSessionUserId(org.instanceUrl, sid);
                   const startedMs = new Date(startedAtIso).getTime();
-                  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-                  const scoreAnonLog = (row) => {
-                    const st = new Date(row?.StartTime || 0).getTime();
-                    const op = String(row?.Operation || '').toLowerCase();
-                    let score = 0;
-                    if (Number.isFinite(st)) {
-                      if (st >= startedMs - 15_000) score += 80;
-                      score += Math.min(40, Math.max(0, (st - (startedMs - 120_000)) / 10_000));
-                    }
-                    if (op === 'execute anonymous') score += 120;
-                    else if (op.includes('anonymous')) score += 60;
-                    else if (op === 'developer console') score -= 30;
-                    return score;
-                  };
-                  for (
-                    let attempt = 0;
-                    attempt < getAnonymousApexLogSearchMaxAttempts() && !logId;
-                    attempt++
-                  ) {
-                    if (attempt > 0) await sleep(getAnonymousApexLogSearchDelayMs());
-                    const since = new Date(startedMs - 120_000).toISOString();
-                    const until = new Date(Date.now() + 10_000).toISOString();
-                    let logs =
-                      (await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
-                        logUserId: userId,
-                        operationEquals: 'Execute Anonymous',
-                        limit: 40
-                      })) || [];
-                    if (!logs.length) {
-                      logs =
-                        (await queryApexLogsInWindow(org.instanceUrl, sid, org.apiVersion, since, until, {
-                          logUserId: userId,
-                          limit: 40
-                        })) || [];
-                    }
-                    const ranked = [...logs]
-                      .filter((r) => r?.Id)
-                      .sort((a, b) => scoreAnonLog(b) - scoreAnonLog(a));
-                    if (ranked[0]?.Id) logId = String(ranked[0].Id);
-                  }
+                  const logs =
+                    (await queryApexLogsInWindow(
+                      org.instanceUrl,
+                      sid,
+                      org.apiVersion,
+                      new Date(startedMs - 5_000).toISOString(),
+                      new Date(Date.now() + 10_000).toISOString(),
+                      { logUserId: userId, operationEquals: 'Execute Anonymous', limit: 20 }
+                    )) || [];
+                  const closest = [...logs]
+                    .filter((row) => row?.Id && Number.isFinite(new Date(row?.StartTime || 0).getTime()))
+                    .sort(
+                      (a, b) =>
+                        Math.abs(new Date(a.StartTime).getTime() - startedMs) -
+                        Math.abs(new Date(b.StartTime).getTime() - startedMs)
+                    )[0];
+                  if (closest?.Id) logId = String(closest.Id);
                 } catch {
                   logId = '';
                 }
@@ -2003,14 +1979,6 @@ export function installMessageHandlers() {
               });
             } catch (e) {
               replyHandlerError(reply, e);
-            } finally {
-              if (traceFlagId) {
-                try {
-                  await deleteTraceFlagById(org.instanceUrl, sid, org.apiVersion, traceFlagId);
-                } catch {
-                  /* ignore cleanup error */
-                }
-              }
             }
             break;
           }
@@ -3059,12 +3027,15 @@ export function installMessageHandlers() {
             break;
           }
           case 'recordViewer:load': {
-            const context = await recordViewerContext(message.requestId, message);
+            const context = await recordViewerContext(message.requestId, message, sender);
             if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
             const saved = await loadSavedOrgs();
             const org = context.org || saved[context.orgId];
             if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
-            const sid = context.sid || await resolveSidForOrg(org);
+            const sid = context.sid || await resolveSidForOrgInTab(org, sender?.tab?.id, {
+              strictStore: true,
+              allowCurrentContextFallback: true
+            });
             if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
             try {
               const payload = await fetchRecordViewerPayload(org.instanceUrl, sid, org.apiVersion, context.recordId);
@@ -3074,12 +3045,15 @@ export function installMessageHandlers() {
             break;
           }
           case 'recordViewer:loadPermissions': {
-            const context = await recordViewerContext(message.requestId, message);
+            const context = await recordViewerContext(message.requestId, message, sender);
             if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
             const saved = await loadSavedOrgs();
             const org = context.org || saved[context.orgId];
             if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
-            const sid = context.sid || await resolveSidForOrg(org);
+            const sid = context.sid || await resolveSidForOrgInTab(org, sender?.tab?.id, {
+              strictStore: true,
+              allowCurrentContextFallback: true
+            });
             if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
             try {
               const objectApiName = await resolveObjectFromRecordId(org.instanceUrl, sid, org.apiVersion, context.recordId);
@@ -3089,12 +3063,15 @@ export function installMessageHandlers() {
             break;
           }
           case 'recordViewer:permissionSources': {
-            const context = await recordViewerContext(message.requestId, message);
+            const context = await recordViewerContext(message.requestId, message, sender);
             if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
             const saved = await loadSavedOrgs();
             const org = context.org || saved[context.orgId];
             if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
-            const sid = context.sid || await resolveSidForOrg(org);
+            const sid = context.sid || await resolveSidForOrgInTab(org, sender?.tab?.id, {
+              strictStore: true,
+              allowCurrentContextFallback: true
+            });
             if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
             try {
               const objectApiName = await resolveObjectFromRecordId(org.instanceUrl, sid, org.apiVersion, context.recordId);
@@ -3108,12 +3085,15 @@ export function installMessageHandlers() {
             break;
           }
           case 'recordViewer:resolveTarget': {
-            const context = await recordViewerContext(message.requestId, message);
+            const context = await recordViewerContext(message.requestId, message, sender);
             if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
             const saved = await loadSavedOrgs();
             const org = context.org || saved[context.orgId];
             if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
-            const sid = context.sid || await resolveSidForOrg(org);
+            const sid = context.sid || await resolveSidForOrgInTab(org, sender?.tab?.id, {
+              strictStore: true,
+              allowCurrentContextFallback: true
+            });
             if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
             try {
               const path = Array.isArray(message.path) ? message.path.slice(0, 6) : [];
@@ -3126,7 +3106,7 @@ export function installMessageHandlers() {
             break;
           }
           case 'recordViewer:save': {
-            const context = await recordViewerContext(message.requestId, message);
+            const context = await recordViewerContext(message.requestId, message, sender);
             const patch = message.fields && typeof message.fields === 'object' && !Array.isArray(message.fields) ? message.fields : null;
             const requestedUpdates = Array.isArray(message.updates)
               ? message.updates.slice(0, 25)
@@ -3136,7 +3116,10 @@ export function installMessageHandlers() {
             if (!context || !requestedUpdates.length) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
             const saved = await loadSavedOrgs(); const org = context.org || saved[context.orgId];
             if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
-            const sid = context.sid || await resolveSidForOrg(org);
+            const sid = context.sid || await resolveSidForOrgInTab(org, sender?.tab?.id, {
+              strictStore: true,
+              allowCurrentContextFallback: true
+            });
             if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
             const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
             if (!writeGuard.ok) { reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error }); break; }
@@ -3205,11 +3188,14 @@ export function installMessageHandlers() {
             break;
           }
           case 'recordViewer:clone': {
-            const context = await recordViewerContext(message.requestId, message);
+            const context = await recordViewerContext(message.requestId, message, sender);
             if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
             const saved = await loadSavedOrgs(); const org = context.org || saved[context.orgId];
             if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
-            const sid = context.sid || await resolveSidForOrg(org);
+            const sid = context.sid || await resolveSidForOrgInTab(org, sender?.tab?.id, {
+              strictStore: true,
+              allowCurrentContextFallback: true
+            });
             if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
             const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
             if (!writeGuard.ok) { reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error }); break; }
@@ -3229,11 +3215,14 @@ export function installMessageHandlers() {
             break;
           }
           case 'recordViewer:delete': {
-            const context = await recordViewerContext(message.requestId, message);
+            const context = await recordViewerContext(message.requestId, message, sender);
             if (!context) { reply({ ok: false, reason: 'INVALID_REQUEST' }); break; }
             const saved = await loadSavedOrgs(); const org = context.org || saved[context.orgId];
             if (!org) { reply({ ok: false, reason: 'ORG_NOT_SAVED' }); break; }
-            const sid = context.sid || await resolveSidForOrg(org);
+            const sid = context.sid || await resolveSidForOrgInTab(org, sender?.tab?.id, {
+              strictStore: true,
+              allowCurrentContextFallback: true
+            });
             if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
             const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'dml_execute' });
             if (!writeGuard.ok) { reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error }); break; }
@@ -3251,6 +3240,103 @@ export function installMessageHandlers() {
               await recordLocalAudit({ action: 'dml_execute', orgId: String(org.id), detail: `recordViewer:delete:${current.objectApiName}` });
               reply({ ok: true });
             } catch (e) { replyHandlerError(reply, e, { handler: 'recordViewer:delete', artifact_type: 'RecordViewer' }); }
+            break;
+          }
+          case 'permissionAccess:searchTargets': {
+            const { orgId, targetType, queryText } = message;
+            if (message.rightOrgId || message.comparisonMode === true || (Array.isArray(message.orgIds) && message.orgIds.length > 1)) {
+              reply({ ok: false, reason: 'COMPARISON_MODE_NOT_SUPPORTED' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) { reply({ ok: false, error: 'Org not saved' }); break; }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const items = await searchPermissionAccessTargets(org.instanceUrl, sid, org.apiVersion || '63.0', targetType, queryText);
+              reply({ ok: true, items });
+            } catch (e) { replyHandlerError(reply, e); }
+            break;
+          }
+          case 'permissionAccess:searchObjects': {
+            const { orgId, queryText } = message;
+            if (message.rightOrgId || message.comparisonMode === true || (Array.isArray(message.orgIds) && message.orgIds.length > 1)) {
+              reply({ ok: false, reason: 'COMPARISON_MODE_NOT_SUPPORTED' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) { reply({ ok: false, error: 'Org not saved' }); break; }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const items = await searchPermissionAccessObjects(org.instanceUrl, sid, org.apiVersion || '63.0', queryText);
+              reply({ ok: true, items });
+            } catch (e) { replyHandlerError(reply, e); }
+            break;
+          }
+          case 'permissionAccess:describeObject': {
+            const { orgId, objectApiName } = message;
+            if (message.rightOrgId || message.comparisonMode === true || (Array.isArray(message.orgIds) && message.orgIds.length > 1)) {
+              reply({ ok: false, reason: 'COMPARISON_MODE_NOT_SUPPORTED' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) { reply({ ok: false, error: 'Org not saved' }); break; }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const object = await describePermissionAccessObject(org.instanceUrl, sid, org.apiVersion || '63.0', objectApiName);
+              reply({ ok: true, object });
+            } catch (e) { replyHandlerError(reply, e); }
+            break;
+          }
+          case 'permissionAccess:preview': {
+            const { orgId, operations } = message;
+            if (message.rightOrgId || message.comparisonMode === true || (Array.isArray(message.orgIds) && message.orgIds.length > 1)) {
+              reply({ ok: false, reason: 'COMPARISON_MODE_NOT_SUPPORTED' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) { reply({ ok: false, error: 'Org not saved' }); break; }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            try {
+              const result = await previewPermissionAccess(org.instanceUrl, sid, org.apiVersion || '63.0', operations);
+              reply({ ok: true, ...result });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'permissionAccess:preview', artifact_type: 'PermissionAccess' }); }
+            break;
+          }
+          case 'permissionAccess:applyBatch': {
+            const blocked = featureControlBlockedResponse('deploy');
+            if (blocked) { reply(blocked); break; }
+            const { orgId, operations } = message;
+            if (message.rightOrgId || message.comparisonMode === true || (Array.isArray(message.orgIds) && message.orgIds.length > 1)) {
+              reply({ ok: false, reason: 'COMPARISON_MODE_NOT_SUPPORTED' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) { reply({ ok: false, error: 'Org not saved' }); break; }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) { reply({ ok: false, reason: 'NO_SID' }); break; }
+            const writeGuard = await assertOrgWriteAllowed(org, sid, { action: 'deploy' });
+            if (!writeGuard.ok) { reply({ ok: false, reason: writeGuard.reason, error: writeGuard.error }); break; }
+            try {
+              const result = await applyPermissionAccessBatch(org.instanceUrl, sid, org.apiVersion || '63.0', operations);
+              for (const archive of result.archives || []) {
+                await rememberDeployPackageArchive(orgId, archive.asyncId, archive.zipBase64);
+              }
+              await recordLocalAudit({
+                action: 'deploy',
+                orgId: String(org.id || orgId),
+                detail: `permissionAccess:${result.summary?.applied || 0}:${result.summary?.failed || 0}:${result.summary?.unchanged || 0}`
+              });
+              reply({ ok: true, summary: result.summary, results: result.results });
+            } catch (e) { replyHandlerError(reply, e, { handler: 'permissionAccess:applyBatch', artifact_type: 'PermissionAccess' }); }
             break;
           }
           case 'permissionsDiff:search': {
@@ -4959,6 +5045,40 @@ export function installMessageHandlers() {
               const raw = Array.isArray(rows) ? rows : [];
               const methods = raw.filter((r) => !isTestSetupApexTestResult(r));
               reply({ ok: true, methods });
+            } catch (e) {
+              replyHandlerError(reply, e);
+            }
+            break;
+          }
+          case 'apexTests:getRunTimings': {
+            const { orgId, jobId } = message;
+            if (!jobId) {
+              reply({ ok: false, error: 'Missing jobId' });
+              break;
+            }
+            const saved = await loadSavedOrgs();
+            const org = saved[orgId];
+            if (!org) {
+              reply({ ok: false, error: 'Org not saved' });
+              break;
+            }
+            const sid = await resolveSidForOrg(org);
+            if (!sid) {
+              reply({ ok: false, reason: 'NO_SID' });
+              break;
+            }
+            try {
+              const esc = escapeSoqlLiteral(jobId);
+              let rows;
+              try {
+                /* IsTestSetup solo existe desde API 60: sin él se reintenta para entornos antiguos. */
+                const soql = `SELECT ApexClass.Name, MethodName, Outcome, RunTime, IsTestSetup FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
+                rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql);
+              } catch {
+                const soql2 = `SELECT ApexClass.Name, MethodName, Outcome, RunTime FROM ApexTestResult WHERE AsyncApexJobId = '${esc}' ORDER BY ApexClass.Name, MethodName LIMIT 2000`;
+                rows = await toolingQuery(org.instanceUrl, sid, org.apiVersion, soql2);
+              }
+              reply({ ok: true, methods: Array.isArray(rows) ? rows : [] });
             } catch (e) {
               replyHandlerError(reply, e);
             }

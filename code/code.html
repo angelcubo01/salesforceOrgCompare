@@ -397,7 +397,18 @@
               <span class="app-toolbar-help-icon" aria-hidden="true">?</span>
             </button>
           </div>
-          <div id="appComparisonToggleParking" hidden aria-hidden="true"></div>
+          <div id="appComparisonToggleParking" hidden aria-hidden="true">
+            <label
+              class="org-limits-compare-toggle"
+              for="comparatorSingleViewToggle"
+              data-i18n-title="code.singleViewTip"
+              title="Abre el componente solo en el entorno izquierdo, sin comparar. Útil para revisar una clase rápidamente."
+            >
+              <input type="checkbox" id="comparatorSingleViewToggle" />
+              <span class="org-limits-compare-switch" aria-hidden="true"></span>
+              <span class="org-limits-compare-label" data-i18n="code.singleView">Vista única</span>
+            </label>
+          </div>
         </div>
         <div id="featureControlsGlobalBanner" class="feature-controls-banner hidden" role="alert" hidden></div>
         <div id="editorBodyWrap" class="editor-body-wrap">
@@ -1495,6 +1506,17 @@
                 <button type="button" id="anonymousApexOpenLogBtn" class="anonymous-apex-log-btn hidden" data-i18n="anonymousApex.openLog" disabled>
                   Ver log
                 </button>
+                <button
+                  type="button"
+                  id="anonymousApexDownloadLogBtn"
+                  class="anonymous-apex-log-btn anonymous-apex-log-download-btn hidden"
+                  data-i18n-title="anonymousApex.downloadLog"
+                  title="Descargar log"
+                  disabled
+                >
+                  <svg class="sfoc-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><use href="#icon-download"></use></svg>
+                  <span data-i18n="anonymousApex.downloadLog">Descargar log</span>
+                </button>
               </div>
               <div class="anonymous-apex-output">
                 <div class="anonymous-apex-result-card anonymous-apex-result-card-full">
@@ -1714,6 +1736,83 @@
             </div>
           </div>
         </div>
+        <div id="permissionAccessPanel" class="sfoc-tool-panel permission-access-panel org-limits-panel hidden" data-tool="PermissionAccess" data-i18n-aria-label="permissionAccess.ariaPanel">
+          <div class="permission-access-inner">
+            <header class="permission-access-head">
+              <div>
+                <h2 data-i18n="permissionAccess.title">Acceso a objetos y campos</h2>
+              </div>
+              <div class="permission-access-head-actions">
+                <button type="button" id="permissionAccessRetryBtn" class="sfoc-btn sfoc-btn--secondary hidden" data-i18n="permissionAccess.retryFailed">Reintentar fallidos</button>
+                <button type="button" id="permissionAccessApplyBtn" class="sfoc-btn sfoc-btn--primary" data-i18n="permissionAccess.apply">Aplicar cambios</button>
+              </div>
+            </header>
+            <p id="permissionAccessStatus" class="permission-access-status" role="status" aria-live="polite"></p>
+            <div id="permissionAccessFlowScroll" class="permission-access-flow-scroll">
+              <div class="permission-access-builder">
+              <section id="permissionAccessResourcesCard" class="permission-access-card permission-access-resources-card">
+                <div class="permission-access-section-head">
+                  <div><h3 data-i18n="permissionAccess.resourceTitle">1. Selecciona un recurso</h3><p data-i18n="permissionAccess.resourceHint">El objeto muestra todos los permisos. Selecciona un campo para cambiar a Ver y Editar.</p></div>
+                </div>
+                <div class="permission-access-resource-controls">
+                  <div class="permission-access-search-wrap slds-combobox_container"><label for="permissionAccessObjectSearch" data-i18n="permissionAccess.object">Objeto</label>
+                    <div class="permission-access-combobox slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click">
+                      <div class="permission-access-combobox-input slds-combobox__form-element slds-input-has-icon slds-input-has-icon_left">
+                        <svg class="permission-access-search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                        <input id="permissionAccessObjectSearch" class="sfoc-query-input slds-input slds-combobox__input" type="search" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="permissionAccessObjectSuggestions" aria-expanded="false" data-i18n-placeholder="permissionAccess.searchObjectsPlaceholder" />
+                      </div>
+                      <div id="permissionAccessObjectSuggestions" class="permission-access-suggestions slds-dropdown slds-dropdown_fluid slds-listbox slds-listbox_vertical" role="listbox" hidden></div>
+                    </div>
+                  </div>
+                  <div class="permission-access-search-wrap slds-combobox_container"><label for="permissionAccessFieldSearch" data-i18n="permissionAccess.fieldOptional">Campo opcional</label>
+                    <div class="permission-access-combobox slds-combobox slds-dropdown-trigger slds-dropdown-trigger_click">
+                      <div class="permission-access-combobox-input slds-combobox__form-element slds-input-has-icon slds-input-has-icon_left">
+                        <svg class="permission-access-search-icon" aria-hidden="true"><use href="#icon-search"></use></svg>
+                        <input id="permissionAccessFieldSearch" class="sfoc-query-input slds-input slds-combobox__input" type="search" autocomplete="off" disabled role="combobox" aria-autocomplete="list" aria-controls="permissionAccessFieldSuggestions" aria-expanded="false" data-i18n-placeholder="permissionAccess.searchFieldsPlaceholder" />
+                      </div>
+                      <div id="permissionAccessFieldSuggestions" class="permission-access-suggestions slds-dropdown slds-dropdown_fluid slds-listbox slds-listbox_vertical" role="listbox" hidden></div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+              <section id="permissionAccessMatrixCard" class="permission-access-card permission-access-matrix-card">
+                <div class="permission-access-section-head">
+                  <div><h3 data-i18n="permissionAccess.matrixTitle">2. Configura accesos</h3></div>
+                </div>
+                <div id="permissionAccessMatrixLoading" class="permission-access-matrix-state hidden" role="status"><span class="permission-access-spinner" aria-hidden="true"></span><span data-i18n="permissionAccess.loadingMatrix">Cargando perfiles, permission sets y permisos actuales…</span></div>
+                <p id="permissionAccessMatrixEmpty" class="permission-access-matrix-state" data-i18n="permissionAccess.selectResourcePrompt">Selecciona un objeto para cargar la matriz de permisos.</p>
+                <div id="permissionAccessMatrixGroups" class="permission-access-matrix-container hidden" aria-labelledby="permissionAccessTargetsTitle">
+                  <div class="permission-access-target-group-head">
+                    <h4 id="permissionAccessTargetsTitle"><svg class="permission-access-inline-icon" aria-hidden="true"><use href="#icon-shield-check"></use></svg><span data-i18n="permissionAccess.targetsCombined">Perfiles y permission sets</span><span id="permissionAccessTargetsCount" class="permission-access-count"></span></h4>
+                    <label class="permission-access-mini-search"><span class="visually-hidden" data-i18n="permissionAccess.filterTargets">Filtrar perfiles y permission sets</span><svg aria-hidden="true"><use href="#icon-search"></use></svg><input id="permissionAccessTargetsSearch" type="search" data-i18n-placeholder="permissionAccess.filterTargets" /></label>
+                  </div>
+                  <div class="permission-access-table-wrap permission-access-matrix-table-wrap">
+                    <table class="permission-access-table permission-access-matrix-table slds-table slds-table_bordered slds-table_fixed-layout" role="table">
+                      <thead id="permissionAccessTargetsHead"></thead>
+                      <tbody id="permissionAccessTargetsBody"></tbody>
+                    </table>
+                  </div>
+                  <p id="permissionAccessTargetsEmpty" class="permission-access-group-empty hidden" data-i18n="permissionAccess.noTargetsMatch">No hay perfiles ni permission sets que coincidan con la búsqueda.</p>
+                </div>
+              </section>
+              </div>
+              <section class="permission-access-card permission-access-queue-card">
+                <div class="permission-access-section-head">
+                  <div><h3 data-i18n="permissionAccess.queueTitle">3. Revisar cola</h3></div>
+                  <button type="button" id="permissionAccessClearBtn" class="sfoc-btn sfoc-btn--ghost" data-i18n="permissionAccess.clearQueue">Vaciar cola</button>
+                </div>
+                <p id="permissionAccessQueueEmpty" data-i18n="permissionAccess.queueEmpty">Todavía no hay cambios en la cola.</p>
+                <div class="permission-access-table-wrap">
+                  <table class="permission-access-table permission-access-queue-table">
+                    <thead><tr><th data-i18n="permissionAccess.target">Destino</th><th data-i18n="permissionAccess.resource">Recurso</th><th data-i18n="permissionAccess.currentState">Estado actual</th><th data-i18n="permissionAccess.finalState">Estado final</th><th data-i18n="permissionAccess.result">Resultado</th><th></th></tr></thead>
+                    <tbody id="permissionAccessQueueBody"></tbody>
+                  </table>
+                </div>
+                <div id="permissionAccessSummary" class="permission-access-summary" aria-live="polite"></div>
+              </section>
+            </div>
+          </div>
+        </div>
         <div id="bulkJobMonitorPanel" class="sfoc-tool-panel bulk-job-panel org-limits-panel hidden" data-tool="BulkJobMonitor" data-i18n-aria-label="code.ariaBulkJobMonitor">
           <div class="org-limits-panel-inner bulk-job-panel-inner">
             <div class="org-limits-head">
@@ -1821,6 +1920,24 @@
                   data-i18n-title="queryExplorer.openSavedQueriesTitle"
                 >
                   Consultas guardadas
+                </button>
+                <button
+                  type="button"
+                  id="queryExplorerCopyLinkBtn"
+                  class="anonymous-apex-small-btn"
+                  data-i18n="queryExplorer.copyLink"
+                  data-i18n-title="queryExplorer.copyLinkTitle"
+                >
+                  Copiar enlace
+                </button>
+                <button
+                  type="button"
+                  id="queryExplorerQuickSaveBtn"
+                  class="anonymous-apex-small-btn"
+                  data-i18n="queryExplorer.saveCurrentQuery"
+                  data-i18n-title="queryExplorer.saveCurrentQueryTitle"
+                >
+                  Guardar
                 </button>
                 <label
                   class="org-limits-compare-toggle"
@@ -2805,6 +2922,28 @@
                 <input id="debugLogBrowserUntil" type="datetime-local" class="debug-log-browser-input" />
               </div>
             </div>
+            <div class="debug-log-browser-bulk-actions">
+              <label class="debug-log-browser-select-all">
+                <input type="checkbox" id="debugLogBrowserSelectAllFiltered" />
+                <span data-i18n="debugLogs.selectAllFiltered">Seleccionar todos los logs filtrados</span>
+              </label>
+              <span id="debugLogBrowserSelectedCount" class="debug-log-browser-selected-count" role="status" aria-live="polite"></span>
+              <button
+                type="button"
+                id="debugLogBrowserDownloadSelectedBtn"
+                class="debug-log-browser-head-btn debug-log-browser-download-selected-btn"
+                disabled
+              >
+                <span class="debug-log-browser-head-btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                </span>
+                <span id="debugLogBrowserDownloadSelectedLabel" data-i18n="debugLogs.downloadSelected">Descargar seleccionados en ZIP</span>
+              </button>
+            </div>
             <div class="debug-log-browser-pagination debug-log-browser-pagination-top">
               <button type="button" id="debugLogBrowserFirstPage" class="debug-log-browser-open-btn sfoc-page-icon-btn" aria-label="First page">«</button>
               <button type="button" id="debugLogBrowserPrevPage" class="debug-log-browser-open-btn sfoc-page-icon-btn" aria-label="Previous page">‹</button>
@@ -2817,6 +2956,7 @@
               <table class="debug-log-browser-table">
                 <thead>
                   <tr>
+                    <th scope="col" class="debug-log-browser-select-cell" data-i18n-aria-label="debugLogs.colSelect"></th>
                     <th scope="col" data-sort="Status" data-i18n="debugLogs.colStatus">Estado</th>
                     <th scope="col" data-sort="StartTime" aria-sort="descending" data-i18n="debugLogs.colStart">Inicio</th>
                     <th scope="col" data-sort="LogUserId" data-i18n="debugLogs.colUser">Usuario</th>

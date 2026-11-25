@@ -58,6 +58,10 @@ export function isDataWorkbenchMode() {
   return getSelectedArtifactType() === 'DataWorkbench';
 }
 
+export function isPermissionAccessMode() {
+  return getSelectedArtifactType() === 'PermissionAccess';
+}
+
 export function isBulkJobMonitorMode() {
   return getSelectedArtifactType() === 'BulkJobMonitor';
 }
@@ -156,6 +160,7 @@ export function isFullScreenToolMode() {
     isRecordCompareMode() ||
     isObjectDescribeMode() ||
     isDataWorkbenchMode() ||
+    isPermissionAccessMode() ||
     isBulkJobMonitorMode() ||
     isEventMonitorMode()
   );
@@ -205,6 +210,28 @@ function syncComparatorActionButtons() {
   pkgBtn?.classList.toggle('hidden', !show);
 }
 
+/** Controles del visor que solo tienen sentido al comparar dos entornos. */
+const COMPARE_ONLY_VIEWER_CONTROL_IDS = Object.freeze([
+  'diffStatus',
+  'toggleWhitespaceBtn',
+  'copyUnifiedDiffBtn',
+  'exportDiffHtmlBtn',
+  'prevDiffBtn',
+  'nextDiffBtn'
+]);
+
+/**
+ * En «vista única» no hay diff: se ocultan estado y navegación de diferencias.
+ * Se usa la clase `hidden` (no CSS por body) porque el Workbench v2 clona estos
+ * controles y observa precisamente esa clase en el origen.
+ * @param {boolean} singleView
+ */
+function syncComparatorSingleViewChrome(singleView) {
+  for (const id of COMPARE_ONLY_VIEWER_CONTROL_IDS) {
+    document.getElementById(id)?.classList.toggle('hidden', singleView);
+  }
+}
+
 /**
  * Aplica visibilidad y estado de orgs según el tipo de metadata seleccionado.
  * No llama a `renderEditor` (evita dependencias circulares); hazlo desde el caller.
@@ -221,6 +248,7 @@ export function applyArtifactTypeUi() {
   const isQueryExplorer = op === 'QueryExplorer';
   const isRestExplorer = op === 'RestExplorer';
   const isDataWorkbench = op === 'DataWorkbench';
+  const isPermissionAccess = op === 'PermissionAccess';
   const isBulkJobMonitor = op === 'BulkJobMonitor';
   const isEventMonitor = op === 'EventMonitor';
   const isOrgLimits = op === 'OrgLimits';
@@ -253,6 +281,7 @@ export function applyArtifactTypeUi() {
   document.body.classList.toggle('artifact-query-explorer', isQueryExplorer);
   document.body.classList.toggle('artifact-rest-explorer', isRestExplorer);
   document.body.classList.toggle('artifact-data-workbench', isDataWorkbench);
+  document.body.classList.toggle('artifact-permission-access', isPermissionAccess);
   document.body.classList.toggle(
     'artifact-query-explorer-compare',
     isQueryExplorer && !!state.queryExplorerCompareMode
@@ -292,6 +321,9 @@ export function applyArtifactTypeUi() {
     isOrgLimits && !!state.orgLimitsCompareMode
   );
   document.body.classList.toggle('artifact-metadata-type-compare', isMetadataTypeCompare);
+  const isComparatorSingleView = op === 'Comparator' && !!state.comparatorSingleView;
+  document.body.classList.toggle('artifact-comparator-single-view', isComparatorSingleView);
+  syncComparatorSingleViewChrome(isComparatorSingleView);
 
   const searchPanel = document.getElementById('searchPanel');
   const clearBtn = document.getElementById('clearHistoryButton');
@@ -308,6 +340,7 @@ export function applyArtifactTypeUi() {
   const queryExplorerPanel = document.getElementById('queryExplorerPanel');
   const restExplorerPanel = document.getElementById('restExplorerPanel');
   const dataWorkbenchPanel = document.getElementById('dataWorkbenchPanel');
+  const permissionAccessPanel = document.getElementById('permissionAccessPanel');
   const bulkJobMonitorPanel = document.getElementById('bulkJobMonitorPanel');
   const eventMonitorPanel = document.getElementById('eventMonitorPanel');
   const orgLimitsPanel = document.getElementById('orgLimitsPanel');
@@ -325,6 +358,7 @@ export function applyArtifactTypeUi() {
   const recordComparePanel = document.getElementById('recordComparePanel');
   const orgDropdowns = document.getElementById('orgDropdowns');
   const landingPanel = document.getElementById('appLandingPanel');
+  permissionAccessPanel?.classList.add('hidden');
 
   if (isNone) {
     if (state.appNavMode === 'home') {
@@ -999,6 +1033,9 @@ export function applyArtifactTypeUi() {
   } else if (isDataWorkbench) {
     applySingleLeftOrgToolUi();
     dataWorkbenchPanel?.classList.remove('hidden');
+  } else if (isPermissionAccess) {
+    applySingleLeftOrgToolUi();
+    permissionAccessPanel?.classList.remove('hidden');
   } else if (isBulkJobMonitor) {
     applySingleLeftOrgToolUi();
     bulkJobMonitorPanel?.classList.remove('hidden');
@@ -1048,7 +1085,18 @@ export function applyArtifactTypeUi() {
       right.value = state.rightOrgId || '';
     }
     const rightReauth = document.getElementById('rightReauthBtn');
-    if (rightReauth) {
+    if (isComparatorSingleView) {
+      // Vista única: solo se usa la org izquierda; la derecha se aparca y vuelve al desactivar.
+      stashAndClearRightOrg();
+      if (right) {
+        right.value = '';
+        right.disabled = true;
+      }
+      if (rightReauth) {
+        rightReauth.classList.add('hidden');
+        rightReauth.disabled = true;
+      }
+    } else if (rightReauth) {
       rightReauth.disabled = false;
       rightReauth.classList.remove('hidden');
     }
@@ -1071,6 +1119,7 @@ export function applyArtifactTypeUi() {
     isFieldDep ||
     isObjectDescribe ||
     isDataWorkbench ||
+    isPermissionAccess ||
     isBulkJobMonitor ||
     isEventMonitor ||
     isDepExplorer ||

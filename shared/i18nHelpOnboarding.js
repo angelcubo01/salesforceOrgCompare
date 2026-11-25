@@ -26,7 +26,7 @@ export const helpOnboardingEs = {
   'help.tool.Comparator.body2':
     'Puedes comparar un package.xml de tu equipo con un entorno, o dos manifiestos entre sí.',
   'help.tool.Comparator.body3':
-    'Desde la barra del visor copia el diff, ignora espacios en blanco, exporta HTML o descarga el componente con Retrieve.',
+    'Desde la barra del visor copia el diff, ignora espacios en blanco, exporta HTML o descarga el componente con Retrieve. Activa Vista única para abrir un componente solo en el entorno izquierdo, sin comparar.',
 
   'help.tool.ApexTests.title': 'Hub de tests Apex',
   'help.tool.ApexTests.lead':
@@ -247,6 +247,16 @@ export const helpOnboardingEs = {
     'Pega o carga un fichero, revisa el mapeo de columnas y ejecuta insert, update, upsert o delete.',
   'help.tool.DataWorkbench.body3':
     'Las operaciones de escritura respetan el control de org de solo lectura y la política de DML de la extensión.',
+
+  'help.tool.PermissionAccess.title': 'Acceso a objetos y campos',
+  'help.tool.PermissionAccess.lead':
+    'Concede o retira permisos de objeto y campo en varios perfiles y permission sets sin entrar en Setup.',
+  'help.tool.PermissionAccess.body1':
+    'Busca un objeto por etiqueta o API name para cargar automáticamente una única matriz de perfiles y permission sets. Después puedes buscar uno de sus campos con el mismo patrón de autocompletado.',
+  'help.tool.PermissionAccess.body2':
+    'Cada checkbox representa el estado final de un permiso y añade su cambio a la cola. Al elegir un campo, la matriz se reduce a Ver y Editar.',
+  'help.tool.PermissionAccess.body3':
+    'Cada cambio se procesa de forma aislada: los válidos continúan aunque otro falle, y Reintentar fallidos no repite los ya aplicados.',
 
   'help.tool.RestExplorer.title': 'REST Explorer',
   'help.tool.RestExplorer.lead':
@@ -516,6 +526,16 @@ export const helpOnboardingEs = {
   'onboarding.tool.DataWorkbench.step3':
     'Ejecutar importación aplica DML en el entorno seleccionado.',
 
+  'onboarding.tool.PermissionAccess.title': 'Acceso a objetos y campos',
+  'onboarding.tool.PermissionAccess.lead':
+    'Actualiza rápidamente permisos en una única organización.',
+  'onboarding.tool.PermissionAccess.step1':
+    'Busca y selecciona un objeto; después puedes buscar un campo por etiqueta o API name. Todos los destinos editables se cargan automáticamente.',
+  'onboarding.tool.PermissionAccess.step2':
+    'Filtra la matriz unificada y marca los permisos; cada modificación se añade directamente a la cola.',
+  'onboarding.tool.PermissionAccess.step3':
+    'Revisa el estado actual y final, confirma el entorno y aplica; los fallos se pueden reintentar por separado.',
+
   'onboarding.tool.RestExplorer.title': 'REST Explorer',
   'onboarding.tool.RestExplorer.lead':
     'Prueba llamadas REST con la sesión del entorno activo.',
@@ -566,7 +586,7 @@ export const helpOnboardingEn = {
   'help.tool.Comparator.body2':
     'You can compare a package.xml from your computer with an org, or two manifests with each other.',
   'help.tool.Comparator.body3':
-    'From the viewer toolbar copy the diff, ignore whitespace, export HTML, or download the component with Retrieve.',
+    'From the viewer toolbar copy the diff, ignore whitespace, export HTML, or download the component with Retrieve. Turn on Single view to open a component in the left org only, with no comparison.',
 
   'help.tool.ApexTests.title': 'Apex tests Hub',
   'help.tool.ApexTests.lead':
@@ -787,6 +807,16 @@ export const helpOnboardingEn = {
     'Paste or load a file, review column mapping, then run insert, update, upsert, or delete.',
   'help.tool.DataWorkbench.body3':
     'Write operations respect read-only org controls and the extension DML policy.',
+
+  'help.tool.PermissionAccess.title': 'Object & Field Access',
+  'help.tool.PermissionAccess.lead':
+    'Grant or revoke object and field permissions across profiles and permission sets without opening Setup.',
+  'help.tool.PermissionAccess.body1':
+    'Search for an object by label or API name to load one unified profile and permission set matrix. You can then find one of its fields with the same autocomplete pattern.',
+  'help.tool.PermissionAccess.body2':
+    'Each checkbox represents a permission’s final state and queues its change. Selecting a field reduces the matrix to View and Edit.',
+  'help.tool.PermissionAccess.body3':
+    'Each change is isolated: valid operations continue after a failure, and Retry failed never repeats applied operations.',
 
   'help.tool.RestExplorer.title': 'REST Explorer',
   'help.tool.RestExplorer.lead':
@@ -1054,6 +1084,16 @@ export const helpOnboardingEn = {
     'Paste data, review columns, and map each one to a Salesforce field.',
   'onboarding.tool.DataWorkbench.step3':
     'Run import applies DML in the selected org.',
+
+  'onboarding.tool.PermissionAccess.title': 'Object & Field Access',
+  'onboarding.tool.PermissionAccess.lead':
+    'Update permissions quickly in one org.',
+  'onboarding.tool.PermissionAccess.step1':
+    'Search for and select an object, then optionally find a field by label or API name. Every editable target loads automatically.',
+  'onboarding.tool.PermissionAccess.step2':
+    'Filter the unified matrix and check permissions; every modification is queued immediately.',
+  'onboarding.tool.PermissionAccess.step3':
+    'Review current and final states, confirm the environment, and apply; failed changes can be retried separately.',
 
   'onboarding.tool.RestExplorer.title': 'REST Explorer',
   'onboarding.tool.RestExplorer.lead':

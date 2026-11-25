@@ -8,6 +8,7 @@ import {
   queryUserDebugTraceFlags,
   searchIndex
 } from '../../shared/salesforceApi.js';
+import { USER_MANAGEMENT_MESSAGES, handleUserManagementMessage } from './userManagementHandlers.js';
 import { fetchDeployDetail } from '../../shared/deployStatusApi.js';
 import { fetchApexClassSource } from '../../shared/apexClassSource.js';
 import { buildOrgPicklistLabel } from '../../shared/orgPrefs.js';
@@ -135,7 +136,11 @@ async function openRecordViewerTab(sender, org, recordId, quickActionId = '') {
   url.searchParams.set('instance', new URL(String(org.instanceUrl)).origin);
   url.searchParams.set('recordId', recordId);
   if (quickActionId) url.searchParams.set('quickAction', quickActionId);
-  const tabs = await chrome.tabs.query({ url: `${chrome.runtime.getURL('code/record-viewer.html')}*` });
+  const sourceWindowId = sender?.tab?.windowId;
+  const tabs = await chrome.tabs.query({
+    url: `${chrome.runtime.getURL('code/record-viewer.html')}*`,
+    ...(sourceWindowId != null ? { windowId: sourceWindowId } : {})
+  });
   const existing = tabs.find((tab) => typeof tab.url === 'string' && tab.url === url.href);
   if (existing?.id != null) {
     await chrome.tabs.update(existing.id, { active: true });
@@ -143,6 +148,7 @@ async function openRecordViewerTab(sender, org, recordId, quickActionId = '') {
     return;
   }
   const options = { url: url.href, active: true };
+  if (sourceWindowId != null) options.windowId = sourceWindowId;
   if (sender?.tab?.id != null) { options.openerTabId = sender.tab.id; if (sender.tab.index != null) options.index = sender.tab.index + 1; }
   await chrome.tabs.create(options);
 }
@@ -325,6 +331,7 @@ async function resolveSavedOrgForInstance(instanceUrl, tabId) {
  * @param {chrome.runtime.MessageSender} [sender]
  */
 export async function handleSfInjectMessage(message, sender) {
+  if (USER_MANAGEMENT_MESSAGES.has(message?.type)) return handleUserManagementMessage(message, sender);
   switch (message?.type) {
     case 'sfInject:getSettings': {
       await loadSfInjectSettings();

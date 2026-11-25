@@ -46,7 +46,7 @@ export const MARKETING_CAPABILITIES = Object.freeze([
     labelKey: 'workbench.marketing.capability.access.label',
     titleKey: 'workbench.marketing.capability.access.title',
     descriptionKey: 'workbench.marketing.capability.access.description',
-    toolIds: Object.freeze(['PermissionDiff', 'FieldDependency', 'DependencyExplorer', 'ObjectDescribe'])
+    toolIds: Object.freeze(['PermissionDiff', 'PermissionAccess', 'FieldDependency', 'DependencyExplorer', 'ObjectDescribe'])
   }),
   Object.freeze({
     id: 'operations',

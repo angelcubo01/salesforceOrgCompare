@@ -88,6 +88,21 @@ describe('parseExecuteAnonymousSoapResponse', () => {
     expect(parsed.exceptionStackTrace).toContain('Class.Foo.bar');
   });
 
+  it('parses namespaced DebuggingInfo logs and XML entities', () => {
+    const xml = `<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:apex="http://soap.sforce.com/2006/08/apex">
+      <soapenv:Header><apex:DebuggingInfo><apex:debugLog>12:00:00.0|USER_DEBUG|A &amp; B &lt;ok&gt;</apex:debugLog></apex:DebuggingInfo></soapenv:Header>
+      <soapenv:Body><apex:executeAnonymousResponse><apex:result>
+        <apex:column>-1</apex:column><apex:compiled>true</apex:compiled>
+        <apex:line>-1</apex:line><apex:success>true</apex:success>
+      </apex:result></apex:executeAnonymousResponse></soapenv:Body>
+    </soapenv:Envelope>`;
+    expect(parseExecuteAnonymousSoapResponse(xml)).toMatchObject({
+      compiled: true,
+      success: true,
+      logs: '12:00:00.0|USER_DEBUG|A & B <ok>'
+    });
+  });
+
   it('throws on SOAP fault', () => {
     const xml = `<soapenv:Envelope>
       <soapenv:Body>
@@ -108,6 +123,18 @@ describe('buildExecuteAnonymousSoapEnvelope', () => {
     expect(xml).toContain('<sessionId>sid123</sessionId>');
     expect(xml).not.toContain('2006/04/apex');
     expect(xml).not.toContain('<executeanonymous');
+  });
+
+  it('adds safe debug categories only when log capture is requested', () => {
+    const plain = buildExecuteAnonymousSoapEnvelope('sid123', "System.debug('ok');");
+    const captured = buildExecuteAnonymousSoapEnvelope('sid123', "System.debug('ok');", {
+      captureDebugLog: true
+    });
+    expect(plain).not.toContain('<DebuggingHeader>');
+    expect(captured).toContain('<DebuggingHeader>');
+    expect(captured).toContain('<category>Apex_code</category><level>DEBUG</level>');
+    expect(captured).toContain('<category>Db</category><level>INFO</level>');
+    expect(captured).not.toContain('FINEST');
   });
 });
 
@@ -167,5 +194,35 @@ describe('executeAnonymous transport routing', () => {
     expect(init.body).toContain('<executeAnonymous>');
     expect(init.body).toContain('http://soap.sforce.com/2006/08/apex');
     expect(init.body).toContain('System.debug');
+  });
+
+  it('forces SOAP and returns its inline log when captureDebugLog is enabled', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () =>
+        `<env:Envelope xmlns:env="http://schemas.xmlsoap.org/soap/envelope/">
+          <env:Header><DebuggingInfo><debugLog><![CDATA[12:00:00.0|EXECUTION_STARTED]]></debugLog></DebuggingInfo></env:Header>
+          <env:Body><executeAnonymousResponse><result><column>-1</column><compiled>true</compiled>
+          <line>-1</line><success>true</success></result></executeAnonymousResponse></env:Body>
+        </env:Envelope>`
+    });
+    const result = await executeAnonymous(
+      'https://example.my.salesforce.com',
+      'sid',
+      '63.0',
+      "System.debug('ok');",
+      '00Dxx0000000001',
+      { captureDebugLog: true }
+    );
+    expect(result).toMatchObject({
+      compiled: true,
+      success: true,
+      logs: '12:00:00.0|EXECUTION_STARTED'
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/services/Soap/s/63.0/00Dxx0000000001');
+    expect(init.method).toBe('POST');
+    expect(init.body).toContain('<DebuggingHeader>');
   });
 });

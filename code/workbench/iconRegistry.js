@@ -27,6 +27,7 @@ export const TOOL_ICONS = Object.freeze({
   RestExplorer: 'api',
   ObjectDescribe: 'schema',
   DataWorkbench: 'database-cog',
+  PermissionAccess: 'shield-cog',
   DebugLogBrowser: 'file-search',
   EventMonitor: 'activity',
   FieldDependency: 'list-tree',

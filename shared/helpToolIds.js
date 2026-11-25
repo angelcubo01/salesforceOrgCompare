@@ -1,7 +1,7 @@
 /** Identificador de ayuda para la pantalla de inicio (no es herramienta de menú). */
 export const HELP_HOME_ID = 'home';
 
-/** Herramientas con onboarding de primera visita (26). */
+/** Herramientas con onboarding de primera visita (27). */
 export const ALL_ONBOARDING_TOOLS = Object.freeze([
   'Comparator',
   'ApexTests',
@@ -26,6 +26,7 @@ export const ALL_ONBOARDING_TOOLS = Object.freeze([
   'MetadataTypeCompare',
   'ObjectDescribe',
   'DataWorkbench',
+  'PermissionAccess',
   'RestExplorer',
   'EventMonitor',
   'BulkJobMonitor'

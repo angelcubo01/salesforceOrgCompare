@@ -28,6 +28,9 @@ import { refreshAuthStatuses, updateOrgDropdownLayout } from '../ui/orgs.js';
 import { isFullScreenToolMode } from '../ui/artifactTypeUi.js';
 import { descriptorForFetchSource } from '../lib/sourceDescriptor.js';
 
+/** Tipos sin lectura directa por API (`fetchSource` → `[]`): solo se obtienen con retrieve ZIP. */
+const RETRIEVE_ONLY_TYPES = new Set(['PermissionSet', 'Profile', 'FlexiPage']);
+
 /** LRU: diff alineado pesado (prepareDiffForViewer) si org+fichero y versiones no cambian. */
 const diffPreparedLru = new Map();
 const DIFF_PREP_CACHE_MAX = 24;
@@ -415,6 +418,10 @@ export async function renderEditor(opts = {}) {
     if (item.fileName) {
       const match = left.find(f => f.fileName === item.fileName);
       if (match) file = match;
+    }
+    if (state.comparatorSingleView && !file.content && RETRIEVE_ONLY_TYPES.has(item.type)) {
+      // Estos tipos no se leen por API: solo existen vía retrieve ZIP, que requiere dos orgs.
+      showToast(t('toast.singleViewRetrieveOnly'), 'warn');
     }
     const sliceL = sliceViewerChunk(file.content, 0);
     if (sliceL.hasNext) {
